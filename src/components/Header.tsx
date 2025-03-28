@@ -9,7 +9,7 @@ const Header: React.FC = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
         <Link to="/" className="flex items-center space-x-2 text-recipe-primary hover:text-recipe-primary/90 transition-colors">
           <UtensilsCrossed className="h-8 w-8" />
-          <h1 className="text-2xl font-bold">Dietary Delight</h1>
+          <h1 className="text-2xl font-bold">Better Bulk</h1>
         </Link>
         <nav>
           <ul className="flex space-x-6">
