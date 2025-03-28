@@ -1,4 +1,3 @@
-
 import { Recipe } from '../types/recipe';
 
 export const initialRecipes: Recipe[] = [
@@ -127,6 +126,63 @@ export const initialRecipes: Recipe[] = [
     ingredients: ['salmon', 'mango', 'red onion', 'cilantro', 'lime'],
     instructions: ['Prepare salsa', 'Grill salmon', 'Top with salsa', 'Serve'],
     image: 'https://images.unsplash.com/photo-1519708227418-c8fd9a32b7a2?ixlib=rb-4.0.3',
+    ratings: [5, 5, 4],
+    comments: []
+  },
+
+  // Dessert Recipes
+  {
+    id: '12',
+    name: 'Chocolate Lava Cake',
+    cuisine: 'French',
+    dietaryRestrictions: ['vegetarian'],
+    ingredients: ['dark chocolate', 'butter', 'eggs', 'sugar', 'flour', 'vanilla extract'],
+    instructions: ['Melt chocolate and butter', 'Mix with other ingredients', 'Pour into ramekins', 'Bake until edges are set but center is soft'],
+    image: 'https://images.unsplash.com/photo-1563805042-7684c019e1cb?ixlib=rb-4.0.3',
+    ratings: [5, 5, 5],
+    comments: []
+  },
+  {
+    id: '13',
+    name: 'Vegan Apple Crisp',
+    cuisine: 'American',
+    dietaryRestrictions: ['vegan', 'vegetarian'],
+    ingredients: ['apples', 'cinnamon', 'oats', 'brown sugar', 'coconut oil', 'lemon juice'],
+    instructions: ['Slice apples', 'Mix with lemon juice and cinnamon', 'Create oat topping', 'Bake until golden and bubbly'],
+    image: 'https://images.unsplash.com/photo-1621236378699-8597faf6a11a?ixlib=rb-4.0.3',
+    ratings: [4, 5, 4],
+    comments: []
+  },
+  {
+    id: '14',
+    name: 'Gluten-Free Cheesecake',
+    cuisine: 'American',
+    dietaryRestrictions: ['gluten-free', 'vegetarian'],
+    ingredients: ['gluten-free graham crackers', 'cream cheese', 'eggs', 'sugar', 'vanilla extract', 'berries'],
+    instructions: ['Make gluten-free crust', 'Prepare filling', 'Bake in water bath', 'Chill and top with berries'],
+    image: 'https://images.unsplash.com/photo-1533134242443-d4fd215305ad?ixlib=rb-4.0.3',
+    ratings: [5, 4, 5],
+    comments: []
+  },
+  {
+    id: '15',
+    name: 'Carnivore Custard',
+    cuisine: 'French',
+    dietaryRestrictions: ['carnivore'],
+    ingredients: ['eggs', 'heavy cream', 'vanilla bean', 'bone marrow'],
+    instructions: ['Whisk eggs and cream', 'Add melted bone marrow', 'Pour into ramekins', 'Bake in water bath until set'],
+    image: 'https://images.unsplash.com/photo-1488477181946-6428a0291777?ixlib=rb-4.0.3',
+    ratings: [4, 3, 4],
+    comments: []
+  },
+  {
+    id: '16',
+    name: 'Tiramisu',
+    cuisine: 'Italian',
+    dietaryRestrictions: ['vegetarian'],
+    ingredients: ['mascarpone cheese', 'espresso', 'ladyfingers', 'eggs', 'sugar', 'cocoa powder'],
+    instructions: ['Prepare espresso', 'Mix mascarpone with eggs and sugar', 'Dip ladyfingers in espresso', 'Layer and dust with cocoa powder', 'Chill for several hours'],
+    image: 'https://images.unsplash.com/photo-1571877227200-a0d98ea2fda3?ixlib=rb-4.0.3',
     ratings: [5, 5, 4],
     comments: []
   }
