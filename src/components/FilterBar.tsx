@@ -51,7 +51,7 @@ const FilterBar: React.FC<FilterBarProps> = ({
             <option value="vegetarian">Vegetarian</option>
             <option value="vegan">Vegan</option>
             <option value="gluten-free">Gluten-Free</option>
-            <option value="carnivore">Carnivore</option>
+            <option value="carnivore">Carnivore (don't blame us for your bathroom situation)</option>
           </select>
           
           <select 
