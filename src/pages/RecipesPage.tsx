@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useToast } from "@/hooks/use-toast";
 import { useQuery } from '@tanstack/react-query';
@@ -34,8 +33,9 @@ const RecipesPage: React.FC = () => {
     const filtered = filterRecipes(recipes, searchTerm, dietaryFilter, cuisineFilter);
     setFilteredRecipes(filtered);
     
-    // Only trigger external search if search term exists
-    if (searchTerm.trim() !== '') {
+    // Only trigger external search if search term exists AND no local results
+    if (searchTerm.trim() !== '' && filtered.length === 0) {
+      console.log(`Setting external search term to "${searchTerm}" because no local results found`);
       setExternalSearchTerm(searchTerm);
     } else {
       setExternalSearchTerm('');
@@ -45,14 +45,19 @@ const RecipesPage: React.FC = () => {
   // Query for external recipes
   const { data: externalData, isLoading: isExternalLoading, isError, error } = useQuery({
     queryKey: ['recipes', externalSearchTerm],
-    queryFn: () => fetchRecipes(externalSearchTerm),
+    queryFn: () => {
+      console.log(`Executing query for "${externalSearchTerm}"`);
+      return fetchRecipes(externalSearchTerm);
+    },
     enabled: !!externalSearchTerm,
     retry: 1,
+    staleTime: 60000, // Cache results for 1 minute
   });
 
   // Handle errors
   useEffect(() => {
     if (isError) {
+      console.error("External recipe query error:", error);
       toast({
         title: "Error fetching external recipes",
         description: `${(error as Error).message}`,
@@ -64,14 +69,18 @@ const RecipesPage: React.FC = () => {
   // Debug log for external data
   useEffect(() => {
     if (externalData) {
-      console.log("External recipe data:", externalData);
+      console.log("External recipe data received:", externalData);
+      console.log("Results array:", externalData.results);
+      console.log("Number of results:", externalData.results?.length || 0);
     }
   }, [externalData]);
 
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchTerm(e.target.value);
+    const value = e.target.value;
+    console.log(`Search term changed to: "${value}"`);
+    setSearchTerm(value);
     // Reset external search if user clears the search
-    if (!e.target.value.trim()) {
+    if (!value.trim()) {
       setExternalSearchTerm('');
     }
   };
@@ -119,6 +128,11 @@ const RecipesPage: React.FC = () => {
 
   // Check if we have external results
   const hasExternalResults = externalData?.results && externalData.results.length > 0;
+  
+  console.log("Has external results:", hasExternalResults);
+  if (hasExternalResults) {
+    console.log("First external recipe:", externalData.results[0]);
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">

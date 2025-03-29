@@ -16,21 +16,24 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onDelete, isExternal = 
   const avgRating = getAverageRating(recipe.ratings);
   
   // Fallback image if recipe image is missing
-  const imageSrc = recipe.image || '/placeholder.svg';
+  const [imageSrc, setImageSrc] = React.useState(recipe.image || '/placeholder.svg');
+
+  // Handle image loading errors
+  const handleImageError = () => {
+    console.log(`Image error for recipe: ${recipe.name}, using placeholder`);
+    setImageSrc('/placeholder.svg');
+  };
 
   return (
-    <div className="recipe-card animate-scale-in">
+    <div className="recipe-card animate-scale-in bg-white rounded-lg shadow-md overflow-hidden transition-transform hover:shadow-lg">
       {isExternal ? (
-        // External recipes don't have detail pages, so no Link
+        // External recipes don't have detail pages
         <div className="relative h-48 w-full overflow-hidden">
           <img 
             src={imageSrc} 
             alt={recipe.name} 
             className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 hover:scale-110"
-            onError={(e) => { 
-              (e.target as HTMLImageElement).src = '/placeholder.svg';
-              (e.target as HTMLImageElement).onerror = null;
-            }}
+            onError={handleImageError}
           />
           {recipe.ratings.length > 0 && (
             <div className="absolute top-2 right-2 bg-black bg-opacity-60 text-white rounded-full px-2 py-1 text-sm flex items-center">
@@ -38,11 +41,9 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onDelete, isExternal = 
               <span>{avgRating}</span>
             </div>
           )}
-          {isExternal && (
-            <div className="absolute top-2 left-2 bg-blue-500 bg-opacity-80 text-white rounded-full px-2 py-1 text-xs">
-              External
-            </div>
-          )}
+          <div className="absolute top-2 left-2 bg-blue-500 bg-opacity-80 text-white rounded-full px-2 py-1 text-xs">
+            External
+          </div>
         </div>
       ) : (
         // Internal recipes have detail pages
@@ -52,15 +53,14 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onDelete, isExternal = 
               src={imageSrc} 
               alt={recipe.name} 
               className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 hover:scale-110"
-              onError={(e) => { 
-                (e.target as HTMLImageElement).src = '/placeholder.svg';
-                (e.target as HTMLImageElement).onerror = null;
-              }}
+              onError={handleImageError}
             />
-            <div className="absolute top-2 right-2 bg-black bg-opacity-60 text-white rounded-full px-2 py-1 text-sm flex items-center">
-              <Star className="h-4 w-4 text-yellow-400 mr-1" />
-              <span>{avgRating}</span>
-            </div>
+            {recipe.ratings.length > 0 && (
+              <div className="absolute top-2 right-2 bg-black bg-opacity-60 text-white rounded-full px-2 py-1 text-sm flex items-center">
+                <Star className="h-4 w-4 text-yellow-400 mr-1" />
+                <span>{avgRating}</span>
+              </div>
+            )}
           </div>
         </Link>
       )}
