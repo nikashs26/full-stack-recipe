@@ -34,9 +34,11 @@ const RecipesPage: React.FC = () => {
     const filtered = filterRecipes(recipes, searchTerm, dietaryFilter, cuisineFilter);
     setFilteredRecipes(filtered);
     
-    // Only trigger external search if no local results and search term exists
-    if (filtered.length === 0 && searchTerm.trim() !== '') {
+    // Only trigger external search if search term exists
+    if (searchTerm.trim() !== '') {
       setExternalSearchTerm(searchTerm);
+    } else {
+      setExternalSearchTerm('');
     }
   }, [recipes, searchTerm, dietaryFilter, cuisineFilter]);
 
@@ -45,6 +47,7 @@ const RecipesPage: React.FC = () => {
     queryKey: ['recipes', externalSearchTerm],
     queryFn: () => fetchRecipes(externalSearchTerm),
     enabled: !!externalSearchTerm,
+    retry: 1,
   });
 
   // Handle errors
@@ -57,6 +60,13 @@ const RecipesPage: React.FC = () => {
       });
     }
   }, [isError, error, toast]);
+
+  // Debug log for external data
+  useEffect(() => {
+    if (externalData) {
+      console.log("External recipe data:", externalData);
+    }
+  }, [externalData]);
 
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(e.target.value);
@@ -102,10 +112,13 @@ const RecipesPage: React.FC = () => {
     dietaryRestrictions: [],
     ingredients: [],
     instructions: [],
-    image: recipe.image,
+    image: recipe.image || '/placeholder.svg', // Fallback image
     ratings: [],
     comments: []
   });
+
+  // Check if we have external results
+  const hasExternalResults = externalData?.results && externalData.results.length > 0;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -143,16 +156,16 @@ const RecipesPage: React.FC = () => {
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 <span className="ml-2 text-gray-600">Searching external recipes...</span>
               </div>
-            ) : externalData?.results && externalData.results.length > 0 ? (
+            ) : hasExternalResults ? (
               /* Show external results if available */
               <div>
                 <h2 className="text-xl font-medium text-gray-800 mt-8 mb-4">External Recipes</h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {externalData.results.map(recipe => (
+                  {externalData.results.map((recipe: SpoonacularRecipe) => (
                     <RecipeCard 
                       key={`ext-${recipe.id}`} 
                       recipe={formatExternalRecipe(recipe)}
-                      onDelete={() => {}}  // Can't delete external recipes
+                      onDelete={() => {}}
                       isExternal={true}
                     />
                   ))}

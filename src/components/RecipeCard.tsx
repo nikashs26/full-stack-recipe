@@ -14,6 +14,9 @@ interface RecipeCardProps {
 const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onDelete, isExternal = false }) => {
   const dietaryTags = getDietaryTags(recipe.dietaryRestrictions);
   const avgRating = getAverageRating(recipe.ratings);
+  
+  // Fallback image if recipe image is missing
+  const imageSrc = recipe.image || '/placeholder.svg';
 
   return (
     <div className="recipe-card animate-scale-in">
@@ -21,9 +24,13 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onDelete, isExternal = 
         // External recipes don't have detail pages, so no Link
         <div className="relative h-48 w-full overflow-hidden">
           <img 
-            src={recipe.image} 
+            src={imageSrc} 
             alt={recipe.name} 
             className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 hover:scale-110"
+            onError={(e) => { 
+              (e.target as HTMLImageElement).src = '/placeholder.svg';
+              (e.target as HTMLImageElement).onerror = null;
+            }}
           />
           {recipe.ratings.length > 0 && (
             <div className="absolute top-2 right-2 bg-black bg-opacity-60 text-white rounded-full px-2 py-1 text-sm flex items-center">
@@ -42,9 +49,13 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onDelete, isExternal = 
         <Link to={`/recipe/${recipe.id}`} className="block">
           <div className="relative h-48 w-full overflow-hidden">
             <img 
-              src={recipe.image} 
+              src={imageSrc} 
               alt={recipe.name} 
               className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 hover:scale-110"
+              onError={(e) => { 
+                (e.target as HTMLImageElement).src = '/placeholder.svg';
+                (e.target as HTMLImageElement).onerror = null;
+              }}
             />
             <div className="absolute top-2 right-2 bg-black bg-opacity-60 text-white rounded-full px-2 py-1 text-sm flex items-center">
               <Star className="h-4 w-4 text-yellow-400 mr-1" />
@@ -53,6 +64,7 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onDelete, isExternal = 
           </div>
         </Link>
       )}
+      
       <div className="p-5">
         <h2 className="text-xl font-semibold text-gray-800 mb-2 line-clamp-1">
           {isExternal ? (
