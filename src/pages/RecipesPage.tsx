@@ -4,6 +4,7 @@ import { useToast } from "@/hooks/use-toast";
 import Header from '../components/Header';
 import FilterBar from '../components/FilterBar';
 import RecipeCard from '../components/RecipeCard';
+import ExternalRecipesSearch from '../components/ExternalRecipesSearch';
 import { loadRecipes, saveRecipes, deleteRecipe as deleteRecipeFromStorage } from '../utils/storage';
 import { filterRecipes, getUniqueCuisines } from '../utils/recipeUtils';
 import { Recipe } from '../types/recipe';
@@ -94,6 +95,9 @@ const RecipesPage: React.FC = () => {
             <p className="text-gray-500 mt-2">Try adjusting your search or filters</p>
           </div>
         )}
+        
+        {/* Add external recipes search component */}
+        <ExternalRecipesSearch />
       </main>
     </div>
   );

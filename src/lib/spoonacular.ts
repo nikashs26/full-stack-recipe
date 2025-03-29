@@ -1,8 +1,9 @@
+
 const API_URL = "http://localhost:5000";
 
 export const fetchRecipes = async (query: string) => {
     try {
-        const response = await fetch(`${API_URL}/recipes?query=${query}`);
+        const response = await fetch(`${API_URL}/recipes?query=${encodeURIComponent(query)}`);
         if (!response.ok) {
             throw new Error("API request failed");
         }
