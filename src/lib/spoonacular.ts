@@ -1,21 +1,23 @@
-
-const API_URL = "http://localhost:5000";
+const API_URL = "http://127.0.0.1:5000/get_recipes"; // Ensure this matches your Flask API endpoint
 
 export const fetchRecipes = async (query: string) => {
     console.log(`Fetching recipes for query: "${query}"`);
+    
     try {
-        // Add a timeout to ensure the fetch doesn't hang indefinitely
+        // Timeout setup to prevent hanging requests
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10-second timeout
         
+        // ✅ FIXED: Removed "/recipes" since API_URL already contains "/get_recipes"
         const response = await fetch(
-            `${API_URL}/recipes?query=${encodeURIComponent(query)}`, 
+            `${API_URL}?query=${encodeURIComponent(query)}`, 
             { signal: controller.signal }
         );
-        clearTimeout(timeoutId);
+
+        clearTimeout(timeoutId); // Prevent timeout from executing if request succeeds
         
         console.log(`API response status: ${response.status}`);
-        
+
         if (!response.ok) {
             const errorData = await response.json().catch(() => null);
             console.error("Error response:", errorData);
@@ -24,19 +26,13 @@ export const fetchRecipes = async (query: string) => {
         
         const data = await response.json();
         console.log("API response data received:", data);
-        
-        // Validate the response structure
-        if (!data || typeof data !== 'object') {
+
+    
+        if (!data || typeof data !== 'object' || !Array.isArray(data.results)) {
             console.error("Invalid API response format", data);
             return { results: [] };
         }
-        
-        // Check if we have results
-        if (!data.results || !Array.isArray(data.results) || data.results.length === 0) {
-            console.log("No external recipes found in response");
-            return { results: [] };
-        }
-        
+
         console.log(`Found ${data.results.length} external recipes`);
         return data;
     } catch (error) {
@@ -45,7 +41,6 @@ export const fetchRecipes = async (query: string) => {
             return { results: [], error: "Request timed out" };
         }
         console.error("Error fetching recipes:", error);
-        // Return empty results rather than throwing to prevent app breaking
         return { results: [], error: error.message };
     }
 };
