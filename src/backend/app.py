@@ -25,6 +25,8 @@ def get_recipes():
         "apiKey": SPOONACULAR_API_KEY,
         "number": 10,
         "addRecipeInformation": "true",
+        "instructionsRequired": "true",
+        "fillIngredients": "true",
     }
     
     # Add query parameter if provided

@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import RecipesPage from "./pages/RecipesPage";
 import RecipeDetailPage from "./pages/RecipeDetailPage";
+import ExternalRecipeDetailPage from "./pages/ExternalRecipeDetailPage";
 import AddRecipePage from "./pages/AddRecipePage";
 import EditRecipePage from "./pages/EditRecipePage";
 import NotFound from "./pages/NotFound";
@@ -23,6 +24,7 @@ const App = () => (
           <Routes>
             <Route path="/" element={<RecipesPage />} />
             <Route path="/recipe/:id" element={<RecipeDetailPage />} />
+            <Route path="/external-recipe/:id" element={<ExternalRecipeDetailPage />} />
             <Route path="/add-recipe" element={<AddRecipePage />} />
             <Route path="/edit-recipe/:id" element={<EditRecipePage />} />
             <Route path="*" element={<NotFound />} />

@@ -70,19 +70,6 @@ const RecipesPage: React.FC = () => {
     }
   }, [isError, error, toast]);
 
-  // Function to format external Spoonacular recipe
-  const formatExternalRecipe = (recipe: SpoonacularRecipe): Recipe => ({
-    id: `ext-${recipe.id}`,
-    name: recipe.title,
-    cuisine: "External",
-    dietaryRestrictions: [],
-    ingredients: [],
-    instructions: [],
-    image: recipe.image || '/placeholder.svg',
-    ratings: [],
-    comments: []
-  });
-
   // Delete local recipes
   const handleDeleteRecipe = (id: string) => {
     if (window.confirm('Are you sure you want to delete this recipe?')) {
@@ -148,7 +135,7 @@ const RecipesPage: React.FC = () => {
           {externalData?.results?.map((recipe: SpoonacularRecipe) => (
             <RecipeCard 
               key={`ext-${recipe.id}`} 
-              recipe={formatExternalRecipe(recipe)}
+              recipe={recipe}
               onDelete={() => {}}
               isExternal={true}
             />
