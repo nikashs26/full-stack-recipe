@@ -36,12 +36,8 @@ const RecipesPage: React.FC = () => {
     const filtered = filterRecipes(recipes, searchTerm, dietaryFilter, cuisineFilter);
     setFilteredRecipes(filtered);
     
-    // Determine if we need external search
-    const shouldSearchExternally = 
-      (searchTerm.trim() !== '' || ingredientTerm.trim() !== '') && 
-      (searchTerm.trim() !== externalSearchTerm || ingredientTerm.trim() !== externalIngredientTerm);
-    
-    if (shouldSearchExternally) {
+    // Always update external search terms when either search term changes
+    if (searchTerm !== externalSearchTerm || ingredientTerm !== externalIngredientTerm) {
       setExternalSearchTerm(searchTerm);
       setExternalIngredientTerm(ingredientTerm);
     }
