@@ -1,3 +1,4 @@
+
 from flask import Flask, request, jsonify
 import requests
 from flask_cors import CORS
@@ -14,15 +15,25 @@ SPOONACULAR_URL = "https://api.spoonacular.com/recipes/complexSearch"
 def get_recipes():
     
     query = request.args.get("query", "").strip()
-    if not query:
-        return jsonify({"error": "Query parameter is required"}), 400
+    ingredient = request.args.get("ingredient", "").strip()
+    
+    # At least one parameter must be provided
+    if not query and not ingredient:
+        return jsonify({"error": "Either query or ingredient parameter is required"}), 400
 
     params = {
-        "query": query,
         "apiKey": SPOONACULAR_API_KEY,
         "number": 10,
         "addRecipeInformation": "true",
     }
+    
+    # Add query parameter if provided
+    if query:
+        params["query"] = query
+        
+    # Add ingredient parameter if provided
+    if ingredient:
+        params["includeIngredients"] = ingredient
 
     try:
         response = requests.get(SPOONACULAR_URL, params=params)

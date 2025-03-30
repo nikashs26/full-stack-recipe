@@ -1,16 +1,27 @@
+
 const API_URL = "http://127.0.0.1:5000/get_recipes"; // Ensure this matches your Flask API endpoint
 
-export const fetchRecipes = async (query: string) => {
-    console.log(`Fetching recipes for query: "${query}"`);
+export const fetchRecipes = async (query: string = "", ingredient: string = "") => {
+    console.log(`Fetching recipes with query: "${query}" and ingredient: "${ingredient}"`);
+    
+    // Validate that at least one parameter is provided
+    if (!query && !ingredient) {
+        console.error("Either query or ingredient must be provided");
+        return { results: [] };
+    }
     
     try {
         // Timeout setup to prevent hanging requests
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 10000); // 10-second timeout
         
-        // ✅ FIXED: Removed "/recipes" since API_URL already contains "/get_recipes"
+        // Build the URL with appropriate parameters
+        let url = `${API_URL}?`;
+        if (query) url += `query=${encodeURIComponent(query)}&`;
+        if (ingredient) url += `ingredient=${encodeURIComponent(ingredient)}&`;
+        
         const response = await fetch(
-            `${API_URL}?query=${encodeURIComponent(query)}`, 
+            url.slice(0, -1), // Remove trailing & or ?
             { signal: controller.signal }
         );
 
