@@ -1,6 +1,5 @@
-
-const API_URL = "http://127.0.0.1:8080/get_recipes";
-const API_URL_RECIPE_BY_ID = "http://127.0.0.1:8080/get_recipe_by_id";
+const API_URL = "http://127.0.0.1:5000/get_recipes";
+const API_URL_RECIPE_BY_ID = "http://127.0.0.1:5000/get_recipe_by_id";
 
 export const fetchRecipes = async (query: string = "", ingredient: string = "") => {
     console.log(`Fetching recipes with query: "${query}" and ingredient: "${ingredient}"`);
@@ -31,14 +30,29 @@ export const fetchRecipes = async (query: string = "", ingredient: string = "") 
         console.log(`API response status: ${response.status}`);
 
         if (!response.ok) {
-            const errorData = await response.json().catch(() => null);
-            console.error("Error response:", errorData);
-            throw new Error(errorData?.error || `Failed to fetch recipes (Status: ${response.status})`);
+            try {
+                const errorData = await response.json();
+                console.error("Error response:", errorData);
+                throw new Error(errorData?.error || `Failed to fetch recipes (Status: ${response.status})`);
+            } catch (parseError) {
+                // If we can't parse as JSON, it might be HTML or plain text
+                const textResponse = await response.text();
+                console.error("Non-JSON error response:", textResponse.substring(0, 200));
+                throw new Error(`Failed to fetch recipes (Status: ${response.status})`);
+            }
         }
         
-        const data = await response.json();
-        console.log("API response data received:", data);
-
+        // Try to parse the JSON response safely
+        let data;
+        try {
+            data = await response.json();
+            console.log("API response data received:", data);
+        } catch (parseError) {
+            console.error("JSON parsing error:", parseError);
+            const textResponse = await response.text();
+            console.error("Invalid JSON response:", textResponse.substring(0, 200));
+            throw new Error("Failed to parse API response as JSON");
+        }
     
         if (!data || typeof data !== 'object' || !Array.isArray(data.results)) {
             console.error("Invalid API response format", data);
@@ -78,13 +92,29 @@ export const fetchRecipeById = async (recipeId: number) => {
         console.log(`API response status for recipe ${recipeId}: ${response.status}`);
 
         if (!response.ok) {
-            const errorData = await response.json().catch(() => null);
-            console.error("Error response:", errorData);
-            throw new Error(errorData?.error || `Failed to fetch recipe details (Status: ${response.status})`);
+            try {
+                const errorData = await response.json();
+                console.error("Error response:", errorData);
+                throw new Error(errorData?.error || `Failed to fetch recipe details (Status: ${response.status})`);
+            } catch (parseError) {
+                // If we can't parse as JSON, it might be HTML or plain text
+                const textResponse = await response.text();
+                console.error("Non-JSON error response:", textResponse.substring(0, 200));
+                throw new Error(`Failed to fetch recipe details (Status: ${response.status})`);
+            }
         }
         
-        const data = await response.json();
-        console.log("Recipe details received:", data);
+        // Try to parse the JSON response safely
+        let data;
+        try {
+            data = await response.json();
+            console.log("Recipe details received:", data);
+        } catch (parseError) {
+            console.error("JSON parsing error:", parseError);
+            const textResponse = await response.text();
+            console.error("Invalid JSON response:", textResponse.substring(0, 200));
+            throw new Error("Failed to parse API response as JSON");
+        }
         
         if (!data || typeof data !== 'object') {
             console.error("Invalid API response format for recipe details", data);

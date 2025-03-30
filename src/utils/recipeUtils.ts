@@ -1,4 +1,3 @@
-
 import { Recipe, DietaryRestriction } from '../types/recipe';
 
 export const getAverageRating = (ratings: number[]): number => {
@@ -28,13 +27,19 @@ export const filterRecipes = (
   recipes: Recipe[], 
   searchTerm: string, 
   dietaryFilter: string,
-  cuisineFilter: string
+  cuisineFilter: string,
+  ingredientTerm: string
 ): Recipe[] => {
-  return recipes.filter(recipe => 
-    recipe.name.toLowerCase().includes(searchTerm.toLowerCase()) &&
-    (dietaryFilter ? recipe.dietaryRestrictions.includes(dietaryFilter as DietaryRestriction) : true) &&
-    (cuisineFilter ? recipe.cuisine === cuisineFilter : true)
-  );
+  return recipes.filter(recipe => {
+    const matchesSearchTerm = recipe.name.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesDietary = dietaryFilter ? recipe.dietaryRestrictions.includes(dietaryFilter as DietaryRestriction) : true;
+    const matchesCuisine = cuisineFilter ? recipe.cuisine === cuisineFilter : true;
+    const matchesIngredient = ingredientTerm
+      ? recipe.ingredients.some(ingredient => ingredient.toLowerCase().includes(ingredientTerm.toLowerCase()))
+      : true;
+
+    return matchesSearchTerm && matchesDietary && matchesCuisine && matchesIngredient;
+  });
 };
 
 export const getUniqueCuisines = (recipes: Recipe[]): string[] => {

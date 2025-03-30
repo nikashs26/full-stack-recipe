@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useToast } from "@/hooks/use-toast";
 import { useQuery } from '@tanstack/react-query';
@@ -16,11 +15,10 @@ const RecipesPage: React.FC = () => {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [filteredRecipes, setFilteredRecipes] = useState<Recipe[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [ingredientTerm, setIngredientTerm] = useState('');
   const [externalSearchTerm, setExternalSearchTerm] = useState('');
-  const [externalIngredientTerm, setExternalIngredientTerm] = useState('');
   const [dietaryFilter, setDietaryFilter] = useState('');
   const [cuisineFilter, setCuisineFilter] = useState('');
+  const [ingredientTerm, setIngredientTerm] = useState('');  // Added state for ingredientTerm
   const [cuisines, setCuisines] = useState<string[]>([]);
   const { toast } = useToast();
 
@@ -33,53 +31,87 @@ const RecipesPage: React.FC = () => {
 
   // Update filtered recipes when filters change
   useEffect(() => {
-    // First filter by search term, dietary filter, and cuisine filter
-    let filtered = filterRecipes(recipes, searchTerm, dietaryFilter, cuisineFilter);
-    
-    // Then apply ingredient filter if it exists
-    if (ingredientTerm) {
-      filtered = filtered.filter(recipe => 
-        recipe.ingredients.some(ingredient => 
-          ingredient.name.toLowerCase().includes(ingredientTerm.toLowerCase())
-        )
-      );
-    }
-    
+    const filtered = filterRecipes(recipes, searchTerm, dietaryFilter, cuisineFilter, ingredientTerm);  // Updated to pass ingredientTerm
     setFilteredRecipes(filtered);
     
-    // Update external search terms
-    if (searchTerm !== externalSearchTerm || ingredientTerm !== externalIngredientTerm) {
+    // Trigger external search if needed
+    if (searchTerm.trim() !== '' && filtered.length === 0) {
       setExternalSearchTerm(searchTerm);
-      setExternalIngredientTerm(ingredientTerm);
+    } else {
+      setExternalSearchTerm('');
     }
-  }, [recipes, searchTerm, ingredientTerm, dietaryFilter, cuisineFilter]);
+  }, [recipes, searchTerm, dietaryFilter, cuisineFilter, ingredientTerm]);  // Added ingredientTerm to dependency array
 
   // Query for external recipes
   const { data: externalData, isLoading: isExternalLoading, isError, error } = useQuery({
-    queryKey: ['recipes', externalSearchTerm, externalIngredientTerm],
-    queryFn: () => fetchRecipes(externalSearchTerm, externalIngredientTerm),
-    enabled: !!(externalSearchTerm || externalIngredientTerm),
+    queryKey: ['recipes', externalSearchTerm],
+    queryFn: () => fetchRecipes(externalSearchTerm),
+    enabled: !!externalSearchTerm,
     retry: 1,
     staleTime: 60000, // Cache results for 1 min
   });
-  
-  useEffect(() => {
-    if (externalData) {
-        console.log("External recipe data:", externalData);
-        console.log("Results:", externalData.results);
-    }
-  }, [externalData]);
 
-  // Handle API errors
-  useEffect(() => {
-    if (isError) {
+  // Function to format external Spoonacular recipe
+  const formatExternalRecipe = (recipe: SpoonacularRecipe): Recipe => ({
+    id: `ext-${recipe.id}`,
+    name: recipe.title,
+    cuisine: "External",
+    dietaryRestrictions: [],
+    ingredients: [],
+    instructions: [],
+    image: recipe.image || '/placeholder.svg',
+    ratings: [],
+    comments: []
+  });
+
+  // Load more external recipes when button is clicked
+  const loadMoreRecipes = async () => {
+    if (!searchTerm.trim()) return;  // Don't fetch if searchTerm is empty
+  
+    try {
+      // Show loading state if desired
+      
+      // Fetch more recipes from your backend
+      const response = await fetch(`http://localhost:5000/get_recipes?query=${encodeURIComponent(searchTerm)}`);
+      
+      // Check if the response is OK
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`Error response: ${response.status} ${response.statusText}`, errorText);
+        throw new Error(`Error fetching recipes: ${response.statusText}`);
+      }
+      
+      // Safely parse the response data as JSON
+      let data;
+      try {
+        data = await response.json();
+      } catch (parseError) {
+        console.error("JSON parsing error:", parseError);
+        console.error("Response text:", await response.text());
+        throw new Error("Failed to parse response as JSON");
+      }
+      
+      // Validate the data structure
+      if (!data || !data.results) {
+        console.error("Invalid data structure:", data);
+        throw new Error("Invalid response format from API");
+      }
+      
+      // Add the newly fetched recipes to the existing list
+      setFilteredRecipes(prevRecipes => [
+        ...prevRecipes,
+        ...data.results.map(formatExternalRecipe)
+      ]);
+    } catch (error) {
+      console.error("Error fetching more recipes:", error);
       toast({
-        title: "Error fetching external recipes",
-        description: `${(error as Error).message}`,
+        title: "Error",
+        description: error.message || "There was an issue loading more recipes.",
         variant: "destructive",
       });
     }
-  }, [isError, error, toast]);
+  };
+  
 
   // Delete local recipes
   const handleDeleteRecipe = (id: string) => {
@@ -97,19 +129,12 @@ const RecipesPage: React.FC = () => {
 
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(e.target.value);
+    if (!e.target.value.trim()) setExternalSearchTerm('');
   };
 
-  const handleIngredientSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Handler for ingredient change
+  const handleIngredientChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setIngredientTerm(e.target.value);
-  };
-
-  const handleClearFilters = () => {
-    setSearchTerm('');
-    setIngredientTerm('');
-    setDietaryFilter('');
-    setCuisineFilter('');
-    setExternalSearchTerm('');
-    setExternalIngredientTerm('');
   };
 
   return (
@@ -118,17 +143,24 @@ const RecipesPage: React.FC = () => {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-6">Recipe Collection</h1>
         
+        {/* Pass the required props for ingredient term */}
         <FilterBar 
           searchTerm={searchTerm}
-          ingredientTerm={ingredientTerm}
           dietaryFilter={dietaryFilter}
           cuisineFilter={cuisineFilter}
           cuisines={cuisines}
           onSearchChange={handleSearch}
-          onIngredientChange={handleIngredientSearch}
           onDietaryFilterChange={(e) => setDietaryFilter(e.target.value)}
           onCuisineFilterChange={(e) => setCuisineFilter(e.target.value)}
-          onClearFilters={handleClearFilters}
+          onClearFilters={() => {
+            setSearchTerm('');
+            setDietaryFilter('');
+            setCuisineFilter('');
+            setIngredientTerm('');  // Clear ingredient filter too
+            setExternalSearchTerm('');
+          }}
+          ingredientTerm={ingredientTerm}  // Pass ingredientTerm
+          onIngredientChange={handleIngredientChange}  // Pass handler
         />
 
         {/* Display both local and external recipes */}
@@ -146,7 +178,7 @@ const RecipesPage: React.FC = () => {
           {externalData?.results?.map((recipe: SpoonacularRecipe) => (
             <RecipeCard 
               key={`ext-${recipe.id}`} 
-              recipe={recipe}
+              recipe={formatExternalRecipe(recipe)}
               onDelete={() => {}}
               isExternal={true}
             />
@@ -161,10 +193,15 @@ const RecipesPage: React.FC = () => {
           </div>
         )}
 
-        {/* No results message */}
-        {!isExternalLoading && filteredRecipes.length === 0 && (!externalData?.results || externalData.results.length === 0) && (
-          <div className="text-center py-12">
-            <p className="text-gray-500">No recipes found. Try adjusting your search criteria.</p>
+        {/* "Load More Recipes" button */}
+        {externalData?.results?.length > 0 && (
+          <div className="flex justify-center mt-6">
+            <button 
+              className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition"
+              onClick={loadMoreRecipes}
+            >
+              Load More Recipes
+            </button>
           </div>
         )}
       </main>
