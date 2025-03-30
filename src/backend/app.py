@@ -36,11 +36,12 @@ def get_recipes():
         params["includeIngredients"] = ingredient
 
     try:
+        print(f"Sending request to Spoonacular with params: {params}")
         response = requests.get(SPOONACULAR_URL, params=params)
         response.raise_for_status()
         data = response.json()
         
-        print("Spoonacular Response:", data)  # Log response for debugging
+        print(f"Spoonacular Response: {data}")  # Log response for debugging
         
         if "results" not in data:
             return jsonify({"error": "Invalid response from Spoonacular"}), 500
@@ -48,9 +49,9 @@ def get_recipes():
         return jsonify(data)
 
     except requests.exceptions.RequestException as e:
-        print("API Error:", str(e))  # Log error
+        print(f"API Error: {str(e)}")  # Log error
         return jsonify({"error": str(e)}), 500
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(host="127.0.0.1", port=5000, debug=True)

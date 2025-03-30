@@ -36,13 +36,14 @@ const RecipesPage: React.FC = () => {
     const filtered = filterRecipes(recipes, searchTerm, dietaryFilter, cuisineFilter);
     setFilteredRecipes(filtered);
     
-    // Trigger external search if needed
-    if ((searchTerm.trim() !== '' || ingredientTerm.trim() !== '') && filtered.length === 0) {
+    // Determine if we need external search
+    const shouldSearchExternally = 
+      (searchTerm.trim() !== '' || ingredientTerm.trim() !== '') && 
+      (searchTerm.trim() !== externalSearchTerm || ingredientTerm.trim() !== externalIngredientTerm);
+    
+    if (shouldSearchExternally) {
       setExternalSearchTerm(searchTerm);
       setExternalIngredientTerm(ingredientTerm);
-    } else if (searchTerm.trim() === '' && ingredientTerm.trim() === '') {
-      setExternalSearchTerm('');
-      setExternalIngredientTerm('');
     }
   }, [recipes, searchTerm, ingredientTerm, dietaryFilter, cuisineFilter]);
 
