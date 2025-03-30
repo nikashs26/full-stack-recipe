@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useToast } from "@/hooks/use-toast";
 import { useQuery } from '@tanstack/react-query';
@@ -15,7 +16,9 @@ const RecipesPage: React.FC = () => {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [filteredRecipes, setFilteredRecipes] = useState<Recipe[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [ingredientTerm, setIngredientTerm] = useState('');
   const [externalSearchTerm, setExternalSearchTerm] = useState('');
+  const [externalIngredientTerm, setExternalIngredientTerm] = useState('');
   const [dietaryFilter, setDietaryFilter] = useState('');
   const [cuisineFilter, setCuisineFilter] = useState('');
   const [cuisines, setCuisines] = useState<string[]>([]);
@@ -34,28 +37,30 @@ const RecipesPage: React.FC = () => {
     setFilteredRecipes(filtered);
     
     // Trigger external search if needed
-    if (searchTerm.trim() !== '' && filtered.length === 0) {
+    if ((searchTerm.trim() !== '' || ingredientTerm.trim() !== '') && filtered.length === 0) {
       setExternalSearchTerm(searchTerm);
-    } else {
+      setExternalIngredientTerm(ingredientTerm);
+    } else if (searchTerm.trim() === '' && ingredientTerm.trim() === '') {
       setExternalSearchTerm('');
+      setExternalIngredientTerm('');
     }
-  }, [recipes, searchTerm, dietaryFilter, cuisineFilter]);
+  }, [recipes, searchTerm, ingredientTerm, dietaryFilter, cuisineFilter]);
 
   // Query for external recipes
   const { data: externalData, isLoading: isExternalLoading, isError, error } = useQuery({
-    queryKey: ['recipes', externalSearchTerm],
-    queryFn: () => fetchRecipes(externalSearchTerm),
-    enabled: !!externalSearchTerm,
+    queryKey: ['recipes', externalSearchTerm, externalIngredientTerm],
+    queryFn: () => fetchRecipes(externalSearchTerm, externalIngredientTerm),
+    enabled: !!(externalSearchTerm || externalIngredientTerm),
     retry: 1,
     staleTime: 60000, // Cache results for 1 min
-    
   });
+  
   useEffect(() => {
     if (externalData) {
         console.log("External recipe data:", externalData);
         console.log("Results:", externalData.results);
     }
-}, [externalData]);
+  }, [externalData]);
 
   // Handle API errors
   useEffect(() => {
@@ -81,22 +86,6 @@ const RecipesPage: React.FC = () => {
     comments: []
   });
 
-  // Load more external recipes when button is clicked
-  const loadMoreRecipes = async () => {
-    if (!searchTerm.trim()) return;
-    try {
-      const response = await fetch(`http://localhost:5000/get_recipes?query=${searchTerm}`);
-      const data = await response.json();
-      
-      setFilteredRecipes(prevRecipes => [
-        ...prevRecipes,
-        ...data.results.map(formatExternalRecipe)
-      ]);
-    } catch (error) {
-      console.error("Error fetching more recipes:", error);
-    }
-  };
-
   // Delete local recipes
   const handleDeleteRecipe = (id: string) => {
     if (window.confirm('Are you sure you want to delete this recipe?')) {
@@ -113,7 +102,19 @@ const RecipesPage: React.FC = () => {
 
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(e.target.value);
-    if (!e.target.value.trim()) setExternalSearchTerm('');
+  };
+
+  const handleIngredientSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setIngredientTerm(e.target.value);
+  };
+
+  const handleClearFilters = () => {
+    setSearchTerm('');
+    setIngredientTerm('');
+    setDietaryFilter('');
+    setCuisineFilter('');
+    setExternalSearchTerm('');
+    setExternalIngredientTerm('');
   };
 
   return (
@@ -124,18 +125,15 @@ const RecipesPage: React.FC = () => {
         
         <FilterBar 
           searchTerm={searchTerm}
+          ingredientTerm={ingredientTerm}
           dietaryFilter={dietaryFilter}
           cuisineFilter={cuisineFilter}
           cuisines={cuisines}
           onSearchChange={handleSearch}
+          onIngredientChange={handleIngredientSearch}
           onDietaryFilterChange={(e) => setDietaryFilter(e.target.value)}
           onCuisineFilterChange={(e) => setCuisineFilter(e.target.value)}
-          onClearFilters={() => {
-            setSearchTerm('');
-            setDietaryFilter('');
-            setCuisineFilter('');
-            setExternalSearchTerm('');
-          }}
+          onClearFilters={handleClearFilters}
         />
 
         {/* Display both local and external recipes */}
@@ -168,15 +166,10 @@ const RecipesPage: React.FC = () => {
           </div>
         )}
 
-        {/* "Load More Recipes" button */}
-        {externalData?.results?.length > 0 && (
-          <div className="flex justify-center mt-6">
-            <button 
-              className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition"
-              onClick={loadMoreRecipes}
-            >
-              Load More Recipes
-            </button>
+        {/* No results message */}
+        {!isExternalLoading && filteredRecipes.length === 0 && (!externalData?.results || externalData.results.length === 0) && (
+          <div className="text-center py-12">
+            <p className="text-gray-500">No recipes found. Try adjusting your search criteria.</p>
           </div>
         )}
       </main>
