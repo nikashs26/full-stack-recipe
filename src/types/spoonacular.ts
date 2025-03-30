@@ -28,6 +28,7 @@ export interface SpoonacularRecipe {
     amount: number;
     unit: string;
     originalString: string;
+    original?: string;
   }[];
 }
 

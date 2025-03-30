@@ -33,10 +33,21 @@ const RecipesPage: React.FC = () => {
 
   // Update filtered recipes when filters change
   useEffect(() => {
-    const filtered = filterRecipes(recipes, searchTerm, dietaryFilter, cuisineFilter);
+    // First filter by search term, dietary filter, and cuisine filter
+    let filtered = filterRecipes(recipes, searchTerm, dietaryFilter, cuisineFilter);
+    
+    // Then apply ingredient filter if it exists
+    if (ingredientTerm) {
+      filtered = filtered.filter(recipe => 
+        recipe.ingredients.some(ingredient => 
+          ingredient.name.toLowerCase().includes(ingredientTerm.toLowerCase())
+        )
+      );
+    }
+    
     setFilteredRecipes(filtered);
     
-    // Always update external search terms when either search term changes
+    // Update external search terms
     if (searchTerm !== externalSearchTerm || ingredientTerm !== externalIngredientTerm) {
       setExternalSearchTerm(searchTerm);
       setExternalIngredientTerm(ingredientTerm);

@@ -1,47 +1,39 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Clock, Users, ExternalLink } from 'lucide-react';
 import Header from '../components/Header';
 import { useToast } from "@/hooks/use-toast";
 import { useQuery } from '@tanstack/react-query';
-import { fetchRecipes } from '../lib/spoonacular';
+import { fetchRecipeById } from '../lib/spoonacular';
 import { SpoonacularRecipe } from '../types/spoonacular';
 import { Card, CardContent } from '@/components/ui/card';
 
 const ExternalRecipeDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
-  const numericId = id ? parseInt(id.replace('ext-', '')) : 0;
+  const numericId = id ? parseInt(id) : 0;
   const navigate = useNavigate();
   const { toast } = useToast();
   const [recipe, setRecipe] = useState<SpoonacularRecipe | null>(null);
   
-  // Fetch the external recipe data
+  // Fetch the external recipe data by ID
   const { data, isLoading, error } = useQuery({
     queryKey: ['externalRecipe', numericId],
-    queryFn: async () => {
-      // We use an empty search with the ID to get specific recipe
-      const response = await fetchRecipes("", "");
-      if (response.results) {
-        const foundRecipe = response.results.find((r: SpoonacularRecipe) => r.id === numericId);
-        if (foundRecipe) {
-          return foundRecipe;
-        }
-      }
-      throw new Error("Recipe not found");
-    },
+    queryFn: () => fetchRecipeById(numericId),
     enabled: !!numericId,
     staleTime: 60 * 1000, // 1 minute
+    retry: 2,
   });
 
   useEffect(() => {
     if (data) {
+      console.log("Loaded recipe details:", data);
       setRecipe(data);
     }
   }, [data]);
 
   useEffect(() => {
     if (error) {
+      console.error("Error loading recipe:", error);
       toast({
         title: "Error loading recipe",
         description: "Could not load the recipe details. Please try again later.",

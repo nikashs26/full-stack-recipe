@@ -9,6 +9,7 @@ CORS(app)
 # Spoonacular API Key (Replace with your actual key)
 SPOONACULAR_API_KEY = "01f12ed117584307b5cba262f43a8d49"
 SPOONACULAR_URL = "https://api.spoonacular.com/recipes/complexSearch"
+SPOONACULAR_RECIPE_URL = "https://api.spoonacular.com/recipes"
 
 
 @app.route("/get_recipes", methods=["GET"])
@@ -52,6 +53,36 @@ def get_recipes():
 
     except requests.exceptions.RequestException as e:
         print(f"API Error: {str(e)}")  # Log error
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/get_recipe_by_id", methods=["GET"])
+def get_recipe_by_id():
+    recipe_id = request.args.get("id")
+    
+    if not recipe_id:
+        return jsonify({"error": "Recipe ID is required"}), 400
+    
+    try:
+        # Construct the URL for the recipe information endpoint
+        url = f"{SPOONACULAR_RECIPE_URL}/{recipe_id}/information"
+        
+        params = {
+            "apiKey": SPOONACULAR_API_KEY,
+            "includeNutrition": "false"
+        }
+        
+        print(f"Fetching recipe details for ID: {recipe_id}")
+        response = requests.get(url, params=params)
+        response.raise_for_status()
+        
+        recipe_data = response.json()
+        print(f"Recipe details retrieved: {recipe_data['title']}")
+        
+        return jsonify(recipe_data)
+        
+    except requests.exceptions.RequestException as e:
+        print(f"API Error when fetching recipe {recipe_id}: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 

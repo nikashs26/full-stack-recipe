@@ -14,7 +14,7 @@ interface RecipeCardProps {
 
 const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onDelete, isExternal = false }) => {
   // Handle both local and external recipe types
-  const recipeId = isExternal ? `ext-${(recipe as SpoonacularRecipe).id}` : (recipe as Recipe).id;
+  const recipeId = isExternal ? (recipe as SpoonacularRecipe).id.toString() : (recipe as Recipe).id;
   const recipeName = isExternal ? (recipe as SpoonacularRecipe).title : (recipe as Recipe).name;
   const recipeCuisine = isExternal 
     ? ((recipe as SpoonacularRecipe).cuisines?.length > 0 ? (recipe as SpoonacularRecipe).cuisines[0] : "External") 
@@ -48,6 +48,7 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onDelete, isExternal = 
     setImageSrc('/placeholder.svg');
   };
 
+  // Fix the link path for external recipes
   const cardLink = isExternal 
     ? `/external-recipe/${(recipe as SpoonacularRecipe).id}` 
     : `/recipe/${(recipe as Recipe).id}`;
