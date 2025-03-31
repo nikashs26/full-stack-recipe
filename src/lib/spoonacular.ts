@@ -1,13 +1,26 @@
+
 const API_URL = "http://127.0.0.1:5000/get_recipes";
 const API_URL_RECIPE_BY_ID = "http://127.0.0.1:5000/get_recipe_by_id";
+const API_DB_RECIPES = "http://127.0.0.1:5000/recipes";
 
 export const fetchRecipes = async (query: string = "", ingredient: string = "") => {
     console.log(`Fetching recipes with query: "${query}" and ingredient: "${ingredient}"`);
     
     // Validate that at least one parameter is provided
     if (!query && !ingredient) {
-        console.error("Either query or ingredient must be provided");
-        return { results: [] };
+        // If no query is provided, get all recipes from our database
+        try {
+            const response = await fetch(API_DB_RECIPES);
+            if (!response.ok) {
+                throw new Error(`Failed to fetch recipes from database (Status: ${response.status})`);
+            }
+            const data = await response.json();
+            console.log(`Found ${data.results?.length || 0} recipes in database`);
+            return data;
+        } catch (error) {
+            console.error("Error fetching recipes from database:", error);
+            return { results: [] };
+        }
     }
     
     try {
@@ -128,6 +141,46 @@ export const fetchRecipeById = async (recipeId: number) => {
             throw new Error("Request timed out while fetching recipe details");
         }
         console.error("Error fetching recipe details:", error);
+        throw error;
+    }
+};
+
+// Add/update a recipe in the MongoDB database
+export const saveRecipeToDB = async (recipe: any) => {
+    try {
+        const response = await fetch(API_DB_RECIPES, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(recipe),
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Failed to save recipe (Status: ${response.status})`);
+        }
+        
+        return await response.json();
+    } catch (error) {
+        console.error("Error saving recipe to database:", error);
+        throw error;
+    }
+};
+
+// Delete a recipe from the MongoDB database
+export const deleteRecipeFromDB = async (recipeId: string) => {
+    try {
+        const response = await fetch(`${API_DB_RECIPES}/${recipeId}`, {
+            method: 'DELETE',
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Failed to delete recipe (Status: ${response.status})`);
+        }
+        
+        return await response.json();
+    } catch (error) {
+        console.error("Error deleting recipe from database:", error);
         throw error;
     }
 };
