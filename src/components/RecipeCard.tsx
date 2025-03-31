@@ -59,13 +59,13 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onDelete, isExternal = 
         <div className="relative h-48 w-full overflow-hidden">
           <img 
             src={imageSrc} 
-            alt={recipeName} 
+            alt={recipeName || "Recipe"} 
             className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 hover:scale-110"
             onError={handleImageError}
           />
           
           {/* Rating badge for local recipes */}
-          {!isExternal && (recipe as Recipe).ratings.length > 0 && (
+          {!isExternal && (recipe as Recipe).ratings && (recipe as Recipe).ratings.length > 0 && (
             <div className="absolute top-2 right-2 bg-black bg-opacity-60 text-white rounded-full px-2 py-1 text-sm flex items-center">
               <Star className="h-4 w-4 text-yellow-400 mr-1" />
               <span>{avgRating}</span>
@@ -92,15 +92,15 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onDelete, isExternal = 
       <div className="p-5">
         <h2 className="text-xl font-semibold text-gray-800 mb-2 line-clamp-1">
           <Link to={cardLink} className="hover:text-recipe-primary transition-colors flex items-center">
-            {recipeName}
+            {recipeName || "Untitled Recipe"}
             {isExternal && <ExternalLink className="h-4 w-4 ml-1 text-blue-500" />}
           </Link>
         </h2>
-        <p className="text-sm text-gray-600 mb-2">Cuisine: {recipeCuisine}</p>
+        <p className="text-sm text-gray-600 mb-2">Cuisine: {recipeCuisine || "Other"}</p>
         
         <div className="mb-4">
           {/* Show dietary tags for local recipes */}
-          {!isExternal && dietaryTags.map((tag, index) => (
+          {!isExternal && dietaryTags && dietaryTags.map((tag, index) => (
             <span key={index} className={`recipe-tag ${tag.class}`}>
               {tag.text}
             </span>

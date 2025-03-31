@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Clock, Users, ExternalLink } from 'lucide-react';
@@ -115,8 +116,8 @@ const ExternalRecipeDetailPage: React.FC = () => {
         <article className="bg-white shadow-lg rounded-lg overflow-hidden animate-fade-in">
           <div className="relative h-80 w-full">
             <img 
-              src={recipe.image} 
-              alt={recipe.title} 
+              src={recipe.image || '/placeholder.svg'} 
+              alt={recipe.title || "Recipe"} 
               className="absolute inset-0 h-full w-full object-cover"
               onError={(e) => {
                 (e.target as HTMLImageElement).src = '/placeholder.svg';
@@ -124,7 +125,7 @@ const ExternalRecipeDetailPage: React.FC = () => {
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
             <div className="absolute bottom-0 left-0 p-6 w-full">
-              <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">{recipe.title}</h1>
+              <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">{recipe.title || "Untitled Recipe"}</h1>
               <p className="text-white/90 text-lg">
                 {recipe.cuisines && recipe.cuisines.length > 0 
                   ? `Cuisine: ${recipe.cuisines.join(', ')}` 
@@ -136,12 +137,13 @@ const ExternalRecipeDetailPage: React.FC = () => {
           <div className="p-6">
             <div className="flex flex-wrap items-center justify-between mb-6">
               <div className="flex items-center flex-wrap gap-2">
-                {dietaryInfo.map((diet, index) => (
-                  <span key={index} className="inline-block px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
-                    {diet}
-                  </span>
-                ))}
-                {dietaryInfo.length === 0 && (
+                {dietaryInfo && dietaryInfo.length > 0 ? (
+                  dietaryInfo.map((diet, index) => (
+                    <span key={index} className="inline-block px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
+                      {diet}
+                    </span>
+                  ))
+                ) : (
                   <span className="text-gray-500 text-sm">No dietary information available</span>
                 )}
               </div>
@@ -175,11 +177,11 @@ const ExternalRecipeDetailPage: React.FC = () => {
             <div className="mb-6">
               <h2 className="text-xl font-semibold text-gray-800 mb-3">Ingredients</h2>
               <ul className="space-y-2 pl-5">
-                {ingredients.length > 0 ? (
+                {ingredients && ingredients.length > 0 ? (
                   ingredients.map((ingredient, index) => (
                     <li key={index} className="text-gray-700 flex items-start">
                       <span className="inline-block h-2 w-2 rounded-full bg-recipe-primary mt-2 mr-2"></span>
-                      {ingredient.originalString || `${ingredient.amount} ${ingredient.unit} ${ingredient.name}`}
+                      {ingredient.originalString || ingredient.original || `${ingredient.amount} ${ingredient.unit} ${ingredient.name}`}
                     </li>
                   ))
                 ) : (
@@ -190,7 +192,7 @@ const ExternalRecipeDetailPage: React.FC = () => {
             
             <div className="mb-6">
               <h2 className="text-xl font-semibold text-gray-800 mb-3">Instructions</h2>
-              {instructions.length > 0 ? (
+              {instructions && instructions.length > 0 ? (
                 <ol className="space-y-4 pl-5">
                   {instructions.map((instruction, index) => (
                     <li key={index} className="text-gray-700">
