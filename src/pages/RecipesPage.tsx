@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useToast } from "@/hooks/use-toast";
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Header from '../components/Header';
 import FilterBar from '../components/FilterBar';
 import RecipeCard from '../components/RecipeCard';
@@ -24,6 +24,7 @@ const RecipesPage: React.FC = () => {
   const [searchError, setSearchError] = useState<string | null>(null);
   const [cuisines, setCuisines] = useState<string[]>([]);
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     const loadedRecipes = loadRecipes();
@@ -49,7 +50,22 @@ const RecipesPage: React.FC = () => {
     enabled: !!externalSearchTerm || !!ingredientTerm,
     retry: 1,
     staleTime: 60000,
-    onError: (error: Error) => {
+    meta: {
+      onError: (error: Error) => {
+        console.error("Query error:", error);
+        setSearchError(error.message || "Failed to fetch external recipes");
+        toast({
+          title: "Search Error",
+          description: error.message || "There was a problem searching for recipes. Please try again.",
+          variant: "destructive",
+        });
+      }
+    }
+  });
+
+  // Handle errors from the query manually if needed
+  useEffect(() => {
+    if (isError && error instanceof Error) {
       console.error("Query error:", error);
       setSearchError(error.message || "Failed to fetch external recipes");
       toast({
@@ -58,7 +74,7 @@ const RecipesPage: React.FC = () => {
         variant: "destructive",
       });
     }
-  });
+  }, [isError, error, toast]);
 
   const formatExternalRecipe = (recipe: SpoonacularRecipe): SpoonacularRecipe => {
     return {
@@ -100,8 +116,7 @@ const RecipesPage: React.FC = () => {
   const retrySearch = () => {
     if (externalSearchTerm) {
       setSearchError(null);
-      const queryCache = useQuery.getQueryCache();
-      queryCache.invalidateQueries({ queryKey: ['recipes', externalSearchTerm, ingredientTerm] });
+      queryClient.invalidateQueries({ queryKey: ['recipes', externalSearchTerm, ingredientTerm] });
     }
   };
 
