@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useToast } from "@/hooks/use-toast";
 import { useQuery } from '@tanstack/react-query';
@@ -9,7 +10,8 @@ import { filterRecipes, getUniqueCuisines } from '../utils/recipeUtils';
 import { fetchRecipes } from '../lib/spoonacular';
 import { Recipe } from '../types/recipe';
 import { SpoonacularRecipe } from '../types/spoonacular';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Search, AlertCircle } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 const RecipesPage: React.FC = () => {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
@@ -19,6 +21,7 @@ const RecipesPage: React.FC = () => {
   const [dietaryFilter, setDietaryFilter] = useState('');
   const [cuisineFilter, setCuisineFilter] = useState('');
   const [ingredientTerm, setIngredientTerm] = useState('');
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [cuisines, setCuisines] = useState<string[]>([]);
   const { toast } = useToast();
 
@@ -31,6 +34,7 @@ const RecipesPage: React.FC = () => {
   useEffect(() => {
     const filtered = filterRecipes(recipes, searchTerm, dietaryFilter, cuisineFilter, ingredientTerm);
     setFilteredRecipes(filtered);
+    setSearchError(null);
     
     if (searchTerm.trim() !== '' && filtered.length === 0) {
       setExternalSearchTerm(searchTerm);
@@ -40,11 +44,20 @@ const RecipesPage: React.FC = () => {
   }, [recipes, searchTerm, dietaryFilter, cuisineFilter, ingredientTerm]);
 
   const { data: externalData, isLoading: isExternalLoading, isError, error } = useQuery({
-    queryKey: ['recipes', externalSearchTerm],
-    queryFn: () => fetchRecipes(externalSearchTerm),
-    enabled: !!externalSearchTerm,
+    queryKey: ['recipes', externalSearchTerm, ingredientTerm],
+    queryFn: () => fetchRecipes(externalSearchTerm, ingredientTerm),
+    enabled: !!externalSearchTerm || !!ingredientTerm,
     retry: 1,
     staleTime: 60000,
+    onError: (error: Error) => {
+      console.error("Query error:", error);
+      setSearchError(error.message || "Failed to fetch external recipes");
+      toast({
+        title: "Search Error",
+        description: error.message || "There was a problem searching for recipes. Please try again.",
+        variant: "destructive",
+      });
+    }
   });
 
   const formatExternalRecipe = (recipe: SpoonacularRecipe): SpoonacularRecipe => {
@@ -57,46 +70,6 @@ const RecipesPage: React.FC = () => {
       diets: recipe.diets || [],
       readyInMinutes: recipe.readyInMinutes || 0
     };
-  };
-
-  const loadMoreRecipes = async () => {
-    if (!searchTerm.trim()) return;
-
-    try {
-      const response = await fetch(`http://localhost:5000/get_recipes?query=${encodeURIComponent(searchTerm)}`);
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`Error response: ${response.status} ${response.statusText}`, errorText);
-        throw new Error(`Error fetching recipes: ${response.statusText}`);
-      }
-
-      let data;
-      try {
-        data = await response.json();
-      } catch (parseError) {
-        console.error("JSON parsing error:", parseError);
-        console.error("Response text:", await response.text());
-        throw new Error("Failed to parse response as JSON");
-      }
-
-      if (!data || !data.results) {
-        console.error("Invalid data structure:", data);
-        throw new Error("Invalid response format from API");
-      }
-
-      setFilteredRecipes(prevRecipes => [
-        ...prevRecipes,
-        ...data.results.map(formatExternalRecipe)
-      ]);
-    } catch (error) {
-      console.error("Error fetching more recipes:", error);
-      toast({
-        title: "Error",
-        description: error.message || "There was an issue loading more recipes.",
-        variant: "destructive",
-      });
-    }
   };
 
   const handleDeleteRecipe = (id: string) => {
@@ -114,11 +87,22 @@ const RecipesPage: React.FC = () => {
 
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(e.target.value);
-    if (!e.target.value.trim()) setExternalSearchTerm('');
+    if (!e.target.value.trim()) {
+      setExternalSearchTerm('');
+      setSearchError(null);
+    }
   };
 
   const handleIngredientChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setIngredientTerm(e.target.value);
+  };
+
+  const retrySearch = () => {
+    if (externalSearchTerm) {
+      setSearchError(null);
+      const queryCache = useQuery.getQueryCache();
+      queryCache.invalidateQueries({ queryKey: ['recipes', externalSearchTerm, ingredientTerm] });
+    }
   };
 
   return (
@@ -141,10 +125,35 @@ const RecipesPage: React.FC = () => {
             setCuisineFilter('');
             setIngredientTerm('');
             setExternalSearchTerm('');
+            setSearchError(null);
           }}
           ingredientTerm={ingredientTerm}
           onIngredientChange={handleIngredientChange}
         />
+
+        {searchError && (
+          <Alert variant="destructive" className="mb-6">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Error</AlertTitle>
+            <AlertDescription>
+              {searchError}
+              <button 
+                onClick={retrySearch}
+                className="ml-2 underline font-medium"
+              >
+                Try again
+              </button>
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {filteredRecipes.length === 0 && !externalSearchTerm && !isExternalLoading && !searchError && (
+          <div className="text-center py-12">
+            <Search className="mx-auto h-12 w-12 text-gray-400" />
+            <h3 className="mt-2 text-lg font-medium text-gray-900">No recipes found</h3>
+            <p className="mt-1 text-gray-500">Try adjusting your search or filters to find recipes.</p>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredRecipes.map(recipe => (
@@ -166,20 +175,19 @@ const RecipesPage: React.FC = () => {
         </div>
 
         {isExternalLoading && (
-          <div className="flex justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <span className="ml-2 text-gray-600">Searching external recipes...</span>
+          <div className="flex justify-center items-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-primary mr-2" />
+            <span className="text-gray-600">Searching for recipes...</span>
           </div>
         )}
 
-        {externalData?.results?.length > 0 && (
-          <div className="flex justify-center mt-6">
-            <button 
-              className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition"
-              onClick={loadMoreRecipes}
-            >
-              Load More Recipes
-            </button>
+        {!isExternalLoading && externalData?.results?.length === 0 && externalSearchTerm && !searchError && (
+          <div className="text-center py-12">
+            <Search className="mx-auto h-12 w-12 text-gray-400" />
+            <h3 className="mt-2 text-lg font-medium text-gray-900">No external recipes found</h3>
+            <p className="mt-1 text-gray-500">
+              We couldn't find any external recipes matching your search. Try a different term.
+            </p>
           </div>
         )}
       </main>

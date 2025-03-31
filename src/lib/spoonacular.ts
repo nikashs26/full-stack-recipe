@@ -10,7 +10,9 @@ export const fetchRecipes = async (query: string = "", ingredient: string = "") 
     if (!query && !ingredient) {
         // If no query is provided, get all recipes from our database
         try {
-            const response = await fetch(API_DB_RECIPES);
+            const response = await fetch(API_DB_RECIPES, { 
+                signal: AbortSignal.timeout(5000) // Shorter timeout for DB calls
+            });
             if (!response.ok) {
                 throw new Error(`Failed to fetch recipes from database (Status: ${response.status})`);
             }
@@ -24,9 +26,9 @@ export const fetchRecipes = async (query: string = "", ingredient: string = "") 
     }
     
     try {
-        // Timeout setup to prevent hanging requests
+        // Shorter timeout to prevent UI hanging
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10-second timeout
+        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5-second timeout
         
         // Build the URL with appropriate parameters
         let url = `${API_URL}?`;

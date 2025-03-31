@@ -2,7 +2,6 @@
 from flask import Flask, request, jsonify
 import requests
 from flask_cors import CORS
-import pymongo
 import os
 import json
 from bson.objectid import ObjectId
@@ -15,17 +14,21 @@ CORS(app)
 SPOONACULAR_API_KEY = "01f12ed117584307b5cba262f43a8d49"  # ← Update this!
 SPOONACULAR_URL = "https://api.spoonacular.com/recipes/complexSearch"
 
-# MongoDB setup
-# Make sure to install pymongo: pip install pymongo
+# MongoDB setup - with fallback to in-memory storage
+in_memory_recipes = []
+mongo_available = False
+
 try:
-    mongo_client = pymongo.MongoClient("mongodb://localhost:27017/")
+    import pymongo
+    mongo_client = pymongo.MongoClient("mongodb://localhost:27017/", serverSelectionTimeoutMS=2000)
+    mongo_client.server_info()  # Will raise an exception if cannot connect
     db = mongo_client["recipe_db"]
     recipes_collection = db["recipes"]
+    mongo_available = True
     print("MongoDB connection successful")
 except Exception as e:
     print(f"MongoDB connection error: {e}")
-    # Fallback to memory storage if MongoDB is not available
-    in_memory_recipes = []
+    print("Using in-memory storage as fallback")
 
 class JSONEncoder(json.JSONEncoder):
     def default(self, o):
@@ -36,30 +39,56 @@ class JSONEncoder(json.JSONEncoder):
 @app.route("/get_recipes", methods=["GET"])
 def get_recipes():
     query = request.args.get("query", "").strip()
-    if not query:
-        return jsonify({"error": "Query parameter is required"}), 400
+    ingredient = request.args.get("ingredient", "").strip()
+    
+    if not query and not ingredient:
+        return jsonify({"error": "At least one search parameter is required"}), 400
 
     # First check if we have recipes in MongoDB that match the query
+    db_results = []
     try:
-        if 'recipes_collection' in globals():
-            db_results = list(recipes_collection.find({"title": {"$regex": query, "$options": "i"}}))
-            if db_results and len(db_results) > 0:
-                print(f"Found {len(db_results)} recipes in database for query: {query}")
+        if mongo_available:
+            search_query = {}
+            if query:
+                search_query["title"] = {"$regex": query, "$options": "i"}
+            if ingredient:
+                search_query["$or"] = [
+                    {"extendedIngredients.name": {"$regex": ingredient, "$options": "i"}},
+                    {"ingredients": {"$regex": ingredient, "$options": "i"}}
+                ]
+            
+            db_results = list(recipes_collection.find(search_query).limit(10))
+            if db_results:
+                print(f"Found {len(db_results)} recipes in database")
                 return JSONEncoder().encode({"results": db_results})
+        else:
+            # If MongoDB is not available, search in-memory storage
+            results = []
+            for recipe in in_memory_recipes:
+                if (query and query.lower() in recipe.get("title", "").lower()) or \
+                   (ingredient and ingredient.lower() in json.dumps(recipe).lower()):
+                    results.append(recipe)
+            if results:
+                return jsonify({"results": results})
     except Exception as e:
-        print(f"Error querying MongoDB: {e}")
-        # Continue to API if MongoDB query fails
+        print(f"Error querying storage: {e}")
+        # Continue to API if query fails
 
     # If no results in DB or MongoDB not available, call the Spoonacular API
     params = {
-        "query": query,
         "apiKey": SPOONACULAR_API_KEY,
         "number": 10,  # Limit to 10 results
         "addRecipeInformation": "true",
     }
+    
+    if query:
+        params["query"] = query
+    if ingredient:
+        params["includeIngredients"] = ingredient
 
     try:
-        response = requests.get(SPOONACULAR_URL, params=params)
+        # Use a short timeout to avoid hanging
+        response = requests.get(SPOONACULAR_URL, params=params, timeout=3)
         
         # Check if content type is JSON
         if 'application/json' not in response.headers.get('Content-Type', ''):
@@ -74,9 +103,9 @@ def get_recipes():
         if "results" not in data:
             return jsonify({"error": "Invalid response from Spoonacular"}), 500
 
-        # Store results in MongoDB for future queries
+        # Store results in storage for future queries
         try:
-            if 'recipes_collection' in globals():
+            if mongo_available:
                 for recipe in data["results"]:
                     # Ensure recipe has all necessary fields
                     if "title" not in recipe:
@@ -89,19 +118,26 @@ def get_recipes():
                     if not existing:
                         recipes_collection.insert_one(recipe)
                 print(f"Stored {len(data['results'])} recipes in MongoDB")
+            else:
+                # Store in in-memory cache if MongoDB not available
+                for recipe in data["results"]:
+                    if not any(r.get("id") == recipe["id"] for r in in_memory_recipes):
+                        in_memory_recipes.append(recipe)
         except Exception as e:
-            print(f"Error storing recipes in MongoDB: {e}")
+            print(f"Error storing recipes: {e}")
 
         return jsonify(data)  # Send results to frontend
 
+    except requests.exceptions.Timeout:
+        return jsonify({"error": "Request to Spoonacular API timed out", "results": []}), 504
     except ValueError as e:  # JSON parsing error
         return jsonify({
             "error": "Failed to parse API response as JSON",
             "message": str(e),
-            "response_text": response.text[:100] + "..." # Show part of the response
+            "results": []
         }), 500
     except requests.exceptions.RequestException as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": str(e), "results": []}), 500
 
 @app.route("/get_recipe_by_id", methods=["GET"])
 def get_recipe_by_id():
@@ -109,23 +145,33 @@ def get_recipe_by_id():
     if not recipe_id:
         return jsonify({"error": "Recipe ID is required"}), 400
     
-    # First check if we have this recipe in MongoDB
+    # First check if we have this recipe in storage
     try:
-        if 'recipes_collection' in globals():
-            db_recipe = recipes_collection.find_one({"id": int(recipe_id)})
+        if mongo_available:
+            # Try to find as integer ID (for external recipes)
+            try:
+                db_recipe = recipes_collection.find_one({"id": int(recipe_id)})
+            except ValueError:
+                # If not an integer, look for it as a string (for local recipes)
+                db_recipe = recipes_collection.find_one({"id": recipe_id})
+                
             if db_recipe:
                 print(f"Found recipe {recipe_id} in database")
                 return JSONEncoder().encode(db_recipe)
+        else:
+            # Check in-memory storage
+            for recipe in in_memory_recipes:
+                if str(recipe.get("id")) == str(recipe_id):
+                    return jsonify(recipe)
     except Exception as e:
-        print(f"Error querying MongoDB for recipe {recipe_id}: {e}")
-        # Continue to API if MongoDB query fails
+        print(f"Error querying storage for recipe {recipe_id}: {e}")
     
-    # If not in DB or MongoDB not available, call the Spoonacular API
+    # If not in DB, call the Spoonacular API
     api_url = f"https://api.spoonacular.com/recipes/{recipe_id}/information"
     params = {"apiKey": SPOONACULAR_API_KEY}
     
     try:
-        response = requests.get(api_url, params=params)
+        response = requests.get(api_url, params=params, timeout=3)
         response.raise_for_status()
         data = response.json()
         
@@ -135,21 +181,27 @@ def get_recipe_by_id():
         if "cuisines" not in data or not data["cuisines"]:
             data["cuisines"] = ["Misc"]
             
-        # Store in MongoDB for future queries
+        # Store in storage for future queries
         try:
-            if 'recipes_collection' in globals():
+            if mongo_available:
                 existing = recipes_collection.find_one({"id": data["id"]})
                 if not existing:
                     recipes_collection.insert_one(data)
                     print(f"Stored recipe {recipe_id} in MongoDB")
+            else:
+                # Store in in-memory cache
+                if not any(r.get("id") == data["id"] for r in in_memory_recipes):
+                    in_memory_recipes.append(data)
         except Exception as e:
-            print(f"Error storing recipe {recipe_id} in MongoDB: {e}")
+            print(f"Error storing recipe {recipe_id}: {e}")
         
         return jsonify(data)
+    except requests.exceptions.Timeout:
+        return jsonify({"error": "Request to Spoonacular API timed out"}), 504
     except requests.exceptions.RequestException as e:
         return jsonify({"error": str(e)}), 500
 
-# ... keep existing code (remaining routes for recipes CRUD operations)
+# ... keep existing code (CRUD operations for recipes)
 
 if __name__ == "__main__":
     app.run(debug=True)
