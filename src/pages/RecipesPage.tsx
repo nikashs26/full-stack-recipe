@@ -23,6 +23,7 @@ const RecipesPage: React.FC = () => {
   const [ingredientTerm, setIngredientTerm] = useState('');
   const [searchError, setSearchError] = useState<string | null>(null);
   const [cuisines, setCuisines] = useState<string[]>([]);
+  const [filteredExternalRecipes, setFilteredExternalRecipes] = useState<SpoonacularRecipe[]>([]);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -75,6 +76,35 @@ const RecipesPage: React.FC = () => {
       });
     }
   }, [isError, error, toast]);
+
+  // Filter external recipes when they arrive or when filters change
+  useEffect(() => {
+    if (externalData?.results) {
+      let filteredExternal = [...externalData.results];
+      
+      // Apply dietary filter to external recipes
+      if (dietaryFilter) {
+        filteredExternal = filteredExternal.filter(recipe => 
+          recipe.diets && recipe.diets.some(diet => 
+            diet.toLowerCase().includes(dietaryFilter.toLowerCase())
+          )
+        );
+      }
+      
+      // Apply cuisine filter to external recipes
+      if (cuisineFilter) {
+        filteredExternal = filteredExternal.filter(recipe => 
+          recipe.cuisines && recipe.cuisines.some(cuisine => 
+            cuisine.toLowerCase() === cuisineFilter.toLowerCase()
+          )
+        );
+      }
+      
+      setFilteredExternalRecipes(filteredExternal);
+    } else {
+      setFilteredExternalRecipes([]);
+    }
+  }, [externalData, dietaryFilter, cuisineFilter]);
 
   const formatExternalRecipe = (recipe: SpoonacularRecipe): SpoonacularRecipe => {
     return {
@@ -162,7 +192,7 @@ const RecipesPage: React.FC = () => {
           </Alert>
         )}
 
-        {filteredRecipes.length === 0 && !externalSearchTerm && !isExternalLoading && !searchError && (
+        {filteredRecipes.length === 0 && filteredExternalRecipes.length === 0 && !isExternalLoading && !searchError && (
           <div className="text-center py-12">
             <Search className="mx-auto h-12 w-12 text-gray-400" />
             <h3 className="mt-2 text-lg font-medium text-gray-900">No recipes found</h3>
@@ -179,7 +209,7 @@ const RecipesPage: React.FC = () => {
             />
           ))}
 
-          {externalData?.results?.map((recipe: SpoonacularRecipe) => (
+          {filteredExternalRecipes.map((recipe: SpoonacularRecipe) => (
             <RecipeCard 
               key={`ext-${recipe.id}`} 
               recipe={formatExternalRecipe(recipe)}

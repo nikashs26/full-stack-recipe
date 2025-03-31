@@ -1,13 +1,14 @@
 
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Clock, Users, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Star } from 'lucide-react';
 import Header from '../components/Header';
 import { useToast } from "@/hooks/use-toast";
 import { useQuery } from '@tanstack/react-query';
 import { fetchRecipeById } from '../lib/spoonacular';
 import { SpoonacularRecipe } from '../types/spoonacular';
-import { Card, CardContent } from '@/components/ui/card';
+import { getDietaryTags } from '../utils/recipeUtils';
+import { DietaryRestriction } from '../types/recipe';
 
 const ExternalRecipeDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -89,7 +90,9 @@ const ExternalRecipeDetailPage: React.FC = () => {
   }
 
   // Extract ingredients from the recipe
-  const ingredients = recipe.extendedIngredients || [];
+  const ingredients = recipe.extendedIngredients?.map(ing => 
+    ing.originalString || ing.original || `${ing.amount} ${ing.unit} ${ing.name}`
+  ) || [];
   
   // Extract instructions from the recipe
   let instructions: string[] = [];
@@ -102,8 +105,15 @@ const ExternalRecipeDetailPage: React.FC = () => {
     instructions = recipe.analyzedInstructions[0].steps.map(s => s.step);
   }
 
-  // Extract dietary information
-  const dietaryInfo = recipe.diets || [];
+  // Make dietary info match the format of regular recipes
+  const dietaryRestrictions = (recipe.diets || []).map(diet => {
+    if (diet.includes('vegetarian')) return 'vegetarian';
+    if (diet.includes('vegan')) return 'vegan'; 
+    if (diet.includes('gluten-free')) return 'gluten-free';
+    return diet;
+  }) as DietaryRestriction[];
+  
+  const dietaryTags = getDietaryTags(dietaryRestrictions);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -127,61 +137,37 @@ const ExternalRecipeDetailPage: React.FC = () => {
             <div className="absolute bottom-0 left-0 p-6 w-full">
               <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">{recipe.title || "Untitled Recipe"}</h1>
               <p className="text-white/90 text-lg">
-                {recipe.cuisines && recipe.cuisines.length > 0 
-                  ? `Cuisine: ${recipe.cuisines.join(', ')}` 
-                  : 'Cuisine: Not specified'}
+                Cuisine: {recipe.cuisines && recipe.cuisines.length > 0 
+                  ? recipe.cuisines[0] 
+                  : "Other"}
               </p>
             </div>
           </div>
           
           <div className="p-6">
             <div className="flex flex-wrap items-center justify-between mb-6">
-              <div className="flex items-center flex-wrap gap-2">
-                {dietaryInfo && dietaryInfo.length > 0 ? (
-                  dietaryInfo.map((diet, index) => (
-                    <span key={index} className="inline-block px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
-                      {diet}
-                    </span>
-                  ))
-                ) : (
-                  <span className="text-gray-500 text-sm">No dietary information available</span>
-                )}
+              <div className="flex items-center">
+                {dietaryTags.map((tag, index) => (
+                  <span key={index} className={`recipe-tag ${tag.class}`}>
+                    {tag.text}
+                  </span>
+                ))}
               </div>
               
-              <div className="flex items-center gap-4 mt-3 sm:mt-0">
-                {recipe.readyInMinutes && (
-                  <div className="flex items-center text-gray-700">
-                    <Clock className="h-5 w-5 mr-1" />
-                    <span>{recipe.readyInMinutes} min</span>
-                  </div>
-                )}
-                
-                {recipe.servings && (
-                  <div className="flex items-center text-gray-700">
-                    <Users className="h-5 w-5 mr-1" />
-                    <span>{recipe.servings} servings</span>
-                  </div>
-                )}
+              <div className="flex items-center bg-gray-100 rounded-full px-3 py-1 text-sm">
+                <Star className="h-5 w-5 text-yellow-500 mr-1" />
+                <span>N/A (0 ratings)</span>
               </div>
             </div>
-            
-            {recipe.summary && (
-              <Card className="mb-6">
-                <CardContent className="pt-6">
-                  <h2 className="text-xl font-semibold text-gray-800 mb-3">Summary</h2>
-                  <p className="text-gray-700" dangerouslySetInnerHTML={{ __html: recipe.summary }} />
-                </CardContent>
-              </Card>
-            )}
             
             <div className="mb-6">
               <h2 className="text-xl font-semibold text-gray-800 mb-3">Ingredients</h2>
               <ul className="space-y-2 pl-5">
-                {ingredients && ingredients.length > 0 ? (
+                {ingredients.length > 0 ? (
                   ingredients.map((ingredient, index) => (
                     <li key={index} className="text-gray-700 flex items-start">
                       <span className="inline-block h-2 w-2 rounded-full bg-recipe-primary mt-2 mr-2"></span>
-                      {ingredient.originalString || ingredient.original || `${ingredient.amount} ${ingredient.unit} ${ingredient.name}`}
+                      {ingredient}
                     </li>
                   ))
                 ) : (
@@ -190,33 +176,20 @@ const ExternalRecipeDetailPage: React.FC = () => {
               </ul>
             </div>
             
-            <div className="mb-6">
+            <div>
               <h2 className="text-xl font-semibold text-gray-800 mb-3">Instructions</h2>
-              {instructions && instructions.length > 0 ? (
-                <ol className="space-y-4 pl-5">
-                  {instructions.map((instruction, index) => (
+              <ol className="space-y-4 pl-5">
+                {instructions.length > 0 ? (
+                  instructions.map((instruction, index) => (
                     <li key={index} className="text-gray-700">
                       <span className="font-medium text-recipe-primary mr-2">{index + 1}.</span> {instruction}
                     </li>
-                  ))}
-                </ol>
-              ) : (
-                <p className="text-gray-500">No instructions available</p>
-              )}
+                  ))
+                ) : (
+                  <li className="text-gray-500">No instructions available</li>
+                )}
+              </ol>
             </div>
-            
-            {recipe.sourceUrl && (
-              <div className="flex justify-end mt-8">
-                <a
-                  href={recipe.sourceUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-recipe-primary hover:bg-recipe-primary/90"
-                >
-                  <ExternalLink className="mr-2 h-5 w-5" /> View Original Recipe
-                </a>
-              </div>
-            )}
           </div>
         </article>
       </main>

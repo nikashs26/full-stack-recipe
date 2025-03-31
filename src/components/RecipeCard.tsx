@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Edit, Trash2, Star, ExternalLink, Clock } from 'lucide-react';
+import { Edit, Trash2, Star, Clock } from 'lucide-react';
 import { Recipe } from '../types/recipe';
 import { getDietaryTags, getAverageRating } from '../utils/recipeUtils';
 import { SpoonacularRecipe } from '../types/spoonacular';
@@ -17,7 +17,7 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onDelete, isExternal = 
   const recipeId = isExternal ? (recipe as SpoonacularRecipe).id.toString() : (recipe as Recipe).id;
   const recipeName = isExternal ? (recipe as SpoonacularRecipe).title : (recipe as Recipe).name;
   const recipeCuisine = isExternal 
-    ? ((recipe as SpoonacularRecipe).cuisines?.length > 0 ? (recipe as SpoonacularRecipe).cuisines[0] : "External") 
+    ? ((recipe as SpoonacularRecipe).cuisines?.length > 0 ? (recipe as SpoonacularRecipe).cuisines[0] : "Other") 
     : (recipe as Recipe).cuisine;
   
   const recipeImage = isExternal 
@@ -26,12 +26,18 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onDelete, isExternal = 
   
   // Ratings handling
   const avgRating = isExternal 
-    ? undefined 
+    ? 0 // External recipes don't have ratings
     : getAverageRating((recipe as Recipe).ratings);
   
-  // Dietary tags for local recipes
-  const dietaryTags = isExternal 
-    ? [] 
+  // Dietary tags
+  let dietaryTags = isExternal 
+    ? getDietaryTags(((recipe as SpoonacularRecipe).diets || []).map(diet => {
+        if (diet.includes('vegetarian')) return 'vegetarian';
+        if (diet.includes('vegan')) return 'vegan'; 
+        if (diet.includes('gluten-free')) return 'gluten-free';
+        if (diet.includes('carnivore')) return 'carnivore';
+        return diet as any;
+      }))
     : getDietaryTags((recipe as Recipe).dietaryRestrictions);
   
   // Ready in minutes for external recipes
@@ -91,25 +97,17 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onDelete, isExternal = 
       
       <div className="p-5">
         <h2 className="text-xl font-semibold text-gray-800 mb-2 line-clamp-1">
-          <Link to={cardLink} className="hover:text-recipe-primary transition-colors flex items-center">
+          <Link to={cardLink} className="hover:text-recipe-primary transition-colors">
             {recipeName || "Untitled Recipe"}
-            {isExternal && <ExternalLink className="h-4 w-4 ml-1 text-blue-500" />}
           </Link>
         </h2>
         <p className="text-sm text-gray-600 mb-2">Cuisine: {recipeCuisine || "Other"}</p>
         
         <div className="mb-4">
-          {/* Show dietary tags for local recipes */}
-          {!isExternal && dietaryTags && dietaryTags.map((tag, index) => (
+          {/* Show dietary tags for both local and external recipes */}
+          {dietaryTags && dietaryTags.map((tag, index) => (
             <span key={index} className={`recipe-tag ${tag.class}`}>
               {tag.text}
-            </span>
-          ))}
-          
-          {/* Show diet tags for external recipes */}
-          {isExternal && (recipe as SpoonacularRecipe).diets && (recipe as SpoonacularRecipe).diets.map((diet, index) => (
-            <span key={index} className="inline-block px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 mr-1 mb-1">
-              {diet}
             </span>
           ))}
         </div>
