@@ -29,13 +29,14 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onDelete, isExternal = 
     ? 0 // External recipes don't have ratings
     : getAverageRating((recipe as Recipe).ratings);
   
-  // Dietary tags
+  // Dietary tags - normalize diets for external recipes to match local format
   let dietaryTags = isExternal 
     ? getDietaryTags(((recipe as SpoonacularRecipe).diets || []).map(diet => {
-        if (diet.includes('vegetarian')) return 'vegetarian';
-        if (diet.includes('vegan')) return 'vegan'; 
-        if (diet.includes('gluten-free')) return 'gluten-free';
-        if (diet.includes('carnivore')) return 'carnivore';
+        // Normalize diet names to match our internal format
+        if (diet.toLowerCase().includes('vegetarian')) return 'vegetarian';
+        if (diet.toLowerCase().includes('vegan')) return 'vegan'; 
+        if (diet.toLowerCase().includes('gluten') && diet.toLowerCase().includes('free')) return 'gluten-free';
+        if (diet.toLowerCase().includes('carnivore') || diet.toLowerCase().includes('meat')) return 'carnivore';
         return diet as any;
       }))
     : getDietaryTags((recipe as Recipe).dietaryRestrictions);

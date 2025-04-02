@@ -6,62 +6,18 @@ const API_URL_RECIPE_BY_ID = "http://127.0.0.1:5000/get_recipe_by_id";
 export const fetchRecipes = async (query: string = "", ingredient: string = "") => {
     console.log(`Fetching recipes with query: "${query}" and ingredient: "${ingredient}"`);
     
-    // Always try MongoDB first
+    // Try the API endpoint directly which handles both MongoDB and API call automatically
     try {
-        const params = new URLSearchParams();
-        if (query) params.append('query', query);
-        if (ingredient) params.append('ingredient', ingredient);
-        
-        const url = `${API_DB_RECIPES}${params.toString() ? '?' + params.toString() : ''}`;
-        console.log("Trying MongoDB URL:", url);
-        
-        const response = await fetch(url, { 
-            signal: AbortSignal.timeout(3000) // Short timeout for DB calls
-        });
-        
-        if (!response.ok) {
-            throw new Error(`Failed to fetch recipes from database (Status: ${response.status})`);
-        }
-        
-        const data = await response.json();
-        console.log(`Found ${data.results?.length || 0} recipes in database`);
-        
-        if (data.results?.length > 0) {
-            return data;
-        }
-        
-        // If no results from MongoDB but we have search terms, fall back to API
-        if ((query || ingredient) && data.results?.length === 0) {
-            console.log("No results from MongoDB, falling back to API");
-            return fetchFromAPI(query, ingredient);
-        }
-        
-        return data;
-    } catch (error) {
-        console.error("Error fetching recipes from database:", error);
-        
-        // Only fallback to API if we have search terms
-        if (query || ingredient) {
-            console.log("Error with MongoDB, falling back to API");
-            return fetchFromAPI(query, ingredient);
-        }
-        
-        return { results: [] };
-    }
-};
-
-const fetchFromAPI = async (query: string = "", ingredient: string = "") => {
-    try {
-        // Short timeout to prevent UI hanging
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5-second timeout
-        
         // Build the URL with appropriate parameters
         let url = `${API_URL}?`;
         if (query) url += `query=${encodeURIComponent(query)}&`;
         if (ingredient) url += `ingredient=${encodeURIComponent(ingredient)}&`;
         
-        console.log("Trying API URL:", url);
+        console.log("Trying recipe API URL:", url);
+        
+        // Short timeout to prevent UI hanging
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000); // 8-second timeout
         
         const response = await fetch(
             url.slice(0, -1), // Remove trailing & or ?
@@ -102,7 +58,7 @@ const fetchFromAPI = async (query: string = "", ingredient: string = "") => {
             return { results: [] };
         }
 
-        console.log(`Found ${data.results.length} external recipes`);
+        console.log(`Found ${data.results.length} recipes`);
         return data;
     } catch (error) {
         if (error.name === 'AbortError') {
@@ -122,34 +78,14 @@ export const fetchRecipeById = async (recipeId: number) => {
         throw new Error("Recipe ID is required");
     }
     
-    // Try MongoDB first
-    try {
-        console.log(`Trying to fetch recipe ${recipeId} from MongoDB`);
-        const url = `${API_DB_RECIPE_BY_ID}/${recipeId}`;
-        
-        const response = await fetch(url, { 
-            signal: AbortSignal.timeout(3000) // Short timeout for DB calls
-        });
-        
-        if (response.ok) {
-            const data = await response.json();
-            console.log("Recipe details received from MongoDB:", data);
-            return data;
-        }
-        
-        // If not found in MongoDB, fall back to API
-        console.log(`Recipe ${recipeId} not found in MongoDB, trying API`);
-    } catch (error) {
-        console.error("Error fetching recipe from MongoDB:", error);
-    }
-    
-    // Fallback to API
+    // Try the API endpoint directly
     try {
         // Timeout setup to prevent hanging requests
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5-second timeout
+        const timeoutId = setTimeout(() => controller.abort(), 8000); // 8-second timeout
         
         const url = `${API_URL_RECIPE_BY_ID}?id=${recipeId}`;
+        console.log("Fetching recipe details from:", url);
         
         const response = await fetch(url, { signal: controller.signal });
         clearTimeout(timeoutId);
@@ -173,7 +109,7 @@ export const fetchRecipeById = async (recipeId: number) => {
         let data;
         try {
             data = await response.json();
-            console.log("Recipe details received from API:", data);
+            console.log("Recipe details received:", data);
         } catch (parseError) {
             console.error("JSON parsing error:", parseError);
             const textResponse = await response.text();

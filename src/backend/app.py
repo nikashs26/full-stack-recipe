@@ -46,8 +46,8 @@ def get_recipes():
 
     # First check if we have recipes in MongoDB that match the query
     db_results = []
-    try:
-        if mongo_available:
+    if mongo_available:
+        try:
             search_query = {}
             if query:
                 search_query["title"] = {"$regex": query, "$options": "i"}
@@ -61,20 +61,22 @@ def get_recipes():
             if db_results:
                 print(f"Found {len(db_results)} recipes in database")
                 return JSONEncoder().encode({"results": db_results})
-        else:
-            # If MongoDB is not available, search in-memory storage
-            results = []
-            for recipe in in_memory_recipes:
-                if (query and query.lower() in recipe.get("title", "").lower()) or \
-                   (ingredient and ingredient.lower() in json.dumps(recipe).lower()):
-                    results.append(recipe)
-            if results:
-                return jsonify({"results": results})
-    except Exception as e:
-        print(f"Error querying storage: {e}")
-        # Continue to API if query fails
+        except Exception as e:
+            print(f"Error querying MongoDB: {e}")
+            # Continue to in-memory or API if MongoDB query fails
+    
+    # If MongoDB is not available or no results, check in-memory storage
+    if not mongo_available:
+        results = []
+        for recipe in in_memory_recipes:
+            if (query and query.lower() in recipe.get("title", "").lower()) or \
+               (ingredient and ingredient.lower() in json.dumps(recipe).lower()):
+                results.append(recipe)
+        if results:
+            print(f"Found {len(results)} recipes in in-memory storage")
+            return jsonify({"results": results})
 
-    # If no results in DB or MongoDB not available, call the Spoonacular API
+    # If no results in DB or in-memory, call the Spoonacular API
     params = {
         "apiKey": SPOONACULAR_API_KEY,
         "number": 10,  # Limit to 10 results
@@ -88,7 +90,8 @@ def get_recipes():
 
     try:
         # Use a short timeout to avoid hanging
-        response = requests.get(SPOONACULAR_URL, params=params, timeout=3)
+        print(f"Calling Spoonacular API with params: {params}")
+        response = requests.get(SPOONACULAR_URL, params=params, timeout=5)
         
         # Check if content type is JSON
         if 'application/json' not in response.headers.get('Content-Type', ''):
@@ -102,6 +105,25 @@ def get_recipes():
 
         if "results" not in data:
             return jsonify({"error": "Invalid response from Spoonacular"}), 500
+
+        # Process the diets for filtering consistency
+        for recipe in data["results"]:
+            # Normalize diet names for consistent filtering
+            if "diets" in recipe:
+                normalized_diets = []
+                for diet in recipe["diets"]:
+                    diet_lower = diet.lower()
+                    if "vegetarian" in diet_lower:
+                        normalized_diets.append("vegetarian")
+                    if "vegan" in diet_lower:
+                        normalized_diets.append("vegan")
+                    if "gluten" in diet_lower and "free" in diet_lower:
+                        normalized_diets.append("gluten-free")
+                    if "carnivore" in diet_lower or "meat" in diet_lower:
+                        normalized_diets.append("carnivore")
+                    # Keep the original diet as well
+                    normalized_diets.append(diet)
+                recipe["diets"] = normalized_diets
 
         # Store results in storage for future queries
         try:
@@ -123,6 +145,7 @@ def get_recipes():
                 for recipe in data["results"]:
                     if not any(r.get("id") == recipe["id"] for r in in_memory_recipes):
                         in_memory_recipes.append(recipe)
+                print(f"Stored {len(data['results'])} recipes in in-memory storage")
         except Exception as e:
             print(f"Error storing recipes: {e}")
 
@@ -146,8 +169,8 @@ def get_recipe_by_id():
         return jsonify({"error": "Recipe ID is required"}), 400
     
     # First check if we have this recipe in storage
-    try:
-        if mongo_available:
+    if mongo_available:
+        try:
             # Try to find as integer ID (for external recipes)
             try:
                 db_recipe = recipes_collection.find_one({"id": int(recipe_id)})
@@ -158,20 +181,22 @@ def get_recipe_by_id():
             if db_recipe:
                 print(f"Found recipe {recipe_id} in database")
                 return JSONEncoder().encode(db_recipe)
-        else:
-            # Check in-memory storage
-            for recipe in in_memory_recipes:
-                if str(recipe.get("id")) == str(recipe_id):
-                    return jsonify(recipe)
-    except Exception as e:
-        print(f"Error querying storage for recipe {recipe_id}: {e}")
+        except Exception as e:
+            print(f"Error querying MongoDB for recipe {recipe_id}: {e}")
+    else:
+        # Check in-memory storage
+        for recipe in in_memory_recipes:
+            if str(recipe.get("id")) == str(recipe_id):
+                print(f"Found recipe {recipe_id} in in-memory storage")
+                return jsonify(recipe)
     
-    # If not in DB, call the Spoonacular API
+    # If not in storage, call the Spoonacular API
     api_url = f"https://api.spoonacular.com/recipes/{recipe_id}/information"
     params = {"apiKey": SPOONACULAR_API_KEY}
     
     try:
-        response = requests.get(api_url, params=params, timeout=3)
+        print(f"Calling Spoonacular API for recipe {recipe_id}")
+        response = requests.get(api_url, params=params, timeout=5)
         response.raise_for_status()
         data = response.json()
         
@@ -180,6 +205,23 @@ def get_recipe_by_id():
             data["title"] = "Untitled Recipe"
         if "cuisines" not in data or not data["cuisines"]:
             data["cuisines"] = ["Misc"]
+        
+        # Normalize diets for consistent filtering
+        if "diets" in data:
+            normalized_diets = []
+            for diet in data["diets"]:
+                diet_lower = diet.lower()
+                if "vegetarian" in diet_lower:
+                    normalized_diets.append("vegetarian")
+                if "vegan" in diet_lower:
+                    normalized_diets.append("vegan")
+                if "gluten" in diet_lower and "free" in diet_lower:
+                    normalized_diets.append("gluten-free")
+                if "carnivore" in diet_lower or "meat" in diet_lower:
+                    normalized_diets.append("carnivore")
+                # Keep the original diet as well
+                normalized_diets.append(diet)
+            data["diets"] = normalized_diets
             
         # Store in storage for future queries
         try:
@@ -192,6 +234,7 @@ def get_recipe_by_id():
                 # Store in in-memory cache
                 if not any(r.get("id") == data["id"] for r in in_memory_recipes):
                     in_memory_recipes.append(data)
+                    print(f"Stored recipe {recipe_id} in in-memory storage")
         except Exception as e:
             print(f"Error storing recipe {recipe_id}: {e}")
         
