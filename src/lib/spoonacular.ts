@@ -1,3 +1,4 @@
+
 const API_DB_RECIPES = "http://127.0.0.1:5000/recipes";
 const API_DB_RECIPE_BY_ID = "http://127.0.0.1:5000/recipes";
 const API_URL = "http://127.0.0.1:5000/get_recipes";
@@ -6,7 +7,7 @@ const API_URL_RECIPE_BY_ID = "http://127.0.0.1:5000/get_recipe_by_id";
 export const fetchRecipes = async (query: string = "", ingredient: string = "") => {
     console.log(`Fetching recipes with query: "${query}" and ingredient: "${ingredient}"`);
     
-    // Try the API endpoint directly which handles both MongoDB and API call automatically
+    // Try the API endpoint first which will prioritize MongoDB before making API calls
     try {
         // Build the URL with appropriate parameters
         let url = `${API_URL}?`;
@@ -17,7 +18,7 @@ export const fetchRecipes = async (query: string = "", ingredient: string = "") 
         
         // Short timeout to prevent UI hanging
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 8000); // 8-second timeout
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10-second timeout
         
         const response = await fetch(
             url.slice(0, -1), // Remove trailing & or ?
@@ -78,11 +79,11 @@ export const fetchRecipeById = async (recipeId: number) => {
         throw new Error("Recipe ID is required");
     }
     
-    // Try the API endpoint directly
+    // Try the API endpoint directly - MongoDB will be checked first
     try {
         // Timeout setup to prevent hanging requests
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 8000); // 8-second timeout
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10-second timeout
         
         const url = `${API_URL_RECIPE_BY_ID}?id=${recipeId}`;
         console.log("Fetching recipe details from:", url);

@@ -14,18 +14,20 @@ CORS(app)
 SPOONACULAR_API_KEY = "01f12ed117584307b5cba262f43a8d49"  # ← Update this!
 SPOONACULAR_URL = "https://api.spoonacular.com/recipes/complexSearch"
 
-# MongoDB setup - with fallback to in-memory storage
+# MongoDB Atlas setup
 in_memory_recipes = []
 mongo_available = False
 
 try:
     import pymongo
-    mongo_client = pymongo.MongoClient("mongodb://localhost:27017/", serverSelectionTimeoutMS=2000)
+    # Replace with your MongoDB Atlas connection string
+    mongo_uri = "mongodb+srv://REPLACE_WITH_YOUR_USERNAME:REPLACE_WITH_YOUR_PASSWORD@REPLACE_WITH_YOUR_CLUSTER.mongodb.net/BetterBulkRecipes?retryWrites=true&w=majority"
+    mongo_client = pymongo.MongoClient(mongo_uri, serverSelectionTimeoutMS=5000)
     mongo_client.server_info()  # Will raise an exception if cannot connect
-    db = mongo_client["recipe_db"]
+    db = mongo_client["BetterBulkRecipes"]
     recipes_collection = db["recipes"]
     mongo_available = True
-    print("MongoDB connection successful")
+    print("MongoDB Atlas connection successful")
 except Exception as e:
     print(f"MongoDB connection error: {e}")
     print("Using in-memory storage as fallback")
@@ -125,7 +127,7 @@ def get_recipes():
                     normalized_diets.append(diet)
                 recipe["diets"] = normalized_diets
 
-        # Store results in storage for future queries
+        # Store results in MongoDB for future queries
         try:
             if mongo_available:
                 for recipe in data["results"]:
@@ -138,8 +140,9 @@ def get_recipes():
                     # Check if recipe already exists in the database
                     existing = recipes_collection.find_one({"id": recipe["id"]})
                     if not existing:
+                        # Insert to MongoDB and ensure proper indexing
                         recipes_collection.insert_one(recipe)
-                print(f"Stored {len(data['results'])} recipes in MongoDB")
+                print(f"Stored {len(data['results'])} recipes in MongoDB Atlas")
             else:
                 # Store in in-memory cache if MongoDB not available
                 for recipe in data["results"]:
@@ -168,7 +171,7 @@ def get_recipe_by_id():
     if not recipe_id:
         return jsonify({"error": "Recipe ID is required"}), 400
     
-    # First check if we have this recipe in storage
+    # First check if we have this recipe in MongoDB
     if mongo_available:
         try:
             # Try to find as integer ID (for external recipes)
@@ -179,7 +182,7 @@ def get_recipe_by_id():
                 db_recipe = recipes_collection.find_one({"id": recipe_id})
                 
             if db_recipe:
-                print(f"Found recipe {recipe_id} in database")
+                print(f"Found recipe {recipe_id} in MongoDB database")
                 return JSONEncoder().encode(db_recipe)
         except Exception as e:
             print(f"Error querying MongoDB for recipe {recipe_id}: {e}")
@@ -223,13 +226,13 @@ def get_recipe_by_id():
                 normalized_diets.append(diet)
             data["diets"] = normalized_diets
             
-        # Store in storage for future queries
+        # Store in MongoDB for future queries
         try:
             if mongo_available:
                 existing = recipes_collection.find_one({"id": data["id"]})
                 if not existing:
                     recipes_collection.insert_one(data)
-                    print(f"Stored recipe {recipe_id} in MongoDB")
+                    print(f"Stored recipe {recipe_id} in MongoDB Atlas")
             else:
                 # Store in in-memory cache
                 if not any(r.get("id") == data["id"] for r in in_memory_recipes):
