@@ -14,7 +14,7 @@ load_dotenv()
 # Get MongoDB URI from environment variables
 MONGO_URI = os.getenv("MONGO_URI")
 if not MONGO_URI:
-    MONGO_URI = "mongodb+srv://nikash:Peellu123@betterbulkrecipes.kudgvdz.mongodb.net/?retryWrites=true&w=majority&appName=BetterBulkRecipes"
+    
     print(f"Using hardcoded MongoDB URI: {MONGO_URI}")
 else:
     print("Using MongoDB URI from environment variables")
