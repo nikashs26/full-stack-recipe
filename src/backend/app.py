@@ -1,3 +1,5 @@
+from dotenv import load_dotenv
+
 
 from flask import Flask, request, jsonify
 import requests
@@ -7,6 +9,10 @@ import json
 from bson.objectid import ObjectId
 from bson.json_util import dumps
 
+# Load environment variables from .env file
+load_dotenv()
+
+MONGO_URI = os.getenv("MONGO_URI")
 app = Flask(__name__)
 CORS(app)
 
@@ -21,8 +27,8 @@ mongo_available = False
 try:
     import pymongo
     # Replace with your MongoDB Atlas connection string
-    mongo_uri = "mongodb+srv://REPLACE_WITH_YOUR_USERNAME:REPLACE_WITH_YOUR_PASSWORD@REPLACE_WITH_YOUR_CLUSTER.mongodb.net/BetterBulkRecipes?retryWrites=true&w=majority"
-    mongo_client = pymongo.MongoClient(mongo_uri, serverSelectionTimeoutMS=5000)
+    
+    mongo_client = pymongo.MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
     mongo_client.server_info()  # Will raise an exception if cannot connect
     db = mongo_client["BetterBulkRecipes"]
     recipes_collection = db["recipes"]
