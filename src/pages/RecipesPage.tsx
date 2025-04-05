@@ -7,11 +7,12 @@ import FilterBar from '../components/FilterBar';
 import RecipeCard from '../components/RecipeCard';
 import { loadRecipes, saveRecipes, deleteRecipe as deleteRecipeFromStorage } from '../utils/storage';
 import { filterRecipes, getUniqueCuisines } from '../utils/recipeUtils';
-import { fetchRecipes } from '../lib/spoonacular';
+import { fetchRecipes, getAllRecipesFromDB } from '../lib/spoonacular';
 import { Recipe } from '../types/recipe';
 import { SpoonacularRecipe } from '../types/spoonacular';
-import { Loader2, Search, AlertCircle } from 'lucide-react';
+import { Loader2, Search, AlertCircle, Database } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 
 const RecipesPage: React.FC = () => {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
@@ -24,6 +25,7 @@ const RecipesPage: React.FC = () => {
   const [searchError, setSearchError] = useState<string | null>(null);
   const [cuisines, setCuisines] = useState<string[]>([]);
   const [filteredExternalRecipes, setFilteredExternalRecipes] = useState<SpoonacularRecipe[]>([]);
+  const [dbStatus, setDbStatus] = useState<'checking' | 'connected' | 'disconnected'>('checking');
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -31,7 +33,25 @@ const RecipesPage: React.FC = () => {
     const loadedRecipes = loadRecipes();
     setRecipes(loadedRecipes);
     setCuisines(getUniqueCuisines(loadedRecipes));
-  }, []);
+    
+    // Check MongoDB status
+    getAllRecipesFromDB()
+      .then(() => {
+        setDbStatus('connected');
+        toast({
+          title: "MongoDB Connected",
+          description: "Successfully connected to MongoDB database",
+        });
+      })
+      .catch(() => {
+        setDbStatus('disconnected');
+        toast({
+          title: "MongoDB Disconnected",
+          description: "Could not connect to MongoDB. Searches will use Spoonacular API only.",
+          variant: "destructive",
+        });
+      });
+  }, [toast]);
 
   useEffect(() => {
     const filtered = filterRecipes(recipes, searchTerm, dietaryFilter, cuisineFilter, ingredientTerm);
@@ -154,7 +174,26 @@ const RecipesPage: React.FC = () => {
     <div className="min-h-screen bg-gray-50">
       <Header />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-6">Recipe Collection</h1>
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-3xl font-bold text-gray-900">Recipe Collection</h1>
+          <div className="flex items-center">
+            {dbStatus === 'checking' && (
+              <Badge variant="outline" className="flex items-center gap-1 bg-yellow-50">
+                <Loader2 className="h-3 w-3 animate-spin" /> Checking DB
+              </Badge>
+            )}
+            {dbStatus === 'connected' && (
+              <Badge variant="outline" className="flex items-center gap-1 bg-green-50 text-green-700">
+                <Database className="h-3 w-3" /> MongoDB Connected
+              </Badge>
+            )}
+            {dbStatus === 'disconnected' && (
+              <Badge variant="outline" className="flex items-center gap-1 bg-red-50 text-red-700">
+                <AlertCircle className="h-3 w-3" /> MongoDB Disconnected
+              </Badge>
+            )}
+          </div>
+        </div>
         
         <FilterBar 
           searchTerm={searchTerm}
@@ -222,16 +261,20 @@ const RecipesPage: React.FC = () => {
         {isExternalLoading && (
           <div className="flex justify-center items-center py-12">
             <Loader2 className="h-8 w-8 animate-spin text-primary mr-2" />
-            <span className="text-gray-600">Searching for recipes...</span>
+            <span className="text-gray-600">
+              {dbStatus === 'connected' 
+                ? 'Searching in MongoDB and external sources...' 
+                : 'Searching for recipes...'}
+            </span>
           </div>
         )}
 
         {!isExternalLoading && externalData?.results?.length === 0 && externalSearchTerm && !searchError && (
           <div className="text-center py-12">
             <Search className="mx-auto h-12 w-12 text-gray-400" />
-            <h3 className="mt-2 text-lg font-medium text-gray-900">No external recipes found</h3>
+            <h3 className="mt-2 text-lg font-medium text-gray-900">No recipes found</h3>
             <p className="mt-1 text-gray-500">
-              We couldn't find any external recipes matching your search. Try a different term.
+              We couldn't find any recipes matching your search in {dbStatus === 'connected' ? 'MongoDB or external sources' : 'external sources'}. Try a different term.
             </p>
           </div>
         )}

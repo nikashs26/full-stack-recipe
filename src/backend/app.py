@@ -1,6 +1,4 @@
 from dotenv import load_dotenv
-
-
 from flask import Flask, request, jsonify
 import requests
 from flask_cors import CORS
@@ -8,15 +6,23 @@ import os
 import json
 from bson.objectid import ObjectId
 from bson.json_util import dumps
+import time
 
 # Load environment variables from .env file
 load_dotenv()
 
+# Get MongoDB URI from environment variables
 MONGO_URI = os.getenv("MONGO_URI")
+if not MONGO_URI:
+    MONGO_URI = "mongodb+srv://nikash:Peellu123@betterbulkrecipes.kudgvdz.mongodb.net/?retryWrites=true&w=majority&appName=BetterBulkRecipes"
+    print(f"Using hardcoded MongoDB URI: {MONGO_URI}")
+else:
+    print("Using MongoDB URI from environment variables")
+
 app = Flask(__name__)
 CORS(app)
 
-# Spoonacular API Key - Replace with your actual key
+# Spoonacular API Key
 SPOONACULAR_API_KEY = "01f12ed117584307b5cba262f43a8d49"  # ← Update this!
 SPOONACULAR_URL = "https://api.spoonacular.com/recipes/complexSearch"
 
@@ -26,8 +32,8 @@ mongo_available = False
 
 try:
     import pymongo
-    # Replace with your MongoDB Atlas connection string
-    
+    # Connect to MongoDB Atlas
+    print(f"Attempting to connect to MongoDB with URI: {MONGO_URI}")
     mongo_client = pymongo.MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
     mongo_client.server_info()  # Will raise an exception if cannot connect
     db = mongo_client["BetterBulkRecipes"]
@@ -37,8 +43,10 @@ try:
     recipes_collection.create_index([("title", pymongo.TEXT)])
     recipes_collection.create_index([("id", pymongo.ASCENDING)], unique=True)
     
+    # Count documents to verify connection
+    recipe_count = recipes_collection.count_documents({})
+    print(f"MongoDB Atlas connection successful. Found {recipe_count} recipes in database")
     mongo_available = True
-    print("MongoDB Atlas connection successful")
 except Exception as e:
     print(f"MongoDB connection error: {e}")
     print("Using in-memory storage as fallback")
@@ -51,6 +59,7 @@ class JSONEncoder(json.JSONEncoder):
 
 @app.route("/get_recipes", methods=["GET"])
 def get_recipes():
+    start_time = time.time()
     query = request.args.get("query", "").strip()
     ingredient = request.args.get("ingredient", "").strip()
     
@@ -70,13 +79,20 @@ def get_recipes():
                     {"ingredients": {"$regex": ingredient, "$options": "i"}}
                 ]
             
+            print(f"Searching MongoDB with query: {search_query}")
             db_results = list(recipes_collection.find(search_query).limit(10))
+            print(f"MongoDB search returned {len(db_results)} results")
+            
             if db_results:
-                print(f"Found {len(db_results)} recipes in database")
+                print(f"Found {len(db_results)} recipes in database in {time.time() - start_time:.2f}s")
                 return JSONEncoder().encode({"results": db_results})
+            else:
+                print("No results found in MongoDB, falling back to Spoonacular API")
         except Exception as e:
             print(f"Error querying MongoDB: {e}")
             # Continue to in-memory or API if MongoDB query fails
+    else:
+        print("MongoDB not available, checking in-memory storage")
     
     # If MongoDB is not available or no results, check in-memory storage
     if not mongo_available:
@@ -90,6 +106,7 @@ def get_recipes():
             return jsonify({"results": results})
 
     # If no results in DB or in-memory, call the Spoonacular API
+    print("No results found locally, calling Spoonacular API")
     params = {
         "apiKey": SPOONACULAR_API_KEY,
         "number": 10,  # Limit to 10 results
@@ -139,6 +156,7 @@ def get_recipes():
                 recipe["diets"] = normalized_diets
 
         # Store results in MongoDB for future queries
+        api_store_count = 0
         try:
             if mongo_available:
                 for recipe in data["results"]:
@@ -159,7 +177,8 @@ def get_recipes():
                     if not existing:
                         # Insert to MongoDB and ensure proper indexing
                         recipes_collection.insert_one(recipe)
-                print(f"Stored {len(data['results'])} recipes in MongoDB Atlas")
+                        api_store_count += 1
+                print(f"Stored {api_store_count} new recipes in MongoDB Atlas")
             else:
                 # Store in in-memory cache if MongoDB not available
                 for recipe in data["results"]:
@@ -169,6 +188,7 @@ def get_recipes():
         except Exception as e:
             print(f"Error storing recipes: {e}")
 
+        print(f"API request completed in {time.time() - start_time:.2f}s")
         return jsonify(data)  # Send results to frontend
 
     except requests.exceptions.Timeout:

@@ -58,7 +58,7 @@ export const fetchRecipes = async (query: string = "", ingredient: string = "") 
             return { results: [] };
         }
 
-        console.log(`Found ${data.results.length} recipes`);
+        console.log(`Found ${data.results.length} recipes from MongoDB/API`);
         return data;
     } catch (error) {
         if (error.name === 'AbortError') {
