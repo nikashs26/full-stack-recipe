@@ -1,6 +1,5 @@
 
 const API_DB_RECIPES = "http://127.0.0.1:5000/recipes";
-const API_DB_RECIPE_BY_ID = "http://127.0.0.1:5000/recipes";
 const API_URL = "http://127.0.0.1:5000/get_recipes";
 const API_URL_RECIPE_BY_ID = "http://127.0.0.1:5000/get_recipe_by_id";
 
@@ -71,7 +70,7 @@ export const fetchRecipes = async (query: string = "", ingredient: string = "") 
     }
 };
 
-export const fetchRecipeById = async (recipeId: number) => {
+export const fetchRecipeById = async (recipeId: number | string) => {
     console.log(`Fetching recipe details for ID: ${recipeId}`);
     
     if (!recipeId) {
@@ -134,7 +133,37 @@ export const fetchRecipeById = async (recipeId: number) => {
     }
 };
 
-// Keep the saveRecipeToDB and deleteRecipeFromDB functions
+// MongoDB direct CRUD operations
+export const getAllRecipesFromDB = async () => {
+    try {
+        const response = await fetch(API_DB_RECIPES);
+        
+        if (!response.ok) {
+            throw new Error(`Failed to fetch recipes from database (Status: ${response.status})`);
+        }
+        
+        return await response.json();
+    } catch (error) {
+        console.error("Error fetching recipes from database:", error);
+        throw error;
+    }
+};
+
+export const getRecipeFromDB = async (recipeId: string) => {
+    try {
+        const response = await fetch(`${API_DB_RECIPES}/${recipeId}`);
+        
+        if (!response.ok) {
+            throw new Error(`Failed to fetch recipe from database (Status: ${response.status})`);
+        }
+        
+        return await response.json();
+    } catch (error) {
+        console.error("Error fetching recipe from database:", error);
+        throw error;
+    }
+};
+
 export const saveRecipeToDB = async (recipe: any) => {
     try {
         const response = await fetch(API_DB_RECIPES, {
@@ -152,6 +181,27 @@ export const saveRecipeToDB = async (recipe: any) => {
         return await response.json();
     } catch (error) {
         console.error("Error saving recipe to database:", error);
+        throw error;
+    }
+};
+
+export const updateRecipeInDB = async (recipeId: string, recipe: any) => {
+    try {
+        const response = await fetch(`${API_DB_RECIPES}/${recipeId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(recipe),
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Failed to update recipe (Status: ${response.status})`);
+        }
+        
+        return await response.json();
+    } catch (error) {
+        console.error("Error updating recipe in database:", error);
         throw error;
     }
 };

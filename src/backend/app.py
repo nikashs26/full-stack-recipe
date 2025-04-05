@@ -32,6 +32,11 @@ try:
     mongo_client.server_info()  # Will raise an exception if cannot connect
     db = mongo_client["BetterBulkRecipes"]
     recipes_collection = db["recipes"]
+    
+    # Create indexes for better search performance
+    recipes_collection.create_index([("title", pymongo.TEXT)])
+    recipes_collection.create_index([("id", pymongo.ASCENDING)], unique=True)
+    
     mongo_available = True
     print("MongoDB Atlas connection successful")
 except Exception as e:
@@ -144,7 +149,13 @@ def get_recipes():
                         recipe["cuisines"] = ["Misc"]
                         
                     # Check if recipe already exists in the database
-                    existing = recipes_collection.find_one({"id": recipe["id"]})
+                    try:
+                        # Try with recipe ID as integer
+                        existing = recipes_collection.find_one({"id": recipe["id"]})
+                    except:
+                        # If not an integer, try as string
+                        existing = recipes_collection.find_one({"id": str(recipe["id"])})
+                        
                     if not existing:
                         # Insert to MongoDB and ensure proper indexing
                         recipes_collection.insert_one(recipe)
@@ -253,7 +264,129 @@ def get_recipe_by_id():
     except requests.exceptions.RequestException as e:
         return jsonify({"error": str(e)}), 500
 
-# ... keep existing code (CRUD operations for recipes)
+# Endpoints for direct MongoDB CRUD operations
+@app.route("/recipes", methods=["GET"])
+def get_all_recipes():
+    if not mongo_available:
+        return jsonify({"error": "MongoDB not available"}), 503
+    
+    try:
+        recipes = list(recipes_collection.find())
+        return JSONEncoder().encode({"results": recipes})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/recipes/<recipe_id>", methods=["GET"])
+def get_recipe_from_db(recipe_id):
+    if not mongo_available:
+        return jsonify({"error": "MongoDB not available"}), 503
+    
+    try:
+        # Try first as ObjectId
+        try:
+            recipe = recipes_collection.find_one({"_id": ObjectId(recipe_id)})
+        except:
+            # Then try as regular id
+            recipe = recipes_collection.find_one({"id": recipe_id})
+            if not recipe:
+                try:
+                    recipe = recipes_collection.find_one({"id": int(recipe_id)})
+                except ValueError:
+                    pass
+                
+        if recipe:
+            return JSONEncoder().encode(recipe)
+        return jsonify({"error": "Recipe not found"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/recipes", methods=["POST"])
+def add_recipe_to_db():
+    if not mongo_available:
+        return jsonify({"error": "MongoDB not available"}), 503
+    
+    try:
+        recipe = request.json
+        if not recipe:
+            return jsonify({"error": "Recipe data is required"}), 400
+        
+        # Ensure recipe has all necessary fields
+        if "title" not in recipe:
+            recipe["title"] = "Untitled Recipe"
+            
+        # If no ID is provided, generate one
+        if "id" not in recipe:
+            recipe["id"] = str(ObjectId())
+            
+        # Check if recipe already exists
+        existing = None
+        if "id" in recipe:
+            try:
+                existing = recipes_collection.find_one({"id": recipe["id"]})
+            except:
+                # Try as integer if string fails
+                try:
+                    existing = recipes_collection.find_one({"id": int(recipe["id"])})
+                except ValueError:
+                    pass
+        
+        if existing:
+            recipes_collection.update_one({"id": recipe["id"]}, {"$set": recipe})
+            return jsonify({"message": "Recipe updated", "id": recipe["id"]})
+        else:
+            result = recipes_collection.insert_one(recipe)
+            return jsonify({"message": "Recipe added", "id": recipe["id"] if "id" in recipe else str(result.inserted_id)})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/recipes/<recipe_id>", methods=["PUT"])
+def update_recipe_in_db(recipe_id):
+    if not mongo_available:
+        return jsonify({"error": "MongoDB not available"}), 503
+    
+    try:
+        recipe = request.json
+        if not recipe:
+            return jsonify({"error": "Recipe data is required"}), 400
+        
+        # Try to update by ObjectId first
+        try:
+            result = recipes_collection.update_one({"_id": ObjectId(recipe_id)}, {"$set": recipe})
+        except:
+            # Then try by regular id
+            result = recipes_collection.update_one({"id": recipe_id}, {"$set": recipe})
+            
+        if result.matched_count == 0:
+            return jsonify({"error": "Recipe not found"}), 404
+        
+        return jsonify({"message": "Recipe updated"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/recipes/<recipe_id>", methods=["DELETE"])
+def delete_recipe_from_db(recipe_id):
+    if not mongo_available:
+        return jsonify({"error": "MongoDB not available"}), 503
+    
+    try:
+        # Try to delete by ObjectId first
+        try:
+            result = recipes_collection.delete_one({"_id": ObjectId(recipe_id)})
+        except:
+            # Then try by regular id
+            result = recipes_collection.delete_one({"id": recipe_id})
+            if result.deleted_count == 0:
+                try:
+                    result = recipes_collection.delete_one({"id": int(recipe_id)})
+                except ValueError:
+                    pass
+                
+        if result.deleted_count == 0:
+            return jsonify({"error": "Recipe not found"}), 404
+        
+        return jsonify({"message": "Recipe deleted"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
     app.run(debug=True)
