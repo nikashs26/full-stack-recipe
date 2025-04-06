@@ -8,6 +8,7 @@ from bson.objectid import ObjectId
 from bson.json_util import dumps
 import time
 
+
 # Load environment variables from .env file
 load_dotenv('../info.env')  # Update path to look for info.env in parent directory
 
@@ -15,7 +16,6 @@ load_dotenv('../info.env')  # Update path to look for info.env in parent directo
 MONGO_URI = os.getenv("MONGO_URI")
 if not MONGO_URI:
     # If not found in env, use a default (for development only)
-    MONGO_URI = "mongodb+srv://nikash:Peellu123@betterbulkrecipes.kudgvdz.mongodb.net/?appName=BetterBulkRecipes"
     print(f"Using hardcoded MongoDB URI: {MONGO_URI}")
 else:
     print("Using MongoDB URI from environment variables")
