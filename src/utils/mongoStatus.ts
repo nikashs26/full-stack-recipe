@@ -13,3 +13,26 @@ export const checkMongoDBConnection = async (): Promise<boolean> => {
     return false;
   }
 };
+
+// Get database status with more information
+export const getDatabaseStatus = async (): Promise<{
+  connected: boolean;
+  message: string;
+  timestamp: Date;
+}> => {
+  try {
+    await getAllRecipesFromDB();
+    return {
+      connected: true,
+      message: "Successfully connected to MongoDB Atlas",
+      timestamp: new Date()
+    };
+  } catch (error) {
+    console.error("MongoDB connection error:", error);
+    return {
+      connected: false,
+      message: error instanceof Error ? error.message : "Unknown connection error",
+      timestamp: new Date()
+    };
+  }
+};
