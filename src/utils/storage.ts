@@ -1,7 +1,11 @@
 
 import { Recipe } from '../types/recipe';
 import { initialRecipes } from '../data/recipes';
-import { saveRecipeToDB, getAllRecipesFromDB } from '../lib/spoonacular';
+import { 
+  saveRecipeToDB, 
+  getAllRecipesFromDB,
+  deleteRecipeFromDB
+} from '../lib/spoonacular';
 
 const RECIPES_STORAGE_KEY = 'dietary-delight-recipes';
 
@@ -95,10 +99,8 @@ export const deleteRecipe = (id: string): void => {
   const updatedRecipes = recipes.filter(recipe => recipe.id !== id);
   saveRecipes(updatedRecipes);
   
-  // Also try to delete from MongoDB
-  import('./dbStats').then(module => {
-    module.deleteRecipeFromDB(id).catch(err => 
-      console.error('Failed to delete recipe from MongoDB:', err)
-    );
-  });
+  // Also try to delete from MongoDB directly
+  deleteRecipeFromDB(id).catch(err => 
+    console.error('Failed to delete recipe from MongoDB:', err)
+  );
 };
