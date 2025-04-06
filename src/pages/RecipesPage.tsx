@@ -126,8 +126,22 @@ const RecipesPage: React.FC = () => {
     enabled: !!(externalSearchTerm || ingredientTerm),
     retry: 1,
     staleTime: 60000,
-    onError: (error: Error) => {
-      console.error("Query error:", error);
+    meta: {
+      onError: (error: Error) => {
+        console.error("Query error:", error);
+        setSearchError(error.message || "Failed to fetch external recipes");
+        toast({
+          title: "Search Error",
+          description: error.message || "There was a problem searching for recipes. Please try again.",
+          variant: "destructive",
+        });
+      }
+    }
+  });
+
+  useEffect(() => {
+    if (isError && error instanceof Error) {
+      console.error("Query error detected:", error);
       setSearchError(error.message || "Failed to fetch external recipes");
       toast({
         title: "Search Error",
@@ -135,7 +149,7 @@ const RecipesPage: React.FC = () => {
         variant: "destructive",
       });
     }
-  });
+  }, [isError, error, toast]);
 
   useEffect(() => {
     if (externalData?.results) {
