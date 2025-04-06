@@ -1,7 +1,6 @@
-
-const API_DB_RECIPES = "http://127.0.0.1:5000/recipes";
-const API_URL = "http://127.0.0.1:5000/get_recipes";
-const API_URL_RECIPE_BY_ID = "http://127.0.0.1:5000/get_recipe_by_id";
+const API_DB_RECIPES = "http://localhost:5000/recipes";
+const API_URL = "http://localhost:5000/get_recipes";
+const API_URL_RECIPE_BY_ID = "http://localhost:5000/get_recipe_by_id";
 
 export const fetchRecipes = async (query: string = "", ingredient: string = "") => {
     console.log(`Fetching recipes with query: "${query}" and ingredient: "${ingredient}"`);
@@ -136,6 +135,7 @@ export const fetchRecipeById = async (recipeId: number | string) => {
 // MongoDB direct CRUD operations
 export const getAllRecipesFromDB = async () => {
     try {
+        console.log("Fetching all recipes from MongoDB via Flask API");
         const response = await fetch(API_DB_RECIPES);
         
         if (!response.ok) {

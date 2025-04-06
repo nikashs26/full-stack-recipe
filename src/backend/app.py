@@ -9,21 +9,22 @@ from bson.json_util import dumps
 import time
 
 # Load environment variables from .env file
-load_dotenv()
+load_dotenv('../info.env')  # Update path to look for info.env in parent directory
 
 # Get MongoDB URI from environment variables
 MONGO_URI = os.getenv("MONGO_URI")
 if not MONGO_URI:
-    
+    # If not found in env, use a default (for development only)
+    MONGO_URI = "mongodb+srv://nikash:Peellu123@betterbulkrecipes.kudgvdz.mongodb.net/?appName=BetterBulkRecipes"
     print(f"Using hardcoded MongoDB URI: {MONGO_URI}")
 else:
     print("Using MongoDB URI from environment variables")
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/*": {"origins": "*"}})  # Enable CORS for all origins (for development)
 
 # Spoonacular API Key
-SPOONACULAR_API_KEY = "01f12ed117584307b5cba262f43a8d49"  # ← Update this!
+SPOONACULAR_API_KEY = "01f12ed117584307b5cba262f43a8d49"
 SPOONACULAR_URL = "https://api.spoonacular.com/recipes/complexSearch"
 
 # MongoDB Atlas setup
@@ -409,4 +410,5 @@ def delete_recipe_from_db(recipe_id):
         return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    # Run the Flask app on 0.0.0.0 to make it accessible from other devices on the network
+    app.run(host='0.0.0.0', debug=True, port=5000)

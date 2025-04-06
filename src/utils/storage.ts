@@ -15,7 +15,9 @@ export const loadRecipes = (): Recipe[] => {
     const recipes = storedRecipes ? JSON.parse(storedRecipes) : initialRecipes;
     
     // Attempt to sync with MongoDB in the background
-    syncWithMongoDB(recipes);
+    syncWithMongoDB(recipes).catch(err => {
+      console.log('MongoDB sync skipped:', err);
+    });
     
     return recipes;
   } catch (error) {
@@ -28,7 +30,8 @@ export const loadRecipes = (): Recipe[] => {
 const syncWithMongoDB = async (recipes: Recipe[]) => {
   try {
     // First check if MongoDB is available by making a request
-    const dbRecipes = await getAllRecipesFromDB();
+    console.log("Checking MongoDB connection through Flask API...");
+    await getAllRecipesFromDB();
     
     // If MongoDB is available, sync local recipes to it
     for (const recipe of recipes) {
