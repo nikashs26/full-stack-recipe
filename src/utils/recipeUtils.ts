@@ -1,3 +1,4 @@
+
 import { Recipe, DietaryRestriction } from '../types/recipe';
 
 export const getAverageRating = (ratings: number[]): number => {
@@ -30,6 +31,11 @@ export const filterRecipes = (
   cuisineFilter: string,
   ingredientTerm: string
 ): Recipe[] => {
+  if (!Array.isArray(recipes)) {
+    console.error("Expected recipes to be an array, got:", typeof recipes);
+    return [];
+  }
+  
   return recipes.filter(recipe => {
     const matchesSearchTerm = recipe.name.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesDietary = dietaryFilter ? recipe.dietaryRestrictions.includes(dietaryFilter as DietaryRestriction) : true;
@@ -43,6 +49,11 @@ export const filterRecipes = (
 };
 
 export const getUniqueCuisines = (recipes: Recipe[]): string[] => {
+  if (!Array.isArray(recipes)) {
+    console.error("Expected recipes to be an array, got:", typeof recipes);
+    return [];
+  }
+  
   const cuisines = recipes.map(recipe => recipe.cuisine);
   return [...new Set(cuisines)].sort();
 };

@@ -99,13 +99,24 @@ export const saveRecipes = (recipes: Recipe[]): void => {
   }
 };
 
+// Helper function to get recipes synchronously from localStorage
+export const getLocalRecipes = (): Recipe[] => {
+  try {
+    const storedRecipes = localStorage.getItem(RECIPES_STORAGE_KEY);
+    return storedRecipes ? JSON.parse(storedRecipes) : initialRecipes;
+  } catch (error) {
+    console.error('Failed to load recipes from localStorage:', error);
+    return initialRecipes;
+  }
+};
+
 export const getRecipeById = (id: string): Recipe | undefined => {
-  const recipes = loadRecipes();
+  const recipes = getLocalRecipes();
   return recipes.find(recipe => recipe.id === id);
 };
 
 export const addRecipe = (recipe: Omit<Recipe, 'id'>): Recipe => {
-  const recipes = loadRecipes();
+  const recipes = getLocalRecipes();
   const newRecipe = {
     ...recipe,
     id: Date.now().toString(),
@@ -123,7 +134,7 @@ export const addRecipe = (recipe: Omit<Recipe, 'id'>): Recipe => {
 };
 
 export const updateRecipe = (updatedRecipe: Recipe): void => {
-  const recipes = loadRecipes();
+  const recipes = getLocalRecipes();
   const updatedRecipes = recipes.map(recipe => 
     recipe.id === updatedRecipe.id ? updatedRecipe : recipe
   );
@@ -136,7 +147,7 @@ export const updateRecipe = (updatedRecipe: Recipe): void => {
 };
 
 export const deleteRecipe = (id: string): void => {
-  const recipes = loadRecipes();
+  const recipes = getLocalRecipes();
   const updatedRecipes = Array.isArray(recipes) 
     ? recipes.filter(recipe => recipe.id !== id)
     : [];

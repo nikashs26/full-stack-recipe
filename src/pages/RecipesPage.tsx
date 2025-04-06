@@ -1,11 +1,10 @@
-
 import React, { useState, useEffect } from 'react';
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Header from '../components/Header';
 import FilterBar from '../components/FilterBar';
 import RecipeCard from '../components/RecipeCard';
-import { loadRecipes, saveRecipes, deleteRecipe as deleteRecipeFromStorage } from '../utils/storage';
+import { loadRecipes, saveRecipes, deleteRecipe as deleteRecipeFromStorage, getLocalRecipes } from '../utils/storage';
 import { filterRecipes, getUniqueCuisines } from '../utils/recipeUtils';
 import { fetchRecipes, getAllRecipesFromDB } from '../lib/spoonacular';
 import { Recipe } from '../types/recipe';
@@ -30,27 +29,38 @@ const RecipesPage: React.FC = () => {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    const loadedRecipes = loadRecipes();
-    setRecipes(loadedRecipes);
-    setCuisines(getUniqueCuisines(loadedRecipes));
+    const localRecipes = getLocalRecipes();
+    setRecipes(localRecipes);
+    setCuisines(getUniqueCuisines(localRecipes));
     
-    // Check MongoDB status
-    getAllRecipesFromDB()
-      .then(() => {
-        setDbStatus('connected');
-        toast({
-          title: "MongoDB Connected",
-          description: "Successfully connected to MongoDB database",
-        });
-      })
-      .catch(() => {
-        setDbStatus('disconnected');
-        toast({
-          title: "MongoDB Disconnected",
-          description: "Could not connect to MongoDB. Searches will use Spoonacular API only.",
-          variant: "destructive",
-        });
-      });
+    const fetchData = async () => {
+      try {
+        getAllRecipesFromDB()
+          .then(() => {
+            setDbStatus('connected');
+            toast({
+              title: "MongoDB Connected",
+              description: "Successfully connected to MongoDB database",
+            });
+          })
+          .catch(() => {
+            setDbStatus('disconnected');
+            toast({
+              title: "MongoDB Disconnected",
+              description: "Could not connect to MongoDB. Searches will use Spoonacular API only.",
+              variant: "destructive",
+            });
+          });
+          
+        const loadedRecipes = await loadRecipes();
+        setRecipes(loadedRecipes);
+        setCuisines(getUniqueCuisines(loadedRecipes));
+      } catch (error) {
+        console.error("Error loading recipes:", error);
+      }
+    };
+    
+    fetchData();
   }, [toast]);
 
   useEffect(() => {
@@ -64,79 +74,6 @@ const RecipesPage: React.FC = () => {
       setExternalSearchTerm('');
     }
   }, [recipes, searchTerm, dietaryFilter, cuisineFilter, ingredientTerm]);
-
-  const { data: externalData, isLoading: isExternalLoading, isError, error } = useQuery({
-    queryKey: ['recipes', externalSearchTerm, ingredientTerm],
-    queryFn: () => fetchRecipes(externalSearchTerm, ingredientTerm),
-    enabled: !!externalSearchTerm || !!ingredientTerm,
-    retry: 1,
-    staleTime: 60000,
-    meta: {
-      onError: (error: Error) => {
-        console.error("Query error:", error);
-        setSearchError(error.message || "Failed to fetch external recipes");
-        toast({
-          title: "Search Error",
-          description: error.message || "There was a problem searching for recipes. Please try again.",
-          variant: "destructive",
-        });
-      }
-    }
-  });
-
-  // Handle errors from the query manually if needed
-  useEffect(() => {
-    if (isError && error instanceof Error) {
-      console.error("Query error:", error);
-      setSearchError(error.message || "Failed to fetch external recipes");
-      toast({
-        title: "Search Error",
-        description: error.message || "There was a problem searching for recipes. Please try again.",
-        variant: "destructive",
-      });
-    }
-  }, [isError, error, toast]);
-
-  // Filter external recipes when they arrive or when filters change
-  useEffect(() => {
-    if (externalData?.results) {
-      let filteredExternal = [...externalData.results];
-      
-      // Apply dietary filter to external recipes
-      if (dietaryFilter) {
-        filteredExternal = filteredExternal.filter(recipe => 
-          recipe.diets && recipe.diets.some(diet => 
-            diet.toLowerCase().includes(dietaryFilter.toLowerCase())
-          )
-        );
-      }
-      
-      // Apply cuisine filter to external recipes
-      if (cuisineFilter) {
-        filteredExternal = filteredExternal.filter(recipe => 
-          recipe.cuisines && recipe.cuisines.some(cuisine => 
-            cuisine.toLowerCase() === cuisineFilter.toLowerCase()
-          )
-        );
-      }
-      
-      setFilteredExternalRecipes(filteredExternal);
-    } else {
-      setFilteredExternalRecipes([]);
-    }
-  }, [externalData, dietaryFilter, cuisineFilter]);
-
-  const formatExternalRecipe = (recipe: SpoonacularRecipe): SpoonacularRecipe => {
-    return {
-      ...recipe,
-      id: recipe.id || 0,
-      title: recipe.title || "Untitled Recipe",
-      image: recipe.image || '/placeholder.svg',
-      cuisines: recipe.cuisines || [],
-      diets: recipe.diets || [],
-      readyInMinutes: recipe.readyInMinutes || 0
-    };
-  };
 
   const handleDeleteRecipe = (id: string) => {
     if (window.confirm('Are you sure you want to delete this recipe?')) {
@@ -168,6 +105,75 @@ const RecipesPage: React.FC = () => {
       setSearchError(null);
       queryClient.invalidateQueries({ queryKey: ['recipes', externalSearchTerm, ingredientTerm] });
     }
+  };
+
+  const { data: externalData, isLoading: isExternalLoading, isError, error } = useQuery({
+    queryKey: ['recipes', externalSearchTerm, ingredientTerm],
+    queryFn: () => fetchRecipes(externalSearchTerm, ingredientTerm),
+    enabled: !!externalSearchTerm || !!ingredientTerm,
+    retry: 1,
+    staleTime: 60000,
+    meta: {
+      onError: (error: Error) => {
+        console.error("Query error:", error);
+        setSearchError(error.message || "Failed to fetch external recipes");
+        toast({
+          title: "Search Error",
+          description: error.message || "There was a problem searching for recipes. Please try again.",
+          variant: "destructive",
+        });
+      }
+    }
+  });
+
+  useEffect(() => {
+    if (isError && error instanceof Error) {
+      console.error("Query error:", error);
+      setSearchError(error.message || "Failed to fetch external recipes");
+      toast({
+        title: "Search Error",
+        description: error.message || "There was a problem searching for recipes. Please try again.",
+        variant: "destructive",
+      });
+    }
+  }, [isError, error, toast]);
+
+  useEffect(() => {
+    if (externalData?.results) {
+      let filteredExternal = [...externalData.results];
+      
+      if (dietaryFilter) {
+        filteredExternal = filteredExternal.filter(recipe => 
+          recipe.diets && recipe.diets.some(diet => 
+            diet.toLowerCase().includes(dietaryFilter.toLowerCase())
+          )
+        );
+      }
+      
+      if (cuisineFilter) {
+        filteredExternal = filteredExternal.filter(recipe => 
+          recipe.cuisines && recipe.cuisines.some(cuisine => 
+            cuisine.toLowerCase() === cuisineFilter.toLowerCase()
+          )
+        );
+      }
+      
+      setFilteredExternalRecipes(filteredExternal);
+    } else {
+      setFilteredExternalRecipes([]);
+    }
+  }, [externalData, dietaryFilter, cuisineFilter]);
+
+  const formatExternalRecipe = (recipe: SpoonacularRecipe): SpoonacularRecipe => {
+    return {
+      ...recipe,
+      id: recipe.id || 0,
+      title: recipe.title || "Untitled Recipe",
+      image: recipe.image || '/placeholder.svg',
+      cuisines: recipe.cuisines || [],
+      diets: recipe.diets || [],
+      readyInMinutes: recipe.readyInMinutes || 0
+    };
   };
 
   return (

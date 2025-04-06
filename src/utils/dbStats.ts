@@ -7,7 +7,8 @@ import {
   getRecipeById,
   addRecipe,
   updateRecipe,
-  deleteRecipe
+  deleteRecipe,
+  getLocalRecipes // Add the new sync function
 } from './storage';
 
 // Also export the MongoDB status checking functions
@@ -20,6 +21,7 @@ export {
   addRecipe,
   updateRecipe,
   deleteRecipe,
+  getLocalRecipes, // Export the new sync function
   checkMongoDBConnection,
   getDatabaseStatus
 };
