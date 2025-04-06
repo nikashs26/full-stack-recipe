@@ -30,33 +30,41 @@ const RecipesPage: React.FC = () => {
 
   useEffect(() => {
     const localRecipes = getLocalRecipes();
-    setRecipes(localRecipes);
-    setCuisines(getUniqueCuisines(localRecipes));
+    if (Array.isArray(localRecipes)) {
+      setRecipes(localRecipes);
+      setCuisines(getUniqueCuisines(localRecipes));
+    }
     
     const fetchData = async () => {
       try {
-        getAllRecipesFromDB()
-          .then(() => {
-            setDbStatus('connected');
-            toast({
-              title: "MongoDB Connected",
-              description: "Successfully connected to MongoDB database",
-            });
-          })
-          .catch(() => {
-            setDbStatus('disconnected');
-            toast({
-              title: "MongoDB Disconnected",
-              description: "Could not connect to MongoDB. Searches will use Spoonacular API only.",
-              variant: "destructive",
-            });
+        try {
+          await getAllRecipesFromDB();
+          setDbStatus('connected');
+          toast({
+            title: "MongoDB Connected",
+            description: "Successfully connected to MongoDB database",
           });
-          
-        const loadedRecipes = await loadRecipes();
-        setRecipes(loadedRecipes);
-        setCuisines(getUniqueCuisines(loadedRecipes));
+        } catch (error) {
+          console.error("MongoDB connection check failed:", error);
+          setDbStatus('disconnected');
+          toast({
+            title: "MongoDB Disconnected",
+            description: "Could not connect to MongoDB. Using local storage only.",
+            variant: "destructive",
+          });
+        }
+        
+        try {
+          const loadedRecipes = await loadRecipes();
+          if (Array.isArray(loadedRecipes)) {
+            setRecipes(loadedRecipes);
+            setCuisines(getUniqueCuisines(loadedRecipes));
+          }
+        } catch (loadError) {
+          console.error("Error loading recipes:", loadError);
+        }
       } catch (error) {
-        console.error("Error loading recipes:", error);
+        console.error("Error in fetchData:", error);
       }
     };
     
@@ -64,14 +72,16 @@ const RecipesPage: React.FC = () => {
   }, [toast]);
 
   useEffect(() => {
-    const filtered = filterRecipes(recipes, searchTerm, dietaryFilter, cuisineFilter, ingredientTerm);
-    setFilteredRecipes(filtered);
-    setSearchError(null);
-    
-    if (searchTerm.trim() !== '' && filtered.length === 0) {
-      setExternalSearchTerm(searchTerm);
-    } else {
-      setExternalSearchTerm('');
+    if (Array.isArray(recipes)) {
+      const filtered = filterRecipes(recipes, searchTerm, dietaryFilter, cuisineFilter, ingredientTerm);
+      setFilteredRecipes(filtered);
+      setSearchError(null);
+      
+      if (searchTerm.trim() !== '' && filtered.length === 0) {
+        setExternalSearchTerm(searchTerm);
+      } else {
+        setExternalSearchTerm('');
+      }
     }
   }, [recipes, searchTerm, dietaryFilter, cuisineFilter, ingredientTerm]);
 
@@ -109,25 +119,14 @@ const RecipesPage: React.FC = () => {
 
   const { data: externalData, isLoading: isExternalLoading, isError, error } = useQuery({
     queryKey: ['recipes', externalSearchTerm, ingredientTerm],
-    queryFn: () => fetchRecipes(externalSearchTerm, ingredientTerm),
-    enabled: !!externalSearchTerm || !!ingredientTerm,
+    queryFn: () => {
+      console.log("Executing query function for:", externalSearchTerm, ingredientTerm);
+      return fetchRecipes(externalSearchTerm, ingredientTerm);
+    },
+    enabled: !!(externalSearchTerm || ingredientTerm),
     retry: 1,
     staleTime: 60000,
-    meta: {
-      onError: (error: Error) => {
-        console.error("Query error:", error);
-        setSearchError(error.message || "Failed to fetch external recipes");
-        toast({
-          title: "Search Error",
-          description: error.message || "There was a problem searching for recipes. Please try again.",
-          variant: "destructive",
-        });
-      }
-    }
-  });
-
-  useEffect(() => {
-    if (isError && error instanceof Error) {
+    onError: (error: Error) => {
       console.error("Query error:", error);
       setSearchError(error.message || "Failed to fetch external recipes");
       toast({
@@ -136,7 +135,7 @@ const RecipesPage: React.FC = () => {
         variant: "destructive",
       });
     }
-  }, [isError, error, toast]);
+  });
 
   useEffect(() => {
     if (externalData?.results) {
@@ -158,6 +157,7 @@ const RecipesPage: React.FC = () => {
         );
       }
       
+      console.log("Setting filtered external recipes:", filteredExternal.length);
       setFilteredExternalRecipes(filteredExternal);
     } else {
       setFilteredExternalRecipes([]);
@@ -176,13 +176,25 @@ const RecipesPage: React.FC = () => {
     };
   };
 
+  const forceApiSearch = () => {
+    if (searchTerm.trim() || ingredientTerm.trim()) {
+      setExternalSearchTerm(searchTerm);
+      queryClient.invalidateQueries({ queryKey: ['recipes', searchTerm, ingredientTerm] });
+    } else {
+      toast({
+        title: "Search terms required",
+        description: "Please enter a recipe name or ingredient to search",
+      });
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-3xl font-bold text-gray-900">Recipe Collection</h1>
-          <div className="flex items-center">
+          <div className="flex items-center gap-2">
             {dbStatus === 'checking' && (
               <Badge variant="outline" className="flex items-center gap-1 bg-yellow-50">
                 <Loader2 className="h-3 w-3 animate-spin" /> Checking DB
@@ -198,6 +210,12 @@ const RecipesPage: React.FC = () => {
                 <AlertCircle className="h-3 w-3" /> MongoDB Disconnected
               </Badge>
             )}
+            <button 
+              onClick={forceApiSearch}
+              className="ml-2 text-xs bg-blue-500 hover:bg-blue-600 text-white py-1 px-2 rounded"
+            >
+              Search API Now
+            </button>
           </div>
         </div>
         
@@ -246,7 +264,7 @@ const RecipesPage: React.FC = () => {
         )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredRecipes.map(recipe => (
+          {Array.isArray(filteredRecipes) && filteredRecipes.map(recipe => (
             <RecipeCard 
               key={recipe.id} 
               recipe={recipe}
@@ -254,7 +272,7 @@ const RecipesPage: React.FC = () => {
             />
           ))}
 
-          {filteredExternalRecipes.map((recipe: SpoonacularRecipe) => (
+          {Array.isArray(filteredExternalRecipes) && filteredExternalRecipes.map((recipe: SpoonacularRecipe) => (
             <RecipeCard 
               key={`ext-${recipe.id}`} 
               recipe={formatExternalRecipe(recipe)}

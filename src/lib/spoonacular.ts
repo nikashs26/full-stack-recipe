@@ -5,6 +5,11 @@ const API_URL_RECIPE_BY_ID = "http://localhost:5000/get_recipe_by_id";
 export const fetchRecipes = async (query: string = "", ingredient: string = "") => {
     console.log(`Fetching recipes with query: "${query}" and ingredient: "${ingredient}"`);
     
+    if (!query && !ingredient) {
+        console.log("No search criteria provided, returning empty results");
+        return { results: [] };
+    }
+    
     // Try the API endpoint first which will prioritize MongoDB before making API calls
     try {
         // Build the URL with appropriate parameters
@@ -12,11 +17,11 @@ export const fetchRecipes = async (query: string = "", ingredient: string = "") 
         if (query) url += `query=${encodeURIComponent(query)}&`;
         if (ingredient) url += `ingredient=${encodeURIComponent(ingredient)}&`;
         
-        console.log("Trying recipe API URL:", url);
+        console.log("Calling recipe API URL:", url);
         
         // Short timeout to prevent UI hanging
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10-second timeout
+        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15-second timeout
         
         const response = await fetch(
             url.slice(0, -1), // Remove trailing & or ?
@@ -81,7 +86,7 @@ export const fetchRecipeById = async (recipeId: number | string) => {
     try {
         // Timeout setup to prevent hanging requests
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10-second timeout
+        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15-second timeout
         
         const url = `${API_URL_RECIPE_BY_ID}?id=${recipeId}`;
         console.log("Fetching recipe details from:", url);
@@ -132,17 +137,21 @@ export const fetchRecipeById = async (recipeId: number | string) => {
     }
 };
 
-// MongoDB direct CRUD operations
 export const getAllRecipesFromDB = async () => {
     try {
         console.log("Fetching all recipes from MongoDB via Flask API");
-        const response = await fetch(API_DB_RECIPES);
+        const response = await fetch(API_DB_RECIPES, { 
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' }
+        });
         
         if (!response.ok) {
             throw new Error(`Failed to fetch recipes from database (Status: ${response.status})`);
         }
         
-        return await response.json();
+        const data = await response.json();
+        console.log(`Retrieved ${data?.results?.length || 0} recipes from MongoDB`);
+        return data;
     } catch (error) {
         console.error("Error fetching recipes from database:", error);
         throw error;

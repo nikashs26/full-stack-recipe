@@ -10,48 +10,63 @@ import { checkMongoDBConnection } from './mongoStatus';
 
 const RECIPES_STORAGE_KEY = 'dietary-delight-recipes';
 
+// Helper function to get recipes synchronously from localStorage
+export const getLocalRecipes = (): Recipe[] => {
+  try {
+    const storedRecipes = localStorage.getItem(RECIPES_STORAGE_KEY);
+    return storedRecipes ? JSON.parse(storedRecipes) : initialRecipes;
+  } catch (error) {
+    console.error('Failed to load recipes from localStorage:', error);
+    return initialRecipes;
+  }
+};
+
 export const loadRecipes = async (): Promise<Recipe[]> => {
   try {
     // First try to load from localStorage for immediate UI display
-    const storedRecipes = localStorage.getItem(RECIPES_STORAGE_KEY);
-    let recipes = storedRecipes ? JSON.parse(storedRecipes) : initialRecipes;
+    const localRecipes = getLocalRecipes();
     
     // Try to check MongoDB connection and fetch the latest recipes
-    const isConnected = await checkMongoDBConnection().catch(() => false);
-    
-    if (isConnected) {
-      try {
-        // If connected to MongoDB, try to fetch the latest recipes
+    try {
+      console.log("Attempting to connect to MongoDB...");
+      const isConnected = await checkMongoDBConnection();
+      
+      if (isConnected) {
         console.log("Connected to MongoDB - fetching latest recipes");
-        const dbRecipes = await getAllRecipesFromDB();
-        
-        if (dbRecipes?.results && Array.isArray(dbRecipes.results) && dbRecipes.results.length > 0) {
-          // Map the recipes from DB format to our app format if needed
-          recipes = dbRecipes.results.map((dbRecipe: any) => ({
-            id: dbRecipe.id || dbRecipe._id,
-            name: dbRecipe.title || dbRecipe.name,
-            cuisine: dbRecipe.cuisine || (dbRecipe.cuisines && dbRecipe.cuisines[0]) || "Unknown",
-            dietaryRestrictions: dbRecipe.dietaryRestrictions || dbRecipe.diets || [],
-            ingredients: dbRecipe.ingredients || [],
-            instructions: dbRecipe.instructions || [],
-            image: dbRecipe.image || '/placeholder.svg',
-            ratings: dbRecipe.ratings || [],
-            comments: dbRecipe.comments || []
-          }));
+        try {
+          const dbRecipes = await getAllRecipesFromDB();
           
-          // Update local storage with the latest recipes from MongoDB
-          localStorage.setItem(RECIPES_STORAGE_KEY, JSON.stringify(recipes));
-          console.log(`Loaded ${recipes.length} recipes from MongoDB`);
+          if (dbRecipes?.results && Array.isArray(dbRecipes.results) && dbRecipes.results.length > 0) {
+            // Map the recipes from DB format to our app format
+            const mappedRecipes = dbRecipes.results.map((dbRecipe: any) => ({
+              id: dbRecipe.id || dbRecipe._id,
+              name: dbRecipe.title || dbRecipe.name,
+              cuisine: dbRecipe.cuisine || (dbRecipe.cuisines && dbRecipe.cuisines[0]) || "Unknown",
+              dietaryRestrictions: dbRecipe.dietaryRestrictions || dbRecipe.diets || [],
+              ingredients: dbRecipe.ingredients || [],
+              instructions: dbRecipe.instructions || [],
+              image: dbRecipe.image || '/placeholder.svg',
+              ratings: dbRecipe.ratings || [],
+              comments: dbRecipe.comments || []
+            }));
+            
+            // Update local storage with the latest recipes from MongoDB
+            localStorage.setItem(RECIPES_STORAGE_KEY, JSON.stringify(mappedRecipes));
+            console.log(`Loaded ${mappedRecipes.length} recipes from MongoDB`);
+            return mappedRecipes;
+          }
+        } catch (dbError) {
+          console.error("Error loading recipes from MongoDB:", dbError);
         }
-      } catch (dbError) {
-        console.error("Error loading recipes from MongoDB:", dbError);
-        // Continue with local recipes on error
+      } else {
+        console.log("MongoDB not available, using local storage recipes");
       }
-    } else {
+    } catch (connectionError) {
+      console.error("MongoDB connection failed:", connectionError);
       console.log("MongoDB not available, using local storage recipes");
     }
     
-    return recipes;
+    return localRecipes;
   } catch (error) {
     console.error('Failed to load recipes:', error);
     return initialRecipes;
@@ -59,7 +74,7 @@ export const loadRecipes = async (): Promise<Recipe[]> => {
 };
 
 // Sync local recipes with MongoDB in the background
-const syncWithMongoDB = async (recipes: Recipe[]) => {
+const syncWithMongoDB = async (recipes: Recipe[]): Promise<boolean> => {
   try {
     // First check if MongoDB is available
     const isConnected = await checkMongoDBConnection().catch(() => false);
@@ -96,17 +111,6 @@ export const saveRecipes = (recipes: Recipe[]): void => {
     );
   } catch (error) {
     console.error('Failed to save recipes to localStorage:', error);
-  }
-};
-
-// Helper function to get recipes synchronously from localStorage
-export const getLocalRecipes = (): Recipe[] => {
-  try {
-    const storedRecipes = localStorage.getItem(RECIPES_STORAGE_KEY);
-    return storedRecipes ? JSON.parse(storedRecipes) : initialRecipes;
-  } catch (error) {
-    console.error('Failed to load recipes from localStorage:', error);
-    return initialRecipes;
   }
 };
 
@@ -148,10 +152,7 @@ export const updateRecipe = (updatedRecipe: Recipe): void => {
 
 export const deleteRecipe = (id: string): void => {
   const recipes = getLocalRecipes();
-  const updatedRecipes = Array.isArray(recipes) 
-    ? recipes.filter(recipe => recipe.id !== id)
-    : [];
-    
+  const updatedRecipes = recipes.filter(recipe => recipe.id !== id);
   saveRecipes(updatedRecipes);
   
   // Also try to delete from MongoDB directly
