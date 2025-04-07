@@ -4,8 +4,6 @@ import requests
 from flask_cors import CORS
 import os
 import json
-from bson.objectid import ObjectId
-from bson.json_util import dumps
 import time
 import sys
 
@@ -38,8 +36,30 @@ mongo_available = False
 try:
     if not MONGO_URI:
         raise Exception("No MongoDB URI provided")
-        
-    import pymongo
+    
+    # Try to import pymongo or handle the import error gracefully
+    try:
+        import pymongo
+        print("Successfully imported pymongo")
+    except ImportError:
+        print("Error importing pymongo. This likely means pymongo is not installed.")
+        print("Trying to install pymongo now...")
+        import subprocess
+        try:
+            # Try to install pymongo using pip
+            result = subprocess.run([sys.executable, "-m", "pip", "install", "pymongo"], 
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            print(f"pip install pymongo output: {result.stdout.decode()}")
+            if result.stderr:
+                print(f"pip install pymongo errors: {result.stderr.decode()}")
+            
+            # Try importing again after installation
+            import pymongo
+            print("Successfully imported pymongo after installation")
+        except Exception as e:
+            print(f"Failed to install pymongo: {e}")
+            raise Exception(f"Could not import or install pymongo: {e}")
+
     # Connect to MongoDB Atlas
     print(f"Attempting to connect to MongoDB with URI: {MONGO_URI[:20]}...")
     mongo_client = pymongo.MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
@@ -537,5 +557,6 @@ def delete_recipe_from_db(recipe_id):
         return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
+    print("Starting Flask application...")
     # Run the Flask app on 0.0.0.0 to make it accessible from other devices on the network
     app.run(host='0.0.0.0', debug=True, port=5000)

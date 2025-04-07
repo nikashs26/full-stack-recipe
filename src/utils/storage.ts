@@ -29,7 +29,7 @@ export const loadRecipes = async (): Promise<Recipe[]> => {
     // Try to check MongoDB connection and fetch the latest recipes
     try {
       console.log("Attempting to connect to MongoDB...");
-      const isConnected = await checkMongoDBConnection();
+      const isConnected = await checkMongoDBConnection(1); // Try with 1 retry
       
       if (isConnected) {
         console.log("Connected to MongoDB - fetching latest recipes");
@@ -59,20 +59,25 @@ export const loadRecipes = async (): Promise<Recipe[]> => {
             
             // If MongoDB is empty, push our initial recipes to it
             console.log("Seeding MongoDB with initial recipes...");
-            const initialImportPromises = localRecipes.map(recipe => saveRecipeToDB({
-              // Convert to MongoDB format
-              id: recipe.id,
-              title: recipe.name,
-              cuisine: recipe.cuisine,
-              cuisines: [recipe.cuisine],
-              diets: recipe.dietaryRestrictions,
-              ingredients: recipe.ingredients,
-              instructions: recipe.instructions,
-              image: recipe.image,
-              ratings: recipe.ratings || []
-            }));
-            
-            await Promise.all(initialImportPromises);
+            for (const recipe of localRecipes) {
+              try {
+                await saveRecipeToDB({
+                  // Convert to MongoDB format
+                  id: recipe.id,
+                  title: recipe.name,
+                  cuisine: recipe.cuisine,
+                  cuisines: [recipe.cuisine],
+                  diets: recipe.dietaryRestrictions,
+                  ingredients: recipe.ingredients,
+                  instructions: recipe.instructions,
+                  image: recipe.image,
+                  ratings: recipe.ratings || []
+                });
+                console.log(`Seeded recipe: ${recipe.name}`);
+              } catch (err) {
+                console.error(`Failed to seed recipe ${recipe.name}:`, err);
+              }
+            }
             console.log(`Initialized MongoDB with ${localRecipes.length} default recipes`);
             return localRecipes;
           }
@@ -109,27 +114,30 @@ const syncWithMongoDB = async (recipes: Recipe[]): Promise<boolean> => {
     
     // If MongoDB is available, sync local recipes to it
     for (const recipe of recipes) {
-      await saveRecipeToDB({
-        // Convert to MongoDB format
-        id: recipe.id,
-        title: recipe.name,
-        cuisine: recipe.cuisine,
-        cuisines: [recipe.cuisine],
-        diets: recipe.dietaryRestrictions,
-        ingredients: recipe.ingredients,
-        instructions: recipe.instructions,
-        image: recipe.image,
-        ratings: recipe.ratings || [],
-        comments: recipe.comments || []
-      }).catch(err => 
-        console.log(`Failed to sync recipe ${recipe.id} to MongoDB:`, err)
-      );
+      try {
+        await saveRecipeToDB({
+          // Convert to MongoDB format
+          id: recipe.id,
+          title: recipe.name,
+          cuisine: recipe.cuisine,
+          cuisines: [recipe.cuisine],
+          diets: recipe.dietaryRestrictions,
+          ingredients: recipe.ingredients,
+          instructions: recipe.instructions,
+          image: recipe.image,
+          ratings: recipe.ratings || [],
+          comments: recipe.comments || []
+        });
+        console.log(`Synced recipe: ${recipe.name}`);
+      } catch (err) {
+        console.error(`Failed to sync recipe ${recipe.id} to MongoDB:`, err);
+      }
     }
     
     console.log('Successfully synced local recipes with MongoDB');
     return true;
   } catch (error) {
-    console.log('MongoDB sync failed:', error);
+    console.error('MongoDB sync failed:', error);
     return false;
   }
 };

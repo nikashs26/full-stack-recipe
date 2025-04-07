@@ -1,25 +1,37 @@
 
 import { getAllRecipesFromDB } from '../lib/spoonacular';
 
-// Check MongoDB connection status
-export const checkMongoDBConnection = async (): Promise<boolean> => {
-  try {
-    console.log("Checking MongoDB connection status...");
-    // Try to fetch recipes as a simple connection test
-    const response = await getAllRecipesFromDB();
-    console.log("MongoDB connection test response:", response);
-    
-    if (response?.results) {
-      console.log(`MongoDB connection successful with ${response.results.length} recipes found`);
-      return true;
-    } else {
-      console.log("MongoDB connected but no recipes found");
-      return true; // Still return true as the connection works
+// Check MongoDB connection status with retries
+export const checkMongoDBConnection = async (retryCount = 2): Promise<boolean> => {
+  let attempts = 0;
+  
+  while (attempts <= retryCount) {
+    try {
+      console.log(`Checking MongoDB connection status (attempt ${attempts + 1})...`);
+      // Try to fetch recipes as a simple connection test
+      const response = await getAllRecipesFromDB();
+      console.log("MongoDB connection test response:", response);
+      
+      if (response?.results) {
+        console.log(`MongoDB connection successful with ${response.results.length} recipes found`);
+        return true;
+      } else {
+        console.log("MongoDB connected but no recipes found");
+        return true; // Still return true as the connection works
+      }
+    } catch (error) {
+      console.error(`MongoDB connection failed (attempt ${attempts + 1}):`, error);
+      attempts++;
+      
+      if (attempts <= retryCount) {
+        console.log(`Retrying MongoDB connection in 1 second...`);
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
     }
-  } catch (error) {
-    console.error("MongoDB connection failed:", error);
-    return false;
   }
+  
+  console.error(`MongoDB connection failed after ${retryCount + 1} attempts`);
+  return false;
 };
 
 // Get database status with more information
