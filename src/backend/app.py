@@ -6,13 +6,14 @@ import os
 import json
 import time
 import sys
+from bson import ObjectId
 
 # Print Python version and path for debugging
 print(f"Python version: {sys.version}")
 print(f"Python executable: {sys.executable}")
 
 # Load environment variables from .env file
-load_dotenv('../info.env')  # Update path to look for info.env in parent directory
+load_dotenv('../info.env')
 
 # Get MongoDB URI from environment variables
 MONGO_URI = os.getenv("MONGO_URI")
@@ -23,7 +24,7 @@ else:
     print(f"Using MongoDB URI from environment variables: {MONGO_URI[:20]}...")
 
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": "*"}})  # Enable CORS for all origins (for development)
+CORS(app, resources={r"/*": {"origins": "*"}})
 
 # Spoonacular API Key
 SPOONACULAR_API_KEY = "01f12ed117584307b5cba262f43a8d49"
@@ -47,7 +48,7 @@ try:
         import subprocess
         try:
             # Try to install pymongo using pip
-            result = subprocess.run([sys.executable, "-m", "pip", "install", "pymongo"], 
+            result = subprocess.run([sys.executable, "-m", "pip", "install", "pymongo[srv]"], 
                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             print(f"pip install pymongo output: {result.stdout.decode()}")
             if result.stderr:
@@ -64,8 +65,10 @@ try:
     print(f"Attempting to connect to MongoDB with URI: {MONGO_URI[:20]}...")
     mongo_client = pymongo.MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
     mongo_client.server_info()  # Will raise an exception if cannot connect
-    db = mongo_client["betterbulkrecipes"]
-    recipes_collection = db["recipes"]
+    
+    # Use 'nikash' as database and 'Recipes' as collection based on the screenshot
+    db = mongo_client["nikash"]
+    recipes_collection = db["Recipes"]
     
     # Create indexes for better search performance
     recipes_collection.create_index([("title", pymongo.TEXT)])

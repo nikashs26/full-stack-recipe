@@ -24,8 +24,8 @@ export const checkMongoDBConnection = async (retryCount = 2): Promise<boolean> =
       attempts++;
       
       if (attempts <= retryCount) {
-        console.log(`Retrying MongoDB connection in 1 second...`);
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        console.log(`Retrying MongoDB connection in 2 seconds...`);
+        await new Promise(resolve => setTimeout(resolve, 2000));
       }
     }
   }

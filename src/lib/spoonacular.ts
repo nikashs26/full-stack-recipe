@@ -50,7 +50,7 @@ export const fetchRecipes = async (query: string = "", ingredient: string = "") 
         
         // Short timeout to prevent UI hanging
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000); // Increased timeout to 10 seconds
+        const timeoutId = setTimeout(() => controller.abort(), 15000); // Increased timeout to 15 seconds
         
         try {
             const response = await fetch(
