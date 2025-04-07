@@ -5,9 +5,16 @@ import { getAllRecipesFromDB } from '../lib/spoonacular';
 export const checkMongoDBConnection = async (): Promise<boolean> => {
   try {
     // Try to fetch recipes as a simple connection test
-    await getAllRecipesFromDB();
-    console.log("MongoDB connection successful");
-    return true;
+    const response = await getAllRecipesFromDB();
+    console.log("MongoDB connection test response:", response);
+    
+    if (response?.results) {
+      console.log(`MongoDB connection successful with ${response.results.length} recipes found`);
+      return true;
+    } else {
+      console.log("MongoDB connected but no recipes found");
+      return true; // Still return true as the connection works
+    }
   } catch (error) {
     console.error("MongoDB connection failed:", error);
     return false;
@@ -21,10 +28,11 @@ export const getDatabaseStatus = async (): Promise<{
   timestamp: Date;
 }> => {
   try {
-    await getAllRecipesFromDB();
+    const response = await getAllRecipesFromDB();
+    const recipeCount = response?.results?.length || 0;
     return {
       connected: true,
-      message: "Successfully connected to MongoDB Atlas",
+      message: `Successfully connected to MongoDB Atlas (${recipeCount} recipes found)`,
       timestamp: new Date()
     };
   } catch (error) {

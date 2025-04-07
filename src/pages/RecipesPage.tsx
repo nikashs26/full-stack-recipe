@@ -5,7 +5,7 @@ import Header from '../components/Header';
 import FilterBar from '../components/FilterBar';
 import RecipeCard from '../components/RecipeCard';
 import { loadRecipes, saveRecipes, deleteRecipe as deleteRecipeFromStorage, getLocalRecipes } from '../utils/storage';
-import { filterRecipes, getUniqueCuisines } from '../utils/recipeUtils';
+import { filterRecipes, getUniqueCuisines, formatExternalRecipeCuisine } from '../utils/recipeUtils';
 import { fetchRecipes, getAllRecipesFromDB } from '../lib/spoonacular';
 import { Recipe } from '../types/recipe';
 import { SpoonacularRecipe } from '../types/spoonacular';
@@ -38,12 +38,22 @@ const RecipesPage: React.FC = () => {
     const fetchData = async () => {
       try {
         try {
-          await getAllRecipesFromDB();
-          setDbStatus('connected');
-          toast({
-            title: "MongoDB Connected",
-            description: "Successfully connected to MongoDB database",
-          });
+          const dbResponse = await getAllRecipesFromDB();
+          if (dbResponse && dbResponse.results && dbResponse.results.length > 0) {
+            console.log("Successfully connected to MongoDB with results:", dbResponse.results.length);
+            setDbStatus('connected');
+            toast({
+              title: "MongoDB Connected",
+              description: `Successfully connected to MongoDB database with ${dbResponse.results.length} recipes`,
+            });
+          } else {
+            console.log("MongoDB connected but no recipes found");
+            setDbStatus('connected');
+            toast({
+              title: "MongoDB Connected",
+              description: "Successfully connected to MongoDB database, but no recipes found",
+            });
+          }
         } catch (error) {
           console.error("MongoDB connection check failed:", error);
           setDbStatus('disconnected');
@@ -125,18 +135,7 @@ const RecipesPage: React.FC = () => {
     },
     enabled: !!(externalSearchTerm || ingredientTerm),
     retry: 1,
-    staleTime: 60000,
-    meta: {
-      onError: (error: Error) => {
-        console.error("Query error:", error);
-        setSearchError(error.message || "Failed to fetch external recipes");
-        toast({
-          title: "Search Error",
-          description: error.message || "There was a problem searching for recipes. Please try again.",
-          variant: "destructive",
-        });
-      }
-    }
+    staleTime: 60000
   });
 
   useEffect(() => {
@@ -185,8 +184,7 @@ const RecipesPage: React.FC = () => {
       title: recipe.title || "Untitled Recipe",
       image: recipe.image || '/placeholder.svg',
       cuisines: recipe.cuisines || [],
-      diets: recipe.diets || [],
-      readyInMinutes: recipe.readyInMinutes || 0
+      diets: recipe.diets || []
     };
   };
 

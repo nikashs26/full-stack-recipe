@@ -3,7 +3,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { Edit, Trash2, Star, Clock } from 'lucide-react';
 import { Recipe } from '../types/recipe';
-import { getDietaryTags, getAverageRating } from '../utils/recipeUtils';
+import { getDietaryTags, getAverageRating, formatExternalRecipeCuisine } from '../utils/recipeUtils';
 import { SpoonacularRecipe } from '../types/spoonacular';
 
 interface RecipeCardProps {
@@ -16,8 +16,10 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onDelete, isExternal = 
   // Handle both local and external recipe types
   const recipeId = isExternal ? (recipe as SpoonacularRecipe).id.toString() : (recipe as Recipe).id;
   const recipeName = isExternal ? (recipe as SpoonacularRecipe).title : (recipe as Recipe).name;
+  
+  // Updated cuisine handling
   const recipeCuisine = isExternal 
-    ? ((recipe as SpoonacularRecipe).cuisines?.length > 0 ? (recipe as SpoonacularRecipe).cuisines[0] : "Other") 
+    ? formatExternalRecipeCuisine(recipe as SpoonacularRecipe)
     : (recipe as Recipe).cuisine;
   
   const recipeImage = isExternal 
