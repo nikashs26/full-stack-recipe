@@ -1,4 +1,3 @@
-
 // URLs for API endpoints - fallback to mock data when not available
 const API_DB_RECIPES = "http://localhost:5000/recipes";
 const API_URL = "http://localhost:5000/get_recipes";
@@ -51,7 +50,7 @@ export const fetchRecipes = async (query: string = "", ingredient: string = "") 
         
         // Short timeout to prevent UI hanging
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5-second timeout
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // Increased timeout to 10 seconds
         
         try {
             const response = await fetch(
@@ -71,9 +70,14 @@ export const fetchRecipes = async (query: string = "", ingredient: string = "") 
             const data = await response.json();
             console.log("API response data received:", data);
         
-            if (!data || typeof data !== 'object' || !Array.isArray(data.results)) {
+            if (!data || typeof data !== 'object') {
                 console.error("Invalid API response format", data);
                 throw new Error("Invalid API response format");
+            }
+
+            // If data.results is missing, create it as an empty array
+            if (!Array.isArray(data.results)) {
+                data.results = [];
             }
 
             console.log(`Found ${data.results.length} recipes from MongoDB/API`);
@@ -211,63 +215,192 @@ export const fetchRecipeById = async (recipeId: number | string) => {
     }
 };
 
-// The remaining functions will just use local storage as MongoDB is likely not available
+// Function to fetch all recipes from MongoDB
 export const getAllRecipesFromDB = async () => {
     try {
-        const localRecipes = localStorage.getItem('dietary-delight-recipes');
-        return { results: localRecipes ? JSON.parse(localRecipes) : [] };
+        console.log("Fetching all recipes from MongoDB");
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        
+        const response = await fetch(API_DB_RECIPES, { signal: controller.signal });
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+            throw new Error(`Failed to fetch recipes from MongoDB (Status: ${response.status})`);
+        }
+        
+        const data = await response.json();
+        console.log(`Fetched ${data.results?.length || 0} recipes from MongoDB`);
+        return data;
     } catch (error) {
-        console.error("Error getting recipes from local storage:", error);
-        return { results: [] };
+        console.error("Error fetching recipes from MongoDB:", error);
+        
+        // Try to get from local storage as backup
+        try {
+            const localRecipes = localStorage.getItem('dietary-delight-recipes');
+            return { results: localRecipes ? JSON.parse(localRecipes) : [] };
+        } catch (localError) {
+            console.error("Error getting recipes from local storage:", localError);
+            return { results: [] };
+        }
     }
 };
 
 export const getRecipeFromDB = async (recipeId: string) => {
     try {
-        const localRecipes = localStorage.getItem('dietary-delight-recipes');
-        const recipes = localRecipes ? JSON.parse(localRecipes) : [];
-        const recipe = recipes.find((r: any) => r.id === recipeId);
-        return recipe || null;
+        console.log(`Fetching recipe ${recipeId} from MongoDB`);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        
+        const response = await fetch(`${API_DB_RECIPES}/${recipeId}`, { signal: controller.signal });
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+            throw new Error(`Failed to fetch recipe from MongoDB (Status: ${response.status})`);
+        }
+        
+        const data = await response.json();
+        console.log(`Fetched recipe ${recipeId} from MongoDB:`, data);
+        return data;
     } catch (error) {
-        console.error("Error getting recipe from local storage:", error);
-        return null;
+        console.error(`Error fetching recipe ${recipeId} from MongoDB:`, error);
+        
+        // Try to get from local storage as backup
+        try {
+            const localRecipes = localStorage.getItem('dietary-delight-recipes');
+            const recipes = localRecipes ? JSON.parse(localRecipes) : [];
+            const recipe = recipes.find((r: any) => r.id === recipeId);
+            return recipe || null;
+        } catch (localError) {
+            console.error(`Error getting recipe ${recipeId} from local storage:`, localError);
+            return null;
+        }
     }
 };
 
 export const saveRecipeToDB = async (recipe: any) => {
     try {
-        const localRecipes = localStorage.getItem('dietary-delight-recipes');
-        const recipes = localRecipes ? JSON.parse(localRecipes) : [];
-        const existingIndex = recipes.findIndex((r: any) => r.id === recipe.id);
+        console.log(`Saving recipe ${recipe.id || recipe.title} to MongoDB`);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
         
-        if (existingIndex >= 0) {
-            recipes[existingIndex] = recipe;
-        } else {
-            recipes.push(recipe);
+        const response = await fetch(API_DB_RECIPES, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(recipe),
+            signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+            throw new Error(`Failed to save recipe to MongoDB (Status: ${response.status})`);
         }
         
-        localStorage.setItem('dietary-delight-recipes', JSON.stringify(recipes));
-        return { success: true, message: "Recipe saved to local storage" };
+        const data = await response.json();
+        console.log(`Saved recipe to MongoDB:`, data);
+        return data;
     } catch (error) {
-        console.error("Error saving recipe to local storage:", error);
-        return { success: false, error: error.message };
+        console.error("Error saving recipe to MongoDB:", error);
+        
+        // Save to local storage as backup
+        try {
+            const localRecipes = localStorage.getItem('dietary-delight-recipes');
+            const recipes = localRecipes ? JSON.parse(localRecipes) : [];
+            const existingIndex = recipes.findIndex((r: any) => r.id === recipe.id);
+            
+            if (existingIndex >= 0) {
+                recipes[existingIndex] = recipe;
+            } else {
+                recipes.push(recipe);
+            }
+            
+            localStorage.setItem('dietary-delight-recipes', JSON.stringify(recipes));
+            return { success: true, message: "Recipe saved to local storage" };
+        } catch (localError) {
+            console.error("Error saving recipe to local storage:", localError);
+            return { success: false, error: localError.message };
+        }
     }
 };
 
 export const updateRecipeInDB = async (recipeId: string, recipe: any) => {
-    return saveRecipeToDB({...recipe, id: recipeId});
+    try {
+        console.log(`Updating recipe ${recipeId} in MongoDB`);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        
+        const response = await fetch(`${API_DB_RECIPES}/${recipeId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(recipe),
+            signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+            throw new Error(`Failed to update recipe in MongoDB (Status: ${response.status})`);
+        }
+        
+        const data = await response.json();
+        console.log(`Updated recipe in MongoDB:`, data);
+        
+        // Also update in local storage
+        return saveRecipeToDB({...recipe, id: recipeId});
+    } catch (error) {
+        console.error(`Error updating recipe ${recipeId} in MongoDB:`, error);
+        return saveRecipeToDB({...recipe, id: recipeId}); // Fall back to saving in localStorage
+    }
 };
 
 export const deleteRecipeFromDB = async (recipeId: string) => {
     try {
-        const localRecipes = localStorage.getItem('dietary-delight-recipes');
-        const recipes = localRecipes ? JSON.parse(localRecipes) : [];
-        const filteredRecipes = recipes.filter((r: any) => r.id !== recipeId);
+        console.log(`Deleting recipe ${recipeId} from MongoDB`);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
         
-        localStorage.setItem('dietary-delight-recipes', JSON.stringify(filteredRecipes));
-        return { success: true, message: "Recipe deleted from local storage" };
+        const response = await fetch(`${API_DB_RECIPES}/${recipeId}`, {
+            method: 'DELETE',
+            signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+            throw new Error(`Failed to delete recipe from MongoDB (Status: ${response.status})`);
+        }
+        
+        const data = await response.json();
+        console.log(`Deleted recipe from MongoDB:`, data);
+        
+        // Also delete from local storage
+        try {
+            const localRecipes = localStorage.getItem('dietary-delight-recipes');
+            const recipes = localRecipes ? JSON.parse(localRecipes) : [];
+            const filteredRecipes = recipes.filter((r: any) => r.id !== recipeId);
+            
+            localStorage.setItem('dietary-delight-recipes', JSON.stringify(filteredRecipes));
+            return { success: true, message: "Recipe deleted from MongoDB and local storage" };
+        } catch (localError) {
+            console.error("Error deleting recipe from local storage:", localError);
+            return { success: true, message: "Recipe deleted from MongoDB only" };
+        }
     } catch (error) {
-        console.error("Error deleting recipe from local storage:", error);
-        return { success: false, error: error.message };
+        console.error(`Error deleting recipe ${recipeId} from MongoDB:`, error);
+        
+        // Try to delete from local storage as backup
+        try {
+            const localRecipes = localStorage.getItem('dietary-delight-recipes');
+            const recipes = localRecipes ? JSON.parse(localRecipes) : [];
+            const filteredRecipes = recipes.filter((r: any) => r.id !== recipeId);
+            
+            localStorage.setItem('dietary-delight-recipes', JSON.stringify(filteredRecipes));
+            return { success: true, message: "Recipe deleted from local storage" };
+        } catch (localError) {
+            console.error("Error deleting recipe from local storage:", localError);
+            return { success: false, error: localError.message };
+        }
     }
 };

@@ -19,10 +19,10 @@ load_dotenv('../info.env')  # Update path to look for info.env in parent directo
 # Get MongoDB URI from environment variables
 MONGO_URI = os.getenv("MONGO_URI")
 if not MONGO_URI:
-    # If not found in env, use a default (for development only)
     print("No MongoDB URI found in environment variables")
+    print("Please update the info.env file with your MongoDB URI")
 else:
-    print(f"Using MongoDB URI from environment variables: {MONGO_URI[:10]}...")
+    print(f"Using MongoDB URI from environment variables: {MONGO_URI[:20]}...")
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})  # Enable CORS for all origins (for development)
@@ -41,7 +41,7 @@ try:
         
     import pymongo
     # Connect to MongoDB Atlas
-    print(f"Attempting to connect to MongoDB with URI: {MONGO_URI[:10]}...")
+    print(f"Attempting to connect to MongoDB with URI: {MONGO_URI[:20]}...")
     mongo_client = pymongo.MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
     mongo_client.server_info()  # Will raise an exception if cannot connect
     db = mongo_client["BetterBulkRecipes"]
@@ -59,7 +59,80 @@ try:
     # Add some test recipes if the collection is empty
     if recipe_count == 0:
         print("Adding test recipes to MongoDB...")
-        from ..data.recipes import initialRecipes
+        # Import initialRecipes directly from a Python dictionary
+        initialRecipes = [
+            {
+                "id": "1",
+                "name": "Vegetable Stir Fry",
+                "cuisine": "Asian",
+                "dietaryRestrictions": ["vegetarian", "vegan"],
+                "ingredients": ["broccoli", "carrots", "bell peppers", "soy sauce", "ginger", "garlic"],
+                "instructions": ["Chop all vegetables", "Heat oil in a wok", "Add vegetables and stir fry for 5 minutes", "Add sauce and cook for 2 more minutes"],
+                "image": "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60",
+                "ratings": [4, 5, 5]
+            },
+            {
+                "id": "2",
+                "name": "Chicken Parmesan",
+                "cuisine": "Italian",
+                "dietaryRestrictions": ["carnivore"],
+                "ingredients": ["chicken breast", "breadcrumbs", "parmesan cheese", "mozzarella cheese", "tomato sauce", "pasta"],
+                "instructions": ["Bread the chicken", "Fry until golden", "Top with sauce and cheese", "Bake until cheese melts", "Serve with pasta"],
+                "image": "https://images.unsplash.com/photo-1515516089376-88db1e26e9c0?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60",
+                "ratings": [5, 4, 4, 5]
+            },
+            {
+                "id": "3",
+                "name": "Beef Tacos",
+                "cuisine": "Mexican",
+                "dietaryRestrictions": ["carnivore"],
+                "ingredients": ["ground beef", "taco shells", "lettuce", "tomato", "cheese", "sour cream", "taco seasoning"],
+                "instructions": ["Brown the beef", "Add taco seasoning", "Warm the taco shells", "Assemble with toppings"],
+                "image": "https://images.unsplash.com/photo-1565299585323-38d6b0865b47?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60",
+                "ratings": [4, 5, 3]
+            },
+            {
+                "id": "4",
+                "name": "Quinoa Stuffed Bell Peppers",
+                "cuisine": "Mediterranean",
+                "dietaryRestrictions": ["vegetarian", "gluten-free"],
+                "ingredients": ["bell peppers", "quinoa", "black beans", "corn", "tomatoes", "cumin", "chili powder"],
+                "instructions": ["Cook quinoa", "Mix with beans, corn, and spices", "Stuff bell peppers", "Bake for 25 minutes"],
+                "image": "https://via.placeholder.com/400x300",
+                "ratings": [4, 4, 4, 5]
+            },
+            {
+                "id": "5",
+                "name": "Lentil Shepherd's Pie",
+                "cuisine": "British",
+                "dietaryRestrictions": ["vegetarian", "vegan"],
+                "ingredients": ["lentils", "carrots", "peas", "potatoes", "plant milk", "vegetable broth"],
+                "instructions": ["Cook lentils with vegetables", "Make mashed potatoes with plant milk", "Layer lentil mixture on the bottom of a dish", "Top with mashed potatoes", "Bake until golden"],
+                "image": "https://via.placeholder.com/400x300",
+                "ratings": [5, 4, 5]
+            },
+            {
+                "id": "6",
+                "name": "Tiramisu",
+                "cuisine": "Italian",
+                "dietaryRestrictions": ["vegetarian"],
+                "ingredients": ["ladyfingers", "espresso", "mascarpone cheese", "eggs", "sugar", "cocoa powder"],
+                "instructions": ["Mix mascarpone, egg yolks, and sugar", "Whip egg whites and fold into mixture", "Dip ladyfingers in espresso", "Layer ladyfingers and cream", "Dust with cocoa powder"],
+                "image": "https://via.placeholder.com/400x300",
+                "ratings": [5, 5, 5, 4]
+            },
+            {
+                "id": "7",
+                "name": "Vegan Apple Crisp",
+                "cuisine": "American",
+                "dietaryRestrictions": ["vegetarian", "vegan"],
+                "ingredients": ["apples", "oats", "brown sugar", "cinnamon", "plant butter", "lemon juice"],
+                "instructions": ["Slice apples and toss with lemon juice", "Mix oats, sugar, cinnamon, and butter", "Place apples in dish and top with oat mixture", "Bake until golden and bubbly"],
+                "image": "https://via.placeholder.com/400x300",
+                "ratings": [4, 4, 3, 5]
+            }
+        ]
+        
         for recipe in initialRecipes:
             try:
                 # Convert to MongoDB format
@@ -74,6 +147,7 @@ try:
                     "ratings": recipe["ratings"]
                 }
                 recipes_collection.insert_one(mongo_recipe)
+                print(f"Added test recipe: {recipe['name']}")
             except Exception as e:
                 print(f"Error adding test recipe {recipe['name']}: {e}")
         print(f"Added {len(initialRecipes)} test recipes to MongoDB")

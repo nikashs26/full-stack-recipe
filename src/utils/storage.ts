@@ -54,6 +54,25 @@ export const loadRecipes = async (): Promise<Recipe[]> => {
             localStorage.setItem(RECIPES_STORAGE_KEY, JSON.stringify(mappedRecipes));
             console.log(`Loaded ${mappedRecipes.length} recipes from MongoDB`);
             return mappedRecipes;
+          } else {
+            console.log("No recipes found in MongoDB - initializing with default recipes");
+            
+            // If MongoDB is empty, push our initial recipes to it
+            const initialImportPromises = localRecipes.map(recipe => saveRecipeToDB({
+              // Convert to MongoDB format
+              id: recipe.id,
+              title: recipe.name,
+              cuisine: recipe.cuisine,
+              cuisines: [recipe.cuisine],
+              diets: recipe.dietaryRestrictions,
+              ingredients: recipe.ingredients,
+              instructions: recipe.instructions,
+              image: recipe.image,
+              ratings: recipe.ratings || []
+            }));
+            
+            await Promise.all(initialImportPromises);
+            console.log(`Initialized MongoDB with ${localRecipes.length} default recipes`);
           }
         } catch (dbError) {
           console.error("Error loading recipes from MongoDB:", dbError);
@@ -88,7 +107,19 @@ const syncWithMongoDB = async (recipes: Recipe[]): Promise<boolean> => {
     
     // If MongoDB is available, sync local recipes to it
     for (const recipe of recipes) {
-      await saveRecipeToDB(recipe).catch(err => 
+      await saveRecipeToDB({
+        // Convert to MongoDB format
+        id: recipe.id,
+        title: recipe.name,
+        cuisine: recipe.cuisine,
+        cuisines: [recipe.cuisine],
+        diets: recipe.dietaryRestrictions,
+        ingredients: recipe.ingredients,
+        instructions: recipe.instructions,
+        image: recipe.image,
+        ratings: recipe.ratings || [],
+        comments: recipe.comments || []
+      }).catch(err => 
         console.log(`Failed to sync recipe ${recipe.id} to MongoDB:`, err)
       );
     }
