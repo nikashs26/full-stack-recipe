@@ -37,7 +37,7 @@ try:
     print(f"Attempting to connect to MongoDB with URI: {MONGO_URI}")
     mongo_client = pymongo.MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
     mongo_client.server_info()  # Will raise an exception if cannot connect
-    db = mongo_client["BetterBulkRecipes"]
+    db = mongo_client["betterbulkrecipes"]
     recipes_collection = db["recipes"]
     
     # Create indexes for better search performance
