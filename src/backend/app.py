@@ -64,8 +64,11 @@ try:
             {
                 "id": "1",
                 "name": "Vegetable Stir Fry",
+                "title": "Vegetable Stir Fry",
                 "cuisine": "Asian",
+                "cuisines": ["Asian"],
                 "dietaryRestrictions": ["vegetarian", "vegan"],
+                "diets": ["vegetarian", "vegan"],
                 "ingredients": ["broccoli", "carrots", "bell peppers", "soy sauce", "ginger", "garlic"],
                 "instructions": ["Chop all vegetables", "Heat oil in a wok", "Add vegetables and stir fry for 5 minutes", "Add sauce and cook for 2 more minutes"],
                 "image": "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60",
@@ -74,8 +77,11 @@ try:
             {
                 "id": "2",
                 "name": "Chicken Parmesan",
+                "title": "Chicken Parmesan",
                 "cuisine": "Italian",
+                "cuisines": ["Italian"],
                 "dietaryRestrictions": ["carnivore"],
+                "diets": ["carnivore"],
                 "ingredients": ["chicken breast", "breadcrumbs", "parmesan cheese", "mozzarella cheese", "tomato sauce", "pasta"],
                 "instructions": ["Bread the chicken", "Fry until golden", "Top with sauce and cheese", "Bake until cheese melts", "Serve with pasta"],
                 "image": "https://images.unsplash.com/photo-1515516089376-88db1e26e9c0?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60",
@@ -84,8 +90,11 @@ try:
             {
                 "id": "3",
                 "name": "Beef Tacos",
+                "title": "Beef Tacos",
                 "cuisine": "Mexican",
+                "cuisines": ["Mexican"],
                 "dietaryRestrictions": ["carnivore"],
+                "diets": ["carnivore"],
                 "ingredients": ["ground beef", "taco shells", "lettuce", "tomato", "cheese", "sour cream", "taco seasoning"],
                 "instructions": ["Brown the beef", "Add taco seasoning", "Warm the taco shells", "Assemble with toppings"],
                 "image": "https://images.unsplash.com/photo-1565299585323-38d6b0865b47?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60",
@@ -94,8 +103,11 @@ try:
             {
                 "id": "4",
                 "name": "Quinoa Stuffed Bell Peppers",
+                "title": "Quinoa Stuffed Bell Peppers",
                 "cuisine": "Mediterranean",
+                "cuisines": ["Mediterranean"],
                 "dietaryRestrictions": ["vegetarian", "gluten-free"],
+                "diets": ["vegetarian", "gluten-free"],
                 "ingredients": ["bell peppers", "quinoa", "black beans", "corn", "tomatoes", "cumin", "chili powder"],
                 "instructions": ["Cook quinoa", "Mix with beans, corn, and spices", "Stuff bell peppers", "Bake for 25 minutes"],
                 "image": "https://via.placeholder.com/400x300",
@@ -104,8 +116,11 @@ try:
             {
                 "id": "5",
                 "name": "Lentil Shepherd's Pie",
+                "title": "Lentil Shepherd's Pie",
                 "cuisine": "British",
+                "cuisines": ["British"],
                 "dietaryRestrictions": ["vegetarian", "vegan"],
+                "diets": ["vegetarian", "vegan"],
                 "ingredients": ["lentils", "carrots", "peas", "potatoes", "plant milk", "vegetable broth"],
                 "instructions": ["Cook lentils with vegetables", "Make mashed potatoes with plant milk", "Layer lentil mixture on the bottom of a dish", "Top with mashed potatoes", "Bake until golden"],
                 "image": "https://via.placeholder.com/400x300",
@@ -114,8 +129,11 @@ try:
             {
                 "id": "6",
                 "name": "Tiramisu",
+                "title": "Tiramisu",
                 "cuisine": "Italian",
+                "cuisines": ["Italian"],
                 "dietaryRestrictions": ["vegetarian"],
+                "diets": ["vegetarian"],
                 "ingredients": ["ladyfingers", "espresso", "mascarpone cheese", "eggs", "sugar", "cocoa powder"],
                 "instructions": ["Mix mascarpone, egg yolks, and sugar", "Whip egg whites and fold into mixture", "Dip ladyfingers in espresso", "Layer ladyfingers and cream", "Dust with cocoa powder"],
                 "image": "https://via.placeholder.com/400x300",
@@ -124,8 +142,11 @@ try:
             {
                 "id": "7",
                 "name": "Vegan Apple Crisp",
+                "title": "Vegan Apple Crisp",
                 "cuisine": "American",
+                "cuisines": ["American"],
                 "dietaryRestrictions": ["vegetarian", "vegan"],
+                "diets": ["vegetarian", "vegan"],
                 "ingredients": ["apples", "oats", "brown sugar", "cinnamon", "plant butter", "lemon juice"],
                 "instructions": ["Slice apples and toss with lemon juice", "Mix oats, sugar, cinnamon, and butter", "Place apples in dish and top with oat mixture", "Bake until golden and bubbly"],
                 "image": "https://via.placeholder.com/400x300",
@@ -135,21 +156,24 @@ try:
         
         for recipe in initialRecipes:
             try:
-                # Convert to MongoDB format
-                mongo_recipe = {
-                    "id": recipe["id"],
-                    "title": recipe["name"],
-                    "cuisines": [recipe["cuisine"]],
-                    "diets": recipe["dietaryRestrictions"],
-                    "ingredients": recipe["ingredients"],
-                    "instructions": recipe["instructions"],
-                    "image": recipe["image"],
-                    "ratings": recipe["ratings"]
-                }
-                recipes_collection.insert_one(mongo_recipe)
-                print(f"Added test recipe: {recipe['name']}")
+                # Add both name and title to ensure consistent access
+                if "name" in recipe and "title" not in recipe:
+                    recipe["title"] = recipe["name"]
+                if "title" in recipe and "name" not in recipe:
+                    recipe["name"] = recipe["title"]
+                
+                # Ensure cuisines array exists
+                if "cuisine" in recipe and ("cuisines" not in recipe or not recipe["cuisines"]):
+                    recipe["cuisines"] = [recipe["cuisine"]]
+                
+                # Ensure diets array exists
+                if "dietaryRestrictions" in recipe and ("diets" not in recipe or not recipe["diets"]):
+                    recipe["diets"] = recipe["dietaryRestrictions"]
+                
+                recipes_collection.insert_one(recipe)
+                print(f"Added test recipe: {recipe.get('title') or recipe.get('name')}")
             except Exception as e:
-                print(f"Error adding test recipe {recipe['name']}: {e}")
+                print(f"Error adding test recipe {recipe.get('title') or recipe.get('name')}: {e}")
         print(f"Added {len(initialRecipes)} test recipes to MongoDB")
 except Exception as e:
     print(f"MongoDB connection error: {e}")

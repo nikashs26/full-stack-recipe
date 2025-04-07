@@ -58,6 +58,7 @@ export const loadRecipes = async (): Promise<Recipe[]> => {
             console.log("No recipes found in MongoDB - initializing with default recipes");
             
             // If MongoDB is empty, push our initial recipes to it
+            console.log("Seeding MongoDB with initial recipes...");
             const initialImportPromises = localRecipes.map(recipe => saveRecipeToDB({
               // Convert to MongoDB format
               id: recipe.id,
@@ -73,6 +74,7 @@ export const loadRecipes = async (): Promise<Recipe[]> => {
             
             await Promise.all(initialImportPromises);
             console.log(`Initialized MongoDB with ${localRecipes.length} default recipes`);
+            return localRecipes;
           }
         } catch (dbError) {
           console.error("Error loading recipes from MongoDB:", dbError);
