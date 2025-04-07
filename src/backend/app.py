@@ -7,7 +7,11 @@ import json
 from bson.objectid import ObjectId
 from bson.json_util import dumps
 import time
+import sys
 
+# Print Python version and path for debugging
+print(f"Python version: {sys.version}")
+print(f"Python executable: {sys.executable}")
 
 # Load environment variables from .env file
 load_dotenv('../info.env')  # Update path to look for info.env in parent directory
@@ -16,9 +20,9 @@ load_dotenv('../info.env')  # Update path to look for info.env in parent directo
 MONGO_URI = os.getenv("MONGO_URI")
 if not MONGO_URI:
     # If not found in env, use a default (for development only)
-    print(f"Using hardcoded MongoDB URI: {MONGO_URI}")
+    print("No MongoDB URI found in environment variables")
 else:
-    print("Using MongoDB URI from environment variables")
+    print(f"Using MongoDB URI from environment variables: {MONGO_URI[:10]}...")
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})  # Enable CORS for all origins (for development)
@@ -32,9 +36,12 @@ in_memory_recipes = []
 mongo_available = False
 
 try:
+    if not MONGO_URI:
+        raise Exception("No MongoDB URI provided")
+        
     import pymongo
     # Connect to MongoDB Atlas
-    print(f"Attempting to connect to MongoDB with URI: {MONGO_URI}")
+    print(f"Attempting to connect to MongoDB with URI: {MONGO_URI[:10]}...")
     mongo_client = pymongo.MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
     mongo_client.server_info()  # Will raise an exception if cannot connect
     db = mongo_client["BetterBulkRecipes"]
@@ -48,6 +55,28 @@ try:
     recipe_count = recipes_collection.count_documents({})
     print(f"MongoDB Atlas connection successful. Found {recipe_count} recipes in database")
     mongo_available = True
+    
+    # Add some test recipes if the collection is empty
+    if recipe_count == 0:
+        print("Adding test recipes to MongoDB...")
+        from ..data.recipes import initialRecipes
+        for recipe in initialRecipes:
+            try:
+                # Convert to MongoDB format
+                mongo_recipe = {
+                    "id": recipe["id"],
+                    "title": recipe["name"],
+                    "cuisines": [recipe["cuisine"]],
+                    "diets": recipe["dietaryRestrictions"],
+                    "ingredients": recipe["ingredients"],
+                    "instructions": recipe["instructions"],
+                    "image": recipe["image"],
+                    "ratings": recipe["ratings"]
+                }
+                recipes_collection.insert_one(mongo_recipe)
+            except Exception as e:
+                print(f"Error adding test recipe {recipe['name']}: {e}")
+        print(f"Added {len(initialRecipes)} test recipes to MongoDB")
 except Exception as e:
     print(f"MongoDB connection error: {e}")
     print("Using in-memory storage as fallback")

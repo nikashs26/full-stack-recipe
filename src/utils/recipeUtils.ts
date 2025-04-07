@@ -1,5 +1,6 @@
 
 import { Recipe, DietaryRestriction } from '../types/recipe';
+import { SpoonacularRecipe } from '../types/spoonacular';
 
 export const getAverageRating = (ratings: number[]): number => {
   if (ratings.length === 0) return 0;
@@ -56,4 +57,24 @@ export const getUniqueCuisines = (recipes: Recipe[]): string[] => {
   
   const cuisines = recipes.map(recipe => recipe.cuisine);
   return [...new Set(cuisines)].sort();
+};
+
+export const formatExternalRecipeCuisine = (recipe: SpoonacularRecipe): string => {
+  // Handle cuisine data for external recipes
+  if (recipe.cuisines && Array.isArray(recipe.cuisines) && recipe.cuisines.length > 0) {
+    return recipe.cuisines[0];
+  }
+  return "Other";
+};
+
+export const formatRecipeForDisplay = (recipe: Recipe | SpoonacularRecipe, isExternal: boolean): any => {
+  if (isExternal) {
+    const spoonacularRecipe = recipe as SpoonacularRecipe;
+    return {
+      ...spoonacularRecipe,
+      cuisine: formatExternalRecipeCuisine(spoonacularRecipe),
+      // Add any other formatting needed for external recipes
+    };
+  }
+  return recipe;
 };
