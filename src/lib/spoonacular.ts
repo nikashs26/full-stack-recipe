@@ -50,7 +50,7 @@ export const fetchRecipes = async (query: string = "", ingredient: string = "") 
         
         // Short timeout to prevent UI hanging
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 15000); // Increased timeout to 15 seconds
+        const timeoutId = setTimeout(() => controller.abort(), 20000); // Increased timeout to 20 seconds
         
         try {
             const response = await fetch(
@@ -220,7 +220,7 @@ export const getAllRecipesFromDB = async () => {
     try {
         console.log("Fetching all recipes from MongoDB");
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // Increased timeout to 10 seconds
         
         const response = await fetch(API_DB_RECIPES, { signal: controller.signal });
         clearTimeout(timeoutId);
@@ -280,9 +280,9 @@ export const getRecipeFromDB = async (recipeId: string) => {
 
 export const saveRecipeToDB = async (recipe: any) => {
     try {
-        console.log(`Saving recipe ${recipe.id || recipe.title} to MongoDB`);
+        console.log(`Saving recipe ${recipe.id || recipe.title} to MongoDB:`, recipe);
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // Increased timeout to 10 seconds
         
         const response = await fetch(API_DB_RECIPES, {
             method: 'POST',
@@ -295,7 +295,9 @@ export const saveRecipeToDB = async (recipe: any) => {
         clearTimeout(timeoutId);
         
         if (!response.ok) {
-            throw new Error(`Failed to save recipe to MongoDB (Status: ${response.status})`);
+            const errorText = await response.text();
+            console.error(`Failed to save recipe to MongoDB (Status: ${response.status}):`, errorText);
+            throw new Error(`Failed to save recipe to MongoDB (Status: ${response.status}): ${errorText}`);
         }
         
         const data = await response.json();

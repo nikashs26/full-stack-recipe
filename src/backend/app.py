@@ -33,6 +33,8 @@ SPOONACULAR_URL = "https://api.spoonacular.com/recipes/complexSearch"
 # MongoDB Atlas setup
 in_memory_recipes = []
 mongo_available = False
+mongo_client = None
+recipes_collection = None
 
 try:
     if not MONGO_URI:
@@ -63,7 +65,7 @@ try:
 
     # Connect to MongoDB Atlas
     print(f"Attempting to connect to MongoDB with URI: {MONGO_URI[:20]}...")
-    mongo_client = pymongo.MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
+    mongo_client = pymongo.MongoClient(MONGO_URI, serverSelectionTimeoutMS=10000)
     mongo_client.server_info()  # Will raise an exception if cannot connect
     
     # Use 'nikash' as database and 'Recipes' as collection based on the screenshot
@@ -72,7 +74,7 @@ try:
     
     # Create indexes for better search performance
     recipes_collection.create_index([("title", pymongo.TEXT)])
-    recipes_collection.create_index([("id", pymongo.ASCENDING)], unique=True)
+    recipes_collection.create_index([("id", pymongo.ASCENDING)])
     
     # Count documents to verify connection
     recipe_count = recipes_collection.count_documents({})
@@ -558,6 +560,103 @@ def delete_recipe_from_db(recipe_id):
         return jsonify({"message": "Recipe deleted"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+# Add a new route for direct testing of MongoDB connection
+@app.route("/test-mongodb", methods=["GET"])
+def test_mongodb():
+    if not mongo_available:
+        return jsonify({
+            "status": "error",
+            "connected": False,
+            "message": "MongoDB is not available. Check your connection string and make sure MongoDB Atlas is accessible."
+        }), 503
+    
+    try:
+        # Verify connection by getting server stats
+        if mongo_client:
+            mongo_client.admin.command('ping')
+            recipe_count = recipes_collection.count_documents({}) if recipes_collection else 0
+            
+            # Check if we can get sample data from the collection
+            sample = []
+            if recipes_collection and recipe_count > 0:
+                sample = list(recipes_collection.find().limit(3))
+                # Convert ObjectId to string for JSON serialization
+                for doc in sample:
+                    if "_id" in doc and isinstance(doc["_id"], ObjectId):
+                        doc["_id"] = str(doc["_id"])
+            
+            return jsonify({
+                "status": "success",
+                "connected": True,
+                "message": f"MongoDB is connected and operational. Found {recipe_count} recipes.",
+                "database": "nikash",
+                "collection": "Recipes",
+                "recipeCount": recipe_count,
+                "sample": sample[:3]  # Just send a few samples to avoid large payloads
+            })
+        else:
+            return jsonify({
+                "status": "error",
+                "connected": False,
+                "message": "MongoDB client is not initialized."
+            }), 500
+    
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "connected": False,
+            "message": f"Error testing MongoDB connection: {str(e)}"
+        }), 500
+
+# Add a new route for adding a test recipe
+@app.route("/add-test-recipe", methods=["POST"])
+def add_test_recipe():
+    if not mongo_available:
+        return jsonify({
+            "status": "error",
+            "success": False,
+            "message": "MongoDB is not available."
+        }), 503
+    
+    try:
+        # Create a test recipe with timestamp to ensure uniqueness
+        timestamp = int(time.time())
+        test_recipe = {
+            "id": f"test-{timestamp}",
+            "title": f"Test Recipe {timestamp}",
+            "name": f"Test Recipe {timestamp}",
+            "cuisine": "Test",
+            "cuisines": ["Test"],
+            "dietaryRestrictions": ["test"],
+            "diets": ["test"],
+            "ingredients": ["test ingredient 1", "test ingredient 2"],
+            "instructions": ["Step 1: Test", "Step 2: Complete"],
+            "image": "https://via.placeholder.com/300",
+            "ratings": [5],
+            "createdAt": timestamp
+        }
+        
+        # Try to insert the recipe
+        result = recipes_collection.insert_one(test_recipe)
+        
+        return jsonify({
+            "status": "success",
+            "success": True,
+            "message": "Test recipe added successfully",
+            "recipeId": str(result.inserted_id),
+            "recipe": {
+                **test_recipe,
+                "_id": str(result.inserted_id)
+            }
+        })
+    
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "success": False,
+            "message": f"Error adding test recipe: {str(e)}"
+        }), 500
 
 if __name__ == "__main__":
     print("Starting Flask application...")

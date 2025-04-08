@@ -9,6 +9,7 @@ import RecipeDetailPage from "./pages/RecipeDetailPage";
 import ExternalRecipeDetailPage from "./pages/ExternalRecipeDetailPage";
 import AddRecipePage from "./pages/AddRecipePage";
 import EditRecipePage from "./pages/EditRecipePage";
+import MongoDBTestPage from "./pages/MongoDBTestPage";
 import NotFound from "./pages/NotFound";
 import Footer from "./components/Footer";
 
@@ -27,6 +28,7 @@ const App = () => (
             <Route path="/external-recipe/:id" element={<ExternalRecipeDetailPage />} />
             <Route path="/add-recipe" element={<AddRecipePage />} />
             <Route path="/edit-recipe/:id" element={<EditRecipePage />} />
+            <Route path="/mongodb-test" element={<MongoDBTestPage />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
           <Footer />
