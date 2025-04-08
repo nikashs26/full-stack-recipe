@@ -7,7 +7,8 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
-import { Loader2, Database, AlertCircle, Check } from 'lucide-react';
+import { Input } from "@/components/ui/input";
+import { Loader2, Database, AlertCircle, Check, RefreshCcw } from 'lucide-react';
 import Header from '../components/Header';
 import { checkMongoDBConnection, getDatabaseStatus } from '../utils/mongoStatus';
 import { getAllRecipesFromDB, saveRecipeToDB } from '../lib/spoonacular';
@@ -19,9 +20,25 @@ const MongoDBTestPage: React.FC = () => {
   const [statusMessage, setStatusMessage] = useState<string>('');
   const [testResult, setTestResult] = useState<string | null>(null);
   const [isTestRunning, setIsTestRunning] = useState(false);
+  const [mongoUri, setMongoUri] = useState<string>('');
   const { toast } = useToast();
 
+  // Load MongoDB URI from .env file on component mount
   useEffect(() => {
+    const fetchEnv = async () => {
+      try {
+        const response = await fetch('/src/info.env');
+        const text = await response.text();
+        const uriMatch = text.match(/MONGO_URI=(.*)/);
+        if (uriMatch && uriMatch[1]) {
+          setMongoUri(uriMatch[1].trim());
+        }
+      } catch (error) {
+        console.error("Could not load MongoDB URI from info.env", error);
+      }
+    };
+    
+    fetchEnv();
     checkStatus();
   }, []);
 
@@ -179,7 +196,8 @@ const MongoDBTestPage: React.FC = () => {
               <Tabs defaultValue="operations">
                 <TabsList className="mb-4">
                   <TabsTrigger value="operations">Test Operations</TabsTrigger>
-                  <TabsTrigger value="commands">MongoDB CLI Commands</TabsTrigger>
+                  <TabsTrigger value="connection">Connection Info</TabsTrigger>
+                  <TabsTrigger value="commands">MongoDB CLI</TabsTrigger>
                 </TabsList>
                 
                 <TabsContent value="operations" className="space-y-4">
@@ -220,6 +238,40 @@ const MongoDBTestPage: React.FC = () => {
                   )}
                 </TabsContent>
                 
+                <TabsContent value="connection" className="space-y-4">
+                  <div className="space-y-3">
+                    <h3 className="text-sm font-medium">MongoDB Connection URI</h3>
+                    <div className="flex gap-2">
+                      <Input
+                        value={mongoUri}
+                        onChange={(e) => setMongoUri(e.target.value)}
+                        className="font-mono text-xs"
+                        placeholder="mongodb+srv://username:password@host/database"
+                      />
+                      <Button variant="outline" className="shrink-0">
+                        <RefreshCcw className="h-4 w-4 mr-2" /> Update
+                      </Button>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      To update this permanently, modify the MONGO_URI in src/info.env
+                    </p>
+                  </div>
+                  
+                  <Alert>
+                    <AlertTitle className="flex items-center gap-2">
+                      <Database className="h-4 w-4" /> Connection Details
+                    </AlertTitle>
+                    <AlertDescription>
+                      <div className="mt-2 space-y-1 text-xs">
+                        <p><strong>Database:</strong> nikash</p>
+                        <p><strong>Collection:</strong> Recipes</p>
+                        <p><strong>Cluster:</strong> BetterBulkRecipes</p>
+                        <p><strong>Region:</strong> AWS Oregon (us-west-2)</p>
+                      </div>
+                    </AlertDescription>
+                  </Alert>
+                </TabsContent>
+                
                 <TabsContent value="commands">
                   <div className="space-y-4">
                     <div>
@@ -244,17 +296,6 @@ const MongoDBTestPage: React.FC = () => {
                         {"  id: 'test-123',\n  title: 'Test Recipe',\n  cuisines: ['Test'],\n  diets: ['vegetarian'],\n  ingredients: ['test ingredient']\n"}&#125;)
                       </pre>
                     </div>
-                    
-                    <Alert>
-                      <AlertCircle className="h-4 w-4" />
-                      <AlertTitle>MongoDB Connection String</AlertTitle>
-                      <AlertDescription>
-                        Make sure your connection string in <code className="bg-gray-100 px-1 rounded">info.env</code> is correct:
-                        <pre className="bg-gray-100 p-2 rounded-md text-xs mt-2">
-                          MONGO_URI=mongodb+srv://&lt;username&gt;:&lt;password&gt;@betterbulkrecipes.mongodb.net/nikash?retryWrites=true&w=majority
-                        </pre>
-                      </AlertDescription>
-                    </Alert>
                   </div>
                 </TabsContent>
               </Tabs>
