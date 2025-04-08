@@ -29,7 +29,7 @@ export const checkMongoDBConnection = async (retryCount = 2): Promise<boolean> =
         console.log(`MongoDB connection successful with ${result.recipeCount || 0} recipes found`);
         return true;
       } else {
-        console.log(`MongoDB connection failed: ${result.message || "Unknown error"}`);
+        console.log("MongoDB test endpoint returned unsuccessful status");
         throw new Error(result.message || "MongoDB connection failed");
       }
     } catch (error) {
@@ -54,7 +54,6 @@ export const getDatabaseStatus = async (): Promise<{
   timestamp: Date;
   recipeCount?: number;
   uri?: string;
-  error?: string;
 }> => {
   try {
     // First try the dedicated test endpoint
@@ -70,16 +69,7 @@ export const getDatabaseStatus = async (): Promise<{
           message: result.message || "MongoDB status check completed",
           timestamp: new Date(),
           recipeCount: result.recipeCount || 0,
-          uri: result.uri ? `${result.uri.substring(0, 20)}...` : undefined,
-          error: result.error || undefined
-        };
-      } else {
-        const errorText = await response.text();
-        return {
-          connected: false,
-          message: `MongoDB test endpoint returned error status: ${response.status}`,
-          timestamp: new Date(),
-          error: errorText
+          uri: result.uri ? `${result.uri.substring(0, 20)}...` : undefined
         };
       }
     } catch (error) {
@@ -103,8 +93,7 @@ export const getDatabaseStatus = async (): Promise<{
     return {
       connected: false,
       message: error instanceof Error ? error.message : "Unknown connection error",
-      timestamp: new Date(),
-      error: error instanceof Error ? error.stack : undefined
+      timestamp: new Date()
     };
   }
 };
