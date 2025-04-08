@@ -7,6 +7,7 @@ import json
 import time
 import sys
 from bson import ObjectId
+import socket
 
 # Print Python version and path for debugging
 print(f"Python version: {sys.version}")
@@ -36,9 +37,31 @@ mongo_available = False
 mongo_client = None
 recipes_collection = None
 
+# Function to test DNS resolution
+def test_dns_resolution(hostname):
+    try:
+        print(f"Testing DNS resolution for {hostname}")
+        # Try to resolve the hostname
+        socket.gethostbyname(hostname)
+        return True, None
+    except socket.gaierror as e:
+        error_message = f"DNS resolution failed: {str(e)}"
+        print(error_message)
+        return False, error_message
+
 try:
     if not MONGO_URI:
         raise Exception("No MongoDB URI provided")
+    
+    # Extract hostname from MongoDB URI for DNS check
+    hostname = MONGO_URI.split('@')[1].split('/')[0]
+    if hostname.endswith('.mongodb.net'):
+        # Test DNS resolution
+        dns_ok, dns_error = test_dns_resolution(hostname)
+        if not dns_ok:
+            print(f"DNS resolution test failed: {dns_error}")
+            print("This usually means the cluster name is incorrect or doesn't exist.")
+            print("Please check your MongoDB Atlas dashboard for the correct cluster name.")
     
     # Try to import pymongo or handle the import error gracefully
     try:
@@ -565,10 +588,22 @@ def delete_recipe_from_db(recipe_id):
 @app.route("/test-mongodb", methods=["GET"])
 def test_mongodb():
     if not mongo_available:
+        # If MongoDB is not available, check DNS resolution
+        dns_info = None
+        if MONGO_URI:
+            try:
+                hostname = MONGO_URI.split('@')[1].split('/')[0]
+                if hostname.endswith('.mongodb.net'):
+                    dns_ok, dns_error = test_dns_resolution(hostname)
+                    dns_info = dns_error if not dns_ok else "DNS resolution successful"
+            except Exception as dns_e:
+                dns_info = f"Error checking DNS: {str(dns_e)}"
+        
         return jsonify({
             "status": "error",
             "connected": False,
-            "message": "MongoDB is not available. Check your connection string and make sure MongoDB Atlas is accessible."
+            "message": "MongoDB is not available. Check your connection string and make sure MongoDB Atlas is accessible.",
+            "dnsInfo": dns_info
         }), 503
     
     try:

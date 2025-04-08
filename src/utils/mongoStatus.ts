@@ -55,6 +55,7 @@ export const getDatabaseStatus = async (): Promise<{
   recipeCount?: number;
   uri?: string;
   error?: string;
+  dnsInfo?: string;
 }> => {
   try {
     // First try the dedicated test endpoint
@@ -71,7 +72,8 @@ export const getDatabaseStatus = async (): Promise<{
           timestamp: new Date(),
           recipeCount: result.recipeCount || 0,
           uri: result.uri ? `${result.uri.substring(0, 20)}...` : undefined,
-          error: result.error || undefined
+          error: result.error || undefined,
+          dnsInfo: result.dnsInfo || undefined
         };
       } else {
         const errorText = await response.text();
