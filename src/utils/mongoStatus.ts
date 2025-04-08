@@ -8,29 +8,16 @@ export const checkMongoDBConnection = async (retryCount = 2): Promise<boolean> =
   while (attempts <= retryCount) {
     try {
       console.log(`Checking MongoDB connection status (attempt ${attempts + 1})...`);
+      // Try to fetch recipes as a simple connection test
+      const response = await getAllRecipesFromDB();
+      console.log("MongoDB connection test response:", response);
       
-      // Try to fetch MongoDB test status directly
-      const testEndpoint = "http://localhost:5000/test-mongodb";
-      const response = await fetch(testEndpoint, { 
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' },
-        // Longer timeout for potential slow connections
-        signal: AbortSignal.timeout(10000)
-      });
-      
-      if (!response.ok) {
-        throw new Error(`MongoDB test endpoint returned status: ${response.status}`);
-      }
-      
-      const result = await response.json();
-      console.log("MongoDB connection test result:", result);
-      
-      if (result.connected) {
-        console.log(`MongoDB connection successful with ${result.recipeCount || 0} recipes found`);
+      if (response?.results) {
+        console.log(`MongoDB connection successful with ${response.results.length} recipes found`);
         return true;
       } else {
-        console.log(`MongoDB connection failed: ${result.message || "Unknown error"}`);
-        throw new Error(result.message || "MongoDB connection failed");
+        console.log("MongoDB connected but no recipes found");
+        return true; // Still return true as the connection works
       }
     } catch (error) {
       console.error(`MongoDB connection failed (attempt ${attempts + 1}):`, error);
@@ -53,40 +40,8 @@ export const getDatabaseStatus = async (): Promise<{
   message: string;
   timestamp: Date;
   recipeCount?: number;
-  uri?: string;
-  error?: string;
 }> => {
   try {
-    // First try the dedicated test endpoint
-    try {
-      const response = await fetch("http://localhost:5000/test-mongodb", { 
-        signal: AbortSignal.timeout(10000) 
-      });
-      
-      if (response.ok) {
-        const result = await response.json();
-        return {
-          connected: result.connected || false,
-          message: result.message || "MongoDB status check completed",
-          timestamp: new Date(),
-          recipeCount: result.recipeCount || 0,
-          uri: result.uri ? `${result.uri.substring(0, 20)}...` : undefined,
-          error: result.error || undefined
-        };
-      } else {
-        const errorText = await response.text();
-        return {
-          connected: false,
-          message: `MongoDB test endpoint returned error status: ${response.status}`,
-          timestamp: new Date(),
-          error: errorText
-        };
-      }
-    } catch (error) {
-      console.error("Error using test-mongodb endpoint:", error);
-    }
-    
-    // Fall back to checking via getAllRecipesFromDB
     const response = await getAllRecipesFromDB();
     const recipeCount = response?.results?.length || 0;
     
@@ -103,8 +58,7 @@ export const getDatabaseStatus = async (): Promise<{
     return {
       connected: false,
       message: error instanceof Error ? error.message : "Unknown connection error",
-      timestamp: new Date(),
-      error: error instanceof Error ? error.stack : undefined
+      timestamp: new Date()
     };
   }
 };
