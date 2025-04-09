@@ -8,9 +8,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
-import { Loader2, Database, AlertCircle, Check, RefreshCcw } from 'lucide-react';
+import { Loader2, Database, AlertCircle, Check, RefreshCcw, Wrench, Server } from 'lucide-react';
 import Header from '../components/Header';
-import { checkMongoDBConnection, getDatabaseStatus } from '../utils/mongoStatus';
+import { checkMongoDBConnection, getDatabaseStatus, testDirectConnection } from '../utils/mongoStatus';
 import { getAllRecipesFromDB, saveRecipeToDB } from '../lib/spoonacular';
 
 const MongoDBTestPage: React.FC = () => {
@@ -21,6 +21,8 @@ const MongoDBTestPage: React.FC = () => {
   const [testResult, setTestResult] = useState<string | null>(null);
   const [isTestRunning, setIsTestRunning] = useState(false);
   const [mongoUri, setMongoUri] = useState<string>('');
+  const [diagnosticData, setDiagnosticData] = useState<any>(null);
+  const [isDiagnosticLoading, setIsDiagnosticLoading] = useState(false);
   const { toast } = useToast();
 
   // Load MongoDB URI from .env file on component mount
@@ -126,6 +128,166 @@ const MongoDBTestPage: React.FC = () => {
     }
   };
 
+  const runDirectTest = async () => {
+    setIsTestRunning(true);
+    setTestResult(null);
+    
+    try {
+      const result = await testDirectConnection();
+      setTestResult(`Direct MongoDB connection test result: ${JSON.stringify(result, null, 2)}`);
+      
+      if (result.success) {
+        toast({
+          title: "MongoDB connection successful",
+          description: result.message,
+        });
+      } else {
+        toast({
+          title: "MongoDB connection failed",
+          description: result.message,
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      setTestResult(`Error running direct test: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsTestRunning(false);
+    }
+  };
+
+  const getDiagnostics = async () => {
+    setIsDiagnosticLoading(true);
+    try {
+      const response = await fetch('http://localhost:5000/mongodb-diagnostics');
+      if (response.ok) {
+        const data = await response.json();
+        setDiagnosticData(data);
+        
+        // Check for DNS issues
+        if (data.dns_check && !data.dns_check.success) {
+          toast({
+            title: "DNS Resolution Issue",
+            description: data.dns_check.message,
+            variant: "destructive"
+          });
+        }
+      } else {
+        toast({
+          title: "Failed to get diagnostics",
+          description: `Server returned ${response.status} ${response.statusText}`,
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Error fetching diagnostics",
+        description: error instanceof Error ? error.message : "Unknown error",
+        variant: "destructive"
+      });
+    } finally {
+      setIsDiagnosticLoading(false);
+    }
+  };
+
+  // Format diagnostic data for display
+  const formatDiagnostics = () => {
+    if (!diagnosticData) return null;
+    
+    return (
+      <div className="space-y-4">
+        <div>
+          <h3 className="text-sm font-medium mb-1">Connection Information</h3>
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <div className="bg-gray-50 p-2 rounded">
+              <span className="font-medium">Status:</span>{' '}
+              {diagnosticData.mongodb_available ? (
+                <Badge variant="outline" className="bg-green-50 text-green-700">Connected</Badge>
+              ) : (
+                <Badge variant="outline" className="bg-red-50 text-red-700">Disconnected</Badge>
+              )}
+            </div>
+            <div className="bg-gray-50 p-2 rounded">
+              <span className="font-medium">Connection Type:</span>{' '}
+              {diagnosticData.connection_string?.type || 'Unknown'}
+            </div>
+            <div className="bg-gray-50 p-2 rounded">
+              <span className="font-medium">URI Provided:</span>{' '}
+              {diagnosticData.connection_string?.provided ? 'Yes' : 'No'}
+            </div>
+            {diagnosticData.database_info && (
+              <>
+                <div className="bg-gray-50 p-2 rounded">
+                  <span className="font-medium">Database:</span>{' '}
+                  {diagnosticData.database_info.database_name}
+                </div>
+                <div className="bg-gray-50 p-2 rounded">
+                  <span className="font-medium">Collection:</span>{' '}
+                  {diagnosticData.database_info.collection_name}
+                </div>
+                <div className="bg-gray-50 p-2 rounded">
+                  <span className="font-medium">Recipe Count:</span>{' '}
+                  {diagnosticData.database_info.document_count}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+        
+        <div>
+          <h3 className="text-sm font-medium mb-1">DNS Check Results</h3>
+          <div className="bg-gray-50 p-3 rounded">
+            <div className="flex items-center mb-2">
+              <span className="font-medium mr-2">Status:</span>
+              {diagnosticData.dns_check?.success ? (
+                <Badge variant="outline" className="bg-green-50 text-green-700">Success</Badge>
+              ) : (
+                <Badge variant="outline" className="bg-red-50 text-red-700">Failed</Badge>
+              )}
+            </div>
+            <p className="text-xs mb-2">
+              <span className="font-medium">Message:</span>{' '}
+              {diagnosticData.dns_check?.message || 'No message'}
+            </p>
+            {diagnosticData.dns_check?.ip && (
+              <p className="text-xs">
+                <span className="font-medium">IP Address:</span>{' '}
+                {diagnosticData.dns_check.ip}
+              </p>
+            )}
+            {diagnosticData.dns_check?.srv_count && (
+              <p className="text-xs">
+                <span className="font-medium">SRV Records:</span>{' '}
+                {diagnosticData.dns_check.srv_count}
+              </p>
+            )}
+          </div>
+        </div>
+        
+        <div>
+          <h3 className="text-sm font-medium mb-1">System Information</h3>
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <div className="bg-gray-50 p-2 rounded">
+              <span className="font-medium">Python:</span>{' '}
+              {diagnosticData.python_version?.split(' ')[0] || 'Unknown'}
+            </div>
+            <div className="bg-gray-50 p-2 rounded">
+              <span className="font-medium">PyMongo:</span>{' '}
+              {diagnosticData.pymongo_version || 'Not installed'}
+            </div>
+            <div className="bg-gray-50 p-2 rounded">
+              <span className="font-medium">Platform:</span>{' '}
+              {diagnosticData.platform || 'Unknown'}
+            </div>
+            <div className="bg-gray-50 p-2 rounded">
+              <span className="font-medium">Timestamp:</span>{' '}
+              {diagnosticData.timestamp || 'Unknown'}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
@@ -197,6 +359,7 @@ const MongoDBTestPage: React.FC = () => {
                 <TabsList className="mb-4">
                   <TabsTrigger value="operations">Test Operations</TabsTrigger>
                   <TabsTrigger value="connection">Connection Info</TabsTrigger>
+                  <TabsTrigger value="diagnostics">Diagnostics</TabsTrigger>
                   <TabsTrigger value="commands">MongoDB CLI</TabsTrigger>
                 </TabsList>
                 
@@ -222,6 +385,15 @@ const MongoDBTestPage: React.FC = () => {
                         {isTestRunning ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                         Check Existing Recipes
                       </Button>
+
+                      <Button 
+                        onClick={runDirectTest}
+                        disabled={isTestRunning}
+                        variant="outline"
+                      >
+                        {isTestRunning ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Server className="mr-2 h-4 w-4" />}
+                        Test Direct Connection
+                      </Button>
                     </div>
                   </div>
                   
@@ -246,7 +418,7 @@ const MongoDBTestPage: React.FC = () => {
                         value={mongoUri}
                         onChange={(e) => setMongoUri(e.target.value)}
                         className="font-mono text-xs"
-                        placeholder="mongodb+srv://username:password@host/database"
+                        placeholder="mongodb://hostname:port/dbname"
                       />
                       <Button variant="outline" className="shrink-0">
                         <RefreshCcw className="h-4 w-4 mr-2" /> Update
@@ -263,28 +435,85 @@ const MongoDBTestPage: React.FC = () => {
                     </AlertTitle>
                     <AlertDescription>
                       <div className="mt-2 space-y-1 text-xs">
-                        <p><strong>Database:</strong> nikash</p>
+                        <p><strong>Database:</strong> {mongoUri?.split('/').pop()?.split('?')[0] || 'recipes'}</p>
                         <p><strong>Collection:</strong> Recipes</p>
-                        <p><strong>Cluster:</strong> BetterBulkRecipes</p>
-                        <p><strong>Region:</strong> AWS Oregon (us-west-2)</p>
+                        <p><strong>Connection Type:</strong> {mongoUri?.startsWith('mongodb+srv') ? 'MongoDB Atlas (SRV)' : 'Standard MongoDB'}</p>
+                        <p><strong>Connection Status:</strong> {dbStatus === 'connected' ? 'Connected' : dbStatus === 'disconnected' ? 'Disconnected' : 'Unknown'}</p>
                       </div>
                     </AlertDescription>
                   </Alert>
+                </TabsContent>
+
+                <TabsContent value="diagnostics" className="space-y-4">
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <h3 className="text-sm font-medium">MongoDB Diagnostics</h3>
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        onClick={getDiagnostics}
+                        disabled={isDiagnosticLoading}
+                      >
+                        {isDiagnosticLoading ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <Wrench className="mr-2 h-4 w-4" />
+                        )}
+                        Run Diagnostics
+                      </Button>
+                    </div>
+                    
+                    {isDiagnosticLoading ? (
+                      <div className="flex justify-center py-8">
+                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                      </div>
+                    ) : diagnosticData ? (
+                      formatDiagnostics()
+                    ) : (
+                      <div className="bg-gray-50 p-4 rounded text-center">
+                        <p className="text-gray-500 text-sm">
+                          Click "Run Diagnostics" to check your MongoDB connection
+                        </p>
+                      </div>
+                    )}
+                    
+                    {diagnosticData && !diagnosticData.mongodb_available && (
+                      <Alert variant="destructive" className="mt-4">
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertTitle>Connection Failed</AlertTitle>
+                        <AlertDescription>
+                          <div className="space-y-2 mt-2">
+                            <p>Common MongoDB connection issues:</p>
+                            <ul className="list-disc pl-5 text-sm space-y-1">
+                              <li>Check that the MongoDB server is running</li>
+                              <li>Verify your connection string is correct</li>
+                              <li>Check network connectivity and firewalls</li>
+                              <li>For MongoDB Atlas: Verify your IP is whitelisted</li>
+                              <li>Ensure username and password are correct</li>
+                              <li>For SRV records: Verify DNS resolution is working</li>
+                            </ul>
+                          </div>
+                        </AlertDescription>
+                      </Alert>
+                    )}
+                  </div>
                 </TabsContent>
                 
                 <TabsContent value="commands">
                   <div className="space-y-4">
                     <div>
-                      <h3 className="text-sm font-medium mb-1">Connect to MongoDB Atlas</h3>
+                      <h3 className="text-sm font-medium mb-1">Connect to MongoDB</h3>
                       <pre className="bg-gray-100 p-2 rounded-md text-xs">
-                        mongo "mongodb+srv://betterbulkrecipes.mongodb.net/nikash" --username &lt;username&gt;
+                        {mongoUri.startsWith('mongodb+srv') ? 
+                          `mongo "${mongoUri}"` : 
+                          `mongo --host ${mongoUri.replace('mongodb://', '').split('/')[0]}`}
                       </pre>
                     </div>
                     
                     <div>
                       <h3 className="text-sm font-medium mb-1">List All Recipes</h3>
                       <pre className="bg-gray-100 p-2 rounded-md text-xs">
-                        use nikash<br/>
+                        use {mongoUri?.split('/').pop()?.split('?')[0] || 'recipes'}<br/>
                         db.Recipes.find().pretty()
                       </pre>
                     </div>
@@ -294,6 +523,27 @@ const MongoDBTestPage: React.FC = () => {
                       <pre className="bg-gray-100 p-2 rounded-md text-xs">
                         db.Recipes.insertOne(&#123;<br/>
                         {"  id: 'test-123',\n  title: 'Test Recipe',\n  cuisines: ['Test'],\n  diets: ['vegetarian'],\n  ingredients: ['test ingredient']\n"}&#125;)
+                      </pre>
+                    </div>
+                    
+                    <div>
+                      <h3 className="text-sm font-medium mb-1">Check MongoDB Status</h3>
+                      <pre className="bg-gray-100 p-2 rounded-md text-xs">
+                        db.serverStatus()
+                      </pre>
+                    </div>
+
+                    <div>
+                      <h3 className="text-sm font-medium mb-1">Check DNS Resolution</h3>
+                      <pre className="bg-gray-100 p-2 rounded-md text-xs">
+                        # On Linux/Mac<br/>
+                        nslookup {mongoUri.includes('@') ? mongoUri.split('@')[1].split('/')[0] : 
+                                 mongoUri.includes('://') ? mongoUri.split('://')[1].split('/')[0] : 
+                                 'your-mongodb-host'}<br/><br/>
+                        # For SRV records<br/>
+                        nslookup -type=SRV _mongodb._tcp.{mongoUri.includes('@') ? 
+                                              mongoUri.split('@')[1].split('/')[0] : 
+                                              'your-mongodb-host'}
                       </pre>
                     </div>
                   </div>

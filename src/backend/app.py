@@ -6,7 +6,9 @@ import os
 import json
 import time
 import sys
+import socket
 from bson import ObjectId
+import dns.resolver
 
 # Print Python version and path for debugging
 print(f"Python version: {sys.version}")
@@ -17,6 +19,9 @@ load_dotenv('../info.env')
 
 # Get MongoDB URI from environment variables
 MONGO_URI = os.getenv("MONGO_URI")
+MONGO_CONNECT_TIMEOUT_MS = int(os.getenv("MONGO_CONNECT_TIMEOUT_MS", "5000"))
+MONGO_RETRY_COUNT = int(os.getenv("MONGO_RETRY_COUNT", "3"))
+
 if not MONGO_URI:
     print("No MongoDB URI found in environment variables")
     print("Please update the info.env file with your MongoDB URI")
@@ -36,9 +41,63 @@ mongo_available = False
 mongo_client = None
 recipes_collection = None
 
+# Function to perform DNS lookup for MongoDB hostname
+def check_mongodb_dns(uri):
+    if not uri or not isinstance(uri, str):
+        return {"success": False, "message": "Invalid URI"}
+    
+    try:
+        # Extract hostname from MongoDB URI
+        if uri.startswith("mongodb://"):
+            # Format: mongodb://hostname:port/dbname
+            parts = uri.replace("mongodb://", "").split("/")[0].split(":")
+            hostname = parts[0]
+        elif uri.startswith("mongodb+srv://"):
+            # Format: mongodb+srv://username:password@hostname/dbname
+            parts = uri.replace("mongodb+srv://", "").split("@")
+            if len(parts) > 1:
+                hostname = parts[1].split("/")[0]
+            else:
+                hostname = parts[0].split("/")[0]
+        else:
+            return {"success": False, "message": f"Unrecognized MongoDB URI format: {uri[:10]}..."}
+        
+        print(f"Checking DNS for MongoDB hostname: {hostname}")
+        
+        # Try basic hostname resolution
+        ip_address = socket.gethostbyname(hostname)
+        print(f"Resolved {hostname} to IP: {ip_address}")
+        
+        # Try SRV record for mongodb+srv URIs
+        if uri.startswith("mongodb+srv://"):
+            try:
+                srv_records = dns.resolver.resolve(f"_mongodb._tcp.{hostname}", "SRV")
+                print(f"Found {len(srv_records)} SRV records for {hostname}")
+                for record in srv_records:
+                    print(f"  SRV record: {record.target} (port: {record.port}, priority: {record.priority})")
+                return {"success": True, "message": f"DNS resolution successful for {hostname}", "ip": ip_address, "srv_count": len(srv_records)}
+            except Exception as dns_err:
+                print(f"SRV record lookup failed: {dns_err}")
+                return {"success": False, "message": f"SRV record lookup failed: {dns_err}", "ip": ip_address}
+        
+        return {"success": True, "message": f"DNS resolution successful for {hostname}", "ip": ip_address}
+    except socket.gaierror as e:
+        return {"success": False, "message": f"DNS resolution failed: {e}"}
+    except Exception as e:
+        return {"success": False, "message": f"Error checking DNS: {e}"}
+
+# Check MongoDB connection
 try:
     if not MONGO_URI:
         raise Exception("No MongoDB URI provided")
+    
+    # First check DNS resolution
+    dns_check = check_mongodb_dns(MONGO_URI)
+    if not dns_check["success"]:
+        print(f"Warning: DNS check failed: {dns_check['message']}")
+        print("This may cause MongoDB connection issues")
+    else:
+        print(f"DNS check successful: {dns_check['message']}")
     
     # Try to import pymongo or handle the import error gracefully
     try:
@@ -50,7 +109,7 @@ try:
         import subprocess
         try:
             # Try to install pymongo using pip
-            result = subprocess.run([sys.executable, "-m", "pip", "install", "pymongo[srv]"], 
+            result = subprocess.run([sys.executable, "-m", "pip", "install", "pymongo[srv]", "dnspython"], 
                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             print(f"pip install pymongo output: {result.stdout.decode()}")
             if result.stderr:
@@ -63,143 +122,191 @@ try:
             print(f"Failed to install pymongo: {e}")
             raise Exception(f"Could not import or install pymongo: {e}")
 
-    # Connect to MongoDB Atlas
-    print(f"Attempting to connect to MongoDB with URI: {MONGO_URI[:20]}...")
-    mongo_client = pymongo.MongoClient(MONGO_URI, serverSelectionTimeoutMS=10000)
-    mongo_client.server_info()  # Will raise an exception if cannot connect
+    # Connect to MongoDB with retry logic
+    connect_attempts = 0
+    while connect_attempts < MONGO_RETRY_COUNT:
+        try:
+            print(f"Attempting to connect to MongoDB (attempt {connect_attempts + 1})...")
+            # Set shorter serverSelectionTimeoutMS to fail faster if MongoDB is unavailable
+            mongo_client = pymongo.MongoClient(
+                MONGO_URI, 
+                serverSelectionTimeoutMS=MONGO_CONNECT_TIMEOUT_MS,
+                connectTimeoutMS=MONGO_CONNECT_TIMEOUT_MS,
+                socketTimeoutMS=MONGO_CONNECT_TIMEOUT_MS * 2
+            )
+            
+            # Test connection with server_info
+            print("Testing MongoDB connection...")
+            mongo_client.server_info()
+            
+            # If we get here, connection is successful
+            print("MongoDB connection successful!")
+            
+            # Determine database name from URI or use default
+            db_name = "nikash"  # Default
+            if "/" in MONGO_URI:
+                uri_parts = MONGO_URI.split("/")
+                if len(uri_parts) > 3:  # mongodb://host:port/dbname
+                    potential_db = uri_parts[3].split("?")[0]
+                    if potential_db:
+                        db_name = potential_db
+                        print(f"Using database name from URI: {db_name}")
+                elif len(uri_parts) > 1 and uri_parts[-1]:  # mongodb+srv://...@host/dbname
+                    potential_db = uri_parts[-1].split("?")[0]
+                    if potential_db:
+                        db_name = potential_db
+                        print(f"Using database name from URI: {db_name}")
+                        
+            # Use detected database name
+            print(f"Using '{db_name}' database")
+            db = mongo_client[db_name]
+            recipes_collection = db["Recipes"]
+            
+            # Create indexes for better search performance
+            recipes_collection.create_index([("title", pymongo.TEXT)])
+            recipes_collection.create_index([("id", pymongo.ASCENDING)])
+            
+            # Count documents to verify connection
+            recipe_count = recipes_collection.count_documents({})
+            print(f"MongoDB connection successful. Found {recipe_count} recipes in database")
+            mongo_available = True
+            break
+            
+        except Exception as e:
+            connect_attempts += 1
+            print(f"MongoDB connection attempt {connect_attempts} failed: {e}")
+            
+            if connect_attempts < MONGO_RETRY_COUNT:
+                wait_time = 2 * connect_attempts  # Progressive backoff
+                print(f"Waiting {wait_time} seconds before retry...")
+                time.sleep(wait_time)
+            else:
+                print(f"All {MONGO_RETRY_COUNT} connection attempts failed")
     
-    # Use 'nikash' as database and 'Recipes' as collection based on the screenshot
-    db = mongo_client["nikash"]
-    recipes_collection = db["Recipes"]
-    
-    # Create indexes for better search performance
-    recipes_collection.create_index([("title", pymongo.TEXT)])
-    recipes_collection.create_index([("id", pymongo.ASCENDING)])
-    
-    # Count documents to verify connection
-    recipe_count = recipes_collection.count_documents({})
-    print(f"MongoDB Atlas connection successful. Found {recipe_count} recipes in database")
-    mongo_available = True
-    
-    # Add some test recipes if the collection is empty
-    if recipe_count == 0:
-        print("Adding test recipes to MongoDB...")
-        # Import initialRecipes directly from a Python dictionary
-        initialRecipes = [
-            {
-                "id": "1",
-                "name": "Vegetable Stir Fry",
-                "title": "Vegetable Stir Fry",
-                "cuisine": "Asian",
-                "cuisines": ["Asian"],
-                "dietaryRestrictions": ["vegetarian", "vegan"],
-                "diets": ["vegetarian", "vegan"],
-                "ingredients": ["broccoli", "carrots", "bell peppers", "soy sauce", "ginger", "garlic"],
-                "instructions": ["Chop all vegetables", "Heat oil in a wok", "Add vegetables and stir fry for 5 minutes", "Add sauce and cook for 2 more minutes"],
-                "image": "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60",
-                "ratings": [4, 5, 5]
-            },
-            {
-                "id": "2",
-                "name": "Chicken Parmesan",
-                "title": "Chicken Parmesan",
-                "cuisine": "Italian",
-                "cuisines": ["Italian"],
-                "dietaryRestrictions": ["carnivore"],
-                "diets": ["carnivore"],
-                "ingredients": ["chicken breast", "breadcrumbs", "parmesan cheese", "mozzarella cheese", "tomato sauce", "pasta"],
-                "instructions": ["Bread the chicken", "Fry until golden", "Top with sauce and cheese", "Bake until cheese melts", "Serve with pasta"],
-                "image": "https://images.unsplash.com/photo-1515516089376-88db1e26e9c0?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60",
-                "ratings": [5, 4, 4, 5]
-            },
-            {
-                "id": "3",
-                "name": "Beef Tacos",
-                "title": "Beef Tacos",
-                "cuisine": "Mexican",
-                "cuisines": ["Mexican"],
-                "dietaryRestrictions": ["carnivore"],
-                "diets": ["carnivore"],
-                "ingredients": ["ground beef", "taco shells", "lettuce", "tomato", "cheese", "sour cream", "taco seasoning"],
-                "instructions": ["Brown the beef", "Add taco seasoning", "Warm the taco shells", "Assemble with toppings"],
-                "image": "https://images.unsplash.com/photo-1565299585323-38d6b0865b47?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60",
-                "ratings": [4, 5, 3]
-            },
-            {
-                "id": "4",
-                "name": "Quinoa Stuffed Bell Peppers",
-                "title": "Quinoa Stuffed Bell Peppers",
-                "cuisine": "Mediterranean",
-                "cuisines": ["Mediterranean"],
-                "dietaryRestrictions": ["vegetarian", "gluten-free"],
-                "diets": ["vegetarian", "gluten-free"],
-                "ingredients": ["bell peppers", "quinoa", "black beans", "corn", "tomatoes", "cumin", "chili powder"],
-                "instructions": ["Cook quinoa", "Mix with beans, corn, and spices", "Stuff bell peppers", "Bake for 25 minutes"],
-                "image": "https://via.placeholder.com/400x300",
-                "ratings": [4, 4, 4, 5]
-            },
-            {
-                "id": "5",
-                "name": "Lentil Shepherd's Pie",
-                "title": "Lentil Shepherd's Pie",
-                "cuisine": "British",
-                "cuisines": ["British"],
-                "dietaryRestrictions": ["vegetarian", "vegan"],
-                "diets": ["vegetarian", "vegan"],
-                "ingredients": ["lentils", "carrots", "peas", "potatoes", "plant milk", "vegetable broth"],
-                "instructions": ["Cook lentils with vegetables", "Make mashed potatoes with plant milk", "Layer lentil mixture on the bottom of a dish", "Top with mashed potatoes", "Bake until golden"],
-                "image": "https://via.placeholder.com/400x300",
-                "ratings": [5, 4, 5]
-            },
-            {
-                "id": "6",
-                "name": "Tiramisu",
-                "title": "Tiramisu",
-                "cuisine": "Italian",
-                "cuisines": ["Italian"],
-                "dietaryRestrictions": ["vegetarian"],
-                "diets": ["vegetarian"],
-                "ingredients": ["ladyfingers", "espresso", "mascarpone cheese", "eggs", "sugar", "cocoa powder"],
-                "instructions": ["Mix mascarpone, egg yolks, and sugar", "Whip egg whites and fold into mixture", "Dip ladyfingers in espresso", "Layer ladyfingers and cream", "Dust with cocoa powder"],
-                "image": "https://via.placeholder.com/400x300",
-                "ratings": [5, 5, 5, 4]
-            },
-            {
-                "id": "7",
-                "name": "Vegan Apple Crisp",
-                "title": "Vegan Apple Crisp",
-                "cuisine": "American",
-                "cuisines": ["American"],
-                "dietaryRestrictions": ["vegetarian", "vegan"],
-                "diets": ["vegetarian", "vegan"],
-                "ingredients": ["apples", "oats", "brown sugar", "cinnamon", "plant butter", "lemon juice"],
-                "instructions": ["Slice apples and toss with lemon juice", "Mix oats, sugar, cinnamon, and butter", "Place apples in dish and top with oat mixture", "Bake until golden and bubbly"],
-                "image": "https://via.placeholder.com/400x300",
-                "ratings": [4, 4, 3, 5]
-            }
-        ]
+    # If connection successful, add seed data if needed
+    if mongo_available and recipes_collection:
+        # Count documents to verify connection
+        recipe_count = recipes_collection.count_documents({})
         
-        for recipe in initialRecipes:
-            try:
-                # Add both name and title to ensure consistent access
-                if "name" in recipe and "title" not in recipe:
-                    recipe["title"] = recipe["name"]
-                if "title" in recipe and "name" not in recipe:
-                    recipe["name"] = recipe["title"]
-                
-                # Ensure cuisines array exists
-                if "cuisine" in recipe and ("cuisines" not in recipe or not recipe["cuisines"]):
-                    recipe["cuisines"] = [recipe["cuisine"]]
-                
-                # Ensure diets array exists
-                if "dietaryRestrictions" in recipe and ("diets" not in recipe or not recipe["diets"]):
-                    recipe["diets"] = recipe["dietaryRestrictions"]
-                
-                recipes_collection.insert_one(recipe)
-                print(f"Added test recipe: {recipe.get('title') or recipe.get('name')}")
-            except Exception as e:
-                print(f"Error adding test recipe {recipe.get('title') or recipe.get('name')}: {e}")
-        print(f"Added {len(initialRecipes)} test recipes to MongoDB")
+        # Add some test recipes if the collection is empty
+        if recipe_count == 0:
+            print("Adding test recipes to MongoDB...")
+            # Import initialRecipes directly from a Python dictionary
+            initialRecipes = [
+                {
+                    "id": "1",
+                    "name": "Vegetable Stir Fry",
+                    "title": "Vegetable Stir Fry",
+                    "cuisine": "Asian",
+                    "cuisines": ["Asian"],
+                    "dietaryRestrictions": ["vegetarian", "vegan"],
+                    "diets": ["vegetarian", "vegan"],
+                    "ingredients": ["broccoli", "carrots", "bell peppers", "soy sauce", "ginger", "garlic"],
+                    "instructions": ["Chop all vegetables", "Heat oil in a wok", "Add vegetables and stir fry for 5 minutes", "Add sauce and cook for 2 more minutes"],
+                    "image": "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60",
+                    "ratings": [4, 5, 5]
+                },
+                {
+                    "id": "2",
+                    "name": "Chicken Parmesan",
+                    "title": "Chicken Parmesan",
+                    "cuisine": "Italian",
+                    "cuisines": ["Italian"],
+                    "dietaryRestrictions": ["carnivore"],
+                    "diets": ["carnivore"],
+                    "ingredients": ["chicken breast", "breadcrumbs", "parmesan cheese", "mozzarella cheese", "tomato sauce", "pasta"],
+                    "instructions": ["Bread the chicken", "Fry until golden", "Top with sauce and cheese", "Bake until cheese melts", "Serve with pasta"],
+                    "image": "https://images.unsplash.com/photo-1515516089376-88db1e26e9c0?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60",
+                    "ratings": [5, 4, 4, 5]
+                },
+                {
+                    "id": "3",
+                    "name": "Beef Tacos",
+                    "title": "Beef Tacos",
+                    "cuisine": "Mexican",
+                    "cuisines": ["Mexican"],
+                    "dietaryRestrictions": ["carnivore"],
+                    "diets": ["carnivore"],
+                    "ingredients": ["ground beef", "taco shells", "lettuce", "tomato", "cheese", "sour cream", "taco seasoning"],
+                    "instructions": ["Brown the beef", "Add taco seasoning", "Warm the taco shells", "Assemble with toppings"],
+                    "image": "https://images.unsplash.com/photo-1565299585323-38d6b0865b47?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60",
+                    "ratings": [4, 5, 3]
+                },
+                {
+                    "id": "4",
+                    "name": "Quinoa Stuffed Bell Peppers",
+                    "title": "Quinoa Stuffed Bell Peppers",
+                    "cuisine": "Mediterranean",
+                    "cuisines": ["Mediterranean"],
+                    "dietaryRestrictions": ["vegetarian", "gluten-free"],
+                    "diets": ["vegetarian", "gluten-free"],
+                    "ingredients": ["bell peppers", "quinoa", "black beans", "corn", "tomatoes", "cumin", "chili powder"],
+                    "instructions": ["Cook quinoa", "Mix with beans, corn, and spices", "Stuff bell peppers", "Bake for 25 minutes"],
+                    "image": "https://via.placeholder.com/400x300",
+                    "ratings": [4, 4, 4, 5]
+                },
+                {
+                    "id": "5",
+                    "name": "Lentil Shepherd's Pie",
+                    "title": "Lentil Shepherd's Pie",
+                    "cuisine": "British",
+                    "cuisines": ["British"],
+                    "dietaryRestrictions": ["vegetarian", "vegan"],
+                    "diets": ["vegetarian", "vegan"],
+                    "ingredients": ["lentils", "carrots", "peas", "potatoes", "plant milk", "vegetable broth"],
+                    "instructions": ["Cook lentils with vegetables", "Make mashed potatoes with plant milk", "Layer lentil mixture on the bottom of a dish", "Top with mashed potatoes", "Bake until golden"],
+                    "image": "https://via.placeholder.com/400x300",
+                    "ratings": [5, 4, 5]
+                },
+                {
+                    "id": "6",
+                    "name": "Tiramisu",
+                    "title": "Tiramisu",
+                    "cuisine": "Italian",
+                    "cuisines": ["Italian"],
+                    "dietaryRestrictions": ["vegetarian"],
+                    "diets": ["vegetarian"],
+                    "ingredients": ["ladyfingers", "espresso", "mascarpone cheese", "eggs", "sugar", "cocoa powder"],
+                    "instructions": ["Mix mascarpone, egg yolks, and sugar", "Whip egg whites and fold into mixture", "Dip ladyfingers in espresso", "Layer ladyfingers and cream", "Dust with cocoa powder"],
+                    "image": "https://via.placeholder.com/400x300",
+                    "ratings": [5, 5, 5, 4]
+                },
+                {
+                    "id": "7",
+                    "name": "Vegan Apple Crisp",
+                    "title": "Vegan Apple Crisp",
+                    "cuisine": "American",
+                    "cuisines": ["American"],
+                    "dietaryRestrictions": ["vegetarian", "vegan"],
+                    "diets": ["vegetarian", "vegan"],
+                    "ingredients": ["apples", "oats", "brown sugar", "cinnamon", "plant butter", "lemon juice"],
+                    "instructions": ["Slice apples and toss with lemon juice", "Mix oats, sugar, cinnamon, and butter", "Place apples in dish and top with oat mixture", "Bake until golden and bubbly"],
+                    "image": "https://via.placeholder.com/400x300",
+                    "ratings": [4, 4, 3, 5]
+                }
+            ]
+            
+            for recipe in initialRecipes:
+                try:
+                    # Add both name and title to ensure consistent access
+                    if "name" in recipe and "title" not in recipe:
+                        recipe["title"] = recipe["name"]
+                    if "title" in recipe and "name" not in recipe:
+                        recipe["name"] = recipe["title"]
+                    
+                    # Ensure cuisines array exists
+                    if "cuisine" in recipe and ("cuisines" not in recipe or not recipe["cuisines"]):
+                        recipe["cuisines"] = [recipe["cuisine"]]
+                    
+                    # Ensure diets array exists
+                    if "dietaryRestrictions" in recipe and ("diets" not in recipe or not recipe["diets"]):
+                        recipe["diets"] = recipe["dietaryRestrictions"]
+                    
+                    recipes_collection.insert_one(recipe)
+                    print(f"Added test recipe: {recipe.get('title') or recipe.get('name')}")
+                except Exception as e:
+                    print(f"Error adding test recipe {recipe.get('title') or recipe.get('name')}: {e}")
+            print(f"Added {len(initialRecipes)} test recipes to MongoDB")
 except Exception as e:
     print(f"MongoDB connection error: {e}")
     print("Using in-memory storage as fallback")
@@ -565,10 +672,22 @@ def delete_recipe_from_db(recipe_id):
 @app.route("/test-mongodb", methods=["GET"])
 def test_mongodb():
     if not mongo_available:
+        # Try to get more specific connection error information
+        error_message = "MongoDB is not available. Check your connection string and make sure MongoDB is accessible."
+        error_type = "Connection Error"
+        
+        # Check DNS resolution for more specific errors
+        dns_check = check_mongodb_dns(MONGO_URI)
+        if not dns_check["success"]:
+            error_type = "DNS Resolution Error"
+            error_message = f"Could not resolve MongoDB hostname: {dns_check['message']}"
+        
         return jsonify({
             "status": "error",
             "connected": False,
-            "message": "MongoDB is not available. Check your connection string and make sure MongoDB Atlas is accessible."
+            "message": error_message,
+            "error_type": error_type,
+            "dns_check": dns_check
         }), 503
     
     try:
@@ -590,10 +709,14 @@ def test_mongodb():
                 "status": "success",
                 "connected": True,
                 "message": f"MongoDB is connected and operational. Found {recipe_count} recipes.",
-                "database": "nikash",
-                "collection": "Recipes",
+                "database": recipes_collection.database.name if recipes_collection else "unknown",
+                "collection": recipes_collection.name if recipes_collection else "unknown",
                 "recipeCount": recipe_count,
-                "sample": sample[:3]  # Just send a few samples to avoid large payloads
+                "sample": sample[:3],  # Just send a few samples to avoid large payloads
+                "connectionInfo": {
+                    "host": mongo_client.address[0] if mongo_client.address else "unknown",
+                    "port": mongo_client.address[1] if mongo_client.address else "unknown",
+                }
             })
         else:
             return jsonify({
@@ -657,6 +780,50 @@ def add_test_recipe():
             "success": False,
             "message": f"Error adding test recipe: {str(e)}"
         }), 500
+
+# Add a new route for MongoDB diagnostic information
+@app.route("/mongodb-diagnostics", methods=["GET"])
+def mongodb_diagnostics():
+    uri = MONGO_URI or "No URI specified"
+    
+    # Mask password in URI for security
+    masked_uri = uri
+    if "@" in masked_uri and ":" in masked_uri:
+        prefix = masked_uri.split("@")[0]
+        if ":" in prefix:
+            username = prefix.split(":")[-2].split("/")[-1]
+            masked_uri = masked_uri.replace(prefix, f"{username}:****")
+    
+    # Basic diagnostics
+    diagnostics = {
+        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "mongodb_available": mongo_available,
+        "connection_string": {
+            "provided": bool(MONGO_URI),
+            "masked_uri": masked_uri,
+            "type": "mongodb+srv" if uri and "mongodb+srv" in uri else "mongodb" if uri and "mongodb://" in uri else "unknown"
+        },
+        "dns_check": check_mongodb_dns(MONGO_URI),
+        "pymongo_version": pymongo.__version__ if 'pymongo' in sys.modules else "Not installed",
+        "python_version": sys.version,
+        "platform": sys.platform,
+        "connection_attempts": MONGO_RETRY_COUNT,
+        "connection_timeout_ms": MONGO_CONNECT_TIMEOUT_MS,
+    }
+    
+    # Add collection info if available
+    if mongo_available and recipes_collection:
+        try:
+            diagnostics["database_info"] = {
+                "database_name": recipes_collection.database.name,
+                "collection_name": recipes_collection.name,
+                "document_count": recipes_collection.count_documents({}),
+                "indexes": list(recipes_collection.list_indexes())
+            }
+        except Exception as e:
+            diagnostics["database_info"] = {"error": str(e)}
+    
+    return jsonify(diagnostics)
 
 if __name__ == "__main__":
     print("Starting Flask application...")
