@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Star } from 'lucide-react';
+import { ArrowLeft, Star, MessageSquare } from 'lucide-react';
 import Header from '../components/Header';
 import { useToast } from "@/hooks/use-toast";
 import { useQuery } from '@tanstack/react-query';
@@ -9,6 +9,17 @@ import { fetchRecipeById } from '../lib/spoonacular';
 import { SpoonacularRecipe } from '../types/spoonacular';
 import { getDietaryTags } from '../utils/recipeUtils';
 import { DietaryRestriction } from '../types/recipe';
+import { Card, CardContent } from "../components/ui/card";
+import { Textarea } from "../components/ui/textarea";
+
+// New types for external recipe reviews
+interface ExternalReview {
+  id: string;
+  author: string;
+  text: string;
+  date: string;
+  rating: number;
+}
 
 const ExternalRecipeDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -16,6 +27,11 @@ const ExternalRecipeDetailPage: React.FC = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [recipe, setRecipe] = useState<SpoonacularRecipe | null>(null);
+  const [reviews, setReviews] = useState<ExternalReview[]>([]);
+  const [newReview, setNewReview] = useState("");
+  const [selectedRating, setSelectedRating] = useState(0);
+  const [reviewAuthor, setReviewAuthor] = useState("");
+  const [showReviewForm, setShowReviewForm] = useState(false);
   
   // Fetch the external recipe data by ID
   const { data, isLoading, error } = useQuery({
@@ -25,6 +41,23 @@ const ExternalRecipeDetailPage: React.FC = () => {
     staleTime: 60 * 1000, // 1 minute
     retry: 2,
   });
+
+  // Load saved reviews from localStorage
+  useEffect(() => {
+    if (id) {
+      const savedReviews = localStorage.getItem(`external-reviews-${id}`);
+      if (savedReviews) {
+        setReviews(JSON.parse(savedReviews));
+      }
+    }
+  }, [id]);
+
+  // Save reviews to localStorage when they change
+  useEffect(() => {
+    if (id && reviews.length > 0) {
+      localStorage.setItem(`external-reviews-${id}`, JSON.stringify(reviews));
+    }
+  }, [id, reviews]);
 
   useEffect(() => {
     if (data) {
@@ -43,6 +76,62 @@ const ExternalRecipeDetailPage: React.FC = () => {
       });
     }
   }, [error, toast]);
+
+  const handleReviewSubmit = () => {
+    if (newReview.trim() === "") {
+      toast({
+        title: "Review text required",
+        description: "Please enter your review text before submitting.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (selectedRating === 0) {
+      toast({
+        title: "Rating required",
+        description: "Please select a rating before submitting your review.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const author = reviewAuthor.trim() === "" ? "Anonymous" : reviewAuthor;
+
+    const newReviewObj: ExternalReview = {
+      id: Date.now().toString(),
+      author,
+      text: newReview,
+      date: new Date().toISOString(),
+      rating: selectedRating
+    };
+
+    setReviews([...reviews, newReviewObj]);
+    setNewReview("");
+    setReviewAuthor("");
+    setSelectedRating(0);
+    setShowReviewForm(false);
+    
+    toast({
+      title: "Review submitted",
+      description: "Your review has been successfully added.",
+    });
+  };
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { 
+      year: 'numeric', 
+      month: 'short', 
+      day: 'numeric' 
+    });
+  };
+
+  const getAverageRating = () => {
+    if (reviews.length === 0) return 0;
+    const sum = reviews.reduce((total, review) => total + review.rating, 0);
+    return (sum / reviews.length).toFixed(1);
+  };
 
   if (isLoading) {
     return (
@@ -114,6 +203,7 @@ const ExternalRecipeDetailPage: React.FC = () => {
   }) as DietaryRestriction[];
   
   const dietaryTags = getDietaryTags(dietaryRestrictions);
+  const avgRating = getAverageRating();
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -156,9 +246,17 @@ const ExternalRecipeDetailPage: React.FC = () => {
               
               <div className="flex items-center bg-gray-100 rounded-full px-3 py-1 text-sm">
                 <Star className="h-5 w-5 text-yellow-500 mr-1" />
-                <span>N/A (0 ratings)</span>
+                <span>{avgRating} ({reviews.length} {reviews.length === 1 ? 'rating' : 'ratings'})</span>
               </div>
             </div>
+
+            {/* Recipe summary if available */}
+            {recipe.summary && (
+              <div className="mb-6">
+                <h2 className="text-xl font-semibold text-gray-800 mb-3">Summary</h2>
+                <p className="text-gray-700" dangerouslySetInnerHTML={{ __html: recipe.summary }} />
+              </div>
+            )}
             
             <div className="mb-6">
               <h2 className="text-xl font-semibold text-gray-800 mb-3">Ingredients</h2>
@@ -176,7 +274,7 @@ const ExternalRecipeDetailPage: React.FC = () => {
               </ul>
             </div>
             
-            <div>
+            <div className="mb-6">
               <h2 className="text-xl font-semibold text-gray-800 mb-3">Instructions</h2>
               <ol className="space-y-4 pl-5">
                 {instructions.length > 0 ? (
@@ -189,6 +287,159 @@ const ExternalRecipeDetailPage: React.FC = () => {
                   <li className="text-gray-500">No instructions available</li>
                 )}
               </ol>
+            </div>
+
+            {/* Additional recipe info */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+              {recipe.readyInMinutes && (
+                <div className="bg-gray-50 p-3 rounded-lg text-center">
+                  <p className="text-gray-500 text-sm">Prep Time</p>
+                  <p className="font-medium">{recipe.readyInMinutes} min</p>
+                </div>
+              )}
+              {recipe.servings && (
+                <div className="bg-gray-50 p-3 rounded-lg text-center">
+                  <p className="text-gray-500 text-sm">Servings</p>
+                  <p className="font-medium">{recipe.servings}</p>
+                </div>
+              )}
+              {recipe.dishTypes && recipe.dishTypes.length > 0 && (
+                <div className="bg-gray-50 p-3 rounded-lg text-center">
+                  <p className="text-gray-500 text-sm">Type</p>
+                  <p className="font-medium">{recipe.dishTypes[0]}</p>
+                </div>
+              )}
+              {recipe.sourceUrl && (
+                <div className="bg-gray-50 p-3 rounded-lg text-center">
+                  <p className="text-gray-500 text-sm">Source</p>
+                  <a 
+                    href={recipe.sourceUrl} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="font-medium text-recipe-primary hover:underline"
+                  >
+                    View Original
+                  </a>
+                </div>
+              )}
+            </div>
+
+            {/* Reviews Section */}
+            <div className="mt-8 border-t pt-6">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-semibold text-gray-800 flex items-center">
+                  <MessageSquare className="mr-2 h-5 w-5" /> Reviews
+                </h2>
+                {!showReviewForm && (
+                  <button 
+                    onClick={() => setShowReviewForm(true)}
+                    className="px-4 py-2 bg-recipe-primary text-white rounded-md hover:bg-recipe-primary/90 transition-colors"
+                  >
+                    Write a Review
+                  </button>
+                )}
+              </div>
+
+              {/* Review Form */}
+              {showReviewForm && (
+                <Card className="mb-6">
+                  <CardContent className="pt-6">
+                    <div className="mb-4">
+                      <label htmlFor="author" className="block text-sm font-medium text-gray-700 mb-1">
+                        Your Name (optional)
+                      </label>
+                      <input
+                        type="text"
+                        id="author"
+                        value={reviewAuthor}
+                        onChange={(e) => setReviewAuthor(e.target.value)}
+                        placeholder="Anonymous"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-recipe-primary"
+                      />
+                    </div>
+                    
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Your Rating
+                      </label>
+                      <div className="flex gap-1">
+                        {[1, 2, 3, 4, 5].map((rating) => (
+                          <button
+                            key={rating}
+                            type="button"
+                            onClick={() => setSelectedRating(rating)}
+                            className="focus:outline-none"
+                          >
+                            <Star
+                              className={`h-6 w-6 ${
+                                rating <= selectedRating ? 'text-yellow-500 fill-yellow-500' : 'text-gray-300'
+                              }`}
+                            />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    
+                    <div className="mb-4">
+                      <label htmlFor="review" className="block text-sm font-medium text-gray-700 mb-1">
+                        Your Review
+                      </label>
+                      <Textarea
+                        id="review"
+                        value={newReview}
+                        onChange={(e) => setNewReview(e.target.value)}
+                        placeholder="Write your review here..."
+                        rows={4}
+                        className="w-full"
+                      />
+                    </div>
+                    
+                    <div className="flex justify-end space-x-2">
+                      <button
+                        onClick={() => setShowReviewForm(false)}
+                        className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleReviewSubmit}
+                        className="px-4 py-2 bg-recipe-primary text-white rounded-md hover:bg-recipe-primary/90 transition-colors"
+                      >
+                        Submit Review
+                      </button>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Reviews List */}
+              {reviews.length > 0 ? (
+                <div className="space-y-4">
+                  {reviews.map((review) => (
+                    <Card key={review.id} className="bg-gray-50">
+                      <CardContent className="pt-6">
+                        <div className="flex justify-between">
+                          <h3 className="font-medium">{review.author}</h3>
+                          <span className="text-sm text-gray-500">{formatDate(review.date)}</span>
+                        </div>
+                        <div className="flex items-center mt-1 mb-3">
+                          {[1, 2, 3, 4, 5].map((rating) => (
+                            <Star
+                              key={rating}
+                              className={`h-4 w-4 ${
+                                rating <= review.rating ? 'text-yellow-500 fill-yellow-500' : 'text-gray-300'
+                              }`}
+                            />
+                          ))}
+                        </div>
+                        <p className="text-gray-700">{review.text}</p>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-gray-500 italic">No reviews yet. Be the first to review this recipe!</p>
+              )}
             </div>
           </div>
         </article>
