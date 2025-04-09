@@ -87,8 +87,10 @@ const RecipesPage: React.FC = () => {
       setFilteredRecipes(filtered);
       setSearchError(null);
       
-      if (searchTerm.trim() !== '' && filtered.length === 0) {
+      if (searchTerm.trim() !== '') {
         setExternalSearchTerm(searchTerm);
+      } else if (ingredientTerm.trim() !== '') {
+        setExternalSearchTerm('');
       } else {
         setExternalSearchTerm('');
       }
@@ -189,9 +191,12 @@ const RecipesPage: React.FC = () => {
   };
 
   const forceApiSearch = () => {
-    if (searchTerm.trim() || ingredientTerm.trim()) {
+    if (searchTerm.trim()) {
       setExternalSearchTerm(searchTerm);
       queryClient.invalidateQueries({ queryKey: ['recipes', searchTerm, ingredientTerm] });
+    } else if (ingredientTerm.trim()) {
+      setExternalSearchTerm('');
+      queryClient.invalidateQueries({ queryKey: ['recipes', '', ingredientTerm] });
     } else {
       toast({
         title: "Search terms required",
@@ -267,32 +272,40 @@ const RecipesPage: React.FC = () => {
           </Alert>
         )}
 
-        {filteredRecipes.length === 0 && filteredExternalRecipes.length === 0 && !isExternalLoading && !searchError && (
-          <div className="text-center py-12">
-            <Search className="mx-auto h-12 w-12 text-gray-400" />
-            <h3 className="mt-2 text-lg font-medium text-gray-900">No recipes found</h3>
-            <p className="mt-1 text-gray-500">Try adjusting your search or filters to find recipes.</p>
+        {(filteredRecipes.length > 0 || filteredExternalRecipes.length > 0) && (
+          <div className="grid grid-cols-1 gap-y-8">
+            {filteredRecipes.length > 0 && (
+              <div>
+                <h2 className="text-xl font-semibold mb-4 text-gray-800">My Recipes</h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {Array.isArray(filteredRecipes) && filteredRecipes.map(recipe => (
+                    <RecipeCard 
+                      key={recipe.id} 
+                      recipe={recipe}
+                      onDelete={handleDeleteRecipe}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {filteredExternalRecipes.length > 0 && (
+              <div>
+                <h2 className="text-xl font-semibold mb-4 text-gray-800">External Recipes</h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {Array.isArray(filteredExternalRecipes) && filteredExternalRecipes.map((recipe: SpoonacularRecipe) => (
+                    <RecipeCard 
+                      key={`ext-${recipe.id}`} 
+                      recipe={formatExternalRecipe(recipe)}
+                      onDelete={() => {}}
+                      isExternal={true}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {Array.isArray(filteredRecipes) && filteredRecipes.map(recipe => (
-            <RecipeCard 
-              key={recipe.id} 
-              recipe={recipe}
-              onDelete={handleDeleteRecipe}
-            />
-          ))}
-
-          {Array.isArray(filteredExternalRecipes) && filteredExternalRecipes.map((recipe: SpoonacularRecipe) => (
-            <RecipeCard 
-              key={`ext-${recipe.id}`} 
-              recipe={formatExternalRecipe(recipe)}
-              onDelete={() => {}}
-              isExternal={true}
-            />
-          ))}
-        </div>
 
         {isExternalLoading && (
           <div className="flex justify-center items-center py-12">
@@ -308,9 +321,9 @@ const RecipesPage: React.FC = () => {
         {!isExternalLoading && externalData?.results?.length === 0 && externalSearchTerm && !searchError && (
           <div className="text-center py-12">
             <Search className="mx-auto h-12 w-12 text-gray-400" />
-            <h3 className="mt-2 text-lg font-medium text-gray-900">No recipes found</h3>
+            <h3 className="mt-2 text-lg font-medium text-gray-900">No external recipes found</h3>
             <p className="mt-1 text-gray-500">
-              We couldn't find any recipes matching your search in {dbStatus === 'connected' ? 'MongoDB or external sources' : 'external sources'}. Try a different term.
+              We couldn't find any external recipes matching your search in {dbStatus === 'connected' ? 'MongoDB or external sources' : 'external sources'}. Try a different term.
             </p>
           </div>
         )}
