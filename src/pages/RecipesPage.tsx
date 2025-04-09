@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -18,6 +17,7 @@ const RecipesPage: React.FC = () => {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [filteredRecipes, setFilteredRecipes] = useState<Recipe[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [externalSearchTerm, setExternalSearchTerm] = useState('');
   const [dietaryFilter, setDietaryFilter] = useState('');
   const [cuisineFilter, setCuisineFilter] = useState('');
   const [ingredientTerm, setIngredientTerm] = useState('');
@@ -86,6 +86,14 @@ const RecipesPage: React.FC = () => {
       const filtered = filterRecipes(recipes, searchTerm, dietaryFilter, cuisineFilter, ingredientTerm);
       setFilteredRecipes(filtered);
       setSearchError(null);
+      
+      if (searchTerm.trim() !== '') {
+        setExternalSearchTerm(searchTerm);
+      } else if (ingredientTerm.trim() !== '') {
+        setExternalSearchTerm('');
+      } else {
+        setExternalSearchTerm('');
+      }
     }
   }, [recipes, searchTerm, dietaryFilter, cuisineFilter, ingredientTerm]);
 
@@ -105,6 +113,7 @@ const RecipesPage: React.FC = () => {
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(e.target.value);
     if (!e.target.value.trim()) {
+      setExternalSearchTerm('');
       setSearchError(null);
     }
   };
@@ -114,18 +123,19 @@ const RecipesPage: React.FC = () => {
   };
 
   const retrySearch = () => {
-    queryClient.invalidateQueries({ queryKey: ['recipes', searchTerm, ingredientTerm] });
-    setSearchError(null);
+    if (externalSearchTerm) {
+      setSearchError(null);
+      queryClient.invalidateQueries({ queryKey: ['recipes', externalSearchTerm, ingredientTerm] });
+    }
   };
 
-  // Modified query to always use search term and ingredient term, with useQuery now enabled by default
   const { data: externalData, isLoading: isExternalLoading, isError, error } = useQuery({
-    queryKey: ['recipes', searchTerm, ingredientTerm],
+    queryKey: ['recipes', externalSearchTerm, ingredientTerm],
     queryFn: () => {
-      console.log("Executing query function for:", searchTerm, ingredientTerm);
-      return fetchRecipes(searchTerm, ingredientTerm);
+      console.log("Executing query function for:", externalSearchTerm, ingredientTerm);
+      return fetchRecipes(externalSearchTerm, ingredientTerm);
     },
-    enabled: true, // Now always enabled
+    enabled: !!(externalSearchTerm || ingredientTerm),
     retry: 1,
     staleTime: 60000
   });
@@ -181,7 +191,18 @@ const RecipesPage: React.FC = () => {
   };
 
   const forceApiSearch = () => {
-    queryClient.invalidateQueries({ queryKey: ['recipes', searchTerm, ingredientTerm] });
+    if (searchTerm.trim()) {
+      setExternalSearchTerm(searchTerm);
+      queryClient.invalidateQueries({ queryKey: ['recipes', searchTerm, ingredientTerm] });
+    } else if (ingredientTerm.trim()) {
+      setExternalSearchTerm('');
+      queryClient.invalidateQueries({ queryKey: ['recipes', '', ingredientTerm] });
+    } else {
+      toast({
+        title: "Search terms required",
+        description: "Please enter a recipe name or ingredient to search",
+      });
+    }
   };
 
   return (
@@ -228,6 +249,7 @@ const RecipesPage: React.FC = () => {
             setDietaryFilter('');
             setCuisineFilter('');
             setIngredientTerm('');
+            setExternalSearchTerm('');
             setSearchError(null);
           }}
           ingredientTerm={ingredientTerm}
@@ -296,12 +318,12 @@ const RecipesPage: React.FC = () => {
           </div>
         )}
 
-        {!isExternalLoading && filteredRecipes.length === 0 && filteredExternalRecipes.length === 0 && (searchTerm || ingredientTerm) && !searchError && (
+        {!isExternalLoading && externalData?.results?.length === 0 && externalSearchTerm && !searchError && (
           <div className="text-center py-12">
             <Search className="mx-auto h-12 w-12 text-gray-400" />
-            <h3 className="mt-2 text-lg font-medium text-gray-900">No recipes found</h3>
+            <h3 className="mt-2 text-lg font-medium text-gray-900">No external recipes found</h3>
             <p className="mt-1 text-gray-500">
-              We couldn't find any recipes matching your search. Try different terms or check your filters.
+              We couldn't find any external recipes matching your search in {dbStatus === 'connected' ? 'MongoDB or external sources' : 'external sources'}. Try a different term.
             </p>
           </div>
         )}
