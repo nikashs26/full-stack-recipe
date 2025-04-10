@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -5,7 +6,7 @@ import Header from '../components/Header';
 import FilterBar from '../components/FilterBar';
 import RecipeCard from '../components/RecipeCard';
 import { loadRecipes, saveRecipes, deleteRecipe as deleteRecipeFromStorage, getLocalRecipes } from '../utils/storage';
-import { filterRecipes, getUniqueCuisines, formatExternalRecipeCuisine } from '../utils/recipeUtils';
+import { filterRecipes, getUniqueCuisines, formatExternalRecipeCuisine, formatRecipeForDisplay } from '../utils/recipeUtils';
 import { fetchRecipes, getAllRecipesFromDB } from '../lib/spoonacular';
 import { Recipe } from '../types/recipe';
 import { SpoonacularRecipe } from '../types/spoonacular';
@@ -24,6 +25,7 @@ const RecipesPage: React.FC = () => {
   const [searchError, setSearchError] = useState<string | null>(null);
   const [cuisines, setCuisines] = useState<string[]>([]);
   const [filteredExternalRecipes, setFilteredExternalRecipes] = useState<SpoonacularRecipe[]>([]);
+  const [combinedRecipes, setCombinedRecipes] = useState<(Recipe | SpoonacularRecipe & { isExternal: boolean })[]>([]);
   const [dbStatus, setDbStatus] = useState<'checking' | 'connected' | 'disconnected'>('checking');
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -79,6 +81,9 @@ const RecipesPage: React.FC = () => {
     };
     
     fetchData();
+    
+    // Always trigger an external search on first load to populate external recipes
+    setExternalSearchTerm('');
   }, [toast]);
 
   useEffect(() => {
@@ -87,15 +92,26 @@ const RecipesPage: React.FC = () => {
       setFilteredRecipes(filtered);
       setSearchError(null);
       
-      if (searchTerm.trim() !== '') {
-        setExternalSearchTerm(searchTerm);
-      } else if (ingredientTerm.trim() !== '') {
-        setExternalSearchTerm('');
-      } else {
-        setExternalSearchTerm('');
-      }
+      // Always enable external search for better experience
+      setExternalSearchTerm(searchTerm);
     }
   }, [recipes, searchTerm, dietaryFilter, cuisineFilter, ingredientTerm]);
+
+  // Combine local and external recipes into one unified list
+  useEffect(() => {
+    const externalWithFlag = filteredExternalRecipes.map(recipe => ({
+      ...recipe,
+      isExternal: true
+    }));
+    
+    const localWithFlag = filteredRecipes.map(recipe => ({
+      ...recipe,
+      isExternal: false
+    }));
+    
+    const combined = [...localWithFlag, ...externalWithFlag];
+    setCombinedRecipes(combined);
+  }, [filteredRecipes, filteredExternalRecipes]);
 
   const handleDeleteRecipe = (id: string) => {
     if (window.confirm('Are you sure you want to delete this recipe?')) {
@@ -123,7 +139,7 @@ const RecipesPage: React.FC = () => {
   };
 
   const retrySearch = () => {
-    if (externalSearchTerm) {
+    if (externalSearchTerm || ingredientTerm) {
       setSearchError(null);
       queryClient.invalidateQueries({ queryKey: ['recipes', externalSearchTerm, ingredientTerm] });
     }
@@ -135,7 +151,7 @@ const RecipesPage: React.FC = () => {
       console.log("Executing query function for:", externalSearchTerm, ingredientTerm);
       return fetchRecipes(externalSearchTerm, ingredientTerm);
     },
-    enabled: !!(externalSearchTerm || ingredientTerm),
+    enabled: true, // Always enable the query to show external recipes
     retry: 1,
     staleTime: 60000
   });
@@ -178,17 +194,6 @@ const RecipesPage: React.FC = () => {
       setFilteredExternalRecipes([]);
     }
   }, [externalData, dietaryFilter, cuisineFilter]);
-
-  const formatExternalRecipe = (recipe: SpoonacularRecipe): SpoonacularRecipe => {
-    return {
-      ...recipe,
-      id: recipe.id || 0,
-      title: recipe.title || "Untitled Recipe",
-      image: recipe.image || '/placeholder.svg',
-      cuisines: recipe.cuisines || [],
-      diets: recipe.diets || []
-    };
-  };
 
   const forceApiSearch = () => {
     if (searchTerm.trim()) {
@@ -272,39 +277,31 @@ const RecipesPage: React.FC = () => {
           </Alert>
         )}
 
-        {(filteredRecipes.length > 0 || filteredExternalRecipes.length > 0) && (
+        {combinedRecipes.length > 0 ? (
           <div className="grid grid-cols-1 gap-y-8">
-            {filteredRecipes.length > 0 && (
-              <div>
-                <h2 className="text-xl font-semibold mb-4 text-gray-800">My Recipes</h2>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {Array.isArray(filteredRecipes) && filteredRecipes.map(recipe => (
-                    <RecipeCard 
-                      key={recipe.id} 
-                      recipe={recipe}
-                      onDelete={handleDeleteRecipe}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {filteredExternalRecipes.length > 0 && (
-              <div>
-                <h2 className="text-xl font-semibold mb-4 text-gray-800">External Recipes</h2>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {Array.isArray(filteredExternalRecipes) && filteredExternalRecipes.map((recipe: SpoonacularRecipe) => (
-                    <RecipeCard 
-                      key={`ext-${recipe.id}`} 
-                      recipe={formatExternalRecipe(recipe)}
-                      onDelete={() => {}}
-                      isExternal={true}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {combinedRecipes.map((recipe, index) => (
+                <RecipeCard 
+                  key={`recipe-${recipe.isExternal ? 'ext' : 'local'}-${recipe.isExternal ? recipe.id : (recipe as Recipe).id}`}
+                  recipe={recipe}
+                  onDelete={handleDeleteRecipe}
+                  isExternal={recipe.isExternal}
+                />
+              ))}
+            </div>
           </div>
+        ) : (
+          <>
+            {!isExternalLoading && (
+              <div className="text-center py-12">
+                <Search className="mx-auto h-12 w-12 text-gray-400" />
+                <h3 className="mt-2 text-lg font-medium text-gray-900">No recipes found</h3>
+                <p className="mt-1 text-gray-500">
+                  We couldn't find any recipes matching your search. Try different search terms or filters.
+                </p>
+              </div>
+            )}
+          </>
         )}
 
         {isExternalLoading && (
@@ -315,16 +312,6 @@ const RecipesPage: React.FC = () => {
                 ? 'Searching in MongoDB and external sources...' 
                 : 'Searching for recipes...'}
             </span>
-          </div>
-        )}
-
-        {!isExternalLoading && externalData?.results?.length === 0 && externalSearchTerm && !searchError && (
-          <div className="text-center py-12">
-            <Search className="mx-auto h-12 w-12 text-gray-400" />
-            <h3 className="mt-2 text-lg font-medium text-gray-900">No external recipes found</h3>
-            <p className="mt-1 text-gray-500">
-              We couldn't find any external recipes matching your search in {dbStatus === 'connected' ? 'MongoDB or external sources' : 'external sources'}. Try a different term.
-            </p>
           </div>
         )}
       </main>

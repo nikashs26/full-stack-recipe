@@ -71,6 +71,7 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onDelete, isExternal = 
             alt={recipeName || "Recipe"} 
             className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 hover:scale-110"
             onError={handleImageError}
+            loading="lazy"
           />
           
           {/* Rating badge for local recipes */}
@@ -86,13 +87,6 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onDelete, isExternal = 
             <div className="absolute top-2 right-2 bg-black bg-opacity-60 text-white rounded-full px-2 py-1 text-sm flex items-center">
               <Clock className="h-4 w-4 text-white mr-1" />
               <span>{readyInMinutes} min</span>
-            </div>
-          )}
-          
-          {/* External badge */}
-          {isExternal && (
-            <div className="absolute top-2 left-2 bg-blue-500 bg-opacity-80 text-white rounded-full px-2 py-1 text-xs">
-              External
             </div>
           )}
         </div>

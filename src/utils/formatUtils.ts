@@ -5,36 +5,41 @@
  * @param maxParaLength Maximum length for each paragraph
  * @returns Formatted HTML with paragraph tags
  */
-export const formatDescriptionIntoParagraphs = (description: string, maxParaLength: number = 200): string => {
+export const formatDescriptionIntoParagraphs = (description: string, maxParaLength: number = 150): string => {
   if (!description) return '';
   
   // First, clean any HTML tags
   const cleanDescription = description.replace(/<\/?[^>]+(>|$)/g, '');
   
-  // Split by periods that are followed by a space, to keep sentences together
-  const sentences = cleanDescription.split(/\.\s+/);
+  // Look for natural paragraph breaks first
+  let paragraphs: string[] = cleanDescription.split(/\n+/).filter(p => p.trim().length > 0);
   
-  // Build paragraphs by combining sentences
-  const paragraphs: string[] = [];
-  let currentParagraph = '';
-  
-  sentences.forEach(sentence => {
-    // Add the period back (except if it's the last empty item)
-    const formattedSentence = sentence.trim() ? sentence.trim() + '.' : '';
+  // If no natural breaks or paragraphs are too long, split by periods
+  if (paragraphs.length <= 1 || paragraphs.some(p => p.length > maxParaLength * 1.5)) {
+    paragraphs = [];
+    // Split by periods that are followed by a space, to keep sentences together
+    const sentences = cleanDescription.split(/\.(?:\s+|\s*$)/);
     
-    // If adding this sentence would make the paragraph too long, start a new one
-    if (currentParagraph && currentParagraph.length + formattedSentence.length > maxParaLength) {
+    let currentParagraph = '';
+    
+    sentences.forEach(sentence => {
+      // Add the period back (except if it's the last empty item)
+      const formattedSentence = sentence.trim() ? sentence.trim() + '.' : '';
+      
+      // If adding this sentence would make the paragraph too long, start a new one
+      if (currentParagraph && currentParagraph.length + formattedSentence.length > maxParaLength) {
+        paragraphs.push(currentParagraph);
+        currentParagraph = formattedSentence;
+      } else {
+        // Otherwise, add to the current paragraph with a space if needed
+        currentParagraph += (currentParagraph && formattedSentence ? ' ' : '') + formattedSentence;
+      }
+    });
+    
+    // Add the last paragraph if it's not empty
+    if (currentParagraph) {
       paragraphs.push(currentParagraph);
-      currentParagraph = formattedSentence;
-    } else {
-      // Otherwise, add to the current paragraph with a space if needed
-      currentParagraph += (currentParagraph && formattedSentence ? ' ' : '') + formattedSentence;
     }
-  });
-  
-  // Add the last paragraph if it's not empty
-  if (currentParagraph) {
-    paragraphs.push(currentParagraph);
   }
   
   // Convert to HTML paragraphs
