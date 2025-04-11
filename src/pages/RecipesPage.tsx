@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -14,6 +13,9 @@ import { Loader2, Search, AlertCircle, Database } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 
+// Define a new type that combines Recipe and SpoonacularRecipe with isExternal flag
+type CombinedRecipe = (Recipe & { isExternal?: boolean }) | (SpoonacularRecipe & { isExternal: boolean });
+
 const RecipesPage: React.FC = () => {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [filteredRecipes, setFilteredRecipes] = useState<Recipe[]>([]);
@@ -25,7 +27,7 @@ const RecipesPage: React.FC = () => {
   const [searchError, setSearchError] = useState<string | null>(null);
   const [cuisines, setCuisines] = useState<string[]>([]);
   const [filteredExternalRecipes, setFilteredExternalRecipes] = useState<SpoonacularRecipe[]>([]);
-  const [combinedRecipes, setCombinedRecipes] = useState<(Recipe | SpoonacularRecipe & { isExternal: boolean })[]>([]);
+  const [combinedRecipes, setCombinedRecipes] = useState<CombinedRecipe[]>([]);
   const [dbStatus, setDbStatus] = useState<'checking' | 'connected' | 'disconnected'>('checking');
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -282,10 +284,10 @@ const RecipesPage: React.FC = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {combinedRecipes.map((recipe, index) => (
                 <RecipeCard 
-                  key={`recipe-${recipe.isExternal ? 'ext' : 'local'}-${recipe.isExternal ? recipe.id : (recipe as Recipe).id}`}
+                  key={`recipe-${index}-${recipe.id}`}
                   recipe={recipe}
                   onDelete={handleDeleteRecipe}
-                  isExternal={recipe.isExternal}
+                  isExternal={!!recipe.isExternal}
                 />
               ))}
             </div>
