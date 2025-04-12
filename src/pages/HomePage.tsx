@@ -94,12 +94,13 @@ const HomePage: React.FC = () => {
   const recentRecipes = React.useMemo(() => {
     if (!Array.isArray(recipes) || recipes.length === 0) return [];
 
+    // Since Recipe type doesn't have createdAt, we'll sort by id as a fallback
     return [...recipes]
       .sort((a, b) => {
-        // Sort by most recently added
-        const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-        const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-        return dateB - dateA;
+        // If we have ids that can be compared, use those
+        const idA = a.id ? parseInt(a.id, 10) : 0;
+        const idB = b.id ? parseInt(b.id, 10) : 0;
+        return idB - idA; // Higher ID is likely more recent
       })
       .slice(0, 6)
       .map(recipe => ({
@@ -128,7 +129,7 @@ const HomePage: React.FC = () => {
               Discover Delicious Recipes
             </h1>
             <p className="text-xl text-white/90 mb-8 max-w-3xl mx-auto">
-              Find, save and create your favorite recipes all in one place
+              Find, save, and create your favorite recipes all in one place
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Link to="/recipes">

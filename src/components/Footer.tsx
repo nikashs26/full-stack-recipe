@@ -1,6 +1,5 @@
 
 import React from 'react';
-import { Heart } from 'lucide-react';
 
 const Footer: React.FC = () => {
   const currentYear = new Date().getFullYear();
@@ -13,11 +12,6 @@ const Footer: React.FC = () => {
             <p className="text-gray-500 text-sm">
               &copy; {currentYear} Better Bulk, Inc. All rights reserved.
             </p>
-          </div>
-          <div className="mt-4 md:mt-0 flex items-center justify-center md:justify-end text-sm">
-            <div className="flex items-center text-gray-500">
-              Made with <Heart className="h-4 w-4 mx-1 text-recipe-secondary" /> for healthy eating
-            </div>
           </div>
         </div>
         <div className="mt-4 text-center text-xs text-gray-400">
