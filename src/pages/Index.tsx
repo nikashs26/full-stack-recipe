@@ -1,9 +1,9 @@
 
 import React from 'react';
-import RecipesPage from './RecipesPage';
+import HomePage from './HomePage';
 
 const Index = () => {
-  return <RecipesPage />;
+  return <HomePage />;
 };
 
 export default Index;
