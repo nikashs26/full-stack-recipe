@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -101,21 +102,37 @@ const RecipesPage: React.FC = () => {
 
   // Combine local and external recipes into one unified list
   useEffect(() => {
-    const externalWithFlag = filteredExternalRecipes.map(recipe => ({
-      ...recipe,
-      isExternal: true
-    }));
-    
-    const localWithFlag = filteredRecipes.map(recipe => ({
-      ...recipe,
-      isExternal: false
-    }));
-    
-    const combined = [...localWithFlag, ...externalWithFlag];
-    setCombinedRecipes(combined);
+    try {
+      // Make sure to handle potential undefined values in the map functions
+      const externalWithFlag = filteredExternalRecipes
+        .filter(recipe => recipe) // Filter out any null/undefined recipes
+        .map(recipe => ({
+          ...recipe,
+          isExternal: true
+        }));
+      
+      const localWithFlag = filteredRecipes
+        .filter(recipe => recipe) // Filter out any null/undefined recipes
+        .map(recipe => ({
+          ...recipe,
+          isExternal: false
+        }));
+      
+      const combined = [...localWithFlag, ...externalWithFlag];
+      setCombinedRecipes(combined);
+    } catch (error) {
+      console.error("Error combining recipes:", error);
+      // Set combined recipes to a safe default if there's an error
+      setCombinedRecipes([]);
+    }
   }, [filteredRecipes, filteredExternalRecipes]);
 
   const handleDeleteRecipe = (id: string) => {
+    if (!id) {
+      console.error("Attempted to delete recipe with invalid ID");
+      return;
+    }
+    
     if (window.confirm('Are you sure you want to delete this recipe?')) {
       deleteRecipeFromStorage(id);
       const updatedRecipes = recipes.filter(recipe => recipe.id !== id);
@@ -172,26 +189,35 @@ const RecipesPage: React.FC = () => {
 
   useEffect(() => {
     if (externalData?.results) {
-      let filteredExternal = [...externalData.results];
-      
-      if (dietaryFilter) {
-        filteredExternal = filteredExternal.filter(recipe => 
-          recipe.diets && recipe.diets.some(diet => 
-            diet.toLowerCase().includes(dietaryFilter.toLowerCase())
-          )
-        );
+      try {
+        let filteredExternal = [...externalData.results].filter(recipe => recipe); // Filter out any null recipes
+        
+        if (dietaryFilter) {
+          filteredExternal = filteredExternal.filter(recipe => 
+            recipe.diets && Array.isArray(recipe.diets) && recipe.diets.some(diet => {
+              // Safe null check before calling toLowerCase
+              if (!diet) return false;
+              return diet.toLowerCase().includes(dietaryFilter.toLowerCase());
+            })
+          );
+        }
+        
+        if (cuisineFilter) {
+          filteredExternal = filteredExternal.filter(recipe => 
+            recipe.cuisines && Array.isArray(recipe.cuisines) && recipe.cuisines.some(cuisine => {
+              // Safe null check before calling toLowerCase
+              if (!cuisine) return false;
+              return cuisine.toLowerCase() === cuisineFilter.toLowerCase();
+            })
+          );
+        }
+        
+        console.log("Setting filtered external recipes:", filteredExternal.length);
+        setFilteredExternalRecipes(filteredExternal);
+      } catch (error) {
+        console.error("Error filtering external recipes:", error);
+        setFilteredExternalRecipes([]);
       }
-      
-      if (cuisineFilter) {
-        filteredExternal = filteredExternal.filter(recipe => 
-          recipe.cuisines && recipe.cuisines.some(cuisine => 
-            cuisine.toLowerCase() === cuisineFilter.toLowerCase()
-          )
-        );
-      }
-      
-      console.log("Setting filtered external recipes:", filteredExternal.length);
-      setFilteredExternalRecipes(filteredExternal);
     } else {
       setFilteredExternalRecipes([]);
     }
@@ -284,7 +310,7 @@ const RecipesPage: React.FC = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {combinedRecipes.map((recipe, index) => (
                 <RecipeCard 
-                  key={`recipe-${index}-${recipe.id}`}
+                  key={`recipe-${index}-${recipe?.id || index}`}
                   recipe={recipe}
                   onDelete={handleDeleteRecipe}
                   isExternal={!!recipe.isExternal}

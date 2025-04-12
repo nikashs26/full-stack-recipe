@@ -9,6 +9,8 @@ export const getAverageRating = (ratings: number[]): number => {
 };
 
 export const getDietaryTags = (dietaryRestrictions: DietaryRestriction[]): { text: string, class: string }[] => {
+  if (!dietaryRestrictions || !Array.isArray(dietaryRestrictions)) return [];
+  
   return dietaryRestrictions.map(restriction => {
     switch (restriction) {
       case 'vegetarian':
@@ -38,11 +40,25 @@ export const filterRecipes = (
   }
   
   return recipes.filter(recipe => {
-    const matchesSearchTerm = recipe.name.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesDietary = dietaryFilter ? recipe.dietaryRestrictions.includes(dietaryFilter as DietaryRestriction) : true;
-    const matchesCuisine = cuisineFilter ? recipe.cuisine === cuisineFilter : true;
+    // Add null checks for all properties to avoid "toLowerCase of undefined" errors
+    const recipeName = recipe.name || "";
+    const searchTermLower = searchTerm ? searchTerm.toLowerCase() : "";
+    const matchesSearchTerm = searchTerm ? recipeName.toLowerCase().includes(searchTermLower) : true;
+    
+    const dietaryRestrictions = recipe.dietaryRestrictions || [];
+    const matchesDietary = dietaryFilter ? dietaryRestrictions.includes(dietaryFilter as DietaryRestriction) : true;
+    
+    const recipeCuisine = recipe.cuisine || "";
+    const cuisineFilterLower = cuisineFilter ? cuisineFilter.toLowerCase() : "";
+    const matchesCuisine = cuisineFilter ? recipeCuisine.toLowerCase() === cuisineFilterLower : true;
+    
+    const ingredients = recipe.ingredients || [];
+    const ingredientTermLower = ingredientTerm ? ingredientTerm.toLowerCase() : "";
     const matchesIngredient = ingredientTerm
-      ? recipe.ingredients.some(ingredient => ingredient.toLowerCase().includes(ingredientTerm.toLowerCase()))
+      ? ingredients.some(ingredient => {
+          if (!ingredient) return false;
+          return ingredient.toLowerCase().includes(ingredientTermLower);
+        })
       : true;
 
     return matchesSearchTerm && matchesDietary && matchesCuisine && matchesIngredient;
@@ -55,19 +71,23 @@ export const getUniqueCuisines = (recipes: Recipe[]): string[] => {
     return [];
   }
   
-  const cuisines = recipes.map(recipe => recipe.cuisine);
+  const cuisines = recipes
+    .filter(recipe => recipe && recipe.cuisine) // Filter out recipes without cuisine
+    .map(recipe => recipe.cuisine);
   return [...new Set(cuisines)].sort();
 };
 
 export const formatExternalRecipeCuisine = (recipe: SpoonacularRecipe): string => {
   // Handle cuisine data for external recipes
-  if (recipe.cuisines && Array.isArray(recipe.cuisines) && recipe.cuisines.length > 0) {
+  if (recipe && recipe.cuisines && Array.isArray(recipe.cuisines) && recipe.cuisines.length > 0) {
     return recipe.cuisines[0];
   }
   return "Other";
 };
 
 export const formatRecipeForDisplay = (recipe: Recipe | SpoonacularRecipe, isExternal: boolean): any => {
+  if (!recipe) return null;
+  
   if (isExternal) {
     const spoonacularRecipe = recipe as SpoonacularRecipe;
     return {

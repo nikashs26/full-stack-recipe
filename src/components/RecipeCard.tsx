@@ -13,35 +13,53 @@ interface RecipeCardProps {
 }
 
 const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onDelete, isExternal = false }) => {
-  // Handle both local and external recipe types
-  const recipeId = isExternal ? (recipe as SpoonacularRecipe).id.toString() : (recipe as Recipe).id;
-  const recipeName = isExternal ? (recipe as SpoonacularRecipe).title : (recipe as Recipe).name;
+  // Safety check for null/undefined recipe
+  if (!recipe) {
+    console.error("Received null or undefined recipe in RecipeCard");
+    return null;
+  }
+
+  // Handle both local and external recipe types with proper null checks
+  const recipeId = isExternal 
+    ? String((recipe as SpoonacularRecipe).id || "unknown") 
+    : (recipe as Recipe).id || "unknown";
   
-  // Updated cuisine handling
+  const recipeName = isExternal 
+    ? (recipe as SpoonacularRecipe).title || "Untitled Recipe" 
+    : (recipe as Recipe).name || "Untitled Recipe";
+  
+  // Updated cuisine handling with null checks
   const recipeCuisine = isExternal 
     ? formatExternalRecipeCuisine(recipe as SpoonacularRecipe)
-    : (recipe as Recipe).cuisine;
+    : (recipe as Recipe).cuisine || "Other";
   
   const recipeImage = isExternal 
-    ? (recipe as SpoonacularRecipe).image 
+    ? (recipe as SpoonacularRecipe).image || '/placeholder.svg' 
     : (recipe as Recipe).image || '/placeholder.svg';
   
-  // Ratings handling
+  // Ratings handling with null checks
   const avgRating = isExternal 
-    ? 0 // External recipes don't have ratings
-    : getAverageRating((recipe as Recipe).ratings);
+    ? 0 
+    : getAverageRating((recipe as Recipe).ratings || []);
   
   // Dietary tags - normalize diets for external recipes to match local format
-  let dietaryTags = isExternal 
-    ? getDietaryTags(((recipe as SpoonacularRecipe).diets || []).map(diet => {
-        // Normalize diet names to match our internal format
-        if (diet.toLowerCase().includes('vegetarian')) return 'vegetarian';
-        if (diet.toLowerCase().includes('vegan')) return 'vegan'; 
-        if (diet.toLowerCase().includes('gluten') && diet.toLowerCase().includes('free')) return 'gluten-free';
-        if (diet.toLowerCase().includes('carnivore') || diet.toLowerCase().includes('meat')) return 'carnivore';
-        return diet as any;
-      }))
-    : getDietaryTags((recipe as Recipe).dietaryRestrictions);
+  let dietaryTags = [];
+  
+  if (isExternal) {
+    const diets = ((recipe as SpoonacularRecipe).diets || []);
+    dietaryTags = getDietaryTags(diets.map(diet => {
+      if (!diet) return 'other' as any;
+      // Normalize diet names to match our internal format
+      const dietLower = diet.toLowerCase();
+      if (dietLower.includes('vegetarian')) return 'vegetarian';
+      if (dietLower.includes('vegan')) return 'vegan'; 
+      if (dietLower.includes('gluten') && dietLower.includes('free')) return 'gluten-free';
+      if (dietLower.includes('carnivore') || dietLower.includes('meat')) return 'carnivore';
+      return diet as any;
+    }));
+  } else {
+    dietaryTags = getDietaryTags((recipe as Recipe).dietaryRestrictions || []);
+  }
   
   // Ready in minutes for external recipes
   const readyInMinutes = isExternal 
@@ -49,7 +67,7 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onDelete, isExternal = 
     : undefined;
   
   // Fallback image handling
-  const [imageSrc, setImageSrc] = React.useState(recipeImage);
+  const [imageSrc, setImageSrc] = React.useState(recipeImage || '/placeholder.svg');
   
   // Handle image loading errors
   const handleImageError = () => {
@@ -59,8 +77,8 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onDelete, isExternal = 
 
   // Fix the link path for external recipes
   const cardLink = isExternal 
-    ? `/external-recipe/${(recipe as SpoonacularRecipe).id}` 
-    : `/recipe/${(recipe as Recipe).id}`;
+    ? `/external-recipe/${recipeId}` 
+    : `/recipe/${recipeId}`;
 
   return (
     <div className="recipe-card animate-scale-in bg-white rounded-lg shadow-md overflow-hidden transition-transform hover:shadow-lg">
@@ -112,13 +130,19 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onDelete, isExternal = 
         {!isExternal && (
           <div className="flex justify-between items-center">
             <Link 
-              to={`/edit-recipe/${(recipe as Recipe).id}`} 
+              to={`/edit-recipe/${recipeId}`} 
               className="inline-flex items-center text-recipe-primary hover:text-recipe-primary/80 transition-colors"
             >
               <Edit className="mr-1 h-4 w-4" /> Edit
             </Link>
             <button 
-              onClick={() => onDelete((recipe as Recipe).id)}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (recipeId && recipeId !== "unknown") {
+                  onDelete(recipeId);
+                }
+              }}
               className="inline-flex items-center text-red-600 hover:text-red-800 transition-colors"
             >
               <Trash2 className="mr-1 h-4 w-4" /> Delete
