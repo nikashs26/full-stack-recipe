@@ -41,18 +41,20 @@ export const filterRecipes = (
   
   return recipes.filter(recipe => {
     // Add null checks for all properties to avoid "toLowerCase of undefined" errors
-    const recipeName = recipe.name || "";
+    const recipeName = recipe?.name || "";
     const searchTermLower = searchTerm ? searchTerm.toLowerCase() : "";
+    
+    // Updated search logic: searchTerm ONLY applies to recipe names, not ingredients
     const matchesSearchTerm = searchTerm ? recipeName.toLowerCase().includes(searchTermLower) : true;
     
-    const dietaryRestrictions = recipe.dietaryRestrictions || [];
+    const dietaryRestrictions = recipe?.dietaryRestrictions || [];
     const matchesDietary = dietaryFilter ? dietaryRestrictions.includes(dietaryFilter as DietaryRestriction) : true;
     
-    const recipeCuisine = recipe.cuisine || "";
+    const recipeCuisine = recipe?.cuisine || "";
     const cuisineFilterLower = cuisineFilter ? cuisineFilter.toLowerCase() : "";
     const matchesCuisine = cuisineFilter ? recipeCuisine.toLowerCase() === cuisineFilterLower : true;
     
-    const ingredients = recipe.ingredients || [];
+    const ingredients = recipe?.ingredients || [];
     const ingredientTermLower = ingredientTerm ? ingredientTerm.toLowerCase() : "";
     const matchesIngredient = ingredientTerm
       ? ingredients.some(ingredient => {

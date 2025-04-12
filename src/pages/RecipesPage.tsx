@@ -14,7 +14,7 @@ import { Loader2, Search, AlertCircle, Database } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 
-// Define a new type that combines Recipe and SpoonacularRecipe with isExternal flag
+// Define a type that combines Recipe and SpoonacularRecipe with isExternal flag
 type CombinedRecipe = (Recipe & { isExternal?: boolean }) | (SpoonacularRecipe & { isExternal: boolean });
 
 const RecipesPage: React.FC = () => {
@@ -95,8 +95,11 @@ const RecipesPage: React.FC = () => {
       setFilteredRecipes(filtered);
       setSearchError(null);
       
-      // Always enable external search for better experience
-      setExternalSearchTerm(searchTerm);
+      // Only update external search when using the main search bar or when
+      // empty to populate initial results - don't trigger external search for ingredient searches
+      if (searchTerm || externalSearchTerm === '') {
+        setExternalSearchTerm(searchTerm);
+      }
     }
   }, [recipes, searchTerm, dietaryFilter, cuisineFilter, ingredientTerm]);
 
@@ -155,6 +158,10 @@ const RecipesPage: React.FC = () => {
 
   const handleIngredientChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setIngredientTerm(e.target.value);
+    // When ingredient search is used, trigger external API search
+    if (e.target.value.trim()) {
+      queryClient.invalidateQueries({ queryKey: ['recipes', externalSearchTerm, e.target.value] });
+    }
   };
 
   const retrySearch = () => {
