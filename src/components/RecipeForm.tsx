@@ -3,7 +3,7 @@ import { Recipe, DietaryRestriction, Folder } from '../types/recipe';
 import { Plus, Minus, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { API_BASE_URL } from '../config';
+import { API_BASE_URL } from '../config/api';
 
 interface RecipeFormProps {
   initialData?: Recipe;
