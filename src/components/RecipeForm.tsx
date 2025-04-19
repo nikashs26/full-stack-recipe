@@ -1,8 +1,9 @@
-
 import React, { useState } from 'react';
-import { Recipe, DietaryRestriction } from '../types/recipe';
+import { Recipe, DietaryRestriction, Folder } from '../types/recipe';
 import { Plus, Minus, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { API_BASE_URL } from '../config';
 
 interface RecipeFormProps {
   initialData?: Recipe;
@@ -28,7 +29,19 @@ const RecipeForm: React.FC<RecipeFormProps> = ({
     initialData?.instructions || ['']
   );
   const [image, setImage] = useState(initialData?.image || '');
+  const [folderId, setFolderId] = useState<string | undefined>(initialData?.folderId);
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Fetch folders for the dropdown
+  const { data: folders = [] } = useQuery<Folder[]>({
+    queryKey: ['folders'],
+    queryFn: async () => {
+      const response = await fetch(`${API_BASE_URL}/folders`);
+      if (!response.ok) throw new Error('Failed to fetch folders');
+      const data = await response.json();
+      return data.folders;
+    },
+  });
 
   const handleDietaryRestrictionChange = (restriction: DietaryRestriction) => {
     if (dietaryRestrictions.includes(restriction)) {
@@ -108,6 +121,7 @@ const RecipeForm: React.FC<RecipeFormProps> = ({
       ingredients: filteredIngredients,
       instructions: filteredInstructions,
       image,
+      folderId,
     };
     
     onSubmit(recipeData);
@@ -261,6 +275,25 @@ const RecipeForm: React.FC<RecipeFormProps> = ({
             />
           </div>
         )}
+      </div>
+      
+      <div>
+        <label htmlFor="folder" className="block text-sm font-medium mb-1">
+          Folder (optional)
+        </label>
+        <select
+          id="folder"
+          value={folderId || ''}
+          onChange={(e) => setFolderId(e.target.value || undefined)}
+          className="w-full px-3 py-2 border rounded-md"
+        >
+          <option value="">No folder</option>
+          {folders.map((folder) => (
+            <option key={folder.id} value={folder.id}>
+              {folder.name}
+            </option>
+          ))}
+        </select>
       </div>
       
       <div className="flex justify-end space-x-3">

@@ -9,6 +9,7 @@ import sys
 import socket
 from bson import ObjectId
 import dns.resolver
+from datetime import datetime
 
 # Print Python version and path for debugging
 print(f"Python version: {sys.version}")
@@ -40,6 +41,7 @@ in_memory_recipes = []
 mongo_available = False
 mongo_client = None
 recipes_collection = None
+folders_collection = None
 
 # Function to perform DNS lookup for MongoDB hostname
 def check_mongodb_dns(uri):
@@ -161,6 +163,7 @@ try:
             print(f"Using '{db_name}' database")
             db = mongo_client[db_name]
             recipes_collection = db["Recipes"]
+            folders_collection = db["Folders"]
             
             # Create indexes for better search performance
             recipes_collection.create_index([("title", pymongo.TEXT)])
@@ -824,6 +827,97 @@ def mongodb_diagnostics():
             diagnostics["database_info"] = {"error": str(e)}
     
     return jsonify(diagnostics)
+
+@app.route("/folders", methods=["GET"])
+def get_folders():
+    if not mongo_available:
+        return jsonify({"error": "MongoDB not available"}), 503
+    
+    try:
+        folders = list(folders_collection.find({}, {'_id': 0}))
+        return jsonify({"folders": folders})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/folders", methods=["POST"])
+def create_folder():
+    if not mongo_available:
+        return jsonify({"error": "MongoDB not available"}), 503
+    
+    try:
+        folder_data = request.json
+        if not folder_data or "name" not in folder_data:
+            return jsonify({"error": "Folder name is required"}), 400
+        
+        folder = {
+            "id": str(ObjectId()),
+            "name": folder_data["name"],
+            "description": folder_data.get("description", ""),
+            "createdAt": datetime.utcnow().isoformat(),
+            "updatedAt": datetime.utcnow().isoformat()
+        }
+        
+        folders_collection.insert_one(folder)
+        return jsonify({"message": "Folder created", "folder": folder})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/folders/<folder_id>", methods=["PUT"])
+def update_folder(folder_id):
+    if not mongo_available:
+        return jsonify({"error": "MongoDB not available"}), 503
+    
+    try:
+        folder_data = request.json
+        if not folder_data:
+            return jsonify({"error": "Folder data is required"}), 400
+        
+        folder_data["updatedAt"] = datetime.utcnow().isoformat()
+        
+        result = folders_collection.update_one(
+            {"id": folder_id},
+            {"$set": folder_data}
+        )
+        
+        if result.matched_count == 0:
+            return jsonify({"error": "Folder not found"}), 404
+        
+        return jsonify({"message": "Folder updated"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/folders/<folder_id>", methods=["DELETE"])
+def delete_folder(folder_id):
+    if not mongo_available:
+        return jsonify({"error": "MongoDB not available"}), 503
+    
+    try:
+        # First, remove folder reference from all recipes
+        recipes_collection.update_many(
+            {"folderId": folder_id},
+            {"$unset": {"folderId": ""}}
+        )
+        
+        # Then delete the folder
+        result = folders_collection.delete_one({"id": folder_id})
+        
+        if result.deleted_count == 0:
+            return jsonify({"error": "Folder not found"}), 404
+        
+        return jsonify({"message": "Folder deleted"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/folders/<folder_id>/recipes", methods=["GET"])
+def get_folder_recipes(folder_id):
+    if not mongo_available:
+        return jsonify({"error": "MongoDB not available"}), 503
+    
+    try:
+        recipes = list(recipes_collection.find({"folderId": folder_id}, {'_id': 0}))
+        return jsonify({"recipes": recipes})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
     print("Starting Flask application...")

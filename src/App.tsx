@@ -1,4 +1,3 @@
-
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -15,6 +14,7 @@ import Footer from "./components/Footer";
 import HomePage from "./pages/HomePage";
 import { Link } from "react-router-dom";
 import { Database } from "lucide-react";
+import FoldersPage from './pages/FoldersPage';
 
 const queryClient = new QueryClient();
 
@@ -38,6 +38,7 @@ const App = () => (
           <Routes>
             <Route path="/" element={<HomePage />} />
             <Route path="/recipes" element={<RecipesPage />} />
+            <Route path="/folders" element={<FoldersPage />} />
             <Route path="/recipe/:id" element={<RecipeDetailPage />} />
             <Route path="/external-recipe/:id" element={<ExternalRecipeDetailPage />} />
             <Route path="/add-recipe" element={<AddRecipePage />} />
