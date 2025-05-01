@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -120,145 +119,86 @@ const HomePage: React.FC = () => {
     <div className="min-h-screen bg-gray-50">
       <Header />
       
-      {/* Hero Section */}
-      <section className="relative bg-gradient-to-r from-recipe-accent to-recipe-primary py-16 md:py-24">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center">
-            <h1 className="text-4xl md:text-5xl font-bold text-white mb-4">
-              Discover Delicious Recipes
-            </h1>
-            <p className="text-xl text-white/90 mb-8 max-w-3xl mx-auto">
-              Find, save and create your favorite recipes all in one place
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Link to="/recipes">
-                <Button size="lg" variant="secondary" className="w-full sm:w-auto">
-                  <Search className="mr-2 h-4 w-4" />
-                  Browse All Recipes
-                </Button>
-              </Link>
-              <Link to="/add-recipe">
-                <Button size="lg" variant="outline" className="w-full sm:w-auto bg-white/10 text-white hover:bg-white/20">
-                  <ChefHat className="mr-2 h-4 w-4" />
-                  Add New Recipe
-                </Button>
-              </Link>
+      {/* Add margin-top to account for the fixed header */}
+      <div className="pt-24 md:pt-28">
+        {/* Hero Section */}
+        <section className="relative bg-gradient-to-r from-recipe-accent to-recipe-primary py-16 md:py-24">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="text-center">
+              <h1 className="text-4xl md:text-5xl font-bold text-white mb-4">
+                Discover Delicious Recipes
+              </h1>
+              <p className="text-xl text-white/90 mb-8 max-w-3xl mx-auto">
+                Find, save, and create your favorite recipes all in one place
+              </p>
+              <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                <Link to="/recipes">
+                  <Button size="lg" variant="secondary" className="w-full sm:w-auto">
+                    <Search className="mr-2 h-4 w-4" />
+                    Browse All Recipes
+                  </Button>
+                </Link>
+                <Link to="/add-recipe">
+                  <Button size="lg" variant="outline" className="w-full sm:w-auto bg-white/10 text-white hover:bg-white/20">
+                    <ChefHat className="mr-2 h-4 w-4" />
+                    Add New Recipe
+                  </Button>
+                </Link>
+              </div>
             </div>
           </div>
-        </div>
-      </section>
-
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        {/* Featured Recipes Section */}
-        <section className="mb-16">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-3xl font-bold text-gray-900 flex items-center">
-              <Award className="mr-2 h-6 w-6 text-recipe-secondary" />
-              Featured Recipes
-            </h2>
-            <Link to="/recipes" className="text-recipe-primary hover:text-recipe-primary/80">
-              View all →
-            </Link>
-          </div>
-          
-          <Carousel className="w-full">
-            <CarouselContent className="-ml-4">
-              {isLoading ? (
-                Array.from({ length: 4 }).map((_, i) => (
-                  <CarouselItem key={i} className="pl-4 md:basis-1/2 lg:basis-1/3">
-                    <div className="h-64 bg-gray-200 animate-pulse rounded-lg"></div>
-                  </CarouselItem>
-                ))
-              ) : featuredRecipes.length > 0 ? (
-                featuredRecipes.map((recipe, i) => (
-                  <CarouselItem key={i} className="pl-4 md:basis-1/2 lg:basis-1/3">
-                    <RecipeCard 
-                      recipe={recipe}
-                      isExternal={true}
-                      onDelete={handleDeleteRecipe}
-                    />
-                  </CarouselItem>
-                ))
-              ) : (
-                <CarouselItem className="pl-4 basis-full">
-                  <div className="text-center py-12 border border-dashed border-gray-300 rounded-lg">
-                    <p className="text-gray-500">No featured recipes available</p>
-                  </div>
-                </CarouselItem>
-              )}
-            </CarouselContent>
-            <CarouselPrevious className="hidden md:flex" />
-            <CarouselNext className="hidden md:flex" />
-          </Carousel>
         </section>
 
-        {/* Quick & Easy Section */}
-        <section className="mb-16">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-3xl font-bold text-gray-900 flex items-center">
-              <Clock className="mr-2 h-6 w-6 text-recipe-secondary" />
-              Quick & Easy
-            </h2>
-            <Link to="/recipes" className="text-recipe-primary hover:text-recipe-primary/80">
-              View all →
-            </Link>
-          </div>
-          
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {isLoading ? (
-              Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="h-64 bg-gray-200 animate-pulse rounded-lg"></div>
-              ))
-            ) : quickRecipes.length > 0 ? (
-              quickRecipes.slice(0, 3).map((recipe, i) => (
-                <RecipeCard 
-                  key={i}
-                  recipe={recipe}
-                  isExternal={true}
-                  onDelete={handleDeleteRecipe}
-                />
-              ))
-            ) : (
-              <div className="col-span-full text-center py-12 border border-dashed border-gray-300 rounded-lg">
-                <p className="text-gray-500">No quick recipes available</p>
-              </div>
-            )}
-          </div>
-        </section>
-
-        {/* Top Rated Section (from local recipes) */}
-        {topRatedRecipes.length > 0 && (
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+          {/* Featured Recipes Section */}
           <section className="mb-16">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-3xl font-bold text-gray-900 flex items-center">
-                <TrendingUp className="mr-2 h-6 w-6 text-recipe-secondary" />
-                Top Rated Recipes
+                <Award className="mr-2 h-6 w-6 text-recipe-secondary" />
+                Featured Recipes
               </h2>
               <Link to="/recipes" className="text-recipe-primary hover:text-recipe-primary/80">
                 View all →
               </Link>
             </div>
             
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {topRatedRecipes.slice(0, 3).map((recipe, i) => (
-                <RecipeCard 
-                  key={i}
-                  recipe={recipe}
-                  isExternal={false}
-                  onDelete={handleDeleteRecipe}
-                />
-              ))}
-            </div>
+            <Carousel className="w-full">
+              <CarouselContent className="-ml-4">
+                {isLoading ? (
+                  Array.from({ length: 4 }).map((_, i) => (
+                    <CarouselItem key={i} className="pl-4 md:basis-1/2 lg:basis-1/3">
+                      <div className="h-64 bg-gray-200 animate-pulse rounded-lg"></div>
+                    </CarouselItem>
+                  ))
+                ) : featuredRecipes.length > 0 ? (
+                  featuredRecipes.map((recipe, i) => (
+                    <CarouselItem key={i} className="pl-4 md:basis-1/2 lg:basis-1/3">
+                      <RecipeCard 
+                        recipe={recipe}
+                        isExternal={true}
+                        onDelete={handleDeleteRecipe}
+                      />
+                    </CarouselItem>
+                  ))
+                ) : (
+                  <CarouselItem className="pl-4 basis-full">
+                    <div className="text-center py-12 border border-dashed border-gray-300 rounded-lg">
+                      <p className="text-gray-500">No featured recipes available</p>
+                    </div>
+                  </CarouselItem>
+                )}
+              </CarouselContent>
+              <CarouselPrevious className="hidden md:flex" />
+              <CarouselNext className="hidden md:flex" />
+            </Carousel>
           </section>
-        )}
 
-        {/* Recently Added Section */}
-        {recentRecipes.length > 0 && (
-          <section className="mb-8">
+          {/* Quick & Easy Section */}
+          <section className="mb-16">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-3xl font-bold text-gray-900 flex items-center">
                 <Clock className="mr-2 h-6 w-6 text-recipe-secondary" />
-                Recently Added
+                Quick & Easy
               </h2>
               <Link to="/recipes" className="text-recipe-primary hover:text-recipe-primary/80">
                 View all →
@@ -266,18 +206,80 @@ const HomePage: React.FC = () => {
             </div>
             
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {recentRecipes.slice(0, 3).map((recipe, i) => (
-                <RecipeCard 
-                  key={i}
-                  recipe={recipe}
-                  isExternal={false}
-                  onDelete={handleDeleteRecipe}
-                />
-              ))}
+              {isLoading ? (
+                Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="h-64 bg-gray-200 animate-pulse rounded-lg"></div>
+                ))
+              ) : quickRecipes.length > 0 ? (
+                quickRecipes.slice(0, 3).map((recipe, i) => (
+                  <RecipeCard 
+                    key={i}
+                    recipe={recipe}
+                    isExternal={true}
+                    onDelete={handleDeleteRecipe}
+                  />
+                ))
+              ) : (
+                <div className="col-span-full text-center py-12 border border-dashed border-gray-300 rounded-lg">
+                  <p className="text-gray-500">No quick recipes available</p>
+                </div>
+              )}
             </div>
           </section>
-        )}
-      </main>
+
+          {/* Top Rated Section (from local recipes) */}
+          {topRatedRecipes.length > 0 && (
+            <section className="mb-16">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-3xl font-bold text-gray-900 flex items-center">
+                  <TrendingUp className="mr-2 h-6 w-6 text-recipe-secondary" />
+                  Top Rated Recipes
+                </h2>
+                <Link to="/recipes" className="text-recipe-primary hover:text-recipe-primary/80">
+                  View all →
+                </Link>
+              </div>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                {topRatedRecipes.slice(0, 3).map((recipe, i) => (
+                  <RecipeCard 
+                    key={i}
+                    recipe={recipe}
+                    isExternal={false}
+                    onDelete={handleDeleteRecipe}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* Recently Added Section */}
+          {recentRecipes.length > 0 && (
+            <section className="mb-8">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-3xl font-bold text-gray-900 flex items-center">
+                  <Clock className="mr-2 h-6 w-6 text-recipe-secondary" />
+                  Recently Added
+                </h2>
+                <Link to="/recipes" className="text-recipe-primary hover:text-recipe-primary/80">
+                  View all →
+                </Link>
+              </div>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                {recentRecipes.slice(0, 3).map((recipe, i) => (
+                  <RecipeCard 
+                    key={i}
+                    recipe={recipe}
+                    isExternal={false}
+                    onDelete={handleDeleteRecipe}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+        </main>
+      </div>
     </div>
   );
 };

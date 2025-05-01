@@ -4,6 +4,8 @@ import { Plus, Minus, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 
+// Define API base URL (will be used for folder fetching)
+const API_BASE_URL = '/api'; // Adjust based on your actual API base URL
 
 interface RecipeFormProps {
   initialData?: Recipe;
@@ -36,10 +38,14 @@ const RecipeForm: React.FC<RecipeFormProps> = ({
   const { data: folders = [] } = useQuery<Folder[]>({
     queryKey: ['folders'],
     queryFn: async () => {
-      const response = await fetch(`${API_BASE_URL}/folders`);
-      if (!response.ok) throw new Error('Failed to fetch folders');
-      const data = await response.json();
-      return data.folders;
+      try {
+        // First try to load from localStorage
+        const storedFolders = localStorage.getItem('recipe-folders');
+        return storedFolders ? JSON.parse(storedFolders) : [];
+      } catch (error) {
+        console.error('Failed to load folders:', error);
+        return [];
+      }
     },
   });
 

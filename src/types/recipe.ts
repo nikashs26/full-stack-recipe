@@ -1,3 +1,4 @@
+
 export type DietaryRestriction = 'vegetarian' | 'vegan' | 'gluten-free' | 'carnivore';
 
 export interface Folder {
