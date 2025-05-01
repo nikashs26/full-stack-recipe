@@ -19,15 +19,12 @@ import ShoppingListPage from "./pages/ShoppingListPage";
 import { Link } from "react-router-dom";
 import { Database } from "lucide-react";
 
-
 const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <div className="flex flex-col min-h-screen">
-        <Toaster />
-        <Sonner />
         <BrowserRouter>
           {/* MongoDB Test Link - For easy access during development */}
           <div className="fixed bottom-20 right-4 z-50">
@@ -53,6 +50,8 @@ const App = () => (
             <Route path="*" element={<NotFound />} />
           </Routes>
           <Footer />
+          <Toaster />
+          <Sonner />
         </BrowserRouter>
       </div>
     </TooltipProvider>
