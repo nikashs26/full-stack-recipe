@@ -20,6 +20,8 @@ export interface Recipe {
   ratings: number[];
   comments: Comment[];
   folderId?: string; // Reference to the folder this recipe belongs to
+  createdAt?: string; // Added this property
+  updatedAt?: string; // Added this property for consistency
 }
 
 export interface Comment {
