@@ -1,7 +1,10 @@
+
 import React, { useState } from 'react';
-import { Folder } from '../types/recipe';
+import { Folder, Recipe } from '../types/recipe';
 import { Plus, Folder as FolderIcon, Trash2, Edit2 } from 'lucide-react';
 import { useToast } from './ui/use-toast';
+import RecipeCard from './RecipeCard';
+import { deleteRecipe, updateRecipe } from '../utils/storage';
 
 interface FolderListProps {
   folders: Folder[];
@@ -22,7 +25,28 @@ const FolderList: React.FC<FolderListProps> = ({
   const [newFolderName, setNewFolderName] = useState('');
   const [newFolderDescription, setNewFolderDescription] = useState('');
   const [editingFolder, setEditingFolder] = useState<Folder | null>(null);
+  const [selectedFolder, setSelectedFolder] = useState<Folder | null>(null);
+  const [recipes, setRecipes] = useState<Recipe[]>([]);
   const { toast } = useToast();
+
+  // Get recipes from local storage when a folder is selected
+  React.useEffect(() => {
+    if (selectedFolder) {
+      try {
+        const storedRecipes = localStorage.getItem('dietary-delight-recipes');
+        if (storedRecipes) {
+          const allRecipes: Recipe[] = JSON.parse(storedRecipes);
+          const folderRecipes = allRecipes.filter(recipe => recipe.folderId === selectedFolder.id);
+          setRecipes(folderRecipes);
+        }
+      } catch (error) {
+        console.error('Failed to load recipes:', error);
+        setRecipes([]);
+      }
+    } else {
+      setRecipes([]);
+    }
+  }, [selectedFolder]);
 
   const handleCreateSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,6 +76,43 @@ const FolderList: React.FC<FolderListProps> = ({
     }
     onFolderUpdate(editingFolder.id, editingFolder.name.trim(), editingFolder.description?.trim());
     setEditingFolder(null);
+  };
+
+  const handleDeleteRecipe = (id: string) => {
+    if (window.confirm('Are you sure you want to delete this recipe?')) {
+      deleteRecipe(id);
+      toast({
+        title: "Recipe deleted",
+        description: "The recipe has been successfully deleted.",
+      });
+      
+      // Update the local recipes list
+      setRecipes(prevRecipes => prevRecipes.filter(recipe => recipe.id !== id));
+    }
+  };
+
+  const handleToggleFavorite = (recipe: Recipe) => {
+    const updatedRecipe = {
+      ...recipe,
+      isFavorite: !recipe.isFavorite
+    };
+    
+    updateRecipe(updatedRecipe);
+    
+    toast({
+      title: updatedRecipe.isFavorite ? "Added to favorites" : "Removed from favorites",
+      description: `"${recipe.name}" has been ${updatedRecipe.isFavorite ? 'added to' : 'removed from'} your favorites.`,
+    });
+    
+    // Update the local recipes list
+    setRecipes(prevRecipes => 
+      prevRecipes.map(r => r.id === recipe.id ? updatedRecipe : r)
+    );
+  };
+
+  const handleFolderClick = (folder: Folder) => {
+    setSelectedFolder(selectedFolder?.id === folder.id ? null : folder);
+    onFolderSelect(folder.id);
   };
 
   return (
@@ -117,8 +178,12 @@ const FolderList: React.FC<FolderListProps> = ({
         {folders.map((folder) => (
           <div
             key={folder.id}
-            className="p-4 border rounded-lg hover:border-primary cursor-pointer"
-            onClick={() => onFolderSelect(folder.id)}
+            className={`p-4 border rounded-lg cursor-pointer ${
+              selectedFolder?.id === folder.id 
+                ? 'border-primary bg-primary/5' 
+                : 'hover:border-primary'
+            }`}
+            onClick={() => handleFolderClick(folder)}
           >
             {editingFolder?.id === folder.id ? (
               <form onSubmit={handleUpdateSubmit} className="space-y-4">
@@ -198,8 +263,41 @@ const FolderList: React.FC<FolderListProps> = ({
           </div>
         ))}
       </div>
+
+      {/* Show recipes in the selected folder */}
+      {selectedFolder && (
+        <div className="mt-8">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-xl font-semibold">Recipes in "{selectedFolder.name}"</h3>
+            <button
+              onClick={() => setSelectedFolder(null)}
+              className="text-sm text-blue-600 hover:text-blue-800"
+            >
+              Close Folder
+            </button>
+          </div>
+          
+          {recipes.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {recipes.map((recipe) => (
+                <RecipeCard
+                  key={recipe.id}
+                  recipe={recipe}
+                  onDelete={handleDeleteRecipe}
+                  onToggleFavorite={handleToggleFavorite}
+                  folderName={selectedFolder.name}
+                />
+              ))}
+            </div>
+          ) : (
+            <p className="text-center py-8 text-gray-500">
+              No recipes in this folder yet. Add recipes to this folder from the recipe detail page.
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 };
 
-export default FolderList; 
+export default FolderList;

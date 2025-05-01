@@ -22,6 +22,7 @@ export interface Recipe {
   folderId?: string; // Reference to the folder this recipe belongs to
   createdAt?: string; // Added this property
   updatedAt?: string; // Added this property for consistency
+  isFavorite?: boolean; // New property to mark recipes as favorites
 }
 
 export interface Comment {
@@ -29,4 +30,12 @@ export interface Comment {
   author: string;
   text: string;
   date: string;
+}
+
+export interface ShoppingListItem {
+  id: string;
+  ingredient: string;
+  recipeId: string;
+  recipeName: string;
+  checked: boolean;
 }

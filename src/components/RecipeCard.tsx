@@ -1,7 +1,7 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Edit, Trash2, Star, Clock } from 'lucide-react';
+import { Edit, Trash2, Star, Clock, Folder, Heart } from 'lucide-react';
 import { Recipe } from '../types/recipe';
 import { getDietaryTags, getAverageRating, formatExternalRecipeCuisine } from '../utils/recipeUtils';
 import { SpoonacularRecipe } from '../types/spoonacular';
@@ -9,10 +9,18 @@ import { SpoonacularRecipe } from '../types/spoonacular';
 interface RecipeCardProps {
   recipe: Recipe | SpoonacularRecipe;
   onDelete: (id: string) => void;
+  onToggleFavorite?: (recipe: Recipe) => void;
   isExternal?: boolean;
+  folderName?: string;
 }
 
-const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onDelete, isExternal = false }) => {
+const RecipeCard: React.FC<RecipeCardProps> = ({ 
+  recipe, 
+  onDelete, 
+  onToggleFavorite,
+  isExternal = false,
+  folderName
+}) => {
   // Safety check for null/undefined recipe
   if (!recipe) {
     console.error("Received null or undefined recipe in RecipeCard");
@@ -41,6 +49,9 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onDelete, isExternal = 
   const avgRating = isExternal 
     ? 0 
     : getAverageRating((recipe as Recipe).ratings || []);
+  
+  // Favorite status (only applies to local recipes)
+  const isFavorite = !isExternal && (recipe as Recipe).isFavorite;
   
   // Dietary tags - normalize diets for external recipes to match local format
   let dietaryTags = [];
@@ -80,35 +91,59 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onDelete, isExternal = 
     ? `/external-recipe/${recipeId}` 
     : `/recipe/${recipeId}`;
 
+  // Handle favorite toggle
+  const handleToggleFavorite = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!isExternal && onToggleFavorite) {
+      onToggleFavorite(recipe as Recipe);
+    }
+  };
+
   return (
     <div className="recipe-card animate-scale-in bg-white rounded-lg shadow-md overflow-hidden transition-transform hover:shadow-lg">
-      <Link to={cardLink} className="block">
-        <div className="relative h-48 w-full overflow-hidden">
-          <img 
-            src={imageSrc} 
-            alt={recipeName || "Recipe"} 
-            className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 hover:scale-110"
-            onError={handleImageError}
-            loading="lazy"
-          />
-          
-          {/* Rating badge for local recipes */}
-          {!isExternal && (recipe as Recipe).ratings && (recipe as Recipe).ratings.length > 0 && (
-            <div className="absolute top-2 right-2 bg-black bg-opacity-60 text-white rounded-full px-2 py-1 text-sm flex items-center">
-              <Star className="h-4 w-4 text-yellow-400 mr-1" />
-              <span>{avgRating}</span>
-            </div>
-          )}
-          
-          {/* Time badge for external recipes */}
-          {isExternal && readyInMinutes && (
-            <div className="absolute top-2 right-2 bg-black bg-opacity-60 text-white rounded-full px-2 py-1 text-sm flex items-center">
-              <Clock className="h-4 w-4 text-white mr-1" />
-              <span>{readyInMinutes} min</span>
-            </div>
-          )}
-        </div>
-      </Link>
+      <div className="relative">
+        <Link to={cardLink} className="block">
+          <div className="relative h-48 w-full overflow-hidden">
+            <img 
+              src={imageSrc} 
+              alt={recipeName || "Recipe"} 
+              className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 hover:scale-110"
+              onError={handleImageError}
+              loading="lazy"
+            />
+            
+            {/* Rating badge for local recipes */}
+            {!isExternal && (recipe as Recipe).ratings && (recipe as Recipe).ratings.length > 0 && (
+              <div className="absolute top-2 right-2 bg-black bg-opacity-60 text-white rounded-full px-2 py-1 text-sm flex items-center">
+                <Star className="h-4 w-4 text-yellow-400 mr-1" />
+                <span>{avgRating}</span>
+              </div>
+            )}
+            
+            {/* Time badge for external recipes */}
+            {isExternal && readyInMinutes && (
+              <div className="absolute top-2 right-2 bg-black bg-opacity-60 text-white rounded-full px-2 py-1 text-sm flex items-center">
+                <Clock className="h-4 w-4 text-white mr-1" />
+                <span>{readyInMinutes} min</span>
+              </div>
+            )}
+          </div>
+        </Link>
+        
+        {/* Favorite button */}
+        {!isExternal && onToggleFavorite && (
+          <button
+            onClick={handleToggleFavorite}
+            className={`absolute top-2 left-2 p-1 rounded-full ${isFavorite ? 'text-red-500' : 'text-white bg-black bg-opacity-40'}`}
+          >
+            <Heart 
+              className="h-5 w-5" 
+              fill={isFavorite ? "currentColor" : "none"} 
+            />
+          </button>
+        )}
+      </div>
       
       <div className="p-5">
         <h2 className="text-xl font-semibold text-gray-800 mb-2 line-clamp-1">
@@ -117,6 +152,13 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onDelete, isExternal = 
           </Link>
         </h2>
         <p className="text-sm text-gray-600 mb-2">Cuisine: {recipeCuisine || "Other"}</p>
+        
+        {folderName && (
+          <div className="mb-2 text-xs flex items-center text-gray-500">
+            <Folder className="h-3 w-3 mr-1" />
+            <span>{folderName}</span>
+          </div>
+        )}
         
         <div className="mb-4">
           {/* Show dietary tags for both local and external recipes */}

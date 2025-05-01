@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { UtensilsCrossed, Search, FolderPlus } from 'lucide-react';
+import { UtensilsCrossed, Search, FolderPlus, Heart, ShoppingCart } from 'lucide-react';
 
 const Header: React.FC = () => {
   const [scrolled, setScrolled] = useState(false);
@@ -52,6 +52,24 @@ const Header: React.FC = () => {
               >
                 <FolderPlus className="h-4 w-4 inline mr-1" />
                 Folders
+              </Link>
+            </li>
+            <li>
+              <Link 
+                to="/favorites" 
+                className="text-gray-600 hover:text-recipe-primary transition-colors"
+              >
+                <Heart className="h-4 w-4 inline mr-1" />
+                Favorites
+              </Link>
+            </li>
+            <li>
+              <Link 
+                to="/shopping-list" 
+                className="text-gray-600 hover:text-recipe-primary transition-colors"
+              >
+                <ShoppingCart className="h-4 w-4 inline mr-1" />
+                Shopping List
               </Link>
             </li>
             <li>
