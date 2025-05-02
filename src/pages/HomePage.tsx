@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -17,11 +18,15 @@ import {
   CarouselNext,
   CarouselPrevious,
 } from "@/components/ui/carousel";
+import { useAuth } from '../context/AuthContext';
+import RecommendedRecipes from '../components/RecommendedRecipes';
 
 // Define a type that combines Recipe and SpoonacularRecipe with isExternal flag
 type CombinedRecipe = (Recipe & { isExternal?: boolean }) | (SpoonacularRecipe & { isExternal: boolean });
 
 const HomePage: React.FC = () => {
+  const { isAuthenticated } = useAuth();
+  
   // Query for local recipes
   const { data: localRecipes = [], isLoading: isLocalLoading } = useQuery({
     queryKey: ['localRecipes'],
@@ -129,7 +134,9 @@ const HomePage: React.FC = () => {
                 Discover Delicious Recipes
               </h1>
               <p className="text-xl text-white/90 mb-8 max-w-3xl mx-auto">
-                Find, save, and create your favorite recipes all in one place
+                {isAuthenticated 
+                  ? "Your personalized recipe collection awaits" 
+                  : "Find, save, and create your favorite recipes all in one place"}
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <Link to="/recipes">
@@ -138,18 +145,30 @@ const HomePage: React.FC = () => {
                     Browse All Recipes
                   </Button>
                 </Link>
-                <Link to="/add-recipe">
-                  <Button size="lg" variant="outline" className="w-full sm:w-auto bg-white/10 text-white hover:bg-white/20">
-                    <ChefHat className="mr-2 h-4 w-4" />
-                    Add New Recipe
-                  </Button>
-                </Link>
+                {isAuthenticated ? (
+                  <Link to="/preferences">
+                    <Button size="lg" variant="outline" className="w-full sm:w-auto bg-white/10 text-white hover:bg-white/20">
+                      <ChefHat className="mr-2 h-4 w-4" />
+                      Update Preferences
+                    </Button>
+                  </Link>
+                ) : (
+                  <Link to="/signup">
+                    <Button size="lg" variant="outline" className="w-full sm:w-auto bg-white/10 text-white hover:bg-white/20">
+                      <ChefHat className="mr-2 h-4 w-4" />
+                      Sign Up for Personalized Recipes
+                    </Button>
+                  </Link>
+                )}
               </div>
             </div>
           </div>
         </section>
 
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+          {/* Personalized Recommendations Section */}
+          {isAuthenticated && <RecommendedRecipes />}
+
           {/* Featured Recipes Section */}
           <section className="mb-16">
             <div className="flex items-center justify-between mb-6">

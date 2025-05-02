@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { UtensilsCrossed, Search, FolderPlus, Heart, ShoppingCart } from 'lucide-react';
+import UserMenu from './UserMenu';
 
 const Header: React.FC = () => {
   const [scrolled, setScrolled] = useState(false);
@@ -79,6 +80,9 @@ const Header: React.FC = () => {
               >
                 Add Recipe
               </Link>
+            </li>
+            <li>
+              <UserMenu />
             </li>
           </ul>
         </nav>
