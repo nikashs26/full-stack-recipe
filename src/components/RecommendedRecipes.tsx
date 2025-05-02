@@ -1,11 +1,10 @@
-
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { loadRecipes } from '../utils/storage';
 import { useAuth } from '../context/AuthContext';
 import RecipeCard from './RecipeCard';
-import { Recipe } from '../types/recipe';
+import { Recipe, DifficultyLevel } from '../types/recipe';
 import { ThumbsUp } from 'lucide-react';
 
 const RecommendedRecipes: React.FC = () => {
@@ -39,11 +38,21 @@ const RecommendedRecipes: React.FC = () => {
       )
     );
 
-    // Consider cooking skill level
-    const skillLevelMatch = recipe.difficulty === undefined || 
-      (user.preferences?.cookingSkillLevel === 'beginner' && recipe.difficulty !== 'hard') ||
-      (user.preferences?.cookingSkillLevel === 'intermediate') ||
-      (user.preferences?.cookingSkillLevel === 'advanced');
+    // Consider cooking skill level - handle recipes without difficulty property
+    let skillLevelMatch = true; // Default to true if no difficulty is specified
+    if (user.preferences?.cookingSkillLevel) {
+      if (recipe.difficulty) {
+        // If recipe has difficulty and user has preferences, check if they match
+        if (user.preferences.cookingSkillLevel === 'beginner') {
+          skillLevelMatch = recipe.difficulty !== 'hard';
+        } else if (user.preferences.cookingSkillLevel === 'intermediate') {
+          skillLevelMatch = true; // Intermediate users can handle all recipes
+        } else if (user.preferences.cookingSkillLevel === 'advanced') {
+          skillLevelMatch = true; // Advanced users can handle all recipes
+        }
+      }
+      // If recipe doesn't have difficulty, assume it matches the skill level
+    }
 
     // Recipe is recommended if it matches cuisine OR dietary needs, doesn't have allergens, and matches skill level
     return (hasFavoriteCuisine || matchesDietaryNeeds) && !hasAllergen && skillLevelMatch;

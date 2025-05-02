@@ -1,5 +1,6 @@
 
 export type DietaryRestriction = 'vegetarian' | 'vegan' | 'gluten-free' | 'carnivore';
+export type DifficultyLevel = 'easy' | 'medium' | 'hard';
 
 export interface Folder {
   id: string;
@@ -23,6 +24,7 @@ export interface Recipe {
   createdAt?: string; // Added this property
   updatedAt?: string; // Added this property for consistency
   isFavorite?: boolean; // New property to mark recipes as favorites
+  difficulty?: DifficultyLevel; // Added difficulty property
 }
 
 export interface Comment {
