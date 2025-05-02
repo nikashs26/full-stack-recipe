@@ -56,12 +56,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signIn = async (email: string, password: string) => {
     try {
-      // Check if user exists
+      // Check if user exists and password matches
       const users = getRegisteredUsers();
-      const user = users.find((u: any) => u.email === email && u.password === password);
+      const user = users.find((u: any) => u.email === email);
       
       if (!user) {
-        throw new Error('Invalid email or password');
+        throw new Error('User does not exist. Please sign up first.');
+      }
+      
+      if (user.password !== password) {
+        throw new Error('Invalid password. Please try again.');
       }
       
       // User exists, create session
@@ -81,10 +85,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         error: null
       });
       
-    } catch (error) {
+    } catch (error: any) {
       setState({
         ...state,
-        error: 'Failed to sign in',
+        error: error.message || 'Failed to sign in',
         isLoading: false
       });
       throw error; // Re-throw to handle in component
@@ -118,10 +122,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isLoading: false,
         error: null
       });
-    } catch (error) {
+    } catch (error: any) {
       setState({
         ...state,
-        error: 'Failed to sign up',
+        error: error.message || 'Failed to sign up',
         isLoading: false
       });
       throw error; // Re-throw to handle in component

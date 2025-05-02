@@ -1,12 +1,14 @@
 
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { UtensilsCrossed, Menu, X } from 'lucide-react';
+import { UtensilsCrossed, Menu, X, Plus } from 'lucide-react';
 import UserMenu from './UserMenu';
+import { useAuth } from '../context/AuthContext';
 
 const Header: React.FC = () => {
   const [scrolled, setScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { isAuthenticated } = useAuth();
   
   useEffect(() => {
     const handleScroll = () => {
@@ -61,22 +63,27 @@ const Header: React.FC = () => {
                 Recipes
               </Link>
             </li>
-            <li>
-              <Link 
-                to="/favorites" 
-                className="text-gray-600 hover:text-recipe-primary transition-colors"
-              >
-                Favorites
-              </Link>
-            </li>
-            <li>
-              <Link 
-                to="/add-recipe" 
-                className="text-gray-600 hover:text-recipe-primary transition-colors"
-              >
-                Add Recipe
-              </Link>
-            </li>
+            {isAuthenticated && (
+              <>
+                <li>
+                  <Link 
+                    to="/favorites" 
+                    className="text-gray-600 hover:text-recipe-primary transition-colors"
+                  >
+                    Favorites
+                  </Link>
+                </li>
+                <li>
+                  <Link 
+                    to="/add-recipe" 
+                    className="bg-recipe-primary hover:bg-recipe-primary/90 text-white px-3 py-1 rounded-md flex items-center"
+                  >
+                    <Plus className="h-4 w-4 mr-1" />
+                    My Recipe
+                  </Link>
+                </li>
+              </>
+            )}
             <li>
               <UserMenu />
             </li>
@@ -102,27 +109,32 @@ const Header: React.FC = () => {
             >
               Recipes
             </Link>
-            <Link 
-              to="/favorites"
-              className="block text-gray-600 hover:text-recipe-primary" 
-              onClick={() => setMobileMenuOpen(false)}
-            >
-              Favorites
-            </Link>
-            <Link 
-              to="/add-recipe"
-              className="block text-gray-600 hover:text-recipe-primary"
-              onClick={() => setMobileMenuOpen(false)}
-            >
-              Add Recipe
-            </Link>
-            <Link 
-              to="/folders"
-              className="block text-gray-600 hover:text-recipe-primary"
-              onClick={() => setMobileMenuOpen(false)}
-            >
-              Folders
-            </Link>
+            {isAuthenticated && (
+              <>
+                <Link 
+                  to="/favorites"
+                  className="block text-gray-600 hover:text-recipe-primary" 
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  Favorites
+                </Link>
+                <Link 
+                  to="/add-recipe"
+                  className="block text-recipe-primary font-medium hover:text-recipe-primary/90"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  <Plus className="h-4 w-4 inline mr-1" />
+                  My Recipe
+                </Link>
+                <Link 
+                  to="/folders"
+                  className="block text-gray-600 hover:text-recipe-primary"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  Folders
+                </Link>
+              </>
+            )}
           </div>
         </div>
       )}
