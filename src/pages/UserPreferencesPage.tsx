@@ -6,9 +6,12 @@ import { useToast } from '@/hooks/use-toast';
 import Header from '../components/Header';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Form } from '@/components/ui/form';
+import { Form, FormField, FormItem, FormLabel } from '@/components/ui/form';
 import { UserPreferences } from '../types/auth';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
+import { zodResolver } from '@hookform/resolvers/zod';
 
 const dietaryOptions = [
   { id: 'vegetarian', label: 'Vegetarian' },
@@ -39,82 +42,78 @@ const allergenOptions = [
   { id: 'wheat', label: 'Wheat' }
 ];
 
+// Define schema for form validation
+const formSchema = z.object({
+  dietaryRestrictions: z.array(z.string()),
+  favoriteCuisines: z.array(z.string()),
+  allergens: z.array(z.string()),
+  cookingSkillLevel: z.enum(['beginner', 'intermediate', 'advanced'])
+});
+
 const UserPreferencesPage: React.FC = () => {
   const { user, updateUserPreferences } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   
-  const [preferences, setPreferences] = useState<UserPreferences>({
-    dietaryRestrictions: user?.preferences?.dietaryRestrictions || [],
-    favoriteCuisines: user?.preferences?.favoriteCuisines || [],
-    allergens: user?.preferences?.allergens || [],
-    cookingSkillLevel: user?.preferences?.cookingSkillLevel || 'beginner'
+  // Initialize form with user preferences
+  const form = useForm<z.infer<typeof formSchema>>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      dietaryRestrictions: user?.preferences?.dietaryRestrictions || [],
+      favoriteCuisines: user?.preferences?.favoriteCuisines || [],
+      allergens: user?.preferences?.allergens || [],
+      cookingSkillLevel: user?.preferences?.cookingSkillLevel || 'beginner'
+    }
   });
 
+  // Create a convenience variable for the current form values
+  const preferences = form.watch();
+
   const handleDietaryChange = (id: string) => {
-    setPreferences(prev => {
-      const currentPrefs = [...prev.dietaryRestrictions];
-      if (currentPrefs.includes(id)) {
-        return {
-          ...prev,
-          dietaryRestrictions: currentPrefs.filter(item => item !== id)
-        };
-      } else {
-        return {
-          ...prev,
-          dietaryRestrictions: [...currentPrefs, id]
-        };
-      }
-    });
+    const currentValues = form.getValues('dietaryRestrictions');
+    const newValues = currentValues.includes(id)
+      ? currentValues.filter(item => item !== id)
+      : [...currentValues, id];
+    
+    form.setValue('dietaryRestrictions', newValues);
   };
 
   const handleCuisineChange = (id: string) => {
-    setPreferences(prev => {
-      const currentPrefs = [...prev.favoriteCuisines];
-      if (currentPrefs.includes(id)) {
-        return {
-          ...prev,
-          favoriteCuisines: currentPrefs.filter(item => item !== id)
-        };
-      } else {
-        return {
-          ...prev,
-          favoriteCuisines: [...currentPrefs, id]
-        };
-      }
-    });
+    const currentValues = form.getValues('favoriteCuisines');
+    const newValues = currentValues.includes(id)
+      ? currentValues.filter(item => item !== id)
+      : [...currentValues, id];
+    
+    form.setValue('favoriteCuisines', newValues);
   };
 
   const handleAllergenChange = (id: string) => {
-    setPreferences(prev => {
-      const currentPrefs = [...prev.allergens];
-      if (currentPrefs.includes(id)) {
-        return {
-          ...prev,
-          allergens: currentPrefs.filter(item => item !== id)
-        };
-      } else {
-        return {
-          ...prev,
-          allergens: [...currentPrefs, id]
-        };
-      }
-    });
+    const currentValues = form.getValues('allergens');
+    const newValues = currentValues.includes(id)
+      ? currentValues.filter(item => item !== id)
+      : [...currentValues, id];
+    
+    form.setValue('allergens', newValues);
   };
 
   const handleSkillLevelChange = (value: string) => {
-    setPreferences(prev => ({
-      ...prev,
-      cookingSkillLevel: value as 'beginner' | 'intermediate' | 'advanced'
-    }));
+    form.setValue('cookingSkillLevel', value as 'beginner' | 'intermediate' | 'advanced');
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
       setIsLoading(true);
-      updateUserPreferences(preferences);
+      // Convert form values to UserPreferences type
+      const userPreferences: UserPreferences = {
+        dietaryRestrictions: values.dietaryRestrictions,
+        favoriteCuisines: values.favoriteCuisines,
+        allergens: values.allergens,
+        cookingSkillLevel: values.cookingSkillLevel
+      };
+      
+      updateUserPreferences(userPreferences);
+      
       toast({
         title: "Preferences saved!",
         description: "Your recipe recommendations are now personalized.",
@@ -141,8 +140,8 @@ const UserPreferencesPage: React.FC = () => {
             <p className="text-gray-500 mt-2">Tell us what you like, and we'll personalize your experience</p>
           </div>
 
-          <Form>
-            <form onSubmit={handleSubmit} className="space-y-8">
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
               <div>
                 <h2 className="text-xl font-medium mb-4">Dietary Restrictions</h2>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
