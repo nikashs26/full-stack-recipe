@@ -6,7 +6,6 @@ import { useToast } from '@/hooks/use-toast';
 import Header from '../components/Header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/components/ui/form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -44,7 +43,7 @@ const SignInPage: React.FC = () => {
     } catch (error) {
       toast({
         title: "Sign in failed",
-        description: "Please check your credentials and try again.",
+        description: "Invalid email or password. Please check your credentials or sign up.",
         variant: "destructive"
       });
     } finally {

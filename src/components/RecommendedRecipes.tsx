@@ -21,29 +21,47 @@ const RecommendedRecipes: React.FC = () => {
 
   // Filter recipes based on user preferences
   const recommendedRecipes = allRecipes.filter((recipe: Recipe) => {
-    // Match by cuisine preferences
-    const cuisineMatch = user.preferences?.favoriteCuisines?.some(c => 
-      recipe.cuisine.toLowerCase().includes(c.toLowerCase())
+    // For cuisine preferences - match any of user's favorites
+    const hasFavoriteCuisine = user.preferences?.favoriteCuisines?.some(c => 
+      recipe.cuisine?.toLowerCase().includes(c.toLowerCase())
     );
     
-    // Don't recommend recipes with allergens
+    // Check for dietary restrictions - if user has restrictions, recipe must match them
+    const matchesDietaryNeeds = !user.preferences?.dietaryRestrictions?.length || 
+      user.preferences.dietaryRestrictions.some(restriction => 
+        recipe.dietaryRestrictions?.includes(restriction as any)
+      );
+    
+    // Check for allergens - don't recommend recipes with user's allergens
     const hasAllergen = user.preferences?.allergens?.some(allergen => 
-      recipe.ingredients.some(ingredient => 
-        ingredient.toLowerCase().includes(allergen.toLowerCase())
+      recipe.ingredients?.some(ingredient => 
+        ingredient?.toLowerCase().includes(allergen.toLowerCase())
       )
     );
 
-    // Match dietary restrictions
-    const dietaryMatch = user.preferences?.dietaryRestrictions?.every(restriction => 
-      recipe.dietaryRestrictions?.includes(restriction as any)
-    );
+    // Consider cooking skill level
+    const skillLevelMatch = recipe.difficulty === undefined || 
+      (user.preferences?.cookingSkillLevel === 'beginner' && recipe.difficulty !== 'hard') ||
+      (user.preferences?.cookingSkillLevel === 'intermediate') ||
+      (user.preferences?.cookingSkillLevel === 'advanced');
 
-    // Prioritize matches by cuisine, then exclude allergens
-    return (cuisineMatch || dietaryMatch) && !hasAllergen;
+    // Recipe is recommended if it matches cuisine OR dietary needs, doesn't have allergens, and matches skill level
+    return (hasFavoriteCuisine || matchesDietaryNeeds) && !hasAllergen && skillLevelMatch;
   }).slice(0, 3);
 
   if (recommendedRecipes.length === 0) {
-    return null;
+    return (
+      <section className="mb-16">
+        <h2 className="text-3xl font-bold text-gray-900 flex items-center mb-6">
+          <ThumbsUp className="mr-2 h-6 w-6 text-recipe-secondary" />
+          Recommended for You
+        </h2>
+        <div className="text-center p-8 border border-dashed border-gray-300 rounded-lg">
+          <p className="text-gray-500">No recommendations match your preferences yet.</p>
+          <p className="text-gray-500 mt-2">Try adjusting your preferences or adding more recipes.</p>
+        </div>
+      </section>
+    );
   }
 
   // Skip recipe delete functionality on homepage

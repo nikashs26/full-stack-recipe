@@ -1,11 +1,12 @@
 
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { UtensilsCrossed, Search, FolderPlus, Heart, ShoppingCart } from 'lucide-react';
+import { UtensilsCrossed, Menu, X } from 'lucide-react';
 import UserMenu from './UserMenu';
 
 const Header: React.FC = () => {
   const [scrolled, setScrolled] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   
   useEffect(() => {
     const handleScroll = () => {
@@ -18,6 +19,10 @@ const Header: React.FC = () => {
     };
   }, []);
 
+  const toggleMobileMenu = () => {
+    setMobileMenuOpen(!mobileMenuOpen);
+  };
+
   return (
     <header className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
       scrolled ? 'bg-white/95 shadow-md backdrop-blur-sm py-2' : 'bg-white py-4'
@@ -27,7 +32,18 @@ const Header: React.FC = () => {
           <UtensilsCrossed className="h-8 w-8" />
           <h1 className="text-2xl font-bold">Better Bulk</h1>
         </Link>
-        <nav>
+        
+        {/* Mobile menu button */}
+        <button 
+          className="md:hidden p-2 text-gray-600" 
+          onClick={toggleMobileMenu}
+          aria-label="Toggle menu"
+        >
+          {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+        </button>
+        
+        {/* Desktop Navigation */}
+        <nav className="hidden md:block">
           <ul className="flex space-x-6 items-center">
             <li>
               <Link 
@@ -42,17 +58,7 @@ const Header: React.FC = () => {
                 to="/recipes" 
                 className="text-gray-600 hover:text-recipe-primary transition-colors"
               >
-                <Search className="h-4 w-4 inline mr-1" />
                 Recipes
-              </Link>
-            </li>
-            <li>
-              <Link 
-                to="/folders" 
-                className="text-gray-600 hover:text-recipe-primary transition-colors"
-              >
-                <FolderPlus className="h-4 w-4 inline mr-1" />
-                Folders
               </Link>
             </li>
             <li>
@@ -60,17 +66,7 @@ const Header: React.FC = () => {
                 to="/favorites" 
                 className="text-gray-600 hover:text-recipe-primary transition-colors"
               >
-                <Heart className="h-4 w-4 inline mr-1" />
                 Favorites
-              </Link>
-            </li>
-            <li>
-              <Link 
-                to="/shopping-list" 
-                className="text-gray-600 hover:text-recipe-primary transition-colors"
-              >
-                <ShoppingCart className="h-4 w-4 inline mr-1" />
-                Shopping List
               </Link>
             </li>
             <li>
@@ -87,6 +83,49 @@ const Header: React.FC = () => {
           </ul>
         </nav>
       </div>
+
+      {/* Mobile Navigation */}
+      {mobileMenuOpen && (
+        <div className="md:hidden bg-white border-t">
+          <div className="px-4 py-3 space-y-3">
+            <Link 
+              to="/"
+              className="block text-gray-600 hover:text-recipe-primary"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              Home
+            </Link>
+            <Link 
+              to="/recipes"
+              className="block text-gray-600 hover:text-recipe-primary"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              Recipes
+            </Link>
+            <Link 
+              to="/favorites"
+              className="block text-gray-600 hover:text-recipe-primary" 
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              Favorites
+            </Link>
+            <Link 
+              to="/add-recipe"
+              className="block text-gray-600 hover:text-recipe-primary"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              Add Recipe
+            </Link>
+            <Link 
+              to="/folders"
+              className="block text-gray-600 hover:text-recipe-primary"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              Folders
+            </Link>
+          </div>
+        </div>
+      )}
     </header>
   );
 };

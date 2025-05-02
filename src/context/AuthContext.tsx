@@ -42,10 +42,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
+  // Store registered users
+  const getRegisteredUsers = () => {
+    const users = localStorage.getItem('registeredUsers');
+    return users ? JSON.parse(users) : [];
+  };
+
+  const saveRegisteredUser = (email: string, password: string) => {
+    const users = getRegisteredUsers();
+    users.push({ email, password });
+    localStorage.setItem('registeredUsers', JSON.stringify(users));
+  };
+
   const signIn = async (email: string, password: string) => {
     try {
-      // This is a mock authentication - in real app, you'd use Supabase
-      // For demo, we'll create a fake user
+      // Check if user exists
+      const users = getRegisteredUsers();
+      const user = users.find((u: any) => u.email === email && u.password === password);
+      
+      if (!user) {
+        throw new Error('Invalid email or password');
+      }
+      
+      // User exists, create session
       const mockUser: User = {
         id: 'user-' + Math.random().toString(36).substring(2, 9),
         email,
@@ -68,12 +87,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         error: 'Failed to sign in',
         isLoading: false
       });
+      throw error; // Re-throw to handle in component
     }
   };
 
   const signUp = async (email: string, password: string) => {
     try {
-      // Mock sign-up logic
+      // Check if user already exists
+      const users = getRegisteredUsers();
+      if (users.some((u: any) => u.email === email)) {
+        throw new Error('Email already in use');
+      }
+      
+      // Register new user
+      saveRegisteredUser(email, password);
+      
+      // Create session
       const mockUser: User = {
         id: 'user-' + Math.random().toString(36).substring(2, 9),
         email,
@@ -95,6 +124,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         error: 'Failed to sign up',
         isLoading: false
       });
+      throw error; // Re-throw to handle in component
     }
   };
 
