@@ -1,9 +1,11 @@
 
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { MessageSquare, Star } from 'lucide-react';
 import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from '../context/AuthContext';
 
 // Generic review interface that can work with both local and external recipes
 export interface Review {
@@ -26,6 +28,7 @@ const RecipeReviews: React.FC<RecipeReviewsProps> = ({ reviews, onSubmitReview, 
   const [reviewAuthor, setReviewAuthor] = useState("");
   const [showReviewForm, setShowReviewForm] = useState(false);
   const { toast } = useToast();
+  const { isAuthenticated } = useAuth();
 
   const handleReviewSubmit = () => {
     if (newReview.trim() === "") {
@@ -74,18 +77,35 @@ const RecipeReviews: React.FC<RecipeReviewsProps> = ({ reviews, onSubmitReview, 
         <h2 className="text-xl font-semibold text-gray-800 flex items-center">
           <MessageSquare className="mr-2 h-5 w-5" /> Reviews
         </h2>
-        {!showReviewForm && (
-          <button 
-            onClick={() => setShowReviewForm(true)}
-            className="px-4 py-2 bg-recipe-primary text-white rounded-md hover:bg-recipe-primary/90 transition-colors"
-          >
-            Write a Review
-          </button>
+        {isAuthenticated ? (
+          !showReviewForm && (
+            <button 
+              onClick={() => setShowReviewForm(true)}
+              className="px-4 py-2 bg-recipe-primary text-white rounded-md hover:bg-recipe-primary/90 transition-colors"
+            >
+              Write a Review
+            </button>
+          )
+        ) : (
+          <div className="flex space-x-2">
+            <Link 
+              to="/signin"
+              className="px-4 py-2 bg-recipe-primary text-white rounded-md hover:bg-recipe-primary/90 transition-colors"
+            >
+              Sign In
+            </Link>
+            <Link 
+              to="/signup"
+              className="px-4 py-2 border border-recipe-primary text-recipe-primary rounded-md hover:bg-gray-50 transition-colors"
+            >
+              Sign Up
+            </Link>
+          </div>
         )}
       </div>
 
-      {/* Review Form */}
-      {showReviewForm && (
+      {/* Review Form - Only show if authenticated */}
+      {isAuthenticated && showReviewForm && (
         <Card className="mb-6">
           <CardContent className="pt-6">
             <div className="mb-4">
@@ -156,6 +176,27 @@ const RecipeReviews: React.FC<RecipeReviewsProps> = ({ reviews, onSubmitReview, 
         </Card>
       )}
 
+      {/* Auth message when user is not signed in */}
+      {!isAuthenticated && reviews.length === 0 && (
+        <div className="text-center p-6 bg-gray-50 rounded-lg mb-6">
+          <p className="text-gray-600 mb-3">Sign in or create an account to be the first to review this recipe!</p>
+          <div className="flex justify-center space-x-3">
+            <Link 
+              to="/signin"
+              className="px-4 py-2 bg-recipe-primary text-white rounded-md hover:bg-recipe-primary/90 transition-colors"
+            >
+              Sign In
+            </Link>
+            <Link 
+              to="/signup"
+              className="px-4 py-2 border border-recipe-primary text-recipe-primary rounded-md hover:bg-gray-50 transition-colors"
+            >
+              Sign Up
+            </Link>
+          </div>
+        </div>
+      )}
+
       {/* Reviews List */}
       {reviews.length > 0 ? (
         <div className="space-y-4">
@@ -182,7 +223,9 @@ const RecipeReviews: React.FC<RecipeReviewsProps> = ({ reviews, onSubmitReview, 
           ))}
         </div>
       ) : (
-        <p className="text-gray-500 italic">No reviews yet. Be the first to review this recipe!</p>
+        isAuthenticated && (
+          <p className="text-gray-500 italic">No reviews yet. Be the first to review this recipe!</p>
+        )
       )}
     </div>
   );

@@ -9,18 +9,7 @@ import { SpoonacularRecipe } from '../types/spoonacular';
 import { getDietaryTags } from '../utils/recipeUtils';
 import { formatDescriptionIntoParagraphs, formatInstructions } from '../utils/formatUtils';
 import { DietaryRestriction } from '../types/recipe';
-import { Card, CardContent } from "../components/ui/card";
-import { Textarea } from "../components/ui/textarea";
-import RecipeReviews from '../components/RecipeReviews';
-
-// New types for external recipe reviews
-interface ExternalReview {
-  id: string;
-  author: string;
-  text: string;
-  date: string;
-  rating: number;
-}
+import RecipeReviews, { Review } from '../components/RecipeReviews';
 
 const ExternalRecipeDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -28,11 +17,7 @@ const ExternalRecipeDetailPage: React.FC = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [recipe, setRecipe] = useState<SpoonacularRecipe | null>(null);
-  const [reviews, setReviews] = useState<ExternalReview[]>([]);
-  const [newReview, setNewReview] = useState("");
-  const [selectedRating, setSelectedRating] = useState(0);
-  const [reviewAuthor, setReviewAuthor] = useState("");
-  const [showReviewForm, setShowReviewForm] = useState(false);
+  const [reviews, setReviews] = useState<Review[]>([]);
   
   // Fetch the external recipe data by ID
   const { data, isLoading, error } = useQuery({
@@ -81,7 +66,7 @@ const ExternalRecipeDetailPage: React.FC = () => {
   const handleReviewSubmit = (reviewData: { text: string, rating: number, author: string }) => {
     const { text, rating, author } = reviewData;
     
-    const newReviewObj: ExternalReview = {
+    const newReviewObj: Review = {
       id: Date.now().toString(),
       author: author || "Anonymous",
       text,
@@ -90,23 +75,10 @@ const ExternalRecipeDetailPage: React.FC = () => {
     };
 
     setReviews([...reviews, newReviewObj]);
-    setNewReview("");
-    setReviewAuthor("");
-    setSelectedRating(0);
-    setShowReviewForm(false);
     
     toast({
       title: "Review submitted",
       description: "Your review has been successfully added.",
-    });
-  };
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { 
-      year: 'numeric', 
-      month: 'short', 
-      day: 'numeric' 
     });
   };
 

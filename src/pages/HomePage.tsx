@@ -153,12 +153,19 @@ const HomePage: React.FC = () => {
                     </Button>
                   </Link>
                 ) : (
-                  <Link to="/signup">
-                    <Button size="lg" variant="outline" className="w-full sm:w-auto bg-white/10 text-white hover:bg-white/20">
-                      <ChefHat className="mr-2 h-4 w-4" />
-                      Sign Up for Personalized Recipes
-                    </Button>
-                  </Link>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <Link to="/signin">
+                      <Button size="lg" variant="outline" className="w-full sm:w-auto bg-white/10 text-white hover:bg-white/20">
+                        Sign In
+                      </Button>
+                    </Link>
+                    <Link to="/signup">
+                      <Button size="lg" variant="outline" className="w-full sm:w-auto bg-white/10 text-white hover:bg-white/20">
+                        <ChefHat className="mr-2 h-4 w-4" />
+                        Sign Up
+                      </Button>
+                    </Link>
+                  </div>
                 )}
               </div>
             </div>
@@ -167,7 +174,30 @@ const HomePage: React.FC = () => {
 
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           {/* Personalized Recommendations Section */}
-          {isAuthenticated && <RecommendedRecipes />}
+          {isAuthenticated ? (
+            <RecommendedRecipes />
+          ) : (
+            <section className="mb-16">
+              <h2 className="text-3xl font-bold text-gray-900 mb-6">Get Personalized Recommendations</h2>
+              <div className="bg-white p-6 rounded-lg shadow-md text-center">
+                <p className="text-lg text-gray-700 mb-4">
+                  Sign in or create an account to get personalized recipe recommendations based on your preferences!
+                </p>
+                <div className="flex justify-center gap-4">
+                  <Link to="/signin">
+                    <Button variant="outline" className="border-recipe-primary text-recipe-primary hover:bg-recipe-primary/10">
+                      Sign In
+                    </Button>
+                  </Link>
+                  <Link to="/signup">
+                    <Button className="bg-recipe-primary hover:bg-recipe-primary/90">
+                      Sign Up Now
+                    </Button>
+                  </Link>
+                </div>
+              </div>
+            </section>
+          )}
 
           {/* Featured Recipes Section */}
           <section className="mb-16">
