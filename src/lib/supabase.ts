@@ -1,5 +1,5 @@
 
-import { createClient } from '@supabase/supabase-js'
+import { createClient } from '@supabase/supabase-js';
 
 // Check if we have actual environment variables or if we need to use fallbacks
 // In a production environment, these should be properly set as environment variables
