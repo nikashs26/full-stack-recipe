@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, AuthState, UserProfile } from '../types/auth';
 import { supabase } from '../lib/supabase';
@@ -117,16 +116,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signIn = async (email: string, password: string) => {
     try {
+      // Log the sign-in attempt to help with debugging
+      console.log('Attempting to sign in user:', email);
+      
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password
       });
       
-      if (error) throw new Error(error.message);
+      if (error) {
+        console.error('Supabase Auth Error:', error);
+        throw new Error(error.message);
+      }
       
-      // User data is handled by the auth state change listener
-      return;
+      console.log('Sign in successful, auth data:', data);
+      
+      if (data.user) {
+        // User data is handled by the auth state change listener
+        return;
+      }
     } catch (error: any) {
+      console.error('Sign in error:', error);
       setState({
         ...state,
         error: error.message || 'Failed to sign in',
@@ -138,32 +148,48 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signUp = async (email: string, password: string) => {
     try {
+      // Log the sign-up attempt to help with debugging
+      console.log('Attempting to sign up user:', email);
+      
       const { data, error } = await supabase.auth.signUp({
         email,
         password
       });
       
-      if (error) throw new Error(error.message);
+      if (error) {
+        console.error('Supabase Auth Error:', error);
+        throw new Error(error.message);
+      }
+      
+      console.log('Sign up successful, auth data:', data);
       
       if (data.user) {
         // Create a user profile record
-        const { error: profileError } = await supabase
+        const userProfile = {
+          id: data.user.id,
+          display_name: email.split('@')[0],
+          email: email,
+          created_at: new Date().toISOString()
+        };
+        
+        console.log('Creating user profile:', userProfile);
+        
+        const { error: profileError, data: profileData } = await supabase
           .from('user_profiles')
-          .insert({
-            id: data.user.id,
-            display_name: email.split('@')[0],
-            email: email,
-            created_at: new Date().toISOString()
-          });
+          .insert(userProfile)
+          .select();
           
         if (profileError) {
           console.error("Error creating user profile:", profileError);
+        } else {
+          console.log('User profile created successfully:', profileData);
         }
       }
       
       // Rest is handled by auth state change listener
       return;
     } catch (error: any) {
+      console.error('Sign up error:', error);
       setState({
         ...state,
         error: error.message || 'Failed to sign up',
