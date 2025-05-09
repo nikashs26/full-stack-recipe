@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -6,7 +5,6 @@ import { useToast } from '@/hooks/use-toast';
 import Header from '../components/Header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/components/ui/form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -46,10 +44,10 @@ const SignUpPage: React.FC = () => {
         description: "Now let's set up your preferences.",
       });
       navigate('/preferences');
-    } catch (error) {
+    } catch (error: any) {
       toast({
         title: "Sign up failed",
-        description: "Please try again.",
+        description: error.message || "Please try again.",
         variant: "destructive"
       });
     } finally {

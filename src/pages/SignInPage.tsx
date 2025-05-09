@@ -40,10 +40,10 @@ const SignInPage: React.FC = () => {
         description: "You're now signed in.",
       });
       navigate('/');
-    } catch (error) {
+    } catch (error: any) {
       toast({
         title: "Sign in failed",
-        description: "Invalid email or password. Please check your credentials or sign up.",
+        description: error.message || "Invalid email or password. Please check your credentials or sign up.",
         variant: "destructive"
       });
     } finally {

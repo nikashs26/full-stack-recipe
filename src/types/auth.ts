@@ -20,3 +20,13 @@ export interface AuthState {
   isLoading: boolean;
   error: string | null;
 }
+
+// Supabase Database Types
+export interface UserProfile {
+  id: string;
+  email: string;
+  display_name: string;
+  preferences?: UserPreferences;
+  created_at: string;
+  updated_at?: string;
+}
