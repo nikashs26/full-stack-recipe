@@ -200,18 +200,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         const { error: signUpError, data: signUpData } = await supabase
           .from('sign-ups')
-          .insert(signUpRecord)
+          .insert([signUpRecord]) // Make sure to wrap in array brackets
           .select();
           
         if (signUpError) {
           console.error("Error creating sign-up record:", signUpError);
+          // Don't throw here to allow the auth process to complete even if table insert fails
+          console.log("Continuing despite table insert error");
         } else {
           console.log('Sign-up record created successfully:', signUpData);
         }
+
+        // After sign-up, return without waiting for auth state change
+        return;
+      } else {
+        console.error("User object not found in sign-up response");
+        throw new Error("Failed to create user account");
       }
-      
-      // Rest is handled by auth state change listener
-      return;
     } catch (error: any) {
       console.error('Sign up error:', error);
       setState({
