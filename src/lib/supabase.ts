@@ -1,5 +1,5 @@
 
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from '@supabase/supabase-js'
 
 // These values should be stored in environment variables
 // For now, we'll use placeholders that you'll need to replace with your actual Supabase credentials
