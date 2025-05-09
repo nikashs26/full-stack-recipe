@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, AuthState, UserProfile } from '../types/auth';
 import { supabase } from '../lib/supabase';
@@ -38,16 +39,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           
           // Get user profile data if available
           const { data: profileData } = await supabase
-            .from('user_profiles')
+            .from('sign-ups')
             .select('*')
-            .eq('id', user.id)
+            .eq('email', user.email)
             .single();
+            
+          console.log("Found sign-up record:", profileData);
             
           const enhancedUser: User = {
             id: user.id,
             email: user.email || '',
-            displayName: profileData?.display_name || user.email?.split('@')[0] || '',
-            preferences: profileData?.preferences || undefined,
+            displayName: user.email?.split('@')[0] || '',
+            preferences: undefined,
             createdAt: user.created_at || new Date().toISOString()
           };
           
@@ -71,21 +74,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Set up auth state change listener
     const { data: authListener } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        console.log("Auth state changed:", event);
+        
         if (event === 'SIGNED_IN' && session?.user) {
           const user = session.user;
           
-          // Get user profile data if available
-          const { data: profileData } = await supabase
-            .from('user_profiles')
+          console.log("User signed in:", user);
+          
+          // Get user sign-up record if available
+          const { data: profileData, error: profileError } = await supabase
+            .from('sign-ups')
             .select('*')
-            .eq('id', user.id)
+            .eq('email', user.email)
             .single();
+            
+          if (profileError) {
+            console.error("Error fetching sign-up record:", profileError);
+          } else {
+            console.log("Found sign-up record:", profileData);
+          }
             
           const enhancedUser: User = {
             id: user.id,
             email: user.email || '',
-            displayName: profileData?.display_name || user.email?.split('@')[0] || '',
-            preferences: profileData?.preferences || undefined,
+            displayName: user.email?.split('@')[0] || '',
+            preferences: undefined,
             createdAt: user.created_at || new Date().toISOString()
           };
           
@@ -131,6 +144,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       console.log('Sign in successful, auth data:', data);
       
+      // Check if the user exists in our sign-ups table
+      const { data: signUpData, error: signUpError } = await supabase
+        .from('sign-ups')
+        .select('*')
+        .eq('email', email)
+        .single();
+        
+      if (signUpError) {
+        console.log('No sign-up record found, will be created if needed');
+      } else {
+        console.log('Found existing sign-up record:', signUpData);
+      }
+      
       if (data.user) {
         // User data is handled by the auth state change listener
         return;
@@ -164,25 +190,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.log('Sign up successful, auth data:', data);
       
       if (data.user) {
-        // Create a user profile record
-        const userProfile = {
-          id: data.user.id,
-          display_name: email.split('@')[0],
+        // Create a record in the sign-ups table
+        const signUpRecord = {
           email: email,
-          created_at: new Date().toISOString()
+          password: "********" // We don't actually store the real password here
         };
         
-        console.log('Creating user profile:', userProfile);
+        console.log('Creating sign-up record:', signUpRecord);
         
-        const { error: profileError, data: profileData } = await supabase
-          .from('user_profiles')
-          .insert(userProfile)
+        const { error: signUpError, data: signUpData } = await supabase
+          .from('sign-ups')
+          .insert(signUpRecord)
           .select();
           
-        if (profileError) {
-          console.error("Error creating user profile:", profileError);
+        if (signUpError) {
+          console.error("Error creating sign-up record:", signUpError);
         } else {
-          console.log('User profile created successfully:', profileData);
+          console.log('Sign-up record created successfully:', signUpData);
         }
       }
       
@@ -211,16 +235,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const updateUserPreferences = async (preferences: any) => {
-    if (!state.user?.id) return;
+    if (!state.user?.email) return;
     
     try {
       const { error } = await supabase
-        .from('user_profiles')
+        .from('sign-ups')
         .update({ 
-          preferences: preferences,
-          updated_at: new Date().toISOString()
+          preferences: preferences
         })
-        .eq('id', state.user.id);
+        .eq('email', state.user.email);
         
       if (error) throw error;
       
