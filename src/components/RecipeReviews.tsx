@@ -27,10 +27,11 @@ const RecipeReviews: React.FC<RecipeReviewsProps> = ({ reviews, onSubmitReview, 
   const [selectedRating, setSelectedRating] = useState(0);
   const [reviewAuthor, setReviewAuthor] = useState("");
   const [showReviewForm, setShowReviewForm] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
   const { isAuthenticated } = useAuth();
 
-  const handleReviewSubmit = () => {
+  const handleReviewSubmit = async () => {
     if (newReview.trim() === "") {
       toast({
         title: "Review text required",
@@ -49,17 +50,30 @@ const RecipeReviews: React.FC<RecipeReviewsProps> = ({ reviews, onSubmitReview, 
       return;
     }
 
-    onSubmitReview({
-      text: newReview,
-      rating: selectedRating,
-      author: reviewAuthor.trim()
-    });
-
-    // Reset form
-    setNewReview("");
-    setReviewAuthor("");
-    setSelectedRating(0);
-    setShowReviewForm(false);
+    setIsSubmitting(true);
+    
+    try {
+      await onSubmitReview({
+        text: newReview,
+        rating: selectedRating,
+        author: reviewAuthor.trim() || "Anonymous"
+      });
+      
+      // Reset form
+      setNewReview("");
+      setReviewAuthor("");
+      setSelectedRating(0);
+      setShowReviewForm(false);
+    } catch (error) {
+      console.error("Error submitting review:", error);
+      toast({
+        title: "Error",
+        description: "Failed to submit your review. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const formatDate = (dateString: string) => {
@@ -133,6 +147,7 @@ const RecipeReviews: React.FC<RecipeReviewsProps> = ({ reviews, onSubmitReview, 
                     type="button"
                     onClick={() => setSelectedRating(rating)}
                     className="focus:outline-none"
+                    disabled={isSubmitting}
                   >
                     <Star
                       className={`h-6 w-6 ${
@@ -155,6 +170,7 @@ const RecipeReviews: React.FC<RecipeReviewsProps> = ({ reviews, onSubmitReview, 
                 placeholder="Write your review here..."
                 rows={4}
                 className="w-full"
+                disabled={isSubmitting}
               />
             </div>
             
@@ -162,14 +178,18 @@ const RecipeReviews: React.FC<RecipeReviewsProps> = ({ reviews, onSubmitReview, 
               <button
                 onClick={() => setShowReviewForm(false)}
                 className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 transition-colors"
+                disabled={isSubmitting}
               >
                 Cancel
               </button>
               <button
                 onClick={handleReviewSubmit}
-                className="px-4 py-2 bg-recipe-primary text-white rounded-md hover:bg-recipe-primary/90 transition-colors"
+                className={`px-4 py-2 bg-recipe-primary text-white rounded-md hover:bg-recipe-primary/90 transition-colors ${
+                  isSubmitting ? 'opacity-70 cursor-not-allowed' : ''
+                }`}
+                disabled={isSubmitting}
               >
-                Submit Review
+                {isSubmitting ? 'Submitting...' : 'Submit Review'}
               </button>
             </div>
           </CardContent>

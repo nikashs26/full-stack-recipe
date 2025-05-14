@@ -10,6 +10,7 @@ import { getDietaryTags } from '../utils/recipeUtils';
 import { formatDescriptionIntoParagraphs, formatInstructions } from '../utils/formatUtils';
 import { DietaryRestriction } from '../types/recipe';
 import RecipeReviews, { Review } from '../components/RecipeReviews';
+import { getReviewsByRecipeId, addReview } from '../utils/reviewUtils';
 
 const ExternalRecipeDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -28,22 +29,17 @@ const ExternalRecipeDetailPage: React.FC = () => {
     retry: 2,
   });
 
-  // Load saved reviews from localStorage
+  // Load reviews from Supabase instead of localStorage
   useEffect(() => {
-    if (id) {
-      const savedReviews = localStorage.getItem(`external-reviews-${id}`);
-      if (savedReviews) {
-        setReviews(JSON.parse(savedReviews));
+    const loadReviews = async () => {
+      if (id) {
+        const fetchedReviews = await getReviewsByRecipeId(id, 'external');
+        setReviews(fetchedReviews);
       }
-    }
+    };
+    
+    loadReviews();
   }, [id]);
-
-  // Save reviews to localStorage when they change
-  useEffect(() => {
-    if (id && reviews.length > 0) {
-      localStorage.setItem(`external-reviews-${id}`, JSON.stringify(reviews));
-    }
-  }, [id, reviews]);
 
   useEffect(() => {
     if (data) {
@@ -63,23 +59,25 @@ const ExternalRecipeDetailPage: React.FC = () => {
     }
   }, [error, toast]);
 
-  const handleReviewSubmit = (reviewData: { text: string, rating: number, author: string }) => {
+  const handleReviewSubmit = async (reviewData: { text: string, rating: number, author: string }) => {
+    if (!id) return;
+    
     const { text, rating, author } = reviewData;
     
-    const newReviewObj: Review = {
-      id: Date.now().toString(),
+    const newReviewData = {
       author: author || "Anonymous",
       text,
       date: new Date().toISOString(),
-      rating
+      rating,
+      recipeId: id,
+      recipeType: 'external' as const
     };
 
-    setReviews([...reviews, newReviewObj]);
+    const savedReview = await addReview(newReviewData);
     
-    toast({
-      title: "Review submitted",
-      description: "Your review has been successfully added.",
-    });
+    if (savedReview) {
+      setReviews(prevReviews => [savedReview, ...prevReviews]);
+    }
   };
 
   const getAverageRating = () => {

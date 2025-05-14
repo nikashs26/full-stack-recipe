@@ -1,8 +1,7 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Heart, Folder, ShoppingCart } from 'lucide-react';
+import { Heart, Folder, ShoppingCart, Star } from 'lucide-react';
 import Header from '../components/Header';
 import { Button } from '@/components/ui/button';
 import { getRecipeById, updateRecipe, loadRecipes } from '../utils/storage';
@@ -10,6 +9,8 @@ import { useToast } from '@/hooks/use-toast';
 import FolderAssignmentModal from '../components/FolderAssignmentModal';
 import { Folder as FolderType, ShoppingListItem } from '../types/recipe';
 import { v4 as uuidv4 } from 'uuid';
+import RecipeReviews, { Review } from '../components/RecipeReviews';
+import { getReviewsByRecipeId, addReview } from '../utils/reviewUtils';
 
 const RecipeDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -18,10 +19,23 @@ const RecipeDetailPage: React.FC = () => {
   const queryClient = useQueryClient();
   const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);
   const [folders, setFolders] = useState<FolderType[]>([]);
+  const [reviews, setReviews] = useState<Review[]>([]);
   
   // Load the recipe
   const recipe = getRecipeById(id || '');
 
+  // Load reviews from Supabase
+  useEffect(() => {
+    const loadReviews = async () => {
+      if (id) {
+        const fetchedReviews = await getReviewsByRecipeId(id, 'local');
+        setReviews(fetchedReviews);
+      }
+    };
+    
+    loadReviews();
+  }, [id]);
+  
   // Load folders from localStorage
   React.useEffect(() => {
     const loadFolders = () => {
@@ -77,6 +91,28 @@ const RecipeDetailPage: React.FC = () => {
     updateRecipe(updatedRecipe);
     queryClient.invalidateQueries({ queryKey: ['recipes'] });
   };
+  
+  // Handler for submitting reviews - now saves to Supabase
+  const handleReviewSubmit = async (reviewData: { text: string, rating: number, author: string }) => {
+    if (!id) return;
+    
+    const { text, rating, author } = reviewData;
+    
+    const newReviewData = {
+      author: author || "Anonymous",
+      text,
+      date: new Date().toISOString(),
+      rating,
+      recipeId: id,
+      recipeType: 'local' as const
+    };
+
+    const savedReview = await addReview(newReviewData);
+    
+    if (savedReview) {
+      setReviews(prevReviews => [savedReview, ...prevReviews]);
+    }
+  };
 
   const currentFolder = folders.find(folder => folder.id === recipe.folderId);
 
@@ -113,6 +149,15 @@ const RecipeDetailPage: React.FC = () => {
     }
   };
 
+  // Calculate average rating
+  const getAverageRating = () => {
+    if (reviews.length === 0) return 0;
+    const sum = reviews.reduce((total, review) => total + review.rating, 0);
+    return (sum / reviews.length).toFixed(1);
+  };
+
+  const avgRating = getAverageRating();
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
@@ -133,6 +178,12 @@ const RecipeDetailPage: React.FC = () => {
                 <h1 className="text-white text-3xl md:text-4xl font-bold">{recipe.name}</h1>
                 <div className="flex items-center text-white mt-2">
                   <span className="text-sm">{recipe.cuisine}</span>
+                  {avgRating > 0 && (
+                    <div className="ml-4 flex items-center">
+                      <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
+                      <span className="ml-1">{avgRating} ({reviews.length} {reviews.length === 1 ? 'review' : 'reviews'})</span>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -185,6 +236,15 @@ const RecipeDetailPage: React.FC = () => {
                   <li key={index} className="mb-2">{instruction}</li>
                 ))}
               </ol>
+              
+              {/* Reviews section */}
+              <div className="mt-8 pt-6 border-t border-gray-200">
+                <RecipeReviews
+                  reviews={reviews}
+                  onSubmitReview={handleReviewSubmit}
+                  recipeType="local"
+                />
+              </div>
             </div>
           </div>
         </div>
