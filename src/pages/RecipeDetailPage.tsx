@@ -92,7 +92,7 @@ const RecipeDetailPage: React.FC = () => {
     queryClient.invalidateQueries({ queryKey: ['recipes'] });
   };
   
-  // Handler for submitting reviews - now saves to Supabase
+  // Handler for submitting reviews
   const handleReviewSubmit = async (reviewData: { text: string, rating: number, author: string }) => {
     if (!id) return;
     
@@ -156,7 +156,8 @@ const RecipeDetailPage: React.FC = () => {
     return (sum / reviews.length).toFixed(1);
   };
 
-  const avgRating = getAverageRating();
+  // Convert the result to a number to ensure proper comparison
+  const avgRating = Number(getAverageRating());
 
   return (
     <div className="min-h-screen bg-gray-50">
