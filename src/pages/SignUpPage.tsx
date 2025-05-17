@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -45,13 +46,13 @@ const SignUpPage: React.FC = () => {
       });
       navigate('/preferences');
     } catch (error: any) {
+      console.error("Sign up error:", error);
       toast({
         title: "Sign up failed",
         description: error.message || "Please try again.",
         variant: "destructive"
       });
-    } finally {
-      setIsLoading(false);
+      setIsLoading(false);  // Make sure loading state is reset on error
     }
   };
 

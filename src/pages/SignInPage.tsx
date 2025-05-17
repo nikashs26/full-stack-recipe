@@ -41,13 +41,13 @@ const SignInPage: React.FC = () => {
       });
       navigate('/');
     } catch (error: any) {
+      console.error("Sign in error:", error);
       toast({
         title: "Sign in failed",
         description: error.message || "Invalid email or password. Please check your credentials or sign up.",
         variant: "destructive"
       });
-    } finally {
-      setIsLoading(false);
+      setIsLoading(false);  // Make sure loading state is reset on error
     }
   };
 

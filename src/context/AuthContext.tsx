@@ -26,31 +26,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     const checkSession = async () => {
       try {
+        console.log("Checking current session...");
         const { data, error } = await supabase.auth.getSession();
         
         if (error) {
           console.error("Error fetching session:", error);
-          setState({ ...initialState, isLoading: false });
+          setState({ ...initialState, isLoading: false, error: error.message });
           return;
         }
         
         if (data?.session) {
+          console.log("Session found:", data.session);
           const { user } = data.session;
           
           // Get user profile data if available
-          const { data: profileData } = await supabase
+          const { data: profileData, error: profileError } = await supabase
             .from('sign-ups')
             .select('*')
             .eq('email', user.email)
             .single();
             
-          console.log("Found sign-up record:", profileData);
+          if (profileError) {
+            console.log("No sign-up record found, user may have been created through direct auth");
+          } else {
+            console.log("Found sign-up record:", profileData);
+          }
             
           const enhancedUser: User = {
             id: user.id,
             email: user.email || '',
             displayName: user.email?.split('@')[0] || '',
-            preferences: undefined,
+            preferences: profileData?.preferences || undefined,
             createdAt: user.created_at || new Date().toISOString()
           };
           
@@ -61,11 +67,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             error: null
           });
         } else {
+          console.log("No active session found");
           setState({ ...initialState, isLoading: false });
         }
       } catch (error) {
         console.error("Unexpected error during session check:", error);
-        setState({ ...initialState, isLoading: false });
+        setState({ ...initialState, isLoading: false, error: "Session check failed" });
       }
     };
     
@@ -89,7 +96,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             .single();
             
           if (profileError) {
-            console.error("Error fetching sign-up record:", profileError);
+            console.log("No sign-up record found:", profileError.message);
           } else {
             console.log("Found sign-up record:", profileData);
           }
@@ -98,7 +105,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             id: user.id,
             email: user.email || '',
             displayName: user.email?.split('@')[0] || '',
-            preferences: undefined,
+            preferences: profileData?.preferences || undefined,
             createdAt: user.created_at || new Date().toISOString()
           };
           
@@ -109,6 +116,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             error: null
           });
         } else if (event === 'SIGNED_OUT') {
+          console.log("User signed out");
           setState({
             user: null,
             isAuthenticated: false,
@@ -131,6 +139,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       // Log the sign-in attempt to help with debugging
       console.log('Attempting to sign in user:', email);
+      setState(prev => ({ ...prev, isLoading: true, error: null }));
       
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
@@ -139,35 +148,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       if (error) {
         console.error('Supabase Auth Error:', error);
+        setState(prev => ({ ...prev, isLoading: false, error: error.message }));
         throw new Error(error.message);
       }
       
       console.log('Sign in successful, auth data:', data);
       
-      // Check if the user exists in our sign-ups table
-      const { data: signUpData, error: signUpError } = await supabase
-        .from('sign-ups')
-        .select('*')
-        .eq('email', email)
-        .single();
-        
-      if (signUpError) {
-        console.log('No sign-up record found, will be created if needed');
-      } else {
-        console.log('Found existing sign-up record:', signUpData);
-      }
-      
-      if (data.user) {
-        // User data is handled by the auth state change listener
-        return;
+      // We'll let the auth state listener handle updating the state
+      // Just make sure we're not stuck in a loading state
+      if (!data.user) {
+        setState(prev => ({ ...prev, isLoading: false }));
       }
     } catch (error: any) {
       console.error('Sign in error:', error);
-      setState({
-        ...state,
+      setState(prev => ({
+        ...prev,
         error: error.message || 'Failed to sign in',
         isLoading: false
-      });
+      }));
       throw error;
     }
   };
@@ -176,6 +174,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       // Log the sign-up attempt to help with debugging
       console.log('Attempting to sign up user:', email);
+      setState(prev => ({ ...prev, isLoading: true, error: null }));
       
       const { data, error } = await supabase.auth.signUp({
         email,
@@ -184,6 +183,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       if (error) {
         console.error('Supabase Auth Error:', error);
+        setState(prev => ({ ...prev, isLoading: false, error: error.message }));
         throw new Error(error.message);
       }
       
@@ -211,31 +211,64 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           console.log('Sign-up record created successfully:', signUpData);
         }
 
-        // After sign-up, return without waiting for auth state change
-        return;
+        // Make sure we're not stuck in a loading state if the auth listener doesn't fire
+        setTimeout(() => {
+          setState(prev => {
+            // Only update if we're still in loading state
+            if (prev.isLoading) {
+              return {
+                ...prev,
+                isLoading: false
+              };
+            }
+            return prev;
+          });
+        }, 2000);
       } else {
         console.error("User object not found in sign-up response");
+        setState(prev => ({ ...prev, isLoading: false }));
         throw new Error("Failed to create user account");
       }
     } catch (error: any) {
       console.error('Sign up error:', error);
-      setState({
-        ...state,
+      setState(prev => ({
+        ...prev,
         error: error.message || 'Failed to sign up',
         isLoading: false
-      });
+      }));
       throw error;
     }
   };
 
   const signOut = async () => {
     try {
+      setState(prev => ({ ...prev, isLoading: true }));
       const { error } = await supabase.auth.signOut();
-      if (error) throw error;
+      if (error) {
+        console.error("Error signing out:", error.message);
+        setState(prev => ({ ...prev, error: error.message, isLoading: false }));
+        throw error;
+      }
       
-      // State update handled by auth listener
+      // State update should be handled by auth listener, but
+      // let's make sure we don't get stuck in a loading state
+      setTimeout(() => {
+        setState(prev => {
+          // Only update if we're still in loading state
+          if (prev.isLoading) {
+            return {
+              user: null,
+              isAuthenticated: false,
+              isLoading: false,
+              error: null
+            };
+          }
+          return prev;
+        });
+      }, 1000);
     } catch (error: any) {
       console.error("Error signing out:", error.message);
+      setState(prev => ({ ...prev, isLoading: false }));
     }
   };
 

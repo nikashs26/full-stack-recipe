@@ -11,10 +11,22 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from '@/components/ui/button';
-import { LogIn, LogOut, User, Settings } from 'lucide-react';
+import { LogIn, LogOut, User, Settings, Loader2 } from 'lucide-react';
 
 const UserMenu: React.FC = () => {
-  const { user, isAuthenticated, signOut } = useAuth();
+  const { user, isAuthenticated, isLoading, signOut } = useAuth();
+
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div className="flex items-center">
+        <Button variant="ghost" size="sm" disabled>
+          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+          Loading...
+        </Button>
+      </div>
+    );
+  }
 
   if (!isAuthenticated) {
     return (
