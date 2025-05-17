@@ -10,7 +10,7 @@ import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from '
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
-import { LogIn } from 'lucide-react';
+import { LogIn, Loader2 } from 'lucide-react';
 
 const formSchema = z.object({
   email: z.string().email({ message: 'Invalid email address' }),
