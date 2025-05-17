@@ -28,13 +28,23 @@ const RecipeDetailPage: React.FC = () => {
   useEffect(() => {
     const loadReviews = async () => {
       if (id) {
-        const fetchedReviews = await getReviewsByRecipeId(id, 'local');
-        setReviews(fetchedReviews);
+        try {
+          const fetchedReviews = await getReviewsByRecipeId(id, 'local');
+          console.log('Loaded reviews for recipe:', id, fetchedReviews);
+          setReviews(fetchedReviews);
+        } catch (error) {
+          console.error('Error loading reviews:', error);
+          toast({
+            title: 'Error',
+            description: 'Failed to load reviews. Please try again later.',
+            variant: 'destructive'
+          });
+        }
       }
     };
     
     loadReviews();
-  }, [id]);
+  }, [id, toast]);
   
   // Load folders from localStorage
   React.useEffect(() => {
@@ -98,19 +108,33 @@ const RecipeDetailPage: React.FC = () => {
     
     const { text, rating, author } = reviewData;
     
-    const newReviewData = {
-      author: author || "Anonymous",
-      text,
-      date: new Date().toISOString(),
-      rating,
-      recipeId: id,
-      recipeType: 'local' as const
-    };
+    try {
+      console.log('Submitting review:', { text, rating, author, recipeId: id });
+      
+      const newReviewData = {
+        author: author || "Anonymous",
+        text,
+        date: new Date().toISOString(),
+        rating,
+        recipeId: id,
+        recipeType: 'local' as const
+      };
 
-    const savedReview = await addReview(newReviewData);
-    
-    if (savedReview) {
-      setReviews(prevReviews => [savedReview, ...prevReviews]);
+      const savedReview = await addReview(newReviewData);
+      
+      if (savedReview) {
+        console.log('Review saved successfully:', savedReview);
+        setReviews(prevReviews => [savedReview, ...prevReviews]);
+      } else {
+        console.error('Failed to save review - no data returned');
+      }
+    } catch (error) {
+      console.error('Error in handleReviewSubmit:', error);
+      toast({
+        title: 'Error',
+        description: 'An unexpected error occurred while saving your review.',
+        variant: 'destructive'
+      });
     }
   };
 
