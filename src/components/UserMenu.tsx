@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -12,11 +12,48 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from '@/components/ui/button';
 import { LogIn, LogOut, User, Settings, Loader2 } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
 const UserMenu: React.FC = () => {
-  const { user, isAuthenticated, isLoading, signOut } = useAuth();
+  const { user, isAuthenticated, isLoading: authLoading, signOut, error } = useAuth();
+  const [isLoading, setIsLoading] = useState(authLoading);
+  const { toast } = useToast();
 
-  // Show loading state (limit to 15 seconds maximum)
+  // Safety timeout: if auth loading takes too long, we'll stop showing the loading state
+  useEffect(() => {
+    setIsLoading(authLoading);
+    
+    // Local loading state timeout (5 seconds max)
+    if (authLoading) {
+      const timer = setTimeout(() => {
+        console.log('Auth loading timeout reached, forcing UI update');
+        setIsLoading(false);
+        
+        // Show a toast if we had to force the loading state to end
+        toast({
+          title: "Authentication status unclear",
+          description: "Please refresh the page if you're experiencing issues",
+          variant: "destructive"
+        });
+      }, 5000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [authLoading, toast]);
+
+  // If there's an auth error, show it
+  useEffect(() => {
+    if (error) {
+      console.error("Auth error:", error);
+      toast({
+        title: "Authentication Error",
+        description: error,
+        variant: "destructive"
+      });
+    }
+  }, [error, toast]);
+
+  // Show loading state
   if (isLoading) {
     return (
       <div className="flex items-center">
@@ -51,6 +88,11 @@ const UserMenu: React.FC = () => {
       await signOut();
     } catch (error) {
       console.error("Error signing out:", error);
+      toast({
+        title: "Error signing out",
+        description: "Please try again",
+        variant: "destructive"
+      });
     }
   };
 

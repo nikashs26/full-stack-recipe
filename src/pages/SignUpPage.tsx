@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '@/hooks/use-toast';
@@ -10,7 +10,7 @@ import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from '
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
-import { UserPlus } from 'lucide-react';
+import { UserPlus, Loader2 } from 'lucide-react';
 
 const formSchema = z.object({
   email: z.string().email({ message: 'Invalid email address' }),
@@ -22,7 +22,7 @@ const formSchema = z.object({
 });
 
 const SignUpPage: React.FC = () => {
-  const { signUp } = useAuth();
+  const { signUp, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
@@ -36,15 +36,44 @@ const SignUpPage: React.FC = () => {
     }
   });
 
+  // Safety timeout to prevent UI from getting stuck
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    
+    if (isLoading) {
+      timer = setTimeout(() => {
+        console.log('Sign up timeout reached, resetting loading state');
+        setIsLoading(false);
+        toast({
+          title: "Sign up taking longer than expected",
+          description: "Please try again or check your connection",
+          variant: "destructive"
+        });
+      }, 10000); // 10 second timeout
+    }
+    
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [isLoading, toast]);
+
+  // Redirect if authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/preferences');
+    }
+  }, [isAuthenticated, navigate]);
+
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
       setIsLoading(true);
+      console.log("Attempting to sign up with:", values.email);
       await signUp(values.email, values.password);
       toast({
         title: "Account created!",
         description: "Now let's set up your preferences.",
       });
-      navigate('/preferences');
+      // No need to navigate here - the useEffect will handle it
     } catch (error: any) {
       console.error("Sign up error:", error);
       toast({
@@ -116,7 +145,10 @@ const SignUpPage: React.FC = () => {
                 disabled={isLoading}
               >
                 {isLoading ? (
-                  <span>Loading...</span>
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Signing up...
+                  </>
                 ) : (
                   <>
                     <UserPlus className="mr-2 h-4 w-4" />

@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '@/hooks/use-toast';
@@ -18,7 +18,7 @@ const formSchema = z.object({
 });
 
 const SignInPage: React.FC = () => {
-  const { signIn } = useAuth();
+  const { signIn, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
@@ -31,15 +31,44 @@ const SignInPage: React.FC = () => {
     }
   });
 
+  // Safety timeout to prevent UI from getting stuck
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    
+    if (isLoading) {
+      timer = setTimeout(() => {
+        console.log('Sign in timeout reached, resetting loading state');
+        setIsLoading(false);
+        toast({
+          title: "Sign in taking longer than expected",
+          description: "Please try again or check your connection",
+          variant: "destructive"
+        });
+      }, 10000); // 10 second timeout
+    }
+    
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [isLoading, toast]);
+
+  // Redirect if authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/');
+    }
+  }, [isAuthenticated, navigate]);
+
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
       setIsLoading(true);
+      console.log("Attempting to sign in with:", values.email);
       await signIn(values.email, values.password);
       toast({
         title: "Success!",
         description: "You're now signed in.",
       });
-      navigate('/');
+      // No need to navigate here - the useEffect will handle it
     } catch (error: any) {
       console.error("Sign in error:", error);
       toast({
@@ -47,7 +76,7 @@ const SignInPage: React.FC = () => {
         description: error.message || "Invalid email or password. Please check your credentials or sign up.",
         variant: "destructive"
       });
-      setIsLoading(false);  // Make sure loading state is reset on error
+      setIsLoading(false); // Make sure loading state is reset on error
     }
   };
 
@@ -97,7 +126,10 @@ const SignInPage: React.FC = () => {
                 disabled={isLoading}
               >
                 {isLoading ? (
-                  <span>Loading...</span>
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Signing in...
+                  </>
                 ) : (
                   <>
                     <LogIn className="mr-2 h-4 w-4" />
