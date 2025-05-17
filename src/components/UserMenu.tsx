@@ -16,7 +16,7 @@ import { LogIn, LogOut, User, Settings, Loader2 } from 'lucide-react';
 const UserMenu: React.FC = () => {
   const { user, isAuthenticated, isLoading, signOut } = useAuth();
 
-  // Show loading state
+  // Show loading state (limit to 15 seconds maximum)
   if (isLoading) {
     return (
       <div className="flex items-center">
