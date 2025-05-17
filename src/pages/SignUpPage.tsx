@@ -10,7 +10,7 @@ import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from '
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
-import { UserPlus, Loader2 } from 'lucide-react';
+import { UserPlus } from 'lucide-react';
 
 const formSchema = z.object({
   email: z.string().email({ message: 'Invalid email address' }),
@@ -36,7 +36,7 @@ const SignUpPage: React.FC = () => {
     }
   });
 
-  // Safety timeout to prevent UI from getting stuck
+  // Safety timeout reduced to 5 seconds from 10 for quicker feedback
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
     
@@ -46,10 +46,10 @@ const SignUpPage: React.FC = () => {
         setIsLoading(false);
         toast({
           title: "Sign up taking longer than expected",
-          description: "Please try again or check your connection",
+          description: "Please check your email for verification or try again",
           variant: "destructive"
         });
-      }, 10000); // 10 second timeout
+      }, 5000); // 5 second timeout
     }
     
     return () => {
@@ -60,6 +60,7 @@ const SignUpPage: React.FC = () => {
   // Redirect if authenticated
   useEffect(() => {
     if (isAuthenticated) {
+      console.log("User is authenticated, redirecting to /preferences");
       navigate('/preferences');
     }
   }, [isAuthenticated, navigate]);
@@ -69,11 +70,24 @@ const SignUpPage: React.FC = () => {
       setIsLoading(true);
       console.log("Attempting to sign up with:", values.email);
       await signUp(values.email, values.password);
+      
       toast({
         title: "Account created!",
         description: "Now let's set up your preferences.",
       });
-      // No need to navigate here - the useEffect will handle it
+      
+      // Small delay before checking authentication state
+      setTimeout(() => {
+        if (!isAuthenticated) {
+          setIsLoading(false);
+          console.log("Authentication state not updated yet");
+          toast({
+            title: "Sign up successful",
+            description: "Please wait while we set up your account...",
+          });
+        }
+      }, 1000);
+      
     } catch (error: any) {
       console.error("Sign up error:", error);
       toast({
@@ -81,7 +95,7 @@ const SignUpPage: React.FC = () => {
         description: error.message || "Please try again.",
         variant: "destructive"
       });
-      setIsLoading(false);  // Make sure loading state is reset on error
+      setIsLoading(false);
     }
   };
 
@@ -146,7 +160,7 @@ const SignUpPage: React.FC = () => {
               >
                 {isLoading ? (
                   <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    <span className="mr-2 h-4 w-4 animate-spin inline-block">⌛</span>
                     Signing up...
                   </>
                 ) : (

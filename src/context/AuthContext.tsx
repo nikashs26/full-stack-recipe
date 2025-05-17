@@ -200,33 +200,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         const { error: signUpError, data: signUpData } = await supabase
           .from('sign-ups')
-          .insert([signUpRecord]) // Make sure to wrap in array brackets
+          .insert([signUpRecord])
           .select();
           
         if (signUpError) {
           console.error("Error creating sign-up record:", signUpError);
-          // Don't throw here to allow the auth process to complete even if table insert fails
-          console.log("Continuing despite table insert error");
+          // Don't throw here but set error in state
+          setState(prev => ({
+            ...prev, 
+            error: `Account created but failed to create profile: ${signUpError.message}`,
+            isLoading: false
+          }));
         } else {
           console.log('Sign-up record created successfully:', signUpData);
-        }
-
-        // Make sure we're not stuck in a loading state if the auth listener doesn't fire
-        setTimeout(() => {
-          setState(prev => {
-            // Only update if we're still in loading state
-            if (prev.isLoading) {
-              return {
-                ...prev,
-                isLoading: false
-              };
-            }
-            return prev;
+          // Update the state directly since we know it was successful
+          const enhancedUser: User = {
+            id: data.user.id,
+            email: data.user.email || '',
+            displayName: data.user.email?.split('@')[0] || '',
+            createdAt: data.user.created_at || new Date().toISOString()
+          };
+          
+          setState({
+            user: enhancedUser,
+            isAuthenticated: true,
+            isLoading: false,
+            error: null
           });
-        }, 2000);
+        }
       } else {
         console.error("User object not found in sign-up response");
-        setState(prev => ({ ...prev, isLoading: false }));
+        setState(prev => ({ 
+          ...prev, 
+          isLoading: false,
+          error: "Failed to create user account" 
+        }));
         throw new Error("Failed to create user account");
       }
     } catch (error: any) {

@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from '@/components/ui/button';
-import { LogIn, LogOut, User, Settings, Loader2 } from 'lucide-react';
+import { LogIn, LogOut, User } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 const UserMenu: React.FC = () => {
@@ -19,34 +19,27 @@ const UserMenu: React.FC = () => {
   const [isLoading, setIsLoading] = useState(authLoading);
   const { toast } = useToast();
 
-  // Safety timeout: if auth loading takes too long, we'll stop showing the loading state
+  // Safety timeout: reduced from 5s to 2s to provide quicker feedback
   useEffect(() => {
     setIsLoading(authLoading);
     
-    // Local loading state timeout (5 seconds max)
+    // Local loading state timeout (2 seconds max)
     if (authLoading) {
       const timer = setTimeout(() => {
-        console.log('Auth loading timeout reached, forcing UI update');
+        console.log('Auth loading timeout reached in UserMenu, forcing UI update');
         setIsLoading(false);
-        
-        // Show a toast if we had to force the loading state to end
-        toast({
-          title: "Authentication status unclear",
-          description: "Please refresh the page if you're experiencing issues",
-          variant: "destructive"
-        });
-      }, 5000);
+      }, 2000);
       
       return () => clearTimeout(timer);
     }
-  }, [authLoading, toast]);
+  }, [authLoading]);
 
   // If there's an auth error, show it
   useEffect(() => {
     if (error) {
-      console.error("Auth error:", error);
+      console.error("Auth error in UserMenu:", error);
       toast({
-        title: "Authentication Error",
+        title: "Authentication Issue",
         description: error,
         variant: "destructive"
       });
@@ -58,7 +51,7 @@ const UserMenu: React.FC = () => {
     return (
       <div className="flex items-center">
         <Button variant="ghost" size="sm" disabled>
-          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+          <span className="h-4 w-4 mr-2 animate-spin">⌛</span>
           Loading...
         </Button>
       </div>
@@ -85,12 +78,16 @@ const UserMenu: React.FC = () => {
 
   const handleSignOut = async () => {
     try {
+      console.log("Attempting to sign out...");
       await signOut();
+      toast({
+        title: "Signed out successfully",
+      });
     } catch (error) {
       console.error("Error signing out:", error);
       toast({
         title: "Error signing out",
-        description: "Please try again",
+        description: "Please try again or refresh the page",
         variant: "destructive"
       });
     }
@@ -107,13 +104,6 @@ const UserMenu: React.FC = () => {
         <DropdownMenuLabel>
           {user?.displayName || user?.email}
         </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem asChild>
-          <Link to="/preferences" className="cursor-pointer flex w-full items-center">
-            <Settings className="mr-2 h-4 w-4" />
-            <span>Preferences</span>
-          </Link>
-        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem 
           onClick={handleSignOut}
