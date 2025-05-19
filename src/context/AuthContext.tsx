@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, AuthState, UserPreferences } from '../types/auth';
 import { supabase } from '../integrations/supabase/client';
@@ -14,7 +13,7 @@ interface AuthContextType extends AuthState {
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string) => Promise<{ error?: string }>;
   signOut: () => Promise<void>;
-  updateUserPreferences: (preferences: any) => Promise<void>;
+  updateUserPreferences: (preferences: UserPreferences) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -51,12 +50,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           } else {
             console.log("Found sign-up record:", profileData);
           }
+          
+          // Parse preferences from profileData as UserPreferences or undefined
+          let userPreferences: UserPreferences | undefined;
+          if (profileData?.preferences && typeof profileData.preferences === 'object') {
+            userPreferences = profileData.preferences as UserPreferences;
+          }
             
           const enhancedUser: User = {
             id: user.id,
             email: user.email || '',
             displayName: user.email?.split('@')[0] || '',
-            preferences: profileData?.preferences || undefined,
+            preferences: userPreferences,
             createdAt: user.created_at || new Date().toISOString()
           };
           
@@ -100,12 +105,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           } else {
             console.log("Found sign-up record:", profileData);
           }
+          
+          // Parse preferences from profileData as UserPreferences or undefined
+          let userPreferences: UserPreferences | undefined;
+          if (profileData?.preferences && typeof profileData.preferences === 'object') {
+            userPreferences = profileData.preferences as UserPreferences;
+          }
             
           const enhancedUser: User = {
             id: user.id,
             email: user.email || '',
             displayName: user.email?.split('@')[0] || '',
-            preferences: profileData?.preferences || undefined,
+            preferences: userPreferences,
             createdAt: user.created_at || new Date().toISOString()
           };
           
@@ -297,7 +308,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const updateUserPreferences = async (preferences: any) => {
+  const updateUserPreferences = async (preferences: UserPreferences) => {
     if (!state.user?.email) return;
     
     try {
