@@ -1,7 +1,40 @@
 
 import { supabase } from '../lib/supabase';
-import { useToast, toast } from '@/hooks/use-toast';
+import { toast } from '@/hooks/use-toast';
 import { Review } from '../components/RecipeReviews';
+
+// Function to ensure the reviews table exists
+export async function ensureReviewsTableExists() {
+  try {
+    console.log('Checking if reviews table exists...');
+    
+    // Check if the table exists by attempting a simple query
+    const { error } = await supabase
+      .from('reviews')
+      .select('count()', { count: 'exact', head: true });
+    
+    if (error && error.code === '42P01') { // Table doesn't exist error code
+      console.log('Reviews table does not exist, creating it...');
+      
+      // Create the reviews table using SQL
+      const { error: createError } = await supabase.rpc('create_reviews_table');
+      
+      if (createError) {
+        console.error('Error creating reviews table:', createError);
+        return false;
+      }
+      
+      console.log('Reviews table created successfully');
+      return true;
+    }
+    
+    console.log('Reviews table exists');
+    return true;
+  } catch (error) {
+    console.error('Error checking/creating reviews table:', error);
+    return false;
+  }
+}
 
 // Function to add a new review to the database
 export async function addReview(
@@ -9,6 +42,9 @@ export async function addReview(
 ) {
   try {
     console.log('Adding review to Supabase:', review);
+    
+    // First ensure the table exists
+    await ensureReviewsTableExists();
     
     // Add review to the reviews table
     const { data, error } = await supabase
@@ -26,9 +62,18 @@ export async function addReview(
     
     if (error) {
       console.error('Error adding review:', error);
+      
+      // More descriptive error message
+      let errorMessage = 'Database error occurred';
+      if (error.code === '42P01') {
+        errorMessage = 'Reviews table does not exist - please try again after table creation';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
       toast({
         title: 'Error',
-        description: `Failed to save your review: ${error.message}`,
+        description: `Failed to save your review: ${errorMessage}`,
         variant: 'destructive',
       });
       return null;
@@ -60,6 +105,13 @@ export async function addReview(
 export async function getReviewsByRecipeId(recipeId: string, recipeType: 'local' | 'external') {
   try {
     console.log(`Fetching reviews for ${recipeType} recipe:`, recipeId);
+    
+    // First ensure the table exists
+    const tableExists = await ensureReviewsTableExists();
+    if (!tableExists) {
+      console.log('Reviews table does not exist yet, returning empty array');
+      return [];
+    }
     
     const { data, error } = await supabase
       .from('reviews')

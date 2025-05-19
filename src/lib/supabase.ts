@@ -19,6 +19,63 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   }
 });
 
+// Create the reviews table function
+supabase.functions.invoke('create_reviews_table');
+
+// Register PostgreSQL function to create reviews table if it doesn't exist
+supabase.rpc('create_reviews_table', {}, {
+  head: true
+}).then(({ error }) => {
+  if (error) {
+    console.error('Failed to register table creation function:', error);
+  } else {
+    console.log('Successfully registered table creation function');
+  }
+});
+
+// Execute raw SQL to create the function if it doesn't exist (only for initial setup)
+supabase.rpc('exec_sql', {
+  sql: `
+  CREATE OR REPLACE FUNCTION create_reviews_table()
+  RETURNS void AS $$
+  BEGIN
+    CREATE TABLE IF NOT EXISTS public.reviews (
+      id UUID DEFAULT extensions.uuid_generate_v4() PRIMARY KEY,
+      author TEXT NOT NULL,
+      text TEXT NOT NULL,
+      rating INTEGER NOT NULL,
+      date TIMESTAMP WITH TIME ZONE NOT NULL,
+      recipe_id TEXT NOT NULL,
+      recipe_type TEXT NOT NULL,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    );
+    
+    -- Grant access to anonymous users (adjust as needed)
+    GRANT ALL ON public.reviews TO anon;
+    GRANT ALL ON public.reviews TO authenticated;
+    GRANT ALL ON public.reviews TO service_role;
+  END;
+  $$ LANGUAGE plpgsql;
+  `
+}, {
+  head: true
+}).then(({ error }) => {
+  if (error) {
+    // This is expected if the function already exists or if permissions aren't sufficient
+    console.log('Note: SQL function creation attempted. Result:', error || 'Success');
+  } else {
+    console.log('SQL function created successfully');
+    // Try to execute the function now
+    supabase.rpc('create_reviews_table').then(({ error }) => {
+      if (error) {
+        console.error('Failed to create reviews table:', error);
+      } else {
+        console.log('Reviews table created or already exists');
+      }
+    });
+  }
+});
+
 // Add a function to test the Supabase connection
 export const testSupabaseConnection = async () => {
   try {

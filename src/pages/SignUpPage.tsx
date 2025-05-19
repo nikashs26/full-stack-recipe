@@ -50,7 +50,7 @@ const SignUpPage: React.FC = () => {
           description: "Please check your network connection or try again",
           variant: "destructive"
         });
-      }, 3000); // 3 second timeout
+      }, 5000); // 5 second timeout for better UX
     }
     
     return () => {
@@ -70,7 +70,17 @@ const SignUpPage: React.FC = () => {
     try {
       setIsLoading(true);
       console.log("Attempting to sign up with:", values.email);
-      await signUp(values.email, values.password);
+      const result = await signUp(values.email, values.password);
+      
+      if (result && result.error) {
+        setIsLoading(false);
+        toast({
+          title: "Sign up failed",
+          description: result.error || "Please try again.",
+          variant: "destructive"
+        });
+        return;
+      }
       
       setSignUpSuccess(true);
       
@@ -93,16 +103,16 @@ const SignUpPage: React.FC = () => {
           // even if the auth state hasn't updated yet
           navigate('/preferences');
         }
-      }, 1000);
+      }, 1500);
       
     } catch (error: any) {
       console.error("Sign up error:", error);
+      setIsLoading(false);
       toast({
         title: "Sign up failed",
         description: error.message || "Please try again.",
         variant: "destructive"
       });
-      setIsLoading(false);
     }
   };
 
