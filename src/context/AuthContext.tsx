@@ -190,30 +190,74 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.log('Sign up successful, auth data:', data);
       
       if (data.user) {
-        // Create a record in the sign-ups table
-        const signUpRecord = {
-          email: email,
-          password: "********" // We don't actually store the real password here
-        };
-        
-        console.log('Creating sign-up record:', signUpRecord);
-        
-        const { error: signUpError, data: signUpData } = await supabase
-          .from('sign-ups')
-          .insert([signUpRecord])
-          .select();
+        // We don't need the password in the sign-ups table
+        // Just create a simple record with email to track the user
+        try {
+          console.log('Creating sign-up record for email:', email);
           
-        if (signUpError) {
-          console.error("Error creating sign-up record:", signUpError);
-          // Don't throw here but set error in state
-          setState(prev => ({
-            ...prev, 
-            error: `Account created but failed to create profile: ${signUpError.message}`,
-            isLoading: false
-          }));
-        } else {
-          console.log('Sign-up record created successfully:', signUpData);
-          // Update the state directly since we know it was successful
+          // First check if the sign-ups table exists
+          const { error: tableCheckError } = await supabase
+            .from('sign-ups')
+            .select('email')
+            .limit(1);
+            
+          if (tableCheckError) {
+            console.error('Error checking sign-ups table:', tableCheckError);
+            
+            if (tableCheckError.message.includes('does not exist')) {
+              console.log('The sign-ups table does not exist in Supabase, proceeding without creating record');
+              
+              // Create a user object anyway and proceed
+              const enhancedUser: User = {
+                id: data.user.id,
+                email: data.user.email || '',
+                displayName: data.user.email?.split('@')[0] || '',
+                createdAt: data.user.created_at || new Date().toISOString()
+              };
+              
+              setState({
+                user: enhancedUser,
+                isAuthenticated: true,
+                isLoading: false,
+                error: null
+              });
+              return;
+            }
+          }
+          
+          // If we get here, the table exists, so insert the record
+          const signUpRecord = {
+            email: email
+          };
+          
+          const { error: signUpError } = await supabase
+            .from('sign-ups')
+            .insert([signUpRecord]);
+            
+          if (signUpError) {
+            console.error("Error creating sign-up record:", signUpError);
+            // Don't throw here, just log it but continue with auth
+            console.log("Will proceed with authentication despite profile creation error");
+          }
+          
+          // Update the state directly since authentication was successful
+          const enhancedUser: User = {
+            id: data.user.id,
+            email: data.user.email || '',
+            displayName: data.user.email?.split('@')[0] || '',
+            createdAt: data.user.created_at || new Date().toISOString()
+          };
+          
+          setState({
+            user: enhancedUser,
+            isAuthenticated: true,
+            isLoading: false,
+            error: null
+          });
+        } catch (profileError) {
+          console.error("Unexpected error creating profile:", profileError);
+          
+          // Still authenticate the user even if profile creation failed
           const enhancedUser: User = {
             id: data.user.id,
             email: data.user.email || '',

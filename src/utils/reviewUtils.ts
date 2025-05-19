@@ -1,6 +1,6 @@
 
 import { supabase } from '../lib/supabase';
-import { toast } from '@/hooks/use-toast';
+import { useToast, toast } from '@/hooks/use-toast';
 import { Review } from '../components/RecipeReviews';
 
 // Function to add a new review to the database
@@ -10,28 +10,7 @@ export async function addReview(
   try {
     console.log('Adding review to Supabase:', review);
     
-    // First check if the 'reviews' table exists
-    const { data: tableExists, error: tableCheckError } = await supabase
-      .from('reviews')
-      .select('id')
-      .limit(1);
-      
-    if (tableCheckError) {
-      console.error('Error checking reviews table:', tableCheckError);
-      
-      // If the table doesn't exist, show a more specific error message
-      if (tableCheckError.message.includes('does not exist')) {
-        console.error('The reviews table does not exist in your Supabase project.');
-        toast({
-          title: 'Database Setup Required',
-          description: 'Please create a "reviews" table in your Supabase project with columns: id, author, text, rating, date, recipe_id, recipe_type',
-          variant: 'destructive',
-        });
-        return null;
-      }
-    }
-    
-    // Proceed with adding the review
+    // Add review to the reviews table
     const { data, error } = await supabase
       .from('reviews')
       .insert([{

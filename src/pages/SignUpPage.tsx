@@ -10,7 +10,7 @@ import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from '
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
-import { UserPlus } from 'lucide-react';
+import { UserPlus, Loader } from 'lucide-react';
 
 const formSchema = z.object({
   email: z.string().email({ message: 'Invalid email address' }),
@@ -26,6 +26,7 @@ const SignUpPage: React.FC = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
+  const [signUpSuccess, setSignUpSuccess] = useState(false);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -36,7 +37,7 @@ const SignUpPage: React.FC = () => {
     }
   });
 
-  // Safety timeout reduced to 5 seconds from 10 for quicker feedback
+  // Reduced timeout to 3 seconds for quicker feedback
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
     
@@ -46,10 +47,10 @@ const SignUpPage: React.FC = () => {
         setIsLoading(false);
         toast({
           title: "Sign up taking longer than expected",
-          description: "Please check your email for verification or try again",
+          description: "Please check your network connection or try again",
           variant: "destructive"
         });
-      }, 5000); // 5 second timeout
+      }, 3000); // 3 second timeout
     }
     
     return () => {
@@ -57,19 +58,21 @@ const SignUpPage: React.FC = () => {
     };
   }, [isLoading, toast]);
 
-  // Redirect if authenticated
+  // Redirect if authenticated or signup successful
   useEffect(() => {
     if (isAuthenticated) {
       console.log("User is authenticated, redirecting to /preferences");
       navigate('/preferences');
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, navigate, signUpSuccess]);
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
       setIsLoading(true);
       console.log("Attempting to sign up with:", values.email);
       await signUp(values.email, values.password);
+      
+      setSignUpSuccess(true);
       
       toast({
         title: "Account created!",
@@ -85,6 +88,10 @@ const SignUpPage: React.FC = () => {
             title: "Sign up successful",
             description: "Please wait while we set up your account...",
           });
+          
+          // Force navigation to preferences page after successful signup
+          // even if the auth state hasn't updated yet
+          navigate('/preferences');
         }
       }, 1000);
       
@@ -160,7 +167,7 @@ const SignUpPage: React.FC = () => {
               >
                 {isLoading ? (
                   <>
-                    <span className="mr-2 h-4 w-4 animate-spin inline-block">⌛</span>
+                    <Loader className="mr-2 h-4 w-4 animate-spin" />
                     Signing up...
                   </>
                 ) : (
