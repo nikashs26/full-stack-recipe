@@ -16,19 +16,37 @@ export async function ensureReviewsTableExists() {
     if (error && error.code === '42P01') { // Table doesn't exist error code
       console.log('Reviews table does not exist, creating it...');
       
-      // Create the reviews table using SQL
-      const { error: createError } = await supabase.rpc('create_reviews_table');
+      // Try to create the table using a direct SQL approach
+      const { error: createError } = await supabase.rpc('exec_sql', {
+        sql: `
+        CREATE TABLE IF NOT EXISTS public.reviews (
+          id UUID DEFAULT extensions.uuid_generate_v4() PRIMARY KEY,
+          author TEXT NOT NULL,
+          text TEXT NOT NULL,
+          rating INTEGER NOT NULL,
+          date TIMESTAMP WITH TIME ZONE NOT NULL,
+          recipe_id TEXT NOT NULL,
+          recipe_type TEXT NOT NULL,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );
+        
+        -- Grant access to anonymous users (adjust as needed)
+        GRANT ALL ON public.reviews TO anon;
+        GRANT ALL ON public.reviews TO authenticated;
+        GRANT ALL ON public.reviews TO service_role;
+        `
+      });
       
       if (createError) {
-        console.error('Error creating reviews table:', createError);
+        console.error('Error creating reviews table with SQL:', createError);
         return false;
       }
       
-      console.log('Reviews table created successfully');
+      console.log('Reviews table created successfully with exec_sql');
       return true;
     }
     
-    console.log('Reviews table exists');
+    console.log('Reviews table exists or was checked');
     return true;
   } catch (error) {
     console.error('Error checking/creating reviews table:', error);
@@ -44,7 +62,17 @@ export async function addReview(
     console.log('Adding review to Supabase:', review);
     
     // First ensure the table exists
-    await ensureReviewsTableExists();
+    const tableExists = await ensureReviewsTableExists();
+    
+    if (!tableExists) {
+      console.error('Could not ensure reviews table exists');
+      toast({
+        title: 'Error',
+        description: 'Could not save your review: Reviews table setup failed',
+        variant: 'destructive',
+      });
+      return null;
+    }
     
     // Add review to the reviews table
     const { data, error } = await supabase

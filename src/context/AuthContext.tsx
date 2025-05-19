@@ -1,6 +1,5 @@
-
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { User, AuthState, UserProfile } from '../types/auth';
+import { User, AuthState, UserPreferences } from '../types/auth';
 import { supabase } from '../lib/supabase';
 
 const initialState: AuthState = {
@@ -12,7 +11,7 @@ const initialState: AuthState = {
 
 interface AuthContextType extends AuthState {
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string) => Promise<void>;
+  signUp: (email: string, password: string) => Promise<{ error?: string }>;
   signOut: () => Promise<void>;
   updateUserPreferences: (preferences: any) => Promise<void>;
 }
@@ -170,7 +169,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const signUp = async (email: string, password: string) => {
+  const signUp = async (email: string, password: string): Promise<{ error?: string }> => {
     try {
       // Log the sign-up attempt to help with debugging
       console.log('Attempting to sign up user:', email);
@@ -184,7 +183,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (error) {
         console.error('Supabase Auth Error:', error);
         setState(prev => ({ ...prev, isLoading: false, error: error.message }));
-        throw new Error(error.message);
+        return { error: error.message };
       }
       
       console.log('Sign up successful, auth data:', data);
@@ -221,7 +220,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 isLoading: false,
                 error: null
               });
-              return;
+              
+              return {};
             }
           }
           
@@ -254,7 +254,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             isLoading: false,
             error: null
           });
-        } catch (profileError) {
+          
+          return {};
+        } catch (profileError: any) {
           console.error("Unexpected error creating profile:", profileError);
           
           // Still authenticate the user even if profile creation failed
@@ -271,6 +273,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             isLoading: false,
             error: null
           });
+          
+          return { error: profileError.message || "Failed to create profile" };
         }
       } else {
         console.error("User object not found in sign-up response");
@@ -279,7 +283,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           isLoading: false,
           error: "Failed to create user account" 
         }));
-        throw new Error("Failed to create user account");
+        
+        return { error: "Failed to create user account" };
       }
     } catch (error: any) {
       console.error('Sign up error:', error);
@@ -288,7 +293,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         error: error.message || 'Failed to sign up',
         isLoading: false
       }));
-      throw error;
+      
+      return { error: error.message || 'Failed to sign up' };
     }
   };
 

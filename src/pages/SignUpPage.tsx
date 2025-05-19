@@ -70,6 +70,7 @@ const SignUpPage: React.FC = () => {
     try {
       setIsLoading(true);
       console.log("Attempting to sign up with:", values.email);
+      
       const result = await signUp(values.email, values.password);
       
       if (result && result.error) {

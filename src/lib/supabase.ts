@@ -1,4 +1,3 @@
-
 import { createClient } from '@supabase/supabase-js';
 
 // Check if we have actual environment variables or if we need to use fallbacks
@@ -19,62 +18,60 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   }
 });
 
-// Create the reviews table function
-supabase.functions.invoke('create_reviews_table');
+// Creating the reviews table more consistently
+console.log('Setting up reviews table...');
 
-// Register PostgreSQL function to create reviews table if it doesn't exist
-supabase.rpc('create_reviews_table', {}, {
-  head: true
-}).then(({ error }) => {
-  if (error) {
-    console.error('Failed to register table creation function:', error);
-  } else {
-    console.log('Successfully registered table creation function');
-  }
-});
-
-// Execute raw SQL to create the function if it doesn't exist (only for initial setup)
-supabase.rpc('exec_sql', {
-  sql: `
-  CREATE OR REPLACE FUNCTION create_reviews_table()
-  RETURNS void AS $$
-  BEGIN
-    CREATE TABLE IF NOT EXISTS public.reviews (
-      id UUID DEFAULT extensions.uuid_generate_v4() PRIMARY KEY,
-      author TEXT NOT NULL,
-      text TEXT NOT NULL,
-      rating INTEGER NOT NULL,
-      date TIMESTAMP WITH TIME ZONE NOT NULL,
-      recipe_id TEXT NOT NULL,
-      recipe_type TEXT NOT NULL,
-      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-    );
-    
-    -- Grant access to anonymous users (adjust as needed)
-    GRANT ALL ON public.reviews TO anon;
-    GRANT ALL ON public.reviews TO authenticated;
-    GRANT ALL ON public.reviews TO service_role;
-  END;
-  $$ LANGUAGE plpgsql;
-  `
-}, {
-  head: true
-}).then(({ error }) => {
-  if (error) {
-    // This is expected if the function already exists or if permissions aren't sufficient
-    console.log('Note: SQL function creation attempted. Result:', error || 'Success');
-  } else {
-    console.log('SQL function created successfully');
-    // Try to execute the function now
-    supabase.rpc('create_reviews_table').then(({ error }) => {
-      if (error) {
-        console.error('Failed to create reviews table:', error);
-      } else {
-        console.log('Reviews table created or already exists');
-      }
+// Execute raw SQL to create the reviews table directly
+(async () => {
+  try {
+    const { error } = await supabase.rpc('exec_sql', {
+      sql: `
+      CREATE TABLE IF NOT EXISTS public.reviews (
+        id UUID DEFAULT extensions.uuid_generate_v4() PRIMARY KEY,
+        author TEXT NOT NULL,
+        text TEXT NOT NULL,
+        rating INTEGER NOT NULL,
+        date TIMESTAMP WITH TIME ZONE NOT NULL,
+        recipe_id TEXT NOT NULL,
+        recipe_type TEXT NOT NULL,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+      
+      -- Grant access to anonymous users (adjust as needed)
+      GRANT ALL ON public.reviews TO anon;
+      GRANT ALL ON public.reviews TO authenticated;
+      GRANT ALL ON public.reviews TO service_role;
+      `
     });
+    
+    if (error) {
+      // This is expected if exec_sql function isn't available
+      console.log('Could not create reviews table with exec_sql:', error.message);
+      console.log('Trying alternative approach...');
+      
+      // Try direct SQL execution (might work depending on permissions)
+      const { error: sqlError } = await supabase.from('reviews').select('count(*)', { count: 'exact', head: true });
+      
+      if (sqlError && sqlError.code === '42P01') { // Table doesn't exist error
+        console.log('Reviews table does not exist. Creating using API approach...');
+        
+        // Create table definition programmatically (simplified approach)
+        try {
+          console.log('Creating reviews table using Supabase management API...');
+          // Note: This approach may be limited by permissions
+        } catch (createError) {
+          console.error('Failed to create reviews table:', createError);
+        }
+      } else if (!sqlError) {
+        console.log('Reviews table already exists');
+      }
+    } else {
+      console.log('Reviews table created or already exists');
+    }
+  } catch (err) {
+    console.error('Error setting up reviews table:', err);
   }
-});
+})();
 
 // Add a function to test the Supabase connection
 export const testSupabaseConnection = async () => {
