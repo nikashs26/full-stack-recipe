@@ -1,6 +1,8 @@
+
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, AuthState, UserPreferences } from '../types/auth';
 import { supabase } from '../integrations/supabase/client';
+import { Json } from '../integrations/supabase/types';
 
 const initialState: AuthState = {
   user: null,
@@ -54,7 +56,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // Parse preferences from profileData as UserPreferences or undefined
           let userPreferences: UserPreferences | undefined;
           if (profileData?.preferences && typeof profileData.preferences === 'object') {
-            userPreferences = profileData.preferences as UserPreferences;
+            // Add a validation function to ensure the data conforms to UserPreferences
+            userPreferences = validateUserPreferences(profileData.preferences as unknown as Record<string, any>);
           }
             
           const enhancedUser: User = {
@@ -109,7 +112,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // Parse preferences from profileData as UserPreferences or undefined
           let userPreferences: UserPreferences | undefined;
           if (profileData?.preferences && typeof profileData.preferences === 'object') {
-            userPreferences = profileData.preferences as UserPreferences;
+            // Add a validation function to ensure the data conforms to UserPreferences
+            userPreferences = validateUserPreferences(profileData.preferences as unknown as Record<string, any>);
           }
             
           const enhancedUser: User = {
@@ -145,6 +149,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     };
   }, []);
+
+  // Helper function to validate and convert preferences data to UserPreferences type
+  const validateUserPreferences = (data: Record<string, any>): UserPreferences => {
+    const defaultPreferences: UserPreferences = {
+      dietaryRestrictions: [],
+      favoriteCuisines: [],
+      allergens: [],
+      cookingSkillLevel: 'beginner'
+    };
+    
+    // Check if the data has the required fields and proper types
+    const validatedPrefs: UserPreferences = {
+      dietaryRestrictions: Array.isArray(data.dietaryRestrictions) ? data.dietaryRestrictions : defaultPreferences.dietaryRestrictions,
+      favoriteCuisines: Array.isArray(data.favoriteCuisines) ? data.favoriteCuisines : defaultPreferences.favoriteCuisines,
+      allergens: Array.isArray(data.allergens) ? data.allergens : defaultPreferences.allergens,
+      cookingSkillLevel: ['beginner', 'intermediate', 'advanced'].includes(data.cookingSkillLevel) 
+        ? data.cookingSkillLevel as 'beginner' | 'intermediate' | 'advanced'
+        : defaultPreferences.cookingSkillLevel
+    };
+    
+    return validatedPrefs;
+  };
 
   const signIn = async (email: string, password: string) => {
     try {
@@ -312,10 +338,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!state.user?.email) return;
     
     try {
+      // Convert UserPreferences to Json type for Supabase
+      const jsonPreferences = preferences as unknown as Json;
+      
       const { error } = await supabase
         .from('sign_ups')
         .update({ 
-          preferences: preferences
+          preferences: jsonPreferences
         })
         .eq('email', state.user.email);
         
