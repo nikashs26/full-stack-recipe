@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, AuthState, UserPreferences } from '../types/auth';
 import { supabase } from '../integrations/supabase/client';
@@ -196,17 +195,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Check if this could be due to unverified email
         if (error.message === 'Invalid login credentials') {
           // Check if user exists but might need email verification
-          const { data: userData } = await supabase.auth.admin.listUsers();
-          const userExists = userData?.users?.some(u => u.email === email);
-          
-          if (userExists) {
-            setIsVerificationRequired(true);
-            setState(prev => ({ 
-              ...prev, 
-              isLoading: false, 
-              error: "Your email may not be verified. Please check your inbox for a verification link or try resetting your password." 
-            }));
-            return;
+          try {
+            // Fixed: Handle the user data properly to avoid type error
+            const { data: userData } = await supabase.auth.admin.listUsers();
+            
+            // Properly type check before accessing properties
+            if (userData && userData.users) {
+              const userExists = userData.users.some(u => u.email === email);
+              
+              if (userExists) {
+                setIsVerificationRequired(true);
+                setState(prev => ({ 
+                  ...prev, 
+                  isLoading: false, 
+                  error: "Your email may not be verified. Please check your inbox for a verification link or try resetting your password." 
+                }));
+                return;
+              }
+            }
+          } catch (listError) {
+            console.error("Error checking user existence:", listError);
+            // Continue with generic error if we can't check user existence
           }
         }
         
@@ -440,4 +449,3 @@ export const useAuth = () => {
   }
   return context;
 };
-
