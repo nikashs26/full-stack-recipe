@@ -16,12 +16,15 @@ interface AuthContextType extends AuthState {
   signUp: (email: string, password: string) => Promise<{ error?: string }>;
   signOut: () => Promise<void>;
   updateUserPreferences: (preferences: UserPreferences) => Promise<void>;
+  resetAuthError: () => void;
+  isVerificationRequired: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, setState] = useState<AuthState>(initialState);
+  const [isVerificationRequired, setIsVerificationRequired] = useState(false);
 
   // Check user session on initial load
   useEffect(() => {
@@ -130,6 +133,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             isLoading: false,
             error: null
           });
+          
+          // Reset verification flag when user is successfully signed in
+          setIsVerificationRequired(false);
         } else if (event === 'SIGNED_OUT') {
           console.log("User signed out");
           setState({
@@ -138,6 +144,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             isLoading: false,
             error: null
           });
+          setIsVerificationRequired(false);
         }
       }
     );
@@ -185,6 +192,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       if (error) {
         console.error('Supabase Auth Error:', error);
+        
+        // Check if this could be due to unverified email
+        if (error.message === 'Invalid login credentials') {
+          // Check if user exists but might need email verification
+          const { data: userData } = await supabase.auth.admin.listUsers();
+          const userExists = userData?.users?.some(u => u.email === email);
+          
+          if (userExists) {
+            setIsVerificationRequired(true);
+            setState(prev => ({ 
+              ...prev, 
+              isLoading: false, 
+              error: "Your email may not be verified. Please check your inbox for a verification link or try resetting your password." 
+            }));
+            return;
+          }
+        }
+        
         setState(prev => ({ ...prev, isLoading: false, error: error.message }));
         throw new Error(error.message);
       }
@@ -209,6 +234,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signUp = async (email: string, password: string): Promise<{ error?: string }> => {
     try {
+      // Reset verification flag when attempting a new sign-up
+      setIsVerificationRequired(false);
+      
       // Log the sign-up attempt to help with debugging
       console.log('Attempting to sign up user:', email);
       setState(prev => ({ ...prev, isLoading: true, error: null }));
@@ -225,6 +253,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       
       console.log('Sign up successful, auth data:', data);
+      
+      // Check if email verification is required
+      if (data.user && !data.session) {
+        console.log('Email verification required');
+        setIsVerificationRequired(true);
+        setState(prev => ({ 
+          ...prev, 
+          isLoading: false,
+          error: null
+        }));
+        
+        return { error: "Please check your email to verify your account before signing in." };
+      }
       
       if (data.user) {
         try {
@@ -254,10 +295,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           
           setState({
             user: enhancedUser,
-            isAuthenticated: true,
+            isAuthenticated: !!data.session, // Only set to true if we have a session
             isLoading: false,
             error: null
           });
+          
+          if (!data.session) {
+            return { error: "Please check your email to verify your account before signing in." };
+          }
           
           return {};
         } catch (profileError: any) {
@@ -273,10 +318,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           
           setState({
             user: enhancedUser,
-            isAuthenticated: true,
+            isAuthenticated: !!data.session,
             isLoading: false,
             error: null
           });
+          
+          if (!data.session) {
+            return { error: "Please check your email to verify your account before signing in." };
+          }
           
           return { error: profileError.message || "Failed to create profile" };
         }
@@ -362,6 +411,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.error("Error updating preferences:", error.message);
     }
   };
+  
+  const resetAuthError = () => {
+    setState(prev => ({ ...prev, error: null }));
+  };
 
   return (
     <AuthContext.Provider
@@ -370,7 +423,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         signIn,
         signUp,
         signOut,
-        updateUserPreferences
+        updateUserPreferences,
+        resetAuthError,
+        isVerificationRequired
       }}
     >
       {children}
@@ -385,3 +440,4 @@ export const useAuth = () => {
   }
   return context;
 };
+
