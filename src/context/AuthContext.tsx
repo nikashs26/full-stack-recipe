@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, AuthState, UserPreferences } from '../types/auth';
 import { supabase } from '../integrations/supabase/client';
@@ -200,8 +201,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const { data: userData } = await supabase.auth.admin.listUsers();
             
             // Properly type check before accessing properties
-            if (userData && userData.users) {
-              const userExists = userData.users.some(u => u.email === email);
+            if (userData && userData.users && Array.isArray(userData.users)) {
+              // Explicitly type the user object to ensure email exists
+              interface AdminUser {
+                email?: string;
+                [key: string]: any;
+              }
+              
+              const userExists = userData.users.some((u: AdminUser) => 
+                typeof u === 'object' && 
+                u !== null && 
+                'email' in u && 
+                typeof u.email === 'string' && 
+                u.email === email
+              );
               
               if (userExists) {
                 setIsVerificationRequired(true);
