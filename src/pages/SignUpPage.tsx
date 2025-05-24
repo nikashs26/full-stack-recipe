@@ -10,7 +10,8 @@ import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from '
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
-import { UserPlus, Loader } from 'lucide-react';
+import { UserPlus, Loader, Mail } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 const formSchema = z.object({
   email: z.string().email({ message: 'Invalid email address' }),
@@ -22,10 +23,12 @@ const formSchema = z.object({
 });
 
 const SignUpPage: React.FC = () => {
-  const { signUp, isAuthenticated, isLoading: authLoading, isVerificationRequired } = useAuth();
+  const { signUp, isAuthenticated, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showVerificationMessage, setShowVerificationMessage] = useState(false);
+  const [userEmail, setUserEmail] = useState('');
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -49,6 +52,7 @@ const SignUpPage: React.FC = () => {
     
     try {
       setIsSubmitting(true);
+      setShowVerificationMessage(false);
       console.log("Attempting to sign up with:", values.email);
       
       const result = await signUp(values.email, values.password);
@@ -64,12 +68,16 @@ const SignUpPage: React.FC = () => {
       }
       
       // Check if email verification is required
-      if (isVerificationRequired) {
+      if (result && result.needsVerification) {
+        console.log("Email verification required");
+        setUserEmail(values.email);
+        setShowVerificationMessage(true);
         toast({
           title: "Check your email",
           description: "We've sent you a verification link. Please check your email and click the link to verify your account.",
         });
       } else {
+        console.log("Sign up successful, user should be signed in");
         toast({
           title: "Account created successfully!",
           description: "Welcome to Better Bulk!",
@@ -99,6 +107,18 @@ const SignUpPage: React.FC = () => {
             <h1 className="text-3xl font-bold">Create an Account</h1>
             <p className="text-gray-500 mt-2">Join Better Bulk for personalized recipes</p>
           </div>
+
+          {showVerificationMessage && (
+            <Alert className="mb-6">
+              <Mail className="h-4 w-4" />
+              <AlertTitle>Email Verification Required</AlertTitle>
+              <AlertDescription>
+                We've sent a verification link to <strong>{userEmail}</strong>. 
+                Please check your inbox and click the link to verify your account before signing in.
+                If you don't see the email, check your spam folder.
+              </AlertDescription>
+            </Alert>
+          )}
 
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">

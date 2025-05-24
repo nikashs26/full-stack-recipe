@@ -13,18 +13,16 @@ const initialState: AuthState = {
 
 interface AuthContextType extends AuthState {
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string) => Promise<{ error?: string }>;
+  signUp: (email: string, password: string) => Promise<{ error?: string; needsVerification?: boolean }>;
   signOut: () => Promise<void>;
   updateUserPreferences: (preferences: UserPreferences) => Promise<void>;
   resetAuthError: () => void;
-  isVerificationRequired: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, setState] = useState<AuthState>(initialState);
-  const [isVerificationRequired, setIsVerificationRequired] = useState(false);
 
   // Check user session on initial load
   useEffect(() => {
@@ -56,7 +54,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 isLoading: false,
                 error: null
               });
-              setIsVerificationRequired(false);
               
             } else if (event === 'SIGNED_OUT') {
               console.log("User signed out");
@@ -66,7 +63,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 isLoading: false,
                 error: null
               });
-              setIsVerificationRequired(false);
               
             } else if (event === 'TOKEN_REFRESHED' && session?.user) {
               console.log("Token refreshed");
@@ -156,7 +152,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       console.log('Attempting to sign in user:', email);
       setState(prev => ({ ...prev, isLoading: true, error: null }));
-      setIsVerificationRequired(false);
       
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
@@ -165,17 +160,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       if (error) {
         console.error('Sign in error:', error.message);
-        
-        if (error.message.includes('Email not confirmed') || error.message.includes('email_not_confirmed')) {
-          setIsVerificationRequired(true);
-          setState(prev => ({ 
-            ...prev, 
-            isLoading: false, 
-            error: "Please verify your email address before signing in. Check your inbox for a verification link." 
-          }));
-          return;
-        }
-        
         setState(prev => ({ ...prev, isLoading: false, error: error.message }));
         throw new Error(error.message);
       }
@@ -186,6 +170,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } else {
         console.log('Sign in returned no session');
         setState(prev => ({ ...prev, isLoading: false, error: "Sign in failed - no session created" }));
+        throw new Error("Sign in failed - no session created");
       }
       
     } catch (error: any) {
@@ -199,11 +184,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const signUp = async (email: string, password: string): Promise<{ error?: string }> => {
+  const signUp = async (email: string, password: string): Promise<{ error?: string; needsVerification?: boolean }> => {
     try {
       console.log('Attempting to sign up user:', email);
       setState(prev => ({ ...prev, isLoading: true, error: null }));
-      setIsVerificationRequired(false);
       
       const { data, error } = await supabase.auth.signUp({
         email,
@@ -221,13 +205,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Check if email confirmation is required
       if (data.user && !data.session) {
         console.log('Email verification required for signup');
-        setIsVerificationRequired(true);
         setState(prev => ({ 
           ...prev, 
           isLoading: false,
           error: null
         }));
-        return { error: "Please check your email to verify your account before signing in." };
+        return { needsVerification: true };
       }
       
       // If we have a session, the user is automatically signed in
@@ -308,8 +291,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         signUp,
         signOut,
         updateUserPreferences,
-        resetAuthError,
-        isVerificationRequired
+        resetAuthError
       }}
     >
       {children}
