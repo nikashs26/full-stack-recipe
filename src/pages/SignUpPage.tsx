@@ -22,11 +22,10 @@ const formSchema = z.object({
 });
 
 const SignUpPage: React.FC = () => {
-  const { signUp, isAuthenticated } = useAuth();
+  const { signUp, isAuthenticated, isLoading: authLoading, isVerificationRequired } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [isLoading, setIsLoading] = useState(false);
-  const [signUpSuccess, setSignUpSuccess] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -37,85 +36,59 @@ const SignUpPage: React.FC = () => {
     }
   });
 
-  // Reduced timeout to 3 seconds for quicker feedback
-  useEffect(() => {
-    let timer: ReturnType<typeof setTimeout>;
-    
-    if (isLoading) {
-      timer = setTimeout(() => {
-        console.log('Sign up timeout reached, resetting loading state');
-        setIsLoading(false);
-        toast({
-          title: "Sign up taking longer than expected",
-          description: "Please check your network connection or try again",
-          variant: "destructive"
-        });
-      }, 5000); // 5 second timeout for better UX
-    }
-    
-    return () => {
-      if (timer) clearTimeout(timer);
-    };
-  }, [isLoading, toast]);
-
-  // Redirect if authenticated or signup successful
+  // Redirect if authenticated
   useEffect(() => {
     if (isAuthenticated) {
       console.log("User is authenticated, redirecting to /preferences");
       navigate('/preferences');
     }
-  }, [isAuthenticated, navigate, signUpSuccess]);
+  }, [isAuthenticated, navigate]);
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
+    if (isSubmitting) return;
+    
     try {
-      setIsLoading(true);
+      setIsSubmitting(true);
       console.log("Attempting to sign up with:", values.email);
       
       const result = await signUp(values.email, values.password);
       
       if (result && result.error) {
-        setIsLoading(false);
+        console.log("Sign up failed:", result.error);
         toast({
           title: "Sign up failed",
-          description: result.error || "Please try again.",
+          description: result.error,
           variant: "destructive"
         });
         return;
       }
       
-      setSignUpSuccess(true);
-      
-      toast({
-        title: "Account created!",
-        description: "Now let's set up your preferences.",
-      });
-      
-      // Small delay before checking authentication state
-      setTimeout(() => {
-        if (!isAuthenticated) {
-          setIsLoading(false);
-          console.log("Authentication state not updated yet");
-          toast({
-            title: "Sign up successful",
-            description: "Please wait while we set up your account...",
-          });
-          
-          // Force navigation to preferences page after successful signup
-          // even if the auth state hasn't updated yet
-          navigate('/preferences');
-        }
-      }, 1500);
+      // Check if email verification is required
+      if (isVerificationRequired) {
+        toast({
+          title: "Check your email",
+          description: "We've sent you a verification link. Please check your email and click the link to verify your account.",
+        });
+      } else {
+        toast({
+          title: "Account created successfully!",
+          description: "Welcome to Better Bulk!",
+        });
+      }
       
     } catch (error: any) {
       console.error("Sign up error:", error);
-      setIsLoading(false);
       toast({
         title: "Sign up failed",
         description: error.message || "Please try again.",
         variant: "destructive"
       });
+    } finally {
+      setIsSubmitting(false);
     }
   };
+
+  const isLoading = authLoading || isSubmitting;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -179,7 +152,7 @@ const SignUpPage: React.FC = () => {
                 {isLoading ? (
                   <>
                     <Loader className="mr-2 h-4 w-4 animate-spin" />
-                    Signing up...
+                    {isSubmitting ? 'Creating account...' : 'Loading...'}
                   </>
                 ) : (
                   <>
