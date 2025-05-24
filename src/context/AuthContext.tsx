@@ -39,34 +39,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return;
         }
         
-        if (data?.session) {
+        if (data?.session?.user) {
           console.log("Session found:", data.session);
-          const { user } = data.session;
+          const user = data.session.user;
           
-          // Get user profile data if available
-          const { data: profileData, error: profileError } = await supabase
-            .from('sign_ups')
-            .select('*')
-            .eq('email', user.email)
-            .single();
-            
-          if (profileError) {
-            console.log("No sign-up record found, user may have been created through direct auth");
-          } else {
-            console.log("Found sign-up record:", profileData);
-          }
-          
-          // Parse preferences from profileData as UserPreferences or undefined
-          let userPreferences: UserPreferences | undefined;
-          if (profileData?.preferences && typeof profileData.preferences === 'object') {
-            userPreferences = validateUserPreferences(profileData.preferences as unknown as Record<string, any>);
-          }
-            
           const enhancedUser: User = {
             id: user.id,
             email: user.email || '',
             displayName: user.email?.split('@')[0] || '',
-            preferences: userPreferences,
             createdAt: user.created_at || new Date().toISOString()
           };
           
@@ -90,38 +70,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     
     // Set up auth state change listener
     const { data: authListener } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log("Auth state changed:", event);
+      (event, session) => {
+        console.log("Auth state changed:", event, session);
         
         if (event === 'SIGNED_IN' && session?.user) {
           const user = session.user;
-          
           console.log("User signed in:", user);
           
-          // Get user sign-up record if available
-          const { data: profileData, error: profileError } = await supabase
-            .from('sign_ups')
-            .select('*')
-            .eq('email', user.email)
-            .single();
-            
-          if (profileError) {
-            console.log("No sign-up record found:", profileError.message);
-          } else {
-            console.log("Found sign-up record:", profileData);
-          }
-          
-          // Parse preferences from profileData as UserPreferences or undefined
-          let userPreferences: UserPreferences | undefined;
-          if (profileData?.preferences && typeof profileData.preferences === 'object') {
-            userPreferences = validateUserPreferences(profileData.preferences as unknown as Record<string, any>);
-          }
-            
           const enhancedUser: User = {
             id: user.id,
             email: user.email || '',
             displayName: user.email?.split('@')[0] || '',
-            preferences: userPreferences,
             createdAt: user.created_at || new Date().toISOString()
           };
           
@@ -132,7 +91,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             error: null
           });
           
-          // Reset verification flag when user is successfully signed in
           setIsVerificationRequired(false);
         } else if (event === 'SIGNED_OUT') {
           console.log("User signed out");
@@ -143,39 +101,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             error: null
           });
           setIsVerificationRequired(false);
+        } else if (event === 'TOKEN_REFRESHED') {
+          console.log("Token refreshed");
+          if (session?.user) {
+            const enhancedUser: User = {
+              id: session.user.id,
+              email: session.user.email || '',
+              displayName: session.user.email?.split('@')[0] || '',
+              createdAt: session.user.created_at || new Date().toISOString()
+            };
+            
+            setState(prev => ({
+              ...prev,
+              user: enhancedUser,
+              isAuthenticated: true,
+              error: null
+            }));
+          }
         }
       }
     );
     
-    // Cleanup subscription on unmount
     return () => {
-      if (authListener && authListener.subscription) {
+      if (authListener?.subscription) {
         authListener.subscription.unsubscribe();
       }
     };
   }, []);
-
-  // Helper function to validate and convert preferences data to UserPreferences type
-  const validateUserPreferences = (data: Record<string, any>): UserPreferences => {
-    const defaultPreferences: UserPreferences = {
-      dietaryRestrictions: [],
-      favoriteCuisines: [],
-      allergens: [],
-      cookingSkillLevel: 'beginner'
-    };
-    
-    // Check if the data has the required fields and proper types
-    const validatedPrefs: UserPreferences = {
-      dietaryRestrictions: Array.isArray(data.dietaryRestrictions) ? data.dietaryRestrictions : defaultPreferences.dietaryRestrictions,
-      favoriteCuisines: Array.isArray(data.favoriteCuisines) ? data.favoriteCuisines : defaultPreferences.favoriteCuisines,
-      allergens: Array.isArray(data.allergens) ? data.allergens : defaultPreferences.allergens,
-      cookingSkillLevel: ['beginner', 'intermediate', 'advanced'].includes(data.cookingSkillLevel) 
-        ? data.cookingSkillLevel as 'beginner' | 'intermediate' | 'advanced'
-        : defaultPreferences.cookingSkillLevel
-    };
-    
-    return validatedPrefs;
-  };
 
   const signIn = async (email: string, password: string) => {
     try {
@@ -188,10 +140,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
       
       if (error) {
-        console.error('Supabase Auth Error:', error);
+        console.error('Sign in error:', error);
         
-        // Check if this is an email verification issue
-        if (error.message === 'Invalid login credentials' || error.message === 'Email not confirmed') {
+        if (error.message.includes('Email not confirmed') || error.message.includes('email_not_confirmed')) {
           setIsVerificationRequired(true);
           setState(prev => ({ 
             ...prev, 
@@ -205,12 +156,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw new Error(error.message);
       }
       
-      console.log('Sign in successful, auth data:', data);
+      console.log('Sign in successful:', data);
+      // Auth state listener will handle the state update
       
-      // We'll let the auth state listener handle updating the state
-      if (!data.user) {
-        setState(prev => ({ ...prev, isLoading: false }));
-      }
     } catch (error: any) {
       console.error('Sign in error:', error);
       setState(prev => ({
@@ -225,7 +173,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signUp = async (email: string, password: string): Promise<{ error?: string }> => {
     try {
       setIsVerificationRequired(false);
-      
       console.log('Attempting to sign up user:', email);
       setState(prev => ({ ...prev, isLoading: true, error: null }));
       
@@ -235,14 +182,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
       
       if (error) {
-        console.error('Supabase Auth Error:', error);
+        console.error('Sign up error:', error);
         setState(prev => ({ ...prev, isLoading: false, error: error.message }));
         return { error: error.message };
       }
       
-      console.log('Sign up successful, auth data:', data);
+      console.log('Sign up successful:', data);
       
-      // Check if email verification is required
       if (data.user && !data.session) {
         console.log('Email verification required');
         setIsVerificationRequired(true);
@@ -251,84 +197,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           isLoading: false,
           error: null
         }));
-        
         return { error: "Please check your email to verify your account before signing in." };
       }
       
-      if (data.user) {
-        try {
-          console.log('Creating sign-up record for email:', email);
-          
-          // Insert into the sign_ups table
-          const signUpRecord = {
-            email: email
-          };
-          
-          const { error: signUpError } = await supabase
-            .from('sign_ups')
-            .insert([signUpRecord]);
-            
-          if (signUpError) {
-            console.error("Error creating sign-up record:", signUpError);
-            console.log("Will proceed with authentication despite profile creation error");
-          }
-          
-          // If we have a session, the user is automatically logged in
-          if (data.session) {
-            const enhancedUser: User = {
-              id: data.user.id,
-              email: data.user.email || '',
-              displayName: data.user.email?.split('@')[0] || '',
-              createdAt: data.user.created_at || new Date().toISOString()
-            };
-            
-            setState({
-              user: enhancedUser,
-              isAuthenticated: true,
-              isLoading: false,
-              error: null
-            });
-            
-            return {};
-          } else {
-            setState(prev => ({ ...prev, isLoading: false }));
-            return { error: "Please check your email to verify your account before signing in." };
-          }
-        } catch (profileError: any) {
-          console.error("Unexpected error creating profile:", profileError);
-          
-          // Still authenticate the user even if profile creation failed
-          if (data.session) {
-            const enhancedUser: User = {
-              id: data.user.id,
-              email: data.user.email || '',
-              displayName: data.user.email?.split('@')[0] || '',
-              createdAt: data.user.created_at || new Date().toISOString()
-            };
-            
-            setState({
-              user: enhancedUser,
-              isAuthenticated: true,
-              isLoading: false,
-              error: null
-            });
-            
-            return {};
-          } else {
-            setState(prev => ({ ...prev, isLoading: false }));
-            return { error: "Please check your email to verify your account before signing in." };
-          }
-        }
-      } else {
-        console.error("User object not found in sign-up response");
-        setState(prev => ({ 
-          ...prev, 
-          isLoading: false,
-          error: "Failed to create user account" 
-        }));
-        
-        return { error: "Failed to create user account" };
+      if (data.session) {
+        console.log('User automatically signed in after signup');
+        // Auth state listener will handle the state update
+        setState(prev => ({ ...prev, isLoading: false }));
+        return {};
       }
+      
+      setState(prev => ({ ...prev, isLoading: false }));
+      return {};
+      
     } catch (error: any) {
       console.error('Sign up error:', error);
       setState(prev => ({
@@ -336,7 +217,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         error: error.message || 'Failed to sign up',
         isLoading: false
       }));
-      
       return { error: error.message || 'Failed to sign up' };
     }
   };
@@ -350,23 +230,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setState(prev => ({ ...prev, error: error.message, isLoading: false }));
         throw error;
       }
-      
-      // State update should be handled by auth listener, but
-      // let's make sure we don't get stuck in a loading state
-      setTimeout(() => {
-        setState(prev => {
-          // Only update if we're still in loading state
-          if (prev.isLoading) {
-            return {
-              user: null,
-              isAuthenticated: false,
-              isLoading: false,
-              error: null
-            };
-          }
-          return prev;
-        });
-      }, 1000);
+      // Auth state listener will handle the state update
     } catch (error: any) {
       console.error("Error signing out:", error.message);
       setState(prev => ({ ...prev, isLoading: false }));
@@ -377,7 +241,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!state.user?.email) return;
     
     try {
-      // Convert UserPreferences to Json type for Supabase
       const jsonPreferences = preferences as unknown as Json;
       
       const { error } = await supabase
@@ -389,7 +252,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
       if (error) throw error;
       
-      // Update local state
       setState({
         ...state,
         user: {
