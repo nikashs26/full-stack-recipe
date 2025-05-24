@@ -59,7 +59,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // Parse preferences from profileData as UserPreferences or undefined
           let userPreferences: UserPreferences | undefined;
           if (profileData?.preferences && typeof profileData.preferences === 'object') {
-            // Add a validation function to ensure the data conforms to UserPreferences
             userPreferences = validateUserPreferences(profileData.preferences as unknown as Record<string, any>);
           }
             
@@ -115,7 +114,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // Parse preferences from profileData as UserPreferences or undefined
           let userPreferences: UserPreferences | undefined;
           if (profileData?.preferences && typeof profileData.preferences === 'object') {
-            // Add a validation function to ensure the data conforms to UserPreferences
             userPreferences = validateUserPreferences(profileData.preferences as unknown as Record<string, any>);
           }
             
@@ -181,7 +179,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signIn = async (email: string, password: string) => {
     try {
-      // Log the sign-in attempt to help with debugging
       console.log('Attempting to sign in user:', email);
       setState(prev => ({ ...prev, isLoading: true, error: null }));
       
@@ -193,43 +190,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (error) {
         console.error('Supabase Auth Error:', error);
         
-        // Check if this could be due to unverified email
-        if (error.message === 'Invalid login credentials') {
-          // Check if user exists but might need email verification
-          try {
-            // Fixed: Handle the user data properly to avoid type error
-            const { data: userData } = await supabase.auth.admin.listUsers();
-            
-            // Properly type check before accessing properties
-            if (userData && userData.users && Array.isArray(userData.users)) {
-              // Explicitly type the user object to ensure email exists
-              interface AdminUser {
-                email?: string;
-                [key: string]: any;
-              }
-              
-              const userExists = userData.users.some((u: AdminUser) => 
-                typeof u === 'object' && 
-                u !== null && 
-                'email' in u && 
-                typeof u.email === 'string' && 
-                u.email === email
-              );
-              
-              if (userExists) {
-                setIsVerificationRequired(true);
-                setState(prev => ({ 
-                  ...prev, 
-                  isLoading: false, 
-                  error: "Your email may not be verified. Please check your inbox for a verification link or try resetting your password." 
-                }));
-                return;
-              }
-            }
-          } catch (listError) {
-            console.error("Error checking user existence:", listError);
-            // Continue with generic error if we can't check user existence
-          }
+        // Check if this is an email verification issue
+        if (error.message === 'Invalid login credentials' || error.message === 'Email not confirmed') {
+          setIsVerificationRequired(true);
+          setState(prev => ({ 
+            ...prev, 
+            isLoading: false, 
+            error: "Please verify your email address before signing in. Check your inbox for a verification link." 
+          }));
+          return;
         }
         
         setState(prev => ({ ...prev, isLoading: false, error: error.message }));
@@ -239,7 +208,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.log('Sign in successful, auth data:', data);
       
       // We'll let the auth state listener handle updating the state
-      // Just make sure we're not stuck in a loading state
       if (!data.user) {
         setState(prev => ({ ...prev, isLoading: false }));
       }
@@ -256,10 +224,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signUp = async (email: string, password: string): Promise<{ error?: string }> => {
     try {
-      // Reset verification flag when attempting a new sign-up
       setIsVerificationRequired(false);
       
-      // Log the sign-up attempt to help with debugging
       console.log('Attempting to sign up user:', email);
       setState(prev => ({ ...prev, isLoading: true, error: null }));
       
@@ -307,49 +273,51 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             console.log("Will proceed with authentication despite profile creation error");
           }
           
-          // Update the state directly since authentication was successful
-          const enhancedUser: User = {
-            id: data.user.id,
-            email: data.user.email || '',
-            displayName: data.user.email?.split('@')[0] || '',
-            createdAt: data.user.created_at || new Date().toISOString()
-          };
-          
-          setState({
-            user: enhancedUser,
-            isAuthenticated: !!data.session, // Only set to true if we have a session
-            isLoading: false,
-            error: null
-          });
-          
-          if (!data.session) {
+          // If we have a session, the user is automatically logged in
+          if (data.session) {
+            const enhancedUser: User = {
+              id: data.user.id,
+              email: data.user.email || '',
+              displayName: data.user.email?.split('@')[0] || '',
+              createdAt: data.user.created_at || new Date().toISOString()
+            };
+            
+            setState({
+              user: enhancedUser,
+              isAuthenticated: true,
+              isLoading: false,
+              error: null
+            });
+            
+            return {};
+          } else {
+            setState(prev => ({ ...prev, isLoading: false }));
             return { error: "Please check your email to verify your account before signing in." };
           }
-          
-          return {};
         } catch (profileError: any) {
           console.error("Unexpected error creating profile:", profileError);
           
           // Still authenticate the user even if profile creation failed
-          const enhancedUser: User = {
-            id: data.user.id,
-            email: data.user.email || '',
-            displayName: data.user.email?.split('@')[0] || '',
-            createdAt: data.user.created_at || new Date().toISOString()
-          };
-          
-          setState({
-            user: enhancedUser,
-            isAuthenticated: !!data.session,
-            isLoading: false,
-            error: null
-          });
-          
-          if (!data.session) {
+          if (data.session) {
+            const enhancedUser: User = {
+              id: data.user.id,
+              email: data.user.email || '',
+              displayName: data.user.email?.split('@')[0] || '',
+              createdAt: data.user.created_at || new Date().toISOString()
+            };
+            
+            setState({
+              user: enhancedUser,
+              isAuthenticated: true,
+              isLoading: false,
+              error: null
+            });
+            
+            return {};
+          } else {
+            setState(prev => ({ ...prev, isLoading: false }));
             return { error: "Please check your email to verify your account before signing in." };
           }
-          
-          return { error: profileError.message || "Failed to create profile" };
         }
       } else {
         console.error("User object not found in sign-up response");
