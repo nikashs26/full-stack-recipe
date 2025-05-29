@@ -10,8 +10,7 @@ import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from '
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
-import { UserPlus, Loader, Mail } from 'lucide-react';
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { UserPlus, Loader } from 'lucide-react';
 
 const formSchema = z.object({
   email: z.string().email({ message: 'Invalid email address' }),
@@ -23,12 +22,11 @@ const formSchema = z.object({
 });
 
 const SignUpPage: React.FC = () => {
-  const { signUp, isAuthenticated, isLoading: authLoading } = useAuth();
+  const { signUp, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showVerificationMessage, setShowVerificationMessage] = useState(false);
-  const [userEmail, setUserEmail] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [signUpSuccess, setSignUpSuccess] = useState(false);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -39,64 +37,85 @@ const SignUpPage: React.FC = () => {
     }
   });
 
-  // Redirect if authenticated
+  // Reduced timeout to 3 seconds for quicker feedback
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    
+    if (isLoading) {
+      timer = setTimeout(() => {
+        console.log('Sign up timeout reached, resetting loading state');
+        setIsLoading(false);
+        toast({
+          title: "Sign up taking longer than expected",
+          description: "Please check your network connection or try again",
+          variant: "destructive"
+        });
+      }, 5000); // 5 second timeout for better UX
+    }
+    
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [isLoading, toast]);
+
+  // Redirect if authenticated or signup successful
   useEffect(() => {
     if (isAuthenticated) {
       console.log("User is authenticated, redirecting to /preferences");
       navigate('/preferences');
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, navigate, signUpSuccess]);
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
-    if (isSubmitting) return;
-    
     try {
-      setIsSubmitting(true);
-      setShowVerificationMessage(false);
+      setIsLoading(true);
       console.log("Attempting to sign up with:", values.email);
       
       const result = await signUp(values.email, values.password);
       
       if (result && result.error) {
-        console.log("Sign up failed:", result.error);
+        setIsLoading(false);
         toast({
           title: "Sign up failed",
-          description: result.error,
+          description: result.error || "Please try again.",
           variant: "destructive"
         });
         return;
       }
       
-      // Check if email verification is required
-      if (result && result.needsVerification) {
-        console.log("Email verification required");
-        setUserEmail(values.email);
-        setShowVerificationMessage(true);
-        toast({
-          title: "Check your email",
-          description: "We've sent you a verification link. Please check your email and click the link to verify your account.",
-        });
-      } else {
-        console.log("Sign up successful, user should be signed in");
-        toast({
-          title: "Account created successfully!",
-          description: "Welcome to Better Bulk!",
-        });
-      }
+      setSignUpSuccess(true);
+      
+      toast({
+        title: "Account created!",
+        description: "Now let's set up your preferences.",
+      });
+      
+      // Small delay before checking authentication state
+      setTimeout(() => {
+        if (!isAuthenticated) {
+          setIsLoading(false);
+          console.log("Authentication state not updated yet");
+          toast({
+            title: "Sign up successful",
+            description: "Please wait while we set up your account...",
+          });
+          
+          // Force navigation to preferences page after successful signup
+          // even if the auth state hasn't updated yet
+          navigate('/preferences');
+        }
+      }, 1500);
       
     } catch (error: any) {
       console.error("Sign up error:", error);
+      setIsLoading(false);
       toast({
         title: "Sign up failed",
         description: error.message || "Please try again.",
         variant: "destructive"
       });
-    } finally {
-      setIsSubmitting(false);
     }
   };
-
-  const isLoading = authLoading || isSubmitting;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -107,18 +126,6 @@ const SignUpPage: React.FC = () => {
             <h1 className="text-3xl font-bold">Create an Account</h1>
             <p className="text-gray-500 mt-2">Join Better Bulk for personalized recipes</p>
           </div>
-
-          {showVerificationMessage && (
-            <Alert className="mb-6">
-              <Mail className="h-4 w-4" />
-              <AlertTitle>Email Verification Required</AlertTitle>
-              <AlertDescription>
-                We've sent a verification link to <strong>{userEmail}</strong>. 
-                Please check your inbox and click the link to verify your account before signing in.
-                If you don't see the email, check your spam folder.
-              </AlertDescription>
-            </Alert>
-          )}
 
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
@@ -172,7 +179,7 @@ const SignUpPage: React.FC = () => {
                 {isLoading ? (
                   <>
                     <Loader className="mr-2 h-4 w-4 animate-spin" />
-                    {isSubmitting ? 'Creating account...' : 'Loading...'}
+                    Signing up...
                   </>
                 ) : (
                   <>

@@ -10,9 +10,7 @@ import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from '
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
-import { LogIn, Loader2, AlertTriangle, Mail } from 'lucide-react';
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { LogIn, Loader2 } from 'lucide-react';
 
 const formSchema = z.object({
   email: z.string().email({ message: 'Invalid email address' }),
@@ -20,12 +18,10 @@ const formSchema = z.object({
 });
 
 const SignInPage: React.FC = () => {
-  const { signIn, isAuthenticated, isVerificationRequired, error, resetAuthError } = useAuth();
+  const { signIn, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
-  const [showVerificationDialog, setShowVerificationDialog] = useState(false);
-  const [verificationEmail, setVerificationEmail] = useState('');
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -34,13 +30,6 @@ const SignInPage: React.FC = () => {
       password: ''
     }
   });
-
-  // Reset auth errors when component unmounts
-  useEffect(() => {
-    return () => {
-      resetAuthError();
-    };
-  }, [resetAuthError]);
 
   // Safety timeout to prevent UI from getting stuck
   useEffect(() => {
@@ -70,22 +59,6 @@ const SignInPage: React.FC = () => {
     }
   }, [isAuthenticated, navigate]);
 
-  // Show verification dialog if needed
-  useEffect(() => {
-    if (isVerificationRequired) {
-      setShowVerificationDialog(true);
-      setVerificationEmail(form.getValues().email);
-    }
-  }, [isVerificationRequired, form]);
-
-  // Reset verification dialog when form values change
-  useEffect(() => {
-    const subscription = form.watch(() => {
-      setShowVerificationDialog(false);
-    });
-    return () => subscription.unsubscribe();
-  }, [form]);
-
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
       setIsLoading(true);
@@ -98,7 +71,11 @@ const SignInPage: React.FC = () => {
       // No need to navigate here - the useEffect will handle it
     } catch (error: any) {
       console.error("Sign in error:", error);
-      // Toast notification will be shown for the error from AuthContext state
+      toast({
+        title: "Sign in failed",
+        description: error.message || "Invalid email or password. Please check your credentials or sign up.",
+        variant: "destructive"
+      });
       setIsLoading(false); // Make sure loading state is reset on error
     }
   };
@@ -112,14 +89,6 @@ const SignInPage: React.FC = () => {
             <h1 className="text-3xl font-bold">Sign In</h1>
             <p className="text-gray-500 mt-2">Welcome back to Better Bulk</p>
           </div>
-
-          {error && (
-            <Alert variant="destructive" className="mb-6">
-              <AlertTriangle className="h-4 w-4" />
-              <AlertTitle>Error</AlertTitle>
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
 
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
@@ -179,28 +148,6 @@ const SignInPage: React.FC = () => {
               </Link>
             </p>
           </div>
-
-          {/* Email Verification Dialog */}
-          <Dialog open={showVerificationDialog} onOpenChange={setShowVerificationDialog}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Email Verification Required</DialogTitle>
-                <DialogDescription>
-                  <div className="py-4">
-                    <div className="flex items-center justify-center mb-4">
-                      <Mail className="h-12 w-12 text-blue-500" />
-                    </div>
-                    <p className="mb-4">
-                      We've sent a verification link to <strong>{verificationEmail}</strong>. Please check your inbox and verify your email before signing in.
-                    </p>
-                    <p className="text-sm text-gray-500">
-                      If you don't see the email, please check your spam folder or try signing up again.
-                    </p>
-                  </div>
-                </DialogDescription>
-              </DialogHeader>
-            </DialogContent>
-          </Dialog>
         </div>
       </main>
     </div>
