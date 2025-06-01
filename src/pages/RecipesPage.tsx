@@ -1,13 +1,14 @@
-
 import React, { useState, useEffect } from 'react';
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Header from '../components/Header';
 import FilterBar from '../components/FilterBar';
 import RecipeCard from '../components/RecipeCard';
+import ManualRecipeCard from '../components/ManualRecipeCard';
 import { loadRecipes, saveRecipes, deleteRecipe as deleteRecipeFromStorage, getLocalRecipes } from '../utils/storage';
 import { filterRecipes, getUniqueCuisines, formatExternalRecipeCuisine, formatRecipeForDisplay } from '../utils/recipeUtils';
 import { fetchRecipes, getAllRecipesFromDB } from '../lib/spoonacular';
+import { fetchManualRecipes, ManualRecipe } from '../lib/manualRecipes';
 import { Recipe } from '../types/recipe';
 import { SpoonacularRecipe } from '../types/spoonacular';
 import { Loader2, Search, AlertCircle, Database } from 'lucide-react';
@@ -32,6 +33,13 @@ const RecipesPage: React.FC = () => {
   const [dbStatus, setDbStatus] = useState<'checking' | 'connected' | 'disconnected'>('checking');
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // Query for manual recipes from Supabase
+  const { data: manualRecipes = [], isLoading: isManualLoading } = useQuery({
+    queryKey: ['manualRecipes'],
+    queryFn: fetchManualRecipes,
+    staleTime: 300000, // Cache for 5 minutes
+  });
 
   useEffect(() => {
     const localRecipes = getLocalRecipes();
@@ -103,7 +111,7 @@ const RecipesPage: React.FC = () => {
     }
   }, [recipes, searchTerm, dietaryFilter, cuisineFilter, ingredientTerm]);
 
-  // Combine local and external recipes into one unified list
+  // Combine local, external, and manual recipes into one unified list
   useEffect(() => {
     try {
       // Make sure to handle potential undefined values in the map functions
@@ -129,6 +137,30 @@ const RecipesPage: React.FC = () => {
       setCombinedRecipes([]);
     }
   }, [filteredRecipes, filteredExternalRecipes]);
+
+  // Filter manual recipes based on search criteria
+  const filteredManualRecipes = React.useMemo(() => {
+    if (!Array.isArray(manualRecipes)) return [];
+    
+    return manualRecipes.filter(recipe => {
+      // Search term filter (applies to recipe title)
+      const matchesSearchTerm = searchTerm 
+        ? recipe.title?.toLowerCase().includes(searchTerm.toLowerCase()) 
+        : true;
+      
+      // Dietary filter
+      const matchesDietary = dietaryFilter 
+        ? recipe.diets?.some(diet => diet.toLowerCase().includes(dietaryFilter.toLowerCase()))
+        : true;
+      
+      // Cuisine filter
+      const matchesCuisine = cuisineFilter 
+        ? recipe.cuisine?.some(cuisine => cuisine.toLowerCase() === cuisineFilter.toLowerCase())
+        : true;
+      
+      return matchesSearchTerm && matchesDietary && matchesCuisine;
+    });
+  }, [manualRecipes, searchTerm, dietaryFilter, cuisineFilter]);
 
   const handleDeleteRecipe = (id: string) => {
     if (!id) {
@@ -312,22 +344,41 @@ const RecipesPage: React.FC = () => {
           </Alert>
         )}
 
-        {combinedRecipes.length > 0 ? (
-          <div className="grid grid-cols-1 gap-y-8">
+        {/* Manual Recipes Section */}
+        {filteredManualRecipes.length > 0 && (
+          <div className="mb-8">
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">Manual Recipes</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {combinedRecipes.map((recipe, index) => (
-                <RecipeCard 
-                  key={`recipe-${index}-${recipe?.id || index}`}
+              {filteredManualRecipes.map((recipe) => (
+                <ManualRecipeCard 
+                  key={`manual-${recipe.id}`}
                   recipe={recipe}
-                  onDelete={handleDeleteRecipe}
-                  isExternal={!!recipe.isExternal}
                 />
               ))}
             </div>
           </div>
+        )}
+
+        {/* Other Recipes Section */}
+        {combinedRecipes.length > 0 ? (
+          <div className="grid grid-cols-1 gap-y-8">
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-4">Other Recipes</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                {combinedRecipes.map((recipe, index) => (
+                  <RecipeCard 
+                    key={`recipe-${index}-${recipe?.id || index}`}
+                    recipe={recipe}
+                    onDelete={handleDeleteRecipe}
+                    isExternal={!!recipe.isExternal}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
         ) : (
           <>
-            {!isExternalLoading && (
+            {!isExternalLoading && !isManualLoading && filteredManualRecipes.length === 0 && (
               <div className="text-center py-12">
                 <Search className="mx-auto h-12 w-12 text-gray-400" />
                 <h3 className="mt-2 text-lg font-medium text-gray-900">No recipes found</h3>
@@ -339,7 +390,7 @@ const RecipesPage: React.FC = () => {
           </>
         )}
 
-        {isExternalLoading && (
+        {(isExternalLoading || isManualLoading) && (
           <div className="flex justify-center items-center py-12">
             <Loader2 className="h-8 w-8 animate-spin text-primary mr-2" />
             <span className="text-gray-600">

@@ -1,70 +1,66 @@
 
-import { Toaster } from "@/components/ui/toaster";
-import { Toaster as Sonner } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import RecipesPage from "./pages/RecipesPage";
-import RecipeDetailPage from "./pages/RecipeDetailPage";
-import ExternalRecipeDetailPage from "./pages/ExternalRecipeDetailPage";
-import AddRecipePage from "./pages/AddRecipePage";
-import EditRecipePage from "./pages/EditRecipePage";
-import MongoDBTestPage from "./pages/MongoDBTestPage";
-import NotFound from "./pages/NotFound";
-import Footer from "./components/Footer";
-import HomePage from "./pages/HomePage";
-import FoldersPage from "./pages/FoldersPage";
-import FavoritesPage from "./pages/FavoritesPage";
-import ShoppingListPage from "./pages/ShoppingListPage";
-import SignInPage from "./pages/SignInPage";
-import SignUpPage from "./pages/SignUpPage";
-import UserPreferencesPage from "./pages/UserPreferencesPage";
-import { Link } from "react-router-dom";
-import { Database } from "lucide-react";
-import { AuthProvider } from "./context/AuthContext";
+import { Suspense, lazy } from 'react';
+import { Routes, Route } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { AuthProvider } from './context/AuthContext';
+import { Toaster } from '@/components/ui/toaster';
+import './App.css';
 
-const queryClient = new QueryClient();
+// Lazy load components
+const Index = lazy(() => import('./pages/Index'));
+const RecipesPage = lazy(() => import('./pages/RecipesPage'));
+const AddRecipePage = lazy(() => import('./pages/AddRecipePage'));
+const RecipeDetailPage = lazy(() => import('./pages/RecipeDetailPage'));
+const ManualRecipeDetailPage = lazy(() => import('./pages/ManualRecipeDetailPage'));
+const ExternalRecipeDetailPage = lazy(() => import('./pages/ExternalRecipeDetailPage'));
+const EditRecipePage = lazy(() => import('./pages/EditRecipePage'));
+const ShoppingListPage = lazy(() => import('./pages/ShoppingListPage'));
+const FavoritesPage = lazy(() => import('./pages/FavoritesPage'));
+const FoldersPage = lazy(() => import('./pages/FoldersPage'));
+const UserPreferencesPage = lazy(() => import('./pages/UserPreferencesPage'));
+const SignInPage = lazy(() => import('./pages/SignInPage'));
+const SignUpPage = lazy(() => import('./pages/SignUpPage'));
+const MongoDBTestPage = lazy(() => import('./pages/MongoDBTestPage'));
+const NotFound = lazy(() => import('./pages/NotFound'));
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 60000, // 1 minute
+      retry: 1
+    },
+  },
+});
+
+function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <div className="flex flex-col min-h-screen">
-          <BrowserRouter>
-            {/* MongoDB Test Link - For easy access during development */}
-            <div className="fixed bottom-20 right-4 z-50">
-              <Link 
-                to="/mongodb-test" 
-                className="flex items-center gap-1 bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded-md shadow-md text-sm font-medium"
-              >
-                <Database className="h-4 w-4" />
-                MongoDB Test
-              </Link>
-            </div>
+        <div className="App">
+          <Suspense fallback={<div className="flex justify-center items-center min-h-screen">Loading...</div>}>
             <Routes>
-              <Route path="/" element={<HomePage />} />
+              <Route path="/" element={<Index />} />
               <Route path="/recipes" element={<RecipesPage />} />
-              <Route path="/folders" element={<FoldersPage />} />
-              <Route path="/favorites" element={<FavoritesPage />} />
-              <Route path="/shopping-list" element={<ShoppingListPage />} />
-              <Route path="/recipe/:id" element={<RecipeDetailPage />} />
-              <Route path="/external-recipe/:id" element={<ExternalRecipeDetailPage />} />
               <Route path="/add-recipe" element={<AddRecipePage />} />
+              <Route path="/recipe/:id" element={<RecipeDetailPage />} />
+              <Route path="/manual-recipe/:id" element={<ManualRecipeDetailPage />} />
+              <Route path="/external-recipe/:id" element={<ExternalRecipeDetailPage />} />
               <Route path="/edit-recipe/:id" element={<EditRecipePage />} />
-              <Route path="/mongodb-test" element={<MongoDBTestPage />} />
+              <Route path="/shopping-list" element={<ShoppingListPage />} />
+              <Route path="/favorites" element={<FavoritesPage />} />
+              <Route path="/folders" element={<FoldersPage />} />
+              <Route path="/preferences" element={<UserPreferencesPage />} />
               <Route path="/signin" element={<SignInPage />} />
               <Route path="/signup" element={<SignUpPage />} />
-              <Route path="/preferences" element={<UserPreferencesPage />} />
+              <Route path="/mongodb-test" element={<MongoDBTestPage />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
-            <Footer />
-            <Toaster />
-            <Sonner />
-          </BrowserRouter>
+          </Suspense>
+          <Toaster />
         </div>
       </AuthProvider>
-    </TooltipProvider>
-  </QueryClientProvider>
-);
+    </QueryClientProvider>
+  );
+}
 
 export default App;
