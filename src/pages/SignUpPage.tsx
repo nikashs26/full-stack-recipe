@@ -10,7 +10,7 @@ import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from '
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
-import { UserPlus, Loader } from 'lucide-react';
+import { UserPlus, Loader2 } from 'lucide-react';
 
 const formSchema = z.object({
   email: z.string().email({ message: 'Invalid email address' }),
@@ -26,7 +26,6 @@ const SignUpPage: React.FC = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
-  const [signUpSuccess, setSignUpSuccess] = useState(false);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -37,34 +36,13 @@ const SignUpPage: React.FC = () => {
     }
   });
 
-  // Reduced timeout to 3 seconds for quicker feedback
-  useEffect(() => {
-    let timer: ReturnType<typeof setTimeout>;
-    
-    if (isLoading) {
-      timer = setTimeout(() => {
-        console.log('Sign up timeout reached, resetting loading state');
-        setIsLoading(false);
-        toast({
-          title: "Sign up taking longer than expected",
-          description: "Please check your network connection or try again",
-          variant: "destructive"
-        });
-      }, 5000); // 5 second timeout for better UX
-    }
-    
-    return () => {
-      if (timer) clearTimeout(timer);
-    };
-  }, [isLoading, toast]);
-
-  // Redirect if authenticated or signup successful
+  // Redirect if authenticated
   useEffect(() => {
     if (isAuthenticated) {
       console.log("User is authenticated, redirecting to /preferences");
       navigate('/preferences');
     }
-  }, [isAuthenticated, navigate, signUpSuccess]);
+  }, [isAuthenticated, navigate]);
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
@@ -75,36 +53,53 @@ const SignUpPage: React.FC = () => {
       
       if (result && result.error) {
         setIsLoading(false);
+        
+        // Check if it's an existing user error
+        if (result.error.includes('already exists') || result.error.includes('already registered')) {
+          toast({
+            title: "Account already exists",
+            description: "An account with this email already exists. Please sign in instead.",
+            variant: "destructive"
+          });
+          // Redirect to sign in page after a short delay
+          setTimeout(() => {
+            navigate('/signin');
+          }, 2000);
+          return;
+        }
+        
+        // Check if it's a verification required message
+        if (result.error.includes('verification link')) {
+          toast({
+            title: "Check your email",
+            description: "We've sent you a verification link. Please check your email and click the link to verify your account before signing in.",
+            duration: 8000
+          });
+          return;
+        }
+        
         toast({
           title: "Sign up failed",
-          description: result.error || "Please try again.",
+          description: result.error,
           variant: "destructive"
         });
         return;
       }
       
-      setSignUpSuccess(true);
-      
+      // Success case - user is signed up and possibly signed in
       toast({
-        title: "Account created!",
-        description: "Now let's set up your preferences.",
+        title: "Account created successfully!",
+        description: "Welcome to Better Bulk. Let's set up your preferences.",
       });
       
-      // Small delay before checking authentication state
+      // Small delay to let the auth state update
       setTimeout(() => {
+        setIsLoading(false);
         if (!isAuthenticated) {
-          setIsLoading(false);
-          console.log("Authentication state not updated yet");
-          toast({
-            title: "Sign up successful",
-            description: "Please wait while we set up your account...",
-          });
-          
-          // Force navigation to preferences page after successful signup
-          // even if the auth state hasn't updated yet
+          // If not automatically signed in, redirect to preferences anyway
           navigate('/preferences');
         }
-      }, 1500);
+      }, 1000);
       
     } catch (error: any) {
       console.error("Sign up error:", error);
@@ -178,8 +173,8 @@ const SignUpPage: React.FC = () => {
               >
                 {isLoading ? (
                   <>
-                    <Loader className="mr-2 h-4 w-4 animate-spin" />
-                    Signing up...
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Creating account...
                   </>
                 ) : (
                   <>
