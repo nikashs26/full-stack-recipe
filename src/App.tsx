@@ -26,11 +26,11 @@ import { AuthProvider } from "./context/AuthContext";
 const queryClient = new QueryClient();
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <AuthProvider>
-        <div className="flex flex-col min-h-screen">
-          <BrowserRouter>
+  <BrowserRouter>
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <AuthProvider>
+          <div className="flex flex-col min-h-screen">
             {/* MongoDB Test Link - For easy access during development */}
             <div className="fixed bottom-20 right-4 z-50">
               <Link 
@@ -60,11 +60,11 @@ const App = () => (
             <Footer />
             <Toaster />
             <Sonner />
-          </BrowserRouter>
-        </div>
-      </AuthProvider>
-    </TooltipProvider>
-  </QueryClientProvider>
+          </div>
+        </AuthProvider>
+      </TooltipProvider>
+    </QueryClientProvider>
+  </BrowserRouter>
 );
 
 export default App;
