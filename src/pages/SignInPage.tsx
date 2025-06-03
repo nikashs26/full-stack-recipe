@@ -52,11 +52,9 @@ const SignInPage: React.FC = () => {
     };
   }, [isLoading, toast]);
 
-  // Redirect if authenticated and clear loading state
+  // Redirect if authenticated
   useEffect(() => {
     if (isAuthenticated) {
-      console.log("User is authenticated, clearing loading and redirecting");
-      setIsLoading(false); // Clear loading state when authenticated
       navigate('/');
     }
   }, [isAuthenticated, navigate]);
@@ -70,7 +68,7 @@ const SignInPage: React.FC = () => {
         title: "Success!",
         description: "You're now signed in.",
       });
-      // Loading state and navigation will be handled by the useEffect above
+      // No need to navigate here - the useEffect will handle it
     } catch (error: any) {
       console.error("Sign in error:", error);
       toast({
