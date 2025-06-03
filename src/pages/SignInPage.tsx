@@ -68,7 +68,7 @@ const SignInPage: React.FC = () => {
         title: "Success!",
         description: "You're now signed in.",
       });
-      // No need to navigate here - the useEffect will handle it
+      // Navigation will be handled by the useEffect above
     } catch (error: any) {
       console.error("Sign in error:", error);
       toast({
@@ -76,7 +76,9 @@ const SignInPage: React.FC = () => {
         description: error.message || "Invalid email or password. Please check your credentials or sign up.",
         variant: "destructive"
       });
-      setIsLoading(false); // Make sure loading state is reset on error
+    } finally {
+      // Always reset loading state in finally block
+      setIsLoading(false);
     }
   };
 
