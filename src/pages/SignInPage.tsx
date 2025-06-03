@@ -31,53 +31,37 @@ const SignInPage: React.FC = () => {
     }
   });
 
-  // Safety timeout to prevent UI from getting stuck
-  useEffect(() => {
-    let timer: ReturnType<typeof setTimeout>;
-    
-    if (isLoading) {
-      timer = setTimeout(() => {
-        console.log('Sign in timeout reached, resetting loading state');
-        setIsLoading(false);
-        toast({
-          title: "Sign in taking longer than expected",
-          description: "Please try again or check your connection",
-          variant: "destructive"
-        });
-      }, 10000); // 10 second timeout
-    }
-    
-    return () => {
-      if (timer) clearTimeout(timer);
-    };
-  }, [isLoading, toast]);
-
   // Redirect if authenticated
   useEffect(() => {
     if (isAuthenticated) {
+      console.log("User is authenticated, redirecting to home");
       navigate('/');
     }
   }, [isAuthenticated, navigate]);
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
+    if (isLoading) return; // Prevent double submission
+    
     try {
       setIsLoading(true);
       console.log("Attempting to sign in with:", values.email);
+      
       await signIn(values.email, values.password);
+      
       toast({
         title: "Success!",
         description: "You're now signed in.",
       });
-      // Navigation will be handled by the useEffect above
+      
     } catch (error: any) {
       console.error("Sign in error:", error);
       toast({
         title: "Sign in failed",
-        description: error.message || "Invalid email or password. Please check your credentials or sign up.",
+        description: error.message || "Invalid email or password. Please check your credentials.",
         variant: "destructive"
       });
     } finally {
-      // Always reset loading state in finally block
+      // Always clear loading state
       setIsLoading(false);
     }
   };
