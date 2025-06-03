@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -13,6 +12,9 @@ import { SpoonacularRecipe } from '../types/spoonacular';
 import { Loader2, Search, AlertCircle, Database } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import ManualRecipeCard from '../components/ManualRecipeCard';
+import { fetchManualRecipes } from '../lib/manualRecipes';
+import { checkAndSeedInitialRecipes } from '../lib/seedManualRecipes';
 
 // Define a type that combines Recipe and SpoonacularRecipe with isExternal flag
 type CombinedRecipe = (Recipe & { isExternal?: boolean }) | (SpoonacularRecipe & { isExternal: boolean });
@@ -32,6 +34,7 @@ const RecipesPage: React.FC = () => {
   const [dbStatus, setDbStatus] = useState<'checking' | 'connected' | 'disconnected'>('checking');
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [manualRecipes, setManualRecipes] = useState<any[]>([]);
 
   useEffect(() => {
     const localRecipes = getLocalRecipes();
@@ -88,6 +91,24 @@ const RecipesPage: React.FC = () => {
     // Always trigger an external search on first load to populate external recipes
     setExternalSearchTerm('');
   }, [toast]);
+
+  // Add useEffect to load manual recipes and seed if needed
+  useEffect(() => {
+    const loadManualRecipes = async () => {
+      try {
+        // Check and seed initial recipes if none exist
+        await checkAndSeedInitialRecipes();
+        
+        // Then load all manual recipes
+        const recipes = await fetchManualRecipes();
+        setManualRecipes(recipes);
+      } catch (error) {
+        console.error('Error loading manual recipes:', error);
+      }
+    };
+    
+    loadManualRecipes();
+  }, []);
 
   useEffect(() => {
     if (Array.isArray(recipes)) {
@@ -312,17 +333,35 @@ const RecipesPage: React.FC = () => {
           </Alert>
         )}
 
-        {combinedRecipes.length > 0 ? (
-          <div className="grid grid-cols-1 gap-y-8">
+        {/* Manual Recipes Section */}
+        {manualRecipes.length > 0 && (
+          <div className="mb-8">
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">Your Manual Recipes</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {combinedRecipes.map((recipe, index) => (
-                <RecipeCard 
-                  key={`recipe-${index}-${recipe?.id || index}`}
+              {manualRecipes.map((recipe) => (
+                <ManualRecipeCard 
+                  key={recipe.id}
                   recipe={recipe}
-                  onDelete={handleDeleteRecipe}
-                  isExternal={!!recipe.isExternal}
                 />
               ))}
+            </div>
+          </div>
+        )}
+
+        {combinedRecipes.length > 0 ? (
+          <div className="grid grid-cols-1 gap-y-8">
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-4">Discovered Recipes</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                {combinedRecipes.map((recipe, index) => (
+                  <RecipeCard 
+                    key={`recipe-${index}-${recipe?.id || index}`}
+                    recipe={recipe}
+                    onDelete={handleDeleteRecipe}
+                    isExternal={!!recipe.isExternal}
+                  />
+                ))}
+              </div>
             </div>
           </div>
         ) : (
