@@ -1,38 +1,66 @@
 
-import { createManualRecipe } from './manualRecipes';
+import { supabase } from "@/integrations/supabase/client";
 
-export const seedNashvilleHotChicken = async () => {
-  try {
-    const nashvilleRecipe = {
-      title: "Nashville Hot Chicken Sandwich",
-      description: "A fiery, crispy fried chicken sandwich with Nashville-style hot seasoning, served on a brioche bun with pickles and coleslaw.",
-      image: "https://images.unsplash.com/photo-1594212699903-ec8a3eca50f5?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80",
-      cuisine: ["American", "Southern"],
-      diets: ["high-protein"],
-      ready_in_minutes: 45
-    };
-
-    const result = await createManualRecipe(nashvilleRecipe);
-    console.log('Nashville hot chicken sandwich added:', result);
-    return result;
-  } catch (error) {
-    console.error('Error seeding Nashville recipe:', error);
-    throw error;
-  }
-};
-
-// Function to check if we should seed data
 export const checkAndSeedInitialRecipes = async () => {
   try {
-    const { fetchManualRecipes } = await import('./manualRecipes');
-    const existingRecipes = await fetchManualRecipes();
-    
-    // If no recipes exist, seed the Nashville hot chicken
-    if (existingRecipes.length === 0) {
-      await seedNashvilleHotChicken();
-      console.log('Initial manual recipes seeded');
+    // Check if any manual recipes exist
+    const { data: existingRecipes, error: checkError } = await supabase
+      .from('manual_recipes')
+      .select('id')
+      .limit(1);
+
+    if (checkError) {
+      console.error('Error checking existing recipes:', checkError);
+      return;
+    }
+
+    // If recipes already exist, don't seed
+    if (existingRecipes && existingRecipes.length > 0) {
+      console.log('Manual recipes already exist, skipping seeding');
+      return;
+    }
+
+    console.log('No manual recipes found, seeding initial recipes...');
+
+    // Seed initial recipes
+    const initialRecipes = [
+      {
+        title: 'Nashville Hot Chicken Sandwich',
+        description: 'A spicy, crispy fried chicken sandwich with Nashville-style hot sauce, pickles, and coleslaw on a brioche bun. This sandwich packs serious heat with a perfect balance of flavors.',
+        ready_in_minutes: 45,
+        cuisine: ['American', 'Southern'],
+        diets: ['None'],
+        image: '/placeholder.svg'
+      },
+      {
+        title: 'Authentic Pasta Carbonara',
+        description: 'Classic Italian pasta dish with eggs, cheese, pancetta, and black pepper. Simple yet elegant, this Roman specialty is creamy without using cream.',
+        ready_in_minutes: 20,
+        cuisine: ['Italian'],
+        diets: ['None'],
+        image: '/placeholder.svg'
+      },
+      {
+        title: 'Thai Green Curry',
+        description: 'Aromatic Thai curry with green chilies, coconut milk, thai basil, and your choice of protein. A perfect balance of spicy, sweet, and savory flavors.',
+        ready_in_minutes: 30,
+        cuisine: ['Thai', 'Asian'],
+        diets: ['Gluten-Free'],
+        image: '/placeholder.svg'
+      }
+    ];
+
+    const { data, error } = await supabase
+      .from('manual_recipes')
+      .insert(initialRecipes)
+      .select();
+
+    if (error) {
+      console.error('Error seeding recipes:', error);
+    } else {
+      console.log('Successfully seeded initial recipes:', data);
     }
   } catch (error) {
-    console.error('Error checking/seeding recipes:', error);
+    console.error('Error in checkAndSeedInitialRecipes:', error);
   }
 };
