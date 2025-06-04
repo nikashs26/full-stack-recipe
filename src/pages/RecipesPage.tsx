@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -14,6 +13,7 @@ import { Loader2, Search, AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import ManualRecipeCard from '../components/ManualRecipeCard';
 import { fetchManualRecipes } from '../lib/manualRecipes';
+import { checkAndSeedInitialRecipes } from '../lib/seedManualRecipes';
 
 // Define a type that combines Recipe and SpoonacularRecipe with isExternal flag
 type CombinedRecipe = (Recipe & { isExternal?: boolean }) | (SpoonacularRecipe & { isExternal: boolean });
@@ -34,12 +34,28 @@ const RecipesPage: React.FC = () => {
   const queryClient = useQueryClient();
 
   // Fetch manual recipes with React Query
-  const { data: manualRecipes = [], isLoading: isLoadingManual, error: manualError } = useQuery({
+  const { data: manualRecipes = [], isLoading: isLoadingManual, error: manualError, refetch: refetchManual } = useQuery({
     queryKey: ['manual-recipes'],
     queryFn: fetchManualRecipes,
     retry: 1,
     staleTime: 60000
   });
+
+  // Seed recipes on first load
+  useEffect(() => {
+    const seedRecipes = async () => {
+      try {
+        console.log('Attempting to seed initial recipes...');
+        await checkAndSeedInitialRecipes();
+        // Refetch manual recipes after seeding
+        refetchManual();
+      } catch (error) {
+        console.error('Failed to seed recipes:', error);
+      }
+    };
+    
+    seedRecipes();
+  }, [refetchManual]);
 
   useEffect(() => {
     if (manualError) {
@@ -52,6 +68,7 @@ const RecipesPage: React.FC = () => {
     }
   }, [manualError, toast]);
 
+  // Fetch local recipes and load them into state
   useEffect(() => {
     const loadLocalRecipes = async () => {
       try {
@@ -298,7 +315,14 @@ const RecipesPage: React.FC = () => {
               ))}
             </div>
           </div>
-        ) : null}
+        ) : (
+          <div className="mb-8">
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">Popular Recipes</h2>
+            <div className="text-center py-8">
+              <p className="text-gray-600">No popular recipes available. They should load automatically.</p>
+            </div>
+          </div>
+        )}
 
         {combinedRecipes.length > 0 ? (
           <div className="grid grid-cols-1 gap-y-8">
