@@ -16,19 +16,18 @@ import { useToast } from '@/hooks/use-toast';
 
 const UserMenu: React.FC = () => {
   const { user, isAuthenticated, isLoading: authLoading, signOut, error } = useAuth();
-  const [isLoading, setIsLoading] = useState(authLoading);
+  const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
-  // Safety timeout: reduced from 5s to 2s to provide quicker feedback
+  // Show loading only for a short time to prevent getting stuck
   useEffect(() => {
     setIsLoading(authLoading);
     
-    // Local loading state timeout (2 seconds max)
     if (authLoading) {
       const timer = setTimeout(() => {
-        console.log('Auth loading timeout reached in UserMenu, forcing UI update');
+        console.log('UserMenu loading timeout reached');
         setIsLoading(false);
-      }, 2000);
+      }, 1500);
       
       return () => clearTimeout(timer);
     }
@@ -46,7 +45,7 @@ const UserMenu: React.FC = () => {
     }
   }, [error, toast]);
 
-  // Show loading state
+  // Show loading state briefly
   if (isLoading) {
     return (
       <div className="flex items-center">

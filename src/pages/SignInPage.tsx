@@ -18,10 +18,10 @@ const formSchema = z.object({
 });
 
 const SignInPage: React.FC = () => {
-  const { signIn, isAuthenticated } = useAuth();
+  const { signIn, isAuthenticated, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [isLoading, setIsLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -40,10 +40,10 @@ const SignInPage: React.FC = () => {
   }, [isAuthenticated, navigate]);
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
-    if (isLoading) return; // Prevent double submission
+    if (isSubmitting || authLoading) return;
     
     try {
-      setIsLoading(true);
+      setIsSubmitting(true);
       console.log("Attempting to sign in with:", values.email);
       
       await signIn(values.email, values.password);
@@ -61,10 +61,11 @@ const SignInPage: React.FC = () => {
         variant: "destructive"
       });
     } finally {
-      // Always clear loading state
-      setIsLoading(false);
+      setIsSubmitting(false);
     }
   };
+
+  const isLoading = isSubmitting || authLoading;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -85,7 +86,7 @@ const SignInPage: React.FC = () => {
                   <FormItem>
                     <FormLabel>Email</FormLabel>
                     <FormControl>
-                      <Input placeholder="your@email.com" {...field} />
+                      <Input placeholder="your@email.com" {...field} disabled={isLoading} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -99,7 +100,7 @@ const SignInPage: React.FC = () => {
                   <FormItem>
                     <FormLabel>Password</FormLabel>
                     <FormControl>
-                      <Input type="password" placeholder="••••••••" {...field} />
+                      <Input type="password" placeholder="••••••••" {...field} disabled={isLoading} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
