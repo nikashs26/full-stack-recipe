@@ -1,11 +1,12 @@
+
 import React, { useState, useEffect } from 'react';
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Header from '../components/Header';
 import FilterBar from '../components/FilterBar';
 import RecipeCard from '../components/RecipeCard';
-import { loadRecipes, saveRecipes, deleteRecipe as deleteRecipeFromStorage, getLocalRecipes } from '../utils/storage';
-import { filterRecipes, getUniqueCuisines, formatExternalRecipeCuisine, formatRecipeForDisplay } from '../utils/recipeUtils';
+import { loadRecipes, deleteRecipe as deleteRecipeFromStorage, getLocalRecipes } from '../utils/storage';
+import { filterRecipes, getUniqueCuisines } from '../utils/recipeUtils';
 import { fetchRecipes } from '../lib/spoonacular';
 import { Recipe } from '../types/recipe';
 import { SpoonacularRecipe } from '../types/spoonacular';
@@ -13,12 +14,10 @@ import { Loader2, Search, AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import ManualRecipeCard from '../components/ManualRecipeCard';
 import { fetchManualRecipes } from '../lib/manualRecipes';
-import { checkAndSeedInitialRecipes } from '../lib/seedManualRecipes';
 
-// Define a type that combines Recipe and SpoonacularRecipe with isExternal flag
 type CombinedRecipe = (Recipe & { isExternal?: boolean }) | (SpoonacularRecipe & { isExternal: boolean });
 
-const RecipesPage: React.FC = () => {
+const SimplifiedRecipesPage: React.FC = () => {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [filteredRecipes, setFilteredRecipes] = useState<Recipe[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -33,42 +32,15 @@ const RecipesPage: React.FC = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Fetch manual recipes with React Query
-  const { data: manualRecipes = [], isLoading: isLoadingManual, error: manualError, refetch: refetchManual } = useQuery({
+  // Fetch manual recipes without seeding
+  const { data: manualRecipes = [], isLoading: isLoadingManual, error: manualError } = useQuery({
     queryKey: ['manual-recipes'],
     queryFn: fetchManualRecipes,
     retry: 1,
     staleTime: 60000
   });
 
-  // Seed recipes on first load
-  useEffect(() => {
-    const seedRecipes = async () => {
-      try {
-        console.log('Attempting to seed initial recipes...');
-        await checkAndSeedInitialRecipes();
-        // Refetch manual recipes after seeding
-        refetchManual();
-      } catch (error) {
-        console.error('Failed to seed recipes:', error);
-      }
-    };
-    
-    seedRecipes();
-  }, [refetchManual]);
-
-  useEffect(() => {
-    if (manualError) {
-      console.error('Error loading manual recipes:', manualError);
-      toast({
-        title: "Error loading popular recipes",
-        description: "Could not load popular recipes from database",
-        variant: "destructive",
-      });
-    }
-  }, [manualError, toast]);
-
-  // Fetch local recipes and load them into state
+  // Load local recipes
   useEffect(() => {
     const loadLocalRecipes = async () => {
       try {
@@ -89,25 +61,23 @@ const RecipesPage: React.FC = () => {
     };
     
     loadLocalRecipes();
-    
-    // Trigger an external search on first load to populate external recipes
     setExternalSearchTerm('');
   }, []);
 
+  // Filter local recipes
   useEffect(() => {
     if (Array.isArray(recipes)) {
       const filtered = filterRecipes(recipes, searchTerm, dietaryFilter, cuisineFilter, ingredientTerm);
       setFilteredRecipes(filtered);
       setSearchError(null);
       
-      // Only update external search when using the main search bar
       if (searchTerm || externalSearchTerm === '') {
         setExternalSearchTerm(searchTerm);
       }
     }
   }, [recipes, searchTerm, dietaryFilter, cuisineFilter, ingredientTerm]);
 
-  // Combine local and external recipes into one unified list
+  // Combine local and external recipes
   useEffect(() => {
     try {
       const externalWithFlag = filteredExternalRecipes
@@ -165,13 +135,7 @@ const RecipesPage: React.FC = () => {
     }
   };
 
-  const retrySearch = () => {
-    if (externalSearchTerm || ingredientTerm) {
-      setSearchError(null);
-      queryClient.invalidateQueries({ queryKey: ['recipes', externalSearchTerm, ingredientTerm] });
-    }
-  };
-
+  // External API recipes query
   const { data: externalData, isLoading: isExternalLoading, isError, error } = useQuery({
     queryKey: ['recipes', externalSearchTerm, ingredientTerm],
     queryFn: () => {
@@ -187,13 +151,8 @@ const RecipesPage: React.FC = () => {
     if (isError && error instanceof Error) {
       console.error("Query error detected:", error);
       setSearchError(error.message || "Failed to fetch external recipes");
-      toast({
-        title: "Search Error",
-        description: error.message || "There was a problem searching for recipes. Please try again.",
-        variant: "destructive",
-      });
     }
-  }, [isError, error, toast]);
+  }, [isError, error]);
 
   useEffect(() => {
     if (externalData?.results) {
@@ -284,47 +243,39 @@ const RecipesPage: React.FC = () => {
             <AlertTitle>Error</AlertTitle>
             <AlertDescription>
               {searchError}
-              <button 
-                onClick={retrySearch}
-                className="ml-2 underline font-medium"
-              >
-                Try again
-              </button>
             </AlertDescription>
           </Alert>
         )}
 
-        {/* Popular Recipes Section */}
-        {isLoadingManual ? (
-          <div className="mb-8">
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">Popular Recipes</h2>
-            <div className="flex justify-center items-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-primary" />
-              <span className="ml-2 text-gray-600">Loading popular recipes...</span>
-            </div>
-          </div>
-        ) : manualRecipes.length > 0 ? (
+        {/* Manual Recipes Section */}
+        {manualRecipes.length > 0 && (
           <div className="mb-8">
             <h2 className="text-2xl font-bold text-gray-900 mb-4">Popular Recipes</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {manualRecipes.map((recipe) => (
-                <ManualRecipeCard 
+                <RecipeCard 
                   key={recipe.id}
-                  recipe={recipe}
+                  recipe={{
+                    id: String(recipe.id),
+                    name: recipe.title,
+                    cuisine: recipe.cuisine?.[0] || 'Other',
+                    dietaryRestrictions: [],
+                    ingredients: [],
+                    instructions: [],
+                    image: recipe.image || '/placeholder.svg',
+                    ratings: [],
+                    comments: []
+                  }}
+                  onDelete={() => {}}
+                  isExternal={false}
                 />
               ))}
             </div>
           </div>
-        ) : (
-          <div className="mb-8">
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">Popular Recipes</h2>
-            <div className="text-center py-8">
-              <p className="text-gray-600">No popular recipes available. They should load automatically.</p>
-            </div>
-          </div>
         )}
 
-        {combinedRecipes.length > 0 ? (
+        {/* Combined Recipes Section */}
+        {combinedRecipes.length > 0 && (
           <div className="grid grid-cols-1 gap-y-8">
             <div>
               <h2 className="text-2xl font-bold text-gray-900 mb-4">Discovered Recipes</h2>
@@ -340,24 +291,22 @@ const RecipesPage: React.FC = () => {
               </div>
             </div>
           </div>
-        ) : (
-          <>
-            {!isExternalLoading && (
-              <div className="text-center py-12">
-                <Search className="mx-auto h-12 w-12 text-gray-400" />
-                <h3 className="mt-2 text-lg font-medium text-gray-900">No recipes found</h3>
-                <p className="mt-1 text-gray-500">
-                  We couldn't find any recipes matching your search. Try different search terms or filters.
-                </p>
-              </div>
-            )}
-          </>
         )}
 
-        {isExternalLoading && (
+        {!isExternalLoading && combinedRecipes.length === 0 && manualRecipes.length === 0 && (
+          <div className="text-center py-12">
+            <Search className="mx-auto h-12 w-12 text-gray-400" />
+            <h3 className="mt-2 text-lg font-medium text-gray-900">No recipes found</h3>
+            <p className="mt-1 text-gray-500">
+              We couldn't find any recipes matching your search. Try different search terms or filters.
+            </p>
+          </div>
+        )}
+
+        {(isExternalLoading || isLoadingManual) && (
           <div className="flex justify-center items-center py-12">
             <Loader2 className="h-8 w-8 animate-spin text-primary mr-2" />
-            <span className="text-gray-600">Searching for recipes...</span>
+            <span className="text-gray-600">Loading recipes...</span>
           </div>
         )}
       </main>
@@ -365,4 +314,4 @@ const RecipesPage: React.FC = () => {
   );
 };
 
-export default RecipesPage;
+export default SimplifiedRecipesPage;

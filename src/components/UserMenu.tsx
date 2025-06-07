@@ -1,7 +1,7 @@
 
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Link } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/SimpleAuthContext';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,38 +15,9 @@ import { LogIn, LogOut, User } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 const UserMenu: React.FC = () => {
-  const { user, isAuthenticated, isLoading: authLoading, signOut, error } = useAuth();
-  const [isLoading, setIsLoading] = useState(authLoading);
+  const { user, isAuthenticated, isLoading, signOut } = useAuth();
   const { toast } = useToast();
 
-  // Safety timeout: reduced from 5s to 2s to provide quicker feedback
-  useEffect(() => {
-    setIsLoading(authLoading);
-    
-    // Local loading state timeout (2 seconds max)
-    if (authLoading) {
-      const timer = setTimeout(() => {
-        console.log('Auth loading timeout reached in UserMenu, forcing UI update');
-        setIsLoading(false);
-      }, 2000);
-      
-      return () => clearTimeout(timer);
-    }
-  }, [authLoading]);
-
-  // If there's an auth error, show it
-  useEffect(() => {
-    if (error) {
-      console.error("Auth error in UserMenu:", error);
-      toast({
-        title: "Authentication Issue",
-        description: error,
-        variant: "destructive"
-      });
-    }
-  }, [error, toast]);
-
-  // Show loading state
   if (isLoading) {
     return (
       <div className="flex items-center">
@@ -78,16 +49,14 @@ const UserMenu: React.FC = () => {
 
   const handleSignOut = async () => {
     try {
-      console.log("Attempting to sign out...");
       await signOut();
       toast({
         title: "Signed out successfully",
       });
     } catch (error) {
-      console.error("Error signing out:", error);
       toast({
         title: "Error signing out",
-        description: "Please try again or refresh the page",
+        description: "Please try again",
         variant: "destructive"
       });
     }
@@ -102,7 +71,7 @@ const UserMenu: React.FC = () => {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuLabel>
-          {user?.displayName || user?.email}
+          {user?.email}
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem 

@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -18,7 +17,7 @@ import {
   CarouselNext,
   CarouselPrevious,
 } from "@/components/ui/carousel";
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/SimpleAuthContext';
 import RecommendedRecipes from '../components/RecommendedRecipes';
 
 // Define a type that combines Recipe and SpoonacularRecipe with isExternal flag

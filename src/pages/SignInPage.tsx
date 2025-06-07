@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/SimpleAuthContext';
 import { useToast } from '@/hooks/use-toast';
 import Header from '../components/Header';
 import { Button } from '@/components/ui/button';
@@ -21,7 +21,7 @@ const SignInPage: React.FC = () => {
   const { signIn, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [isLoading, setIsLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -31,38 +31,30 @@ const SignInPage: React.FC = () => {
     }
   });
 
-  // Redirect if authenticated
   useEffect(() => {
     if (isAuthenticated) {
-      console.log("User is authenticated, redirecting to home");
       navigate('/');
     }
   }, [isAuthenticated, navigate]);
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
-    if (isLoading) return; // Prevent double submission
+    if (isSubmitting) return;
     
     try {
-      setIsLoading(true);
-      console.log("Attempting to sign in with:", values.email);
-      
+      setIsSubmitting(true);
       await signIn(values.email, values.password);
-      
       toast({
         title: "Success!",
         description: "You're now signed in.",
       });
-      
     } catch (error: any) {
-      console.error("Sign in error:", error);
       toast({
         title: "Sign in failed",
-        description: error.message || "Invalid email or password. Please check your credentials.",
+        description: error.message || "Invalid email or password.",
         variant: "destructive"
       });
     } finally {
-      // Always clear loading state
-      setIsLoading(false);
+      setIsSubmitting(false);
     }
   };
 
@@ -85,7 +77,7 @@ const SignInPage: React.FC = () => {
                   <FormItem>
                     <FormLabel>Email</FormLabel>
                     <FormControl>
-                      <Input placeholder="your@email.com" {...field} />
+                      <Input placeholder="your@email.com" {...field} disabled={isSubmitting} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -99,7 +91,7 @@ const SignInPage: React.FC = () => {
                   <FormItem>
                     <FormLabel>Password</FormLabel>
                     <FormControl>
-                      <Input type="password" placeholder="••••••••" {...field} />
+                      <Input type="password" placeholder="••••••••" {...field} disabled={isSubmitting} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -109,9 +101,9 @@ const SignInPage: React.FC = () => {
               <Button 
                 type="submit" 
                 className="w-full"
-                disabled={isLoading}
+                disabled={isSubmitting}
               >
-                {isLoading ? (
+                {isSubmitting ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Signing in...
