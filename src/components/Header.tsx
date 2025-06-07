@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { UtensilsCrossed, Menu, X, Plus } from 'lucide-react';
 import UserMenu from './UserMenu';
-import { useAuth } from '../context/SimpleAuthContext';
+import { useAuth } from '../context/AuthContext';
 
 const Header: React.FC = () => {
   const [scrolled, setScrolled] = useState(false);
