@@ -48,7 +48,7 @@ const ManualRecipeDetailPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
-      <main className="pt-24 md:pt-28 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-6">
           <Link 
             to="/recipes"
@@ -76,17 +76,10 @@ const ManualRecipeDetailPage: React.FC = () => {
             <div className="p-6">
               <h1 className="text-3xl font-bold text-gray-900 mb-4">{recipe.title}</h1>
               
-              {recipe.description ? (
+              {recipe.description && (
                 <div className="mb-6 p-4 bg-gray-50 rounded-lg border">
                   <h3 className="text-lg font-semibold text-gray-900 mb-2">About This Recipe</h3>
                   <p className="text-gray-700 leading-relaxed">{recipe.description}</p>
-                </div>
-              ) : (
-                <div className="mb-6 p-4 bg-gray-50 rounded-lg border">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">About This Recipe</h3>
-                  <p className="text-gray-700 leading-relaxed">
-                    This is a popular recipe that's loved by many. Try it out and see why it's one of our featured dishes!
-                  </p>
                 </div>
               )}
               

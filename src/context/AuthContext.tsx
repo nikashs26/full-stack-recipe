@@ -25,32 +25,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Check user session on initial load
   useEffect(() => {
-    let mounted = true;
-    
     const checkSession = async () => {
       try {
         console.log("Checking current session...");
         const { data, error } = await supabase.auth.getSession();
         
-        if (!mounted) return;
-        
         if (error) {
           console.error("Error fetching session:", error);
-          setState({ user: null, isAuthenticated: false, isLoading: false, error: error.message });
+          setState({ ...initialState, isLoading: false, error: error.message });
           return;
         }
         
-        if (data?.session?.user) {
-          console.log("Session found:", data.session.user.email);
+        if (data?.session) {
+          console.log("Session found:", data.session);
           const { user } = data.session;
           
           // Get user profile data if available
-          const { data: profileData } = await supabase
+          const { data: profileData, error: profileError } = await supabase
             .from('sign_ups')
             .select('*')
             .eq('email', user.email)
             .single();
             
+          if (profileError) {
+            console.log("No sign-up record found, user may have been created through direct auth");
+          } else {
+            console.log("Found sign-up record:", profileData);
+          }
+          
           // Parse preferences from profileData as UserPreferences or undefined
           let userPreferences: UserPreferences | undefined;
           if (profileData?.preferences && typeof profileData.preferences === 'object') {
@@ -73,13 +75,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           });
         } else {
           console.log("No active session found");
-          setState({ user: null, isAuthenticated: false, isLoading: false, error: null });
+          setState({ ...initialState, isLoading: false });
         }
       } catch (error) {
         console.error("Unexpected error during session check:", error);
-        if (mounted) {
-          setState({ user: null, isAuthenticated: false, isLoading: false, error: "Session check failed" });
-        }
+        setState({ ...initialState, isLoading: false, error: "Session check failed" });
       }
     };
     
@@ -88,21 +88,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Set up auth state change listener
     const { data: authListener } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        if (!mounted) return;
-        
-        console.log("Auth state changed:", event);
+        console.log("Auth state changed:", event, session);
         
         if (event === 'SIGNED_IN' && session?.user) {
           const user = session.user;
-          console.log("User signed in:", user.email);
+          console.log("User signed in:", user);
           
           // Get user sign-up record if available
-          const { data: profileData } = await supabase
+          const { data: profileData, error: profileError } = await supabase
             .from('sign_ups')
             .select('*')
             .eq('email', user.email)
             .single();
             
+          if (profileError) {
+            console.log("No sign-up record found:", profileError.message);
+          } else {
+            console.log("Found sign-up record:", profileData);
+          }
+          
           // Parse preferences from profileData as UserPreferences or undefined
           let userPreferences: UserPreferences | undefined;
           if (profileData?.preferences && typeof profileData.preferences === 'object') {
@@ -131,25 +135,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             isLoading: false,
             error: null
           });
-        } else if (event === 'TOKEN_REFRESHED') {
-          console.log("Token refreshed");
-          // Don't change loading state on token refresh
         }
       }
     );
     
-    // Safety timeout to prevent infinite loading
-    const timeoutId = setTimeout(() => {
-      if (mounted) {
-        console.log("Auth loading timeout reached");
-        setState(prev => ({ ...prev, isLoading: false }));
-      }
-    }, 3000);
-    
-    // Cleanup function
+    // Cleanup subscription on unmount
     return () => {
-      mounted = false;
-      clearTimeout(timeoutId);
       if (authListener && authListener.subscription) {
         authListener.subscription.unsubscribe();
       }
@@ -193,7 +184,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw new Error(error.message);
       }
       
-      console.log('Sign in successful');
+      console.log('Sign in successful:', data);
       // Auth state listener will handle updating the state
     } catch (error: any) {
       console.error('Sign in error:', error);
