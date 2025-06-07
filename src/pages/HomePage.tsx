@@ -18,14 +18,14 @@ import {
   CarouselNext,
   CarouselPrevious,
 } from "@/components/ui/carousel";
-import { useAuth } from '../context/SimpleAuthContext';
 import RecommendedRecipes from '../components/RecommendedRecipes';
 
 // Define a type that combines Recipe and SpoonacularRecipe with isExternal flag
 type CombinedRecipe = (Recipe & { isExternal?: boolean }) | (SpoonacularRecipe & { isExternal: boolean });
 
 const HomePage: React.FC = () => {
-  const { isAuthenticated } = useAuth();
+  // Remove auth dependency for now to prevent crashes
+  const isAuthenticated = false; // Temporarily hardcode this
   
   // Query for local recipes
   const { data: localRecipes = [], isLoading: isLocalLoading } = useQuery({
