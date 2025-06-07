@@ -4,7 +4,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import RecipesPage from "./pages/RecipesPage";
+import SimplifiedRecipesPage from "./pages/SimplifiedRecipesPage";
 import RecipeDetailPage from "./pages/RecipeDetailPage";
 import ExternalRecipeDetailPage from "./pages/ExternalRecipeDetailPage";
 import AddRecipePage from "./pages/AddRecipePage";
@@ -21,7 +21,7 @@ import SignUpPage from "./pages/SignUpPage";
 import UserPreferencesPage from "./pages/UserPreferencesPage";
 import { Link } from "react-router-dom";
 import { Database } from "lucide-react";
-import { AuthProvider } from "./context/AuthContext";
+import { AuthProvider } from "./context/SimpleAuthContext";
 import ManualRecipeDetailPage from "./pages/ManualRecipeDetailPage";
 
 const queryClient = new QueryClient();
@@ -44,7 +44,7 @@ const App = () => (
             </div>
             <Routes>
               <Route path="/" element={<HomePage />} />
-              <Route path="/recipes" element={<RecipesPage />} />
+              <Route path="/recipes" element={<SimplifiedRecipesPage />} />
               <Route path="/folders" element={<FoldersPage />} />
               <Route path="/favorites" element={<FavoritesPage />} />
               <Route path="/shopping-list" element={<ShoppingListPage />} />
