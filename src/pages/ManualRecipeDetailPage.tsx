@@ -58,7 +58,7 @@ const ManualRecipeDetailPage: React.FC = () => {
             Back to Recipes
           </Link>
           
-          <div className="bg-white rounded-lg shadow-lg overflow-hidden">
+          <div className="recipe-card">
             <div className="relative">
               <img
                 src={recipe.image || '/placeholder.svg'}
@@ -66,15 +66,22 @@ const ManualRecipeDetailPage: React.FC = () => {
                 className="w-full h-64 sm:h-80 object-cover"
               />
               <div className="absolute top-4 right-4">
-                <div className="bg-blue-500 text-white px-3 py-2 rounded-full text-sm font-medium flex items-center gap-2">
+                <div className="bg-blue-600 text-white px-3 py-2 rounded-full text-sm font-medium flex items-center gap-2 shadow-lg">
                   <ChefHat className="h-4 w-4" />
-                  Manual Recipe
+                  Popular Recipe
                 </div>
               </div>
             </div>
             
             <div className="p-6">
               <h1 className="text-3xl font-bold text-gray-900 mb-4">{recipe.title}</h1>
+              
+              {recipe.description && (
+                <div className="mb-6 p-4 bg-gray-50 rounded-lg border">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">About This Recipe</h3>
+                  <p className="text-gray-700 leading-relaxed">{recipe.description}</p>
+                </div>
+              )}
               
               <div className="flex flex-wrap gap-4 mb-6">
                 {recipe.ready_in_minutes && (
@@ -85,15 +92,15 @@ const ManualRecipeDetailPage: React.FC = () => {
                 )}
               </div>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {recipe.cuisine && recipe.cuisine.length > 0 && (
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Cuisine</h3>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-3">Cuisine</h3>
                     <div className="flex flex-wrap gap-2">
                       {recipe.cuisine.map((cuisine, index) => (
                         <span 
                           key={index}
-                          className="px-3 py-1 bg-orange-100 text-orange-800 text-sm rounded-full"
+                          className="recipe-tag bg-orange-100 text-orange-800"
                         >
                           {cuisine}
                         </span>
@@ -104,12 +111,12 @@ const ManualRecipeDetailPage: React.FC = () => {
                 
                 {recipe.diets && recipe.diets.length > 0 && (
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Dietary Restrictions</h3>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-3">Dietary Information</h3>
                     <div className="flex flex-wrap gap-2">
                       {recipe.diets.map((diet, index) => (
                         <span 
                           key={index}
-                          className="px-3 py-1 bg-green-100 text-green-800 text-sm rounded-full"
+                          className="recipe-tag bg-green-100 text-green-800"
                         >
                           {diet}
                         </span>
@@ -118,13 +125,6 @@ const ManualRecipeDetailPage: React.FC = () => {
                   </div>
                 )}
               </div>
-              
-              {recipe.description && (
-                <div className="mb-6">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Description</h3>
-                  <p className="text-gray-700 leading-relaxed">{recipe.description}</p>
-                </div>
-              )}
             </div>
           </div>
         </div>

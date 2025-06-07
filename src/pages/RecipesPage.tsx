@@ -96,19 +96,26 @@ const RecipesPage: React.FC = () => {
   useEffect(() => {
     const loadManualRecipes = async () => {
       try {
+        console.log("Loading manual recipes...");
         // Check and seed initial recipes if none exist
         await checkAndSeedInitialRecipes();
         
         // Then load all manual recipes
         const recipes = await fetchManualRecipes();
+        console.log("Manual recipes loaded:", recipes);
         setManualRecipes(recipes);
       } catch (error) {
         console.error('Error loading manual recipes:', error);
+        toast({
+          title: "Error loading popular recipes",
+          description: "Could not load popular recipes from database",
+          variant: "destructive",
+        });
       }
     };
     
     loadManualRecipes();
-  }, []);
+  }, [toast]);
 
   useEffect(() => {
     if (Array.isArray(recipes)) {
@@ -333,10 +340,10 @@ const RecipesPage: React.FC = () => {
           </Alert>
         )}
 
-        {/* Manual Recipes Section */}
+        {/* Popular Recipes Section */}
         {manualRecipes.length > 0 && (
           <div className="mb-8">
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">Your Manual Recipes</h2>
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">Popular Recipes</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {manualRecipes.map((recipe) => (
                 <ManualRecipeCard 
