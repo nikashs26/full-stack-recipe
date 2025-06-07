@@ -3,8 +3,6 @@ import { supabase } from "@/integrations/supabase/client";
 
 export const checkAndSeedInitialRecipes = async () => {
   try {
-    console.log('Checking for existing manual recipes...');
-    
     // Check if any manual recipes exist
     const { data: existingRecipes, error: checkError } = await supabase
       .from('manual_recipes')
@@ -49,22 +47,6 @@ export const checkAndSeedInitialRecipes = async () => {
         cuisine: ['Thai', 'Asian'],
         diets: ['Gluten-Free'],
         image: '/placeholder.svg'
-      },
-      {
-        title: 'Classic Beef Burger',
-        description: 'Juicy beef patty with lettuce, tomato, onion, and special sauce on a toasted sesame bun. The perfect comfort food classic.',
-        ready_in_minutes: 25,
-        cuisine: ['American'],
-        diets: ['None'],
-        image: '/placeholder.svg'
-      },
-      {
-        title: 'Margherita Pizza',
-        description: 'Traditional Italian pizza with fresh mozzarella, basil, and tomato sauce on a crispy thin crust. Simple ingredients, perfect execution.',
-        ready_in_minutes: 35,
-        cuisine: ['Italian'],
-        diets: ['Vegetarian'],
-        image: '/placeholder.svg'
       }
     ];
 
@@ -75,13 +57,10 @@ export const checkAndSeedInitialRecipes = async () => {
 
     if (error) {
       console.error('Error seeding recipes:', error);
-      throw error;
     } else {
-      console.log('Successfully seeded initial recipes:', data?.length || 0);
-      return data;
+      console.log('Successfully seeded initial recipes:', data);
     }
   } catch (error) {
     console.error('Error in checkAndSeedInitialRecipes:', error);
-    throw error;
   }
 };
