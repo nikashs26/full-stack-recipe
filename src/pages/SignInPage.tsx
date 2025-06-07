@@ -18,10 +18,10 @@ const formSchema = z.object({
 });
 
 const SignInPage: React.FC = () => {
-  const { signIn, isAuthenticated } = useAuth();
+  const { signIn, isAuthenticated, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [isLoading, setIsLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -31,54 +31,41 @@ const SignInPage: React.FC = () => {
     }
   });
 
-  // Safety timeout to prevent UI from getting stuck
-  useEffect(() => {
-    let timer: ReturnType<typeof setTimeout>;
-    
-    if (isLoading) {
-      timer = setTimeout(() => {
-        console.log('Sign in timeout reached, resetting loading state');
-        setIsLoading(false);
-        toast({
-          title: "Sign in taking longer than expected",
-          description: "Please try again or check your connection",
-          variant: "destructive"
-        });
-      }, 10000); // 10 second timeout
-    }
-    
-    return () => {
-      if (timer) clearTimeout(timer);
-    };
-  }, [isLoading, toast]);
-
   // Redirect if authenticated
   useEffect(() => {
     if (isAuthenticated) {
+      console.log("User is authenticated, redirecting to home");
       navigate('/');
     }
   }, [isAuthenticated, navigate]);
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
+    if (isSubmitting || authLoading) return;
+    
     try {
-      setIsLoading(true);
+      setIsSubmitting(true);
       console.log("Attempting to sign in with:", values.email);
+      
       await signIn(values.email, values.password);
+      
       toast({
         title: "Success!",
         description: "You're now signed in.",
       });
-      // No need to navigate here - the useEffect will handle it
+      
     } catch (error: any) {
       console.error("Sign in error:", error);
       toast({
         title: "Sign in failed",
-        description: error.message || "Invalid email or password. Please check your credentials or sign up.",
+        description: error.message || "Invalid email or password. Please check your credentials.",
         variant: "destructive"
       });
-      setIsLoading(false); // Make sure loading state is reset on error
+    } finally {
+      setIsSubmitting(false);
     }
   };
+
+  const isLoading = isSubmitting || authLoading;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -99,7 +86,7 @@ const SignInPage: React.FC = () => {
                   <FormItem>
                     <FormLabel>Email</FormLabel>
                     <FormControl>
-                      <Input placeholder="your@email.com" {...field} />
+                      <Input placeholder="your@email.com" {...field} disabled={isLoading} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -113,7 +100,7 @@ const SignInPage: React.FC = () => {
                   <FormItem>
                     <FormLabel>Password</FormLabel>
                     <FormControl>
-                      <Input type="password" placeholder="••••••••" {...field} />
+                      <Input type="password" placeholder="••••••••" {...field} disabled={isLoading} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
