@@ -5,9 +5,11 @@ import { useQuery } from '@tanstack/react-query';
 import Header from '../components/Header';
 import { loadRecipes } from '../utils/storage';
 import { fetchRecipes } from '../lib/spoonacular';
+import { fetchManualRecipes } from '../lib/manualRecipes';
 import { Recipe } from '../types/recipe';
 import { SpoonacularRecipe } from '../types/spoonacular';
 import RecipeCard from '../components/RecipeCard';
+import ManualRecipeCard from '../components/ManualRecipeCard';
 import { getAverageRating } from '../utils/recipeUtils';
 import { ChefHat, TrendingUp, Award, Clock, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -31,6 +33,13 @@ const HomePage: React.FC = () => {
   const { data: localRecipes = [], isLoading: isLocalLoading } = useQuery({
     queryKey: ['localRecipes'],
     queryFn: loadRecipes,
+    staleTime: 60000
+  });
+
+  // Query for manual recipes (popular recipes)
+  const { data: manualRecipes = [], isLoading: isManualLoading } = useQuery({
+    queryKey: ['manualRecipes'],
+    queryFn: fetchManualRecipes,
     staleTime: 60000
   });
 
@@ -112,13 +121,31 @@ const HomePage: React.FC = () => {
       }));
   }, [recipes]);
 
+  // Process manual recipes for popular section - use same theming as external recipes
+  const popularRecipes = React.useMemo(() => {
+    if (!Array.isArray(manualRecipes) || manualRecipes.length === 0) return [];
+    
+    return manualRecipes
+      .slice(0, 8)
+      .map(recipe => ({
+        id: recipe.id,
+        title: recipe.title,
+        image: recipe.image_url || '/placeholder.svg',
+        readyInMinutes: recipe.prep_time ? parseInt(recipe.prep_time.toString()) : undefined,
+        summary: recipe.description,
+        cuisines: recipe.cuisine ? [recipe.cuisine] : [],
+        diets: recipe.dietary_restrictions || [],
+        isExternal: true // Use external theming
+      }));
+  }, [manualRecipes]);
+
   // Skip recipe delete functionality on homepage
   const handleDeleteRecipe = () => {
     // This is intentionally empty as we don't want delete functionality on the homepage cards
   };
 
   // Clean featured recipes to avoid duplicates
-  const isLoading = isLocalLoading || isFeaturedLoading || isQuickLoading;
+  const isLoading = isLocalLoading || isFeaturedLoading || isQuickLoading || isManualLoading;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -198,6 +225,49 @@ const HomePage: React.FC = () => {
               </div>
             </section>
           )}
+
+          {/* Popular Recipes Section - Now using same theming as external recipes */}
+          <section className="mb-16">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-3xl font-bold text-gray-900 flex items-center">
+                <Award className="mr-2 h-6 w-6 text-recipe-secondary" />
+                Popular Recipes
+              </h2>
+              <Link to="/recipes" className="text-recipe-primary hover:text-recipe-primary/80">
+                View all →
+              </Link>
+            </div>
+            
+            <Carousel className="w-full">
+              <CarouselContent className="-ml-4">
+                {isLoading ? (
+                  Array.from({ length: 4 }).map((_, i) => (
+                    <CarouselItem key={i} className="pl-4 md:basis-1/2 lg:basis-1/3">
+                      <div className="h-64 bg-gray-200 animate-pulse rounded-lg"></div>
+                    </CarouselItem>
+                  ))
+                ) : popularRecipes.length > 0 ? (
+                  popularRecipes.map((recipe, i) => (
+                    <CarouselItem key={i} className="pl-4 md:basis-1/2 lg:basis-1/3">
+                      <RecipeCard 
+                        recipe={recipe}
+                        isExternal={true}
+                        onDelete={handleDeleteRecipe}
+                      />
+                    </CarouselItem>
+                  ))
+                ) : (
+                  <CarouselItem className="pl-4 basis-full">
+                    <div className="text-center py-12 border border-dashed border-gray-300 rounded-lg">
+                      <p className="text-gray-500">No popular recipes available</p>
+                    </div>
+                  </CarouselItem>
+                )}
+              </CarouselContent>
+              <CarouselPrevious className="hidden md:flex" />
+              <CarouselNext className="hidden md:flex" />
+            </Carousel>
+          </section>
 
           {/* Featured Recipes Section */}
           <section className="mb-16">
