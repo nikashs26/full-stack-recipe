@@ -130,11 +130,12 @@ const HomePage: React.FC = () => {
       .map(recipe => ({
         id: recipe.id,
         title: recipe.title,
-        image: recipe.image_url || '/placeholder.svg',
-        readyInMinutes: recipe.prep_time ? parseInt(recipe.prep_time.toString()) : undefined,
+        image: recipe.image || '/placeholder.svg',
+        imageType: 'jpg', // Required for SpoonacularRecipe type
+        readyInMinutes: recipe.ready_in_minutes || undefined,
         summary: recipe.description,
-        cuisines: recipe.cuisine ? [recipe.cuisine] : [],
-        diets: recipe.dietary_restrictions || [],
+        cuisines: Array.isArray(recipe.cuisine) ? recipe.cuisine : (recipe.cuisine ? [recipe.cuisine] : []),
+        diets: Array.isArray(recipe.diets) ? recipe.diets : [],
         isExternal: true // Use external theming
       }));
   }, [manualRecipes]);
@@ -250,7 +251,7 @@ const HomePage: React.FC = () => {
                   popularRecipes.map((recipe, i) => (
                     <CarouselItem key={i} className="pl-4 md:basis-1/2 lg:basis-1/3">
                       <RecipeCard 
-                        recipe={recipe}
+                        recipe={recipe as SpoonacularRecipe}
                         isExternal={true}
                         onDelete={handleDeleteRecipe}
                       />
