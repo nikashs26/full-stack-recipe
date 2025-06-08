@@ -7,7 +7,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from '../context/AuthContext';
 
-// Generic review interface that can work with both local and external recipes
 export interface Review {
   id: string;
   author: string;
@@ -18,7 +17,7 @@ export interface Review {
 
 interface RecipeReviewsProps {
   reviews: Review[];
-  onSubmitReview: (reviewData: { text: string, rating: number, author: string }) => void;
+  onSubmitReview: (reviewData: { text: string, rating: number, author: string }) => Promise<void>;
   recipeType: 'local' | 'external';
 }
 
@@ -64,6 +63,11 @@ const RecipeReviews: React.FC<RecipeReviewsProps> = ({ reviews, onSubmitReview, 
       setReviewAuthor("");
       setSelectedRating(0);
       setShowReviewForm(false);
+      
+      toast({
+        title: "Review submitted",
+        description: "Your review has been added successfully.",
+      });
     } catch (error) {
       console.error("Error submitting review:", error);
       toast({
