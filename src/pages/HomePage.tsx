@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -137,23 +136,16 @@ const HomePage: React.FC = () => {
       })) as SpoonacularRecipe[];
   }, [recipes]);
 
-  // Process manual recipes for popular section - format properly as SpoonacularRecipe
+  // Process manual recipes for popular section - format properly as ManualRecipe for correct linking
   const popularRecipes = React.useMemo(() => {
     if (!Array.isArray(manualRecipes) || manualRecipes.length === 0) return [];
     
     return manualRecipes
       .slice(0, 8)
       .map(recipe => ({
-        id: recipe.id,
-        title: recipe.title,
-        image: recipe.image || '/placeholder.svg',
-        imageType: 'jpg' as const,
-        readyInMinutes: recipe.ready_in_minutes || undefined,
-        summary: recipe.description,
-        cuisines: Array.isArray(recipe.cuisine) ? recipe.cuisine : (recipe.cuisine ? [recipe.cuisine] : []),
-        diets: Array.isArray(recipe.diets) ? recipe.diets : [],
-        isExternal: true // Use external theming
-      })) as SpoonacularRecipe[];
+        ...recipe,
+        image: recipe.image || '/placeholder.svg'
+      }));
   }, [manualRecipes]);
 
   // Skip recipe delete functionality on homepage
@@ -266,10 +258,8 @@ const HomePage: React.FC = () => {
                 ) : popularRecipes.length > 0 ? (
                   popularRecipes.map((recipe, i) => (
                     <CarouselItem key={i} className="pl-4 md:basis-1/2 lg:basis-1/3">
-                      <RecipeCard 
+                      <ManualRecipeCard 
                         recipe={recipe}
-                        isExternal={true}
-                        onDelete={handleDeleteRecipe}
                       />
                     </CarouselItem>
                   ))

@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Edit, Trash2, Star, Clock, Folder, Heart } from 'lucide-react';
@@ -53,29 +52,35 @@ const RecipeCard: React.FC<RecipeCardProps> = ({
   // Favorite status (only applies to local recipes)
   const isFavorite = !isExternal && (recipe as Recipe).isFavorite;
   
-  // Dietary tags - normalize diets for external recipes to match local format
+  // Improved dietary tags mapping for both local and external recipes
   let dietaryTags = [];
   
   if (isExternal) {
     const diets = ((recipe as SpoonacularRecipe).diets || []);
-    dietaryTags = getDietaryTags(diets.map(diet => {
-      if (!diet) return 'other' as any;
-      // Normalize diet names to match our internal format
-      const dietLower = diet.toLowerCase();
-      if (dietLower.includes('vegetarian')) return 'vegetarian';
-      if (dietLower.includes('vegan')) return 'vegan'; 
-      if (dietLower.includes('gluten') && dietLower.includes('free')) return 'gluten-free';
-      if (dietLower.includes('carnivore') || dietLower.includes('meat')) return 'carnivore';
-      return diet as any;
-    }));
+    // Map external diet names to our internal format with proper filtering
+    const mappedDiets = diets
+      .filter(diet => diet && typeof diet === 'string')
+      .map(diet => {
+        const dietLower = diet.toLowerCase();
+        if (dietLower.includes('vegetarian') && !dietLower.includes('lacto') && !dietLower.includes('ovo')) return 'vegetarian';
+        if (dietLower.includes('vegan')) return 'vegan'; 
+        if (dietLower.includes('gluten') && dietLower.includes('free')) return 'gluten-free';
+        if (dietLower.includes('dairy') && dietLower.includes('free')) return 'dairy-free';
+        if (dietLower.includes('ketogenic') || dietLower.includes('keto')) return 'keto';
+        if (dietLower.includes('paleo')) return 'paleo';
+        return null;
+      })
+      .filter(diet => diet !== null);
+    
+    dietaryTags = getDietaryTags(mappedDiets as any);
   } else {
     dietaryTags = getDietaryTags((recipe as Recipe).dietaryRestrictions || []);
   }
   
-  // Ready in minutes for external recipes
+  // Ready in minutes for external recipes - always use time badge for external styling
   const readyInMinutes = isExternal 
     ? (recipe as SpoonacularRecipe).readyInMinutes 
-    : undefined;
+    : 30; // Default time for local recipes when using external styling
   
   // Fallback image handling
   const [imageSrc, setImageSrc] = React.useState(recipeImage || '/placeholder.svg');
@@ -113,21 +118,11 @@ const RecipeCard: React.FC<RecipeCardProps> = ({
               loading="lazy"
             />
             
-            {/* Rating badge for local recipes */}
-            {!isExternal && (recipe as Recipe).ratings && (recipe as Recipe).ratings.length > 0 && (
-              <div className="absolute top-2 right-2 bg-black bg-opacity-60 text-white rounded-full px-2 py-1 text-sm flex items-center">
-                <Star className="h-4 w-4 text-yellow-400 mr-1" />
-                <span>{avgRating}</span>
-              </div>
-            )}
-            
-            {/* Time badge for external recipes */}
-            {isExternal && readyInMinutes && (
-              <div className="absolute top-2 right-2 bg-black bg-opacity-60 text-white rounded-full px-2 py-1 text-sm flex items-center">
-                <Clock className="h-4 w-4 text-white mr-1" />
-                <span>{readyInMinutes} min</span>
-              </div>
-            )}
+            {/* Always show time badge for consistent external theming */}
+            <div className="absolute top-2 right-2 bg-black bg-opacity-60 text-white rounded-full px-2 py-1 text-sm flex items-center">
+              <Clock className="h-4 w-4 text-white mr-1" />
+              <span>{readyInMinutes || 30} min</span>
+            </div>
           </div>
         </Link>
         
@@ -161,8 +156,8 @@ const RecipeCard: React.FC<RecipeCardProps> = ({
         )}
         
         <div className="mb-4">
-          {/* Show dietary tags for both local and external recipes */}
-          {dietaryTags && dietaryTags.map((tag, index) => (
+          {/* Show dietary tags only if they exist and are properly mapped */}
+          {dietaryTags && dietaryTags.length > 0 && dietaryTags.map((tag, index) => (
             <span key={index} className={`recipe-tag ${tag.class}`}>
               {tag.text}
             </span>

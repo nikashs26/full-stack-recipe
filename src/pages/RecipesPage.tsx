@@ -294,36 +294,6 @@ const RecipesPage: React.FC = () => {
           </Alert>
         )}
 
-        {/* Popular Recipes Section */}
-        {isLoadingManual ? (
-          <div className="mb-8">
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">Popular Recipes</h2>
-            <div className="flex justify-center items-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-primary" />
-              <span className="ml-2 text-gray-600">Loading popular recipes...</span>
-            </div>
-          </div>
-        ) : manualRecipes.length > 0 ? (
-          <div className="mb-8">
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">Popular Recipes</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {manualRecipes.map((recipe) => (
-                <ManualRecipeCard 
-                  key={recipe.id}
-                  recipe={recipe}
-                />
-              ))}
-            </div>
-          </div>
-        ) : (
-          <div className="mb-8">
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">Popular Recipes</h2>
-            <div className="text-center py-8">
-              <p className="text-gray-600">No popular recipes available. They should load automatically.</p>
-            </div>
-          </div>
-        )}
-
         {combinedRecipes.length > 0 ? (
           <div className="grid grid-cols-1 gap-y-8">
             <div>
