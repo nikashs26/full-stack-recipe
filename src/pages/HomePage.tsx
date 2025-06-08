@@ -36,7 +36,7 @@ const HomePage: React.FC = () => {
     staleTime: 60000
   });
 
-  // Query for manual recipes (popular recipes)
+  // Query for manual recipes (popular recipes) - ONLY fetch on homepage
   const { data: manualRecipes = [], isLoading: isManualLoading } = useQuery({
     queryKey: ['manualRecipes'],
     queryFn: fetchManualRecipes,
@@ -60,7 +60,7 @@ const HomePage: React.FC = () => {
   // Handle null check for recipes
   const recipes = Array.isArray(localRecipes) ? localRecipes : [];
   
-  // Process and get top rated recipes from local collection
+  // Process and get top rated recipes from local collection - format as external
   const topRatedRecipes = React.useMemo(() => {
     if (!Array.isArray(recipes) || recipes.length === 0) return [];
 
@@ -73,9 +73,16 @@ const HomePage: React.FC = () => {
       })
       .slice(0, 6)
       .map(recipe => ({
-        ...recipe,
-        isExternal: false
-      }));
+        id: parseInt(recipe.id) || 0,
+        title: recipe.name || 'Untitled Recipe',
+        image: recipe.image || '/placeholder.svg',
+        imageType: 'jpg' as const,
+        readyInMinutes: undefined,
+        summary: recipe.instructions?.join(' ') || '',
+        cuisines: recipe.cuisine ? [recipe.cuisine] : [],
+        diets: recipe.dietaryRestrictions || [],
+        isExternal: true // Use external theming
+      })) as SpoonacularRecipe[];
   }, [recipes]);
 
   // Process featured recipes
@@ -86,6 +93,7 @@ const HomePage: React.FC = () => {
       .slice(0, 8)
       .map(recipe => ({
         ...recipe,
+        image: recipe.image || '/placeholder.svg',
         isExternal: true
       }));
   }, [featuredData]);
@@ -99,11 +107,12 @@ const HomePage: React.FC = () => {
       .slice(0, 6)
       .map(recipe => ({
         ...recipe,
+        image: recipe.image || '/placeholder.svg',
         isExternal: true
       }));
   }, [quickData]);
 
-  // Recent recipes (latest added locally)
+  // Recent recipes (latest added locally) - format as external
   const recentRecipes = React.useMemo(() => {
     if (!Array.isArray(recipes) || recipes.length === 0) return [];
 
@@ -116,12 +125,19 @@ const HomePage: React.FC = () => {
       })
       .slice(0, 6)
       .map(recipe => ({
-        ...recipe,
-        isExternal: false
-      }));
+        id: parseInt(recipe.id) || 0,
+        title: recipe.name || 'Untitled Recipe',
+        image: recipe.image || '/placeholder.svg',
+        imageType: 'jpg' as const,
+        readyInMinutes: undefined,
+        summary: recipe.instructions?.join(' ') || '',
+        cuisines: recipe.cuisine ? [recipe.cuisine] : [],
+        diets: recipe.dietaryRestrictions || [],
+        isExternal: true // Use external theming
+      })) as SpoonacularRecipe[];
   }, [recipes]);
 
-  // Process manual recipes for popular section - use same theming as external recipes
+  // Process manual recipes for popular section - format properly as SpoonacularRecipe
   const popularRecipes = React.useMemo(() => {
     if (!Array.isArray(manualRecipes) || manualRecipes.length === 0) return [];
     
@@ -131,13 +147,13 @@ const HomePage: React.FC = () => {
         id: recipe.id,
         title: recipe.title,
         image: recipe.image || '/placeholder.svg',
-        imageType: 'jpg', // Required for SpoonacularRecipe type
+        imageType: 'jpg' as const,
         readyInMinutes: recipe.ready_in_minutes || undefined,
         summary: recipe.description,
         cuisines: Array.isArray(recipe.cuisine) ? recipe.cuisine : (recipe.cuisine ? [recipe.cuisine] : []),
         diets: Array.isArray(recipe.diets) ? recipe.diets : [],
         isExternal: true // Use external theming
-      }));
+      })) as SpoonacularRecipe[];
   }, [manualRecipes]);
 
   // Skip recipe delete functionality on homepage
@@ -227,7 +243,7 @@ const HomePage: React.FC = () => {
             </section>
           )}
 
-          {/* Popular Recipes Section - Now using same theming as external recipes */}
+          {/* Popular Recipes Section - ONLY ON HOMEPAGE */}
           <section className="mb-16">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-3xl font-bold text-gray-900 flex items-center">
@@ -251,7 +267,7 @@ const HomePage: React.FC = () => {
                   popularRecipes.map((recipe, i) => (
                     <CarouselItem key={i} className="pl-4 md:basis-1/2 lg:basis-1/3">
                       <RecipeCard 
-                        recipe={recipe as SpoonacularRecipe}
+                        recipe={recipe}
                         isExternal={true}
                         onDelete={handleDeleteRecipe}
                       />
@@ -294,7 +310,7 @@ const HomePage: React.FC = () => {
                   featuredRecipes.map((recipe, i) => (
                     <CarouselItem key={i} className="pl-4 md:basis-1/2 lg:basis-1/3">
                       <RecipeCard 
-                        recipe={recipe}
+                        recipe={recipe as SpoonacularRecipe}
                         isExternal={true}
                         onDelete={handleDeleteRecipe}
                       />
@@ -334,7 +350,7 @@ const HomePage: React.FC = () => {
                 quickRecipes.slice(0, 3).map((recipe, i) => (
                   <RecipeCard 
                     key={i}
-                    recipe={recipe}
+                    recipe={recipe as SpoonacularRecipe}
                     isExternal={true}
                     onDelete={handleDeleteRecipe}
                   />
@@ -347,7 +363,7 @@ const HomePage: React.FC = () => {
             </div>
           </section>
 
-          {/* Top Rated Section (from local recipes) */}
+          {/* Top Rated Section (from local recipes) - Use external theming */}
           {topRatedRecipes.length > 0 && (
             <section className="mb-16">
               <div className="flex items-center justify-between mb-6">
@@ -365,7 +381,7 @@ const HomePage: React.FC = () => {
                   <RecipeCard 
                     key={i}
                     recipe={recipe}
-                    isExternal={false}
+                    isExternal={true}
                     onDelete={handleDeleteRecipe}
                   />
                 ))}
@@ -373,7 +389,7 @@ const HomePage: React.FC = () => {
             </section>
           )}
 
-          {/* Recently Added Section */}
+          {/* Recently Added Section - Use external theming */}
           {recentRecipes.length > 0 && (
             <section className="mb-8">
               <div className="flex items-center justify-between mb-6">
@@ -391,7 +407,7 @@ const HomePage: React.FC = () => {
                   <RecipeCard 
                     key={i}
                     recipe={recipe}
-                    isExternal={false}
+                    isExternal={true}
                     onDelete={handleDeleteRecipe}
                   />
                 ))}
