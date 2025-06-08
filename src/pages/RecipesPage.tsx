@@ -200,15 +200,6 @@ const RecipesPage: React.FC = () => {
       try {
         let filteredExternal = [...externalData.results].filter(recipe => recipe);
         
-        // Apply stricter name-based filtering for external recipes too
-        if (externalSearchTerm && externalSearchTerm.trim()) {
-          const searchWords = externalSearchTerm.toLowerCase().trim().split(/\s+/).filter(word => word.length > 0);
-          filteredExternal = filteredExternal.filter(recipe => {
-            const recipeTitle = (recipe.title || "").toLowerCase();
-            return searchWords.every(word => recipeTitle.includes(word));
-          });
-        }
-        
         if (dietaryFilter) {
           filteredExternal = filteredExternal.filter(recipe => 
             recipe.diets && Array.isArray(recipe.diets) && recipe.diets.some(diet => {
@@ -236,7 +227,7 @@ const RecipesPage: React.FC = () => {
     } else {
       setFilteredExternalRecipes([]);
     }
-  }, [externalData, dietaryFilter, cuisineFilter, externalSearchTerm]);
+  }, [externalData, dietaryFilter, cuisineFilter]);
 
   const forceApiSearch = () => {
     if (searchTerm.trim()) {

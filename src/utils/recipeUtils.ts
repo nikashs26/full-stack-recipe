@@ -40,21 +40,12 @@ export const filterRecipes = (
   }
   
   return recipes.filter(recipe => {
-    // Add null checks for all properties
+    // Add null checks for all properties to avoid "toLowerCase of undefined" errors
     const recipeName = recipe?.name || "";
-    const searchTermLower = searchTerm ? searchTerm.toLowerCase().trim() : "";
+    const searchTermLower = searchTerm ? searchTerm.toLowerCase() : "";
     
-    // More strict search logic: only match if ALL words in the search term appear in the recipe name
-    let matchesSearchTerm = true;
-    if (searchTerm && searchTermLower) {
-      const searchWords = searchTermLower.split(/\s+/).filter(word => word.length > 0);
-      const recipeNameLower = recipeName.toLowerCase();
-      
-      // Check if ALL search words appear in the recipe name
-      matchesSearchTerm = searchWords.every(word => 
-        recipeNameLower.includes(word)
-      );
-    }
+    // Updated search logic: searchTerm ONLY applies to recipe names, not ingredients
+    const matchesSearchTerm = searchTerm ? recipeName.toLowerCase().includes(searchTermLower) : true;
     
     const dietaryRestrictions = recipe?.dietaryRestrictions || [];
     const matchesDietary = dietaryFilter ? dietaryRestrictions.includes(dietaryFilter as DietaryRestriction) : true;
@@ -83,12 +74,13 @@ export const getUniqueCuisines = (recipes: Recipe[]): string[] => {
   }
   
   const cuisines = recipes
-    .filter(recipe => recipe && recipe.cuisine)
+    .filter(recipe => recipe && recipe.cuisine) // Filter out recipes without cuisine
     .map(recipe => recipe.cuisine);
   return [...new Set(cuisines)].sort();
 };
 
 export const formatExternalRecipeCuisine = (recipe: SpoonacularRecipe): string => {
+  // Handle cuisine data for external recipes
   if (recipe && recipe.cuisines && Array.isArray(recipe.cuisines) && recipe.cuisines.length > 0) {
     return recipe.cuisines[0];
   }
@@ -103,6 +95,7 @@ export const formatRecipeForDisplay = (recipe: Recipe | SpoonacularRecipe, isExt
     return {
       ...spoonacularRecipe,
       cuisine: formatExternalRecipeCuisine(spoonacularRecipe),
+      // Add any other formatting needed for external recipes
     };
   }
   return recipe;
