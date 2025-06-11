@@ -1,292 +1,208 @@
+
 import React, { useState, useEffect } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Star, MessageSquare } from 'lucide-react';
-import Header from '../components/Header';
-import { useToast } from "@/hooks/use-toast";
+import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { fetchRecipeById } from '../lib/spoonacular';
-import { SpoonacularRecipe } from '../types/spoonacular';
-import { getDietaryTags } from '../utils/recipeUtils';
-import { formatDescriptionIntoParagraphs, formatInstructions } from '../utils/formatUtils';
-import { DietaryRestriction } from '../types/recipe';
+import { ArrowLeft, Clock, ChefHat, Star } from 'lucide-react';
+import Header from '../components/Header';
+import { fetchRecipeDetails } from '../lib/spoonacular';
+import { Button } from '@/components/ui/button';
 import RecipeReviews, { Review } from '../components/RecipeReviews';
 import { getReviewsByRecipeId, addReview } from '../utils/reviewUtils';
+import { useToast } from '@/hooks/use-toast';
 
 const ExternalRecipeDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
-  const numericId = id ? parseInt(id) : 0;
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [recipe, setRecipe] = useState<SpoonacularRecipe | null>(null);
   const [reviews, setReviews] = useState<Review[]>([]);
   
-  // Fetch the external recipe data by ID
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['externalRecipe', numericId],
-    queryFn: () => fetchRecipeById(numericId),
-    enabled: !!numericId,
-    staleTime: 60 * 1000, // 1 minute
-    retry: 2,
+  const { data: recipe, isLoading, error } = useQuery({
+    queryKey: ['external-recipe', id],
+    queryFn: () => fetchRecipeDetails(parseInt(id!)),
+    enabled: !!id,
   });
 
-  // Load reviews from Supabase instead of localStorage
+  // Load reviews from Supabase
   useEffect(() => {
     const loadReviews = async () => {
       if (id) {
-        const fetchedReviews = await getReviewsByRecipeId(id, 'external');
-        setReviews(fetchedReviews);
+        try {
+          const fetchedReviews = await getReviewsByRecipeId(id, 'external');
+          console.log('Loaded reviews for external recipe:', id, fetchedReviews);
+          setReviews(fetchedReviews);
+        } catch (error) {
+          console.error('Error loading reviews:', error);
+          toast({
+            title: 'Error',
+            description: 'Failed to load reviews. Please try again later.',
+            variant: 'destructive'
+          });
+        }
       }
     };
     
     loadReviews();
-  }, [id]);
+  }, [id, toast]);
 
-  useEffect(() => {
-    if (data) {
-      console.log("Loaded recipe details:", data);
-      setRecipe(data);
-    }
-  }, [data]);
-
-  useEffect(() => {
-    if (error) {
-      console.error("Error loading recipe:", error);
-      toast({
-        title: "Error loading recipe",
-        description: "Could not load the recipe details. Please try again later.",
-        variant: "destructive",
-      });
-    }
-  }, [error, toast]);
-
+  // Handler for submitting reviews
   const handleReviewSubmit = async (reviewData: { text: string, rating: number, author: string }) => {
     if (!id) return;
     
     const { text, rating, author } = reviewData;
     
-    const newReviewData = {
-      author: author || "Anonymous",
-      text,
-      date: new Date().toISOString(),
-      rating,
-      recipeId: id,
-      recipeType: 'external' as const
-    };
+    try {
+      console.log('Submitting review:', { text, rating, author, recipeId: id });
+      
+      const newReviewData = {
+        author: author || "Anonymous",
+        text,
+        date: new Date().toISOString(),
+        rating,
+        recipeId: id,
+        recipeType: 'external' as const
+      };
 
-    const savedReview = await addReview(newReviewData);
-    
-    if (savedReview) {
-      setReviews(prevReviews => [savedReview, ...prevReviews]);
+      const savedReview = await addReview(newReviewData);
+      
+      if (savedReview) {
+        console.log('Review saved successfully:', savedReview);
+        setReviews(prevReviews => [savedReview, ...prevReviews]);
+      } else {
+        console.error('Failed to save review - no data returned');
+      }
+    } catch (error) {
+      console.error('Error in handleReviewSubmit:', error);
+      toast({
+        title: 'Error',
+        description: 'An unexpected error occurred while saving your review.',
+        variant: 'destructive'
+      });
     }
-  };
-
-  const getAverageRating = () => {
-    if (reviews.length === 0) return 0;
-    const sum = reviews.reduce((total, review) => total + review.rating, 0);
-    return (sum / reviews.length).toFixed(1);
   };
 
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50">
         <Header />
-        <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <Link to="/" className="inline-flex items-center text-recipe-primary hover:text-recipe-primary/80 mb-6">
-            <ArrowLeft className="mr-2 h-5 w-5" /> Back to Recipes
-          </Link>
-          <div className="animate-pulse">
-            <div className="h-8 bg-gray-200 rounded w-3/4 mb-4"></div>
-            <div className="h-64 bg-gray-200 rounded mb-4"></div>
-            <div className="h-4 bg-gray-200 rounded w-1/2 mb-2"></div>
-            <div className="h-4 bg-gray-200 rounded w-1/3 mb-4"></div>
-            <div className="h-4 bg-gray-200 rounded w-full mb-2"></div>
-            <div className="h-4 bg-gray-200 rounded w-full mb-2"></div>
-            <div className="h-4 bg-gray-200 rounded w-3/4 mb-4"></div>
-          </div>
-        </main>
+        <div className="pt-24 md:pt-28 flex justify-center items-center py-12">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-recipe-primary"></div>
+        </div>
       </div>
     );
   }
 
-  if (!recipe) {
+  if (error || !recipe) {
     return (
       <div className="min-h-screen bg-gray-50">
         <Header />
-        <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <Link to="/" className="inline-flex items-center text-recipe-primary hover:text-recipe-primary/80 mb-6">
-            <ArrowLeft className="mr-2 h-5 w-5" /> Back to Recipes
-          </Link>
-          <div className="text-center py-12">
-            <h2 className="text-2xl font-medium text-gray-600">Recipe Not Found</h2>
-            <p className="text-gray-500 mt-2">The recipe you're looking for doesn't exist or couldn't be loaded.</p>
-            <Link 
-              to="/" 
-              className="mt-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-recipe-primary hover:bg-recipe-primary/90"
-            >
-              Go back to all recipes
-            </Link>
+        <main className="pt-24 md:pt-28 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold mb-4">Recipe not found</h1>
+            <Button onClick={() => navigate('/recipes')}>Back to Recipes</Button>
           </div>
         </main>
       </div>
     );
   }
 
-  // Extract ingredients from the recipe
-  const ingredients = recipe.extendedIngredients?.map(ing => 
-    ing.originalString || ing.original || `${ing.amount} ${ing.unit} ${ing.name}`
-  ) || [];
-  
-  // Extract and format instructions from the recipe
-  let instructions: string[] = [];
-  if (recipe.instructions) {
-    // Use our new formatInstructions utility
-    instructions = formatInstructions(recipe.instructions);
-  } else if (recipe.analyzedInstructions && recipe.analyzedInstructions.length > 0) {
-    // Or use analyzed instructions
-    instructions = recipe.analyzedInstructions[0].steps.map(s => s.step);
-  }
+  // Calculate average rating
+  const getAverageRating = () => {
+    if (reviews.length === 0) return 0;
+    const sum = reviews.reduce((total, review) => total + review.rating, 0);
+    return (sum / reviews.length).toFixed(1);
+  };
 
-  // Make dietary info match the format of regular recipes
-  const dietaryRestrictions = (recipe.diets || []).map(diet => {
-    if (diet.includes('vegetarian')) return 'vegetarian';
-    if (diet.includes('vegan')) return 'vegan'; 
-    if (diet.includes('gluten-free')) return 'gluten-free';
-    return diet;
-  }) as DietaryRestriction[];
-  
-  const dietaryTags = getDietaryTags(dietaryRestrictions);
-  const avgRating = getAverageRating();
-  
-  // Format the description into paragraphs
-  const formattedSummary = recipe.summary ? formatDescriptionIntoParagraphs(recipe.summary) : '';
+  const avgRating = Number(getAverageRating());
+
+  // Parse ingredients and instructions
+  const ingredients = recipe.extendedIngredients?.map(ing => ing.original) || ['No ingredients available'];
+  const instructions = recipe.analyzedInstructions?.[0]?.steps?.map(step => step.step) || ['No instructions available'];
+  const cuisine = recipe.cuisines?.[0] || 'Other';
 
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <Link to="/" className="inline-flex items-center text-recipe-primary hover:text-recipe-primary/80 mb-6">
-          <ArrowLeft className="mr-2 h-5 w-5" /> Back to Recipes
-        </Link>
-        
-        <article className="bg-white shadow-lg rounded-lg overflow-hidden animate-fade-in">
-          <div className="relative h-80 w-full">
-            <img 
-              src={recipe.image || '/placeholder.svg'} 
-              alt={recipe.title || "Recipe"} 
-              className="absolute inset-0 h-full w-full object-cover"
-              onError={(e) => {
-                (e.target as HTMLImageElement).src = '/placeholder.svg';
-              }}
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
-            <div className="absolute bottom-0 left-0 p-6 w-full">
-              <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">{recipe.title || "Untitled Recipe"}</h1>
-              <p className="text-white/90 text-lg">
-                Cuisine: {recipe.cuisines && recipe.cuisines.length > 0 
-                  ? recipe.cuisines[0] 
-                  : "Other"}
-              </p>
-            </div>
+      <main className="pt-24 md:pt-28">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="mb-6">
+            <Button 
+              variant="outline" 
+              onClick={() => navigate('/recipes')}
+              className="mb-4"
+            >
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to Recipes
+            </Button>
           </div>
-          
-          <div className="p-6">
-            <div className="flex flex-wrap items-center justify-between mb-6">
-              <div className="flex items-center">
-                {dietaryTags.map((tag, index) => (
-                  <span key={index} className={`recipe-tag ${tag.class}`}>
-                    {tag.text}
-                  </span>
+
+          {/* Recipe header */}
+          <div className="bg-white shadow-sm rounded-lg overflow-hidden">
+            <div className="relative h-64 md:h-96 w-full">
+              <img
+                src={recipe.image || '/placeholder.svg'}
+                alt={recipe.title}
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = '/placeholder.svg';
+                }}
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex flex-col justify-end p-6">
+                <h1 className="text-white text-3xl md:text-4xl font-bold">{recipe.title}</h1>
+                <div className="flex items-center text-white mt-2">
+                  <span className="text-sm">{cuisine}</span>
+                  {recipe.readyInMinutes && (
+                    <div className="ml-4 flex items-center">
+                      <Clock className="h-4 w-4" />
+                      <span className="ml-1">{recipe.readyInMinutes} minutes</span>
+                    </div>
+                  )}
+                  {avgRating > 0 && (
+                    <div className="ml-4 flex items-center">
+                      <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
+                      <span className="ml-1">{avgRating} ({reviews.length} {reviews.length === 1 ? 'review' : 'reviews'})</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Recipe content */}
+            <div className="p-6">
+              {recipe.summary && (
+                <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+                  <h2 className="text-xl font-semibold mb-2">About This Recipe</h2>
+                  <div 
+                    className="text-gray-700" 
+                    dangerouslySetInnerHTML={{ __html: recipe.summary }}
+                  />
+                </div>
+              )}
+
+              <h2 className="text-2xl font-semibold mb-4">Ingredients</h2>
+              <ul className="list-disc list-inside mb-6">
+                {ingredients.map((ingredient, index) => (
+                  <li key={index} className="mb-1">{ingredient}</li>
                 ))}
-              </div>
-              
-              <div className="flex items-center bg-gray-100 rounded-full px-3 py-1 text-sm">
-                <Star className="h-5 w-5 text-yellow-500 mr-1" />
-                <span>{avgRating} ({reviews.length} {reviews.length === 1 ? 'rating' : 'ratings'})</span>
-              </div>
-            </div>
-
-            {/* Recipe summary with formatted paragraphs */}
-            {formattedSummary && (
-              <div className="mb-6">
-                <h2 className="text-xl font-semibold text-gray-800 mb-3">Summary</h2>
-                <div className="text-gray-700 space-y-4" dangerouslySetInnerHTML={{ __html: formattedSummary }} />
-              </div>
-            )}
-            
-            <div className="mb-6">
-              <h2 className="text-xl font-semibold text-gray-800 mb-3">Ingredients</h2>
-              <ul className="space-y-2 pl-5">
-                {ingredients.length > 0 ? (
-                  ingredients.map((ingredient, index) => (
-                    <li key={index} className="text-gray-700 flex items-start">
-                      <span className="inline-block h-2 w-2 rounded-full bg-recipe-primary mt-2 mr-2"></span>
-                      {ingredient}
-                    </li>
-                  ))
-                ) : (
-                  <li className="text-gray-500">No ingredients information available</li>
-                )}
               </ul>
-            </div>
-            
-            <div className="mb-6">
-              <h2 className="text-xl font-semibold text-gray-800 mb-3">Instructions</h2>
-              <ol className="space-y-4 pl-5">
-                {instructions.length > 0 ? (
-                  instructions.map((instruction, index) => (
-                    <li key={index} className="text-gray-700">
-                      <span className="font-medium text-recipe-primary mr-2">{index + 1}.</span> {instruction}
-                    </li>
-                  ))
-                ) : (
-                  <li className="text-gray-500">No instructions available</li>
-                )}
+
+              <h2 className="text-2xl font-semibold mb-4">Instructions</h2>
+              <ol className="list-decimal list-inside">
+                {instructions.map((instruction, index) => (
+                  <li key={index} className="mb-2">{instruction}</li>
+                ))}
               </ol>
+              
+              {/* Reviews section */}
+              <div className="mt-8 pt-6 border-t border-gray-200">
+                <RecipeReviews
+                  reviews={reviews}
+                  onSubmitReview={handleReviewSubmit}
+                  recipeType="external"
+                />
+              </div>
             </div>
-
-            {/* Additional recipe info */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-              {recipe.readyInMinutes && (
-                <div className="bg-gray-50 p-3 rounded-lg text-center">
-                  <p className="text-gray-500 text-sm">Prep Time</p>
-                  <p className="font-medium">{recipe.readyInMinutes} min</p>
-                </div>
-              )}
-              {recipe.servings && (
-                <div className="bg-gray-50 p-3 rounded-lg text-center">
-                  <p className="text-gray-500 text-sm">Servings</p>
-                  <p className="font-medium">{recipe.servings}</p>
-                </div>
-              )}
-              {recipe.dishTypes && recipe.dishTypes.length > 0 && (
-                <div className="bg-gray-50 p-3 rounded-lg text-center">
-                  <p className="text-gray-500 text-sm">Type</p>
-                  <p className="font-medium">{recipe.dishTypes[0]}</p>
-                </div>
-              )}
-              {recipe.sourceUrl && (
-                <div className="bg-gray-50 p-3 rounded-lg text-center">
-                  <p className="text-gray-500 text-sm">Source</p>
-                  <a 
-                    href={recipe.sourceUrl} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="font-medium text-recipe-primary hover:underline"
-                  >
-                    View Original
-                  </a>
-                </div>
-              )}
-            </div>
-
-            {/* Reviews Section - Using the shared component */}
-            <RecipeReviews
-              reviews={reviews}
-              onSubmitReview={handleReviewSubmit}
-              recipeType="external"
-            />
           </div>
-        </article>
+        </div>
       </main>
     </div>
   );

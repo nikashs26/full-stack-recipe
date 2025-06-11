@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Edit, Trash2, Star, Clock, Folder, Heart } from 'lucide-react';
@@ -44,20 +45,19 @@ const RecipeCard: React.FC<RecipeCardProps> = ({
     ? (recipe as SpoonacularRecipe).image || '/placeholder.svg' 
     : (recipe as Recipe).image || '/placeholder.svg';
   
-  // Ratings handling with null checks
-  const avgRating = isExternal 
-    ? 0 
-    : getAverageRating((recipe as Recipe).ratings || []);
+  // ALWAYS show external theme - time badge and consistent styling
+  const readyInMinutes = isExternal 
+    ? (recipe as SpoonacularRecipe).readyInMinutes || 30
+    : 30; // Default time for all recipes
   
   // Favorite status (only applies to local recipes)
   const isFavorite = !isExternal && (recipe as Recipe).isFavorite;
   
-  // Improved dietary tags mapping for both local and external recipes
+  // Improved dietary tags mapping for all recipes
   let dietaryTags = [];
   
   if (isExternal) {
     const diets = ((recipe as SpoonacularRecipe).diets || []);
-    // Map external diet names to our internal format with proper filtering
     const mappedDiets = diets
       .filter(diet => diet && typeof diet === 'string')
       .map(diet => {
@@ -65,9 +65,6 @@ const RecipeCard: React.FC<RecipeCardProps> = ({
         if (dietLower.includes('vegetarian') && !dietLower.includes('lacto') && !dietLower.includes('ovo')) return 'vegetarian';
         if (dietLower.includes('vegan')) return 'vegan'; 
         if (dietLower.includes('gluten') && dietLower.includes('free')) return 'gluten-free';
-        if (dietLower.includes('dairy') && dietLower.includes('free')) return 'dairy-free';
-        if (dietLower.includes('ketogenic') || dietLower.includes('keto')) return 'keto';
-        if (dietLower.includes('paleo')) return 'paleo';
         return null;
       })
       .filter(diet => diet !== null);
@@ -76,11 +73,6 @@ const RecipeCard: React.FC<RecipeCardProps> = ({
   } else {
     dietaryTags = getDietaryTags((recipe as Recipe).dietaryRestrictions || []);
   }
-  
-  // Ready in minutes for external recipes - always use time badge for external styling
-  const readyInMinutes = isExternal 
-    ? (recipe as SpoonacularRecipe).readyInMinutes 
-    : 30; // Default time for local recipes when using external styling
   
   // Fallback image handling
   const [imageSrc, setImageSrc] = React.useState(recipeImage || '/placeholder.svg');
@@ -91,10 +83,19 @@ const RecipeCard: React.FC<RecipeCardProps> = ({
     setImageSrc('/placeholder.svg');
   };
 
-  // Fix the link path for external recipes
-  const cardLink = isExternal 
-    ? `/external-recipe/${recipeId}` 
-    : `/recipe/${recipeId}`;
+  // Fix the link path for different recipe types
+  let cardLink = '';
+  if (isExternal) {
+    cardLink = `/external-recipe/${recipeId}`;
+  } else {
+    // Check if this is a manual recipe (has integer ID) or local recipe
+    const numericId = parseInt(recipeId);
+    if (!isNaN(numericId) && String(numericId) === recipeId) {
+      cardLink = `/manual-recipe/${recipeId}`;
+    } else {
+      cardLink = `/recipe/${recipeId}`;
+    }
+  }
 
   // Handle favorite toggle
   const handleToggleFavorite = (e: React.MouseEvent) => {
@@ -118,10 +119,10 @@ const RecipeCard: React.FC<RecipeCardProps> = ({
               loading="lazy"
             />
             
-            {/* Always show time badge for consistent external theming */}
+            {/* ALWAYS show time badge for consistent external theming */}
             <div className="absolute top-2 right-2 bg-black bg-opacity-60 text-white rounded-full px-2 py-1 text-sm flex items-center">
               <Clock className="h-4 w-4 text-white mr-1" />
-              <span>{readyInMinutes || 30} min</span>
+              <span>{readyInMinutes} min</span>
             </div>
           </div>
         </Link>
