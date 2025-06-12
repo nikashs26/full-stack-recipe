@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -113,10 +114,18 @@ const ExternalRecipeDetailPage: React.FC = () => {
 
   const avgRating = Number(getAverageRating());
 
-  // Parse ingredients and instructions
-  const ingredients = recipe?.extendedIngredients?.map(ing => ing.original || ing.originalString) || ['No ingredients available'];
-  const instructions = recipe?.analyzedInstructions?.[0]?.steps?.map(step => step.step) || ['No instructions available'];
-  const cuisine = recipe?.cuisines?.[0] || 'Other';
+  // Better parsing of ingredients and instructions with fallback content
+  const ingredients = recipe?.extendedIngredients?.length > 0 
+    ? recipe.extendedIngredients.map(ing => ing.original || ing.originalString || `${ing.amount || ''} ${ing.unit || ''} ${ing.name || ''}`.trim()).filter(Boolean)
+    : ['This is a popular recipe from our collection. Detailed ingredients will be available soon.'];
+    
+  const instructions = recipe?.analyzedInstructions?.[0]?.steps?.length > 0
+    ? recipe.analyzedInstructions[0].steps.map(step => step.step).filter(Boolean)
+    : recipe?.instructions 
+      ? [recipe.instructions]
+      : ['This is a popular recipe from our collection. Detailed cooking instructions will be available soon. In the meantime, you can search online for similar recipes or check the source URL if available.'];
+      
+  const cuisine = recipe?.cuisines?.[0] || 'International';
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -190,6 +199,21 @@ const ExternalRecipeDetailPage: React.FC = () => {
                   <li key={index} className="mb-2">{instruction}</li>
                 ))}
               </ol>
+              
+              {/* Source URL if available */}
+              {recipe.sourceUrl && (
+                <div className="mt-6 p-4 bg-blue-50 rounded-lg">
+                  <h3 className="text-lg font-semibold mb-2">Original Recipe</h3>
+                  <a 
+                    href={recipe.sourceUrl} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-blue-600 hover:text-blue-800 underline"
+                  >
+                    View full recipe at original source
+                  </a>
+                </div>
+              )}
               
               {/* Reviews section */}
               <div className="mt-8 pt-6 border-t border-gray-200">

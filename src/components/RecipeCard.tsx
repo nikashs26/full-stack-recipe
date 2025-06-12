@@ -83,18 +83,13 @@ const RecipeCard: React.FC<RecipeCardProps> = ({
     setImageSrc('/placeholder.svg');
   };
 
-  // Fix the link path for different recipe types
+  // Fixed the link path logic - ONLY external recipes use /external-recipe/
   let cardLink = '';
   if (isExternal) {
     cardLink = `/external-recipe/${recipeId}`;
   } else {
-    // Check if this is a manual recipe (has integer ID) or local recipe
-    const numericId = parseInt(recipeId);
-    if (!isNaN(numericId) && String(numericId) === recipeId) {
-      cardLink = `/manual-recipe/${recipeId}`;
-    } else {
-      cardLink = `/recipe/${recipeId}`;
-    }
+    // For local recipes, always use /recipe/ regardless of ID format
+    cardLink = `/recipe/${recipeId}`;
   }
 
   // Handle favorite toggle
