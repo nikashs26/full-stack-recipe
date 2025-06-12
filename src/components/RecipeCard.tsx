@@ -41,22 +41,9 @@ const RecipeCard: React.FC<RecipeCardProps> = ({
     ? formatExternalRecipeCuisine(recipe as SpoonacularRecipe)
     : (recipe as Recipe).cuisine || "Other";
   
-  // Improved image handling with better fallbacks
-  const recipeImage = React.useMemo(() => {
-    if (isExternal) {
-      const spoonacularRecipe = recipe as SpoonacularRecipe;
-      if (spoonacularRecipe.image && spoonacularRecipe.image.startsWith('http')) {
-        return spoonacularRecipe.image;
-      }
-    } else {
-      const localRecipe = recipe as Recipe;
-      if (localRecipe.image && localRecipe.image.startsWith('http')) {
-        return localRecipe.image;
-      }
-    }
-    // Use a better placeholder from Unsplash for food
-    return 'https://images.unsplash.com/photo-1546554137-f86b9593a222?w=400&h=300&fit=crop';
-  }, [recipe, isExternal]);
+  const recipeImage = isExternal 
+    ? (recipe as SpoonacularRecipe).image || '/placeholder.svg' 
+    : (recipe as Recipe).image || '/placeholder.svg';
   
   // ALWAYS show external theme - time badge and consistent styling
   const readyInMinutes = isExternal 
@@ -87,17 +74,13 @@ const RecipeCard: React.FC<RecipeCardProps> = ({
     dietaryTags = getDietaryTags((recipe as Recipe).dietaryRestrictions || []);
   }
   
-  // State for image error handling
-  const [imageSrc, setImageSrc] = React.useState(recipeImage);
-  const [hasImageError, setHasImageError] = React.useState(false);
+  // Fallback image handling
+  const [imageSrc, setImageSrc] = React.useState(recipeImage || '/placeholder.svg');
   
-  // Handle image loading errors with better fallback
+  // Handle image loading errors
   const handleImageError = () => {
-    if (!hasImageError) {
-      console.log(`Image error for recipe: ${recipeName}, using food placeholder`);
-      setImageSrc('https://images.unsplash.com/photo-1546554137-f86b9593a222?w=400&h=300&fit=crop');
-      setHasImageError(true);
-    }
+    console.log(`Image error for recipe: ${recipeName}, using placeholder`);
+    setImageSrc('/placeholder.svg');
   };
 
   // Fixed the link path logic - ONLY external recipes use /external-recipe/
@@ -136,11 +119,6 @@ const RecipeCard: React.FC<RecipeCardProps> = ({
               <Clock className="h-4 w-4 text-white mr-1" />
               <span>{readyInMinutes} min</span>
             </div>
-            
-            {/* Show cuisine badge for better theming */}
-            <div className="absolute top-2 left-2 bg-recipe-primary bg-opacity-80 text-white rounded-full px-2 py-1 text-xs">
-              {recipeCuisine}
-            </div>
           </div>
         </Link>
         
@@ -148,7 +126,7 @@ const RecipeCard: React.FC<RecipeCardProps> = ({
         {!isExternal && onToggleFavorite && (
           <button
             onClick={handleToggleFavorite}
-            className={`absolute bottom-2 left-2 p-1 rounded-full ${isFavorite ? 'text-red-500' : 'text-white bg-black bg-opacity-40'}`}
+            className={`absolute top-2 left-2 p-1 rounded-full ${isFavorite ? 'text-red-500' : 'text-white bg-black bg-opacity-40'}`}
           >
             <Heart 
               className="h-5 w-5" 
@@ -164,6 +142,7 @@ const RecipeCard: React.FC<RecipeCardProps> = ({
             {recipeName || "Untitled Recipe"}
           </Link>
         </h2>
+        <p className="text-sm text-gray-600 mb-2">Cuisine: {recipeCuisine || "Other"}</p>
         
         {folderName && (
           <div className="mb-2 text-xs flex items-center text-gray-500">
