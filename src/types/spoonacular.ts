@@ -12,6 +12,7 @@ export interface SpoonacularRecipe {
   dishTypes?: string[];
   diets?: string[];
   instructions?: string;
+  isExternal?: boolean;
   analyzedInstructions?: {
     name: string;
     steps: {

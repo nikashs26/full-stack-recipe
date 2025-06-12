@@ -86,8 +86,7 @@ const HomePage: React.FC = () => {
           readyInMinutes: 25,
           summary: "A delicious and healthy pasta dish perfect for any occasion.",
           cuisines: ["Italian"],
-          diets: ["vegetarian"],
-          isExternal: true
+          diets: ["vegetarian"]
         },
         {
           id: 715538,
@@ -97,8 +96,7 @@ const HomePage: React.FC = () => {
           readyInMinutes: 15,
           summary: "Classic Italian appetizer with fresh tomatoes and basil.",
           cuisines: ["Italian"],
-          diets: ["vegetarian"],
-          isExternal: true
+          diets: ["vegetarian"]
         },
         {
           id: 782585,
@@ -108,18 +106,16 @@ const HomePage: React.FC = () => {
           readyInMinutes: 30,
           summary: "Hearty Italian soup with beans and sausage.",
           cuisines: ["Italian"],
-          diets: [],
-          isExternal: true
+          diets: []
         }
-      ];
+      ] as SpoonacularRecipe[];
     }
     
     return featuredData.results
       .slice(0, 8)
       .map(recipe => ({
         ...recipe,
-        image: recipe.image || '/placeholder.svg',
-        isExternal: true
+        image: recipe.image || '/placeholder.svg'
       }));
   }, [featuredData]);
 
@@ -136,8 +132,7 @@ const HomePage: React.FC = () => {
           readyInMinutes: 25,
           summary: "Quick and nutritious soup perfect for busy weeknights.",
           cuisines: ["Middle Eastern"],
-          diets: ["gluten free"],
-          isExternal: true
+          diets: ["gluten free"]
         },
         {
           id: 716406,
@@ -147,8 +142,7 @@ const HomePage: React.FC = () => {
           readyInMinutes: 20,
           summary: "Light and fresh spring soup.",
           cuisines: ["European"],
-          diets: ["vegetarian", "vegan"],
-          isExternal: true
+          diets: ["vegetarian", "vegan"]
         },
         {
           id: 644387,
@@ -158,10 +152,9 @@ const HomePage: React.FC = () => {
           readyInMinutes: 15,
           summary: "Quick and healthy sautéed kale with garlic.",
           cuisines: ["American"],
-          diets: ["vegetarian", "vegan"],
-          isExternal: true
+          diets: ["vegetarian", "vegan"]
         }
-      ];
+      ] as SpoonacularRecipe[];
     }
     
     return quickData.results
@@ -169,8 +162,7 @@ const HomePage: React.FC = () => {
       .slice(0, 6)
       .map(recipe => ({
         ...recipe,
-        image: recipe.image || '/placeholder.svg',
-        isExternal: true
+        image: recipe.image || '/placeholder.svg'
       }));
   }, [quickData]);
 
