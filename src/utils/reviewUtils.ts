@@ -5,7 +5,7 @@ import { Review } from '../components/RecipeReviews';
 
 // Function to add a new review to the database
 export async function addReview(
-  review: Omit<Review, 'id'> & { recipeId: string, recipeType: 'local' | 'external' }
+  review: Omit<Review, 'id'> & { recipeId: string, recipeType: 'local' | 'external' | 'manual' }
 ) {
   try {
     console.log('Adding review to Supabase:', review);
@@ -64,7 +64,7 @@ export async function addReview(
 }
 
 // Function to get reviews for a recipe
-export async function getReviewsByRecipeId(recipeId: string, recipeType: 'local' | 'external') {
+export async function getReviewsByRecipeId(recipeId: string, recipeType: 'local' | 'external' | 'manual') {
   try {
     console.log(`Fetching reviews for ${recipeType} recipe:`, recipeId);
     

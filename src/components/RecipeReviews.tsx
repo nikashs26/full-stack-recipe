@@ -19,7 +19,7 @@ export interface Review {
 interface RecipeReviewsProps {
   reviews: Review[];
   onSubmitReview: (reviewData: { text: string, rating: number, author: string }) => void;
-  recipeType: 'local' | 'external';
+  recipeType: 'local' | 'external' | 'manual';
 }
 
 const RecipeReviews: React.FC<RecipeReviewsProps> = ({ reviews, onSubmitReview, recipeType }) => {

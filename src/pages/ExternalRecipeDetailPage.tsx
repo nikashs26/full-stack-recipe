@@ -1,10 +1,9 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, Clock, ChefHat, Star } from 'lucide-react';
 import Header from '../components/Header';
-import { fetchRecipeDetails } from '../lib/spoonacular';
+import { fetchRecipeById } from '../lib/spoonacular';
 import { Button } from '@/components/ui/button';
 import RecipeReviews, { Review } from '../components/RecipeReviews';
 import { getReviewsByRecipeId, addReview } from '../utils/reviewUtils';
@@ -18,7 +17,7 @@ const ExternalRecipeDetailPage: React.FC = () => {
   
   const { data: recipe, isLoading, error } = useQuery({
     queryKey: ['external-recipe', id],
-    queryFn: () => fetchRecipeDetails(parseInt(id!)),
+    queryFn: () => fetchRecipeById(parseInt(id!)),
     enabled: !!id,
   });
 
@@ -115,9 +114,9 @@ const ExternalRecipeDetailPage: React.FC = () => {
   const avgRating = Number(getAverageRating());
 
   // Parse ingredients and instructions
-  const ingredients = recipe.extendedIngredients?.map(ing => ing.original) || ['No ingredients available'];
-  const instructions = recipe.analyzedInstructions?.[0]?.steps?.map(step => step.step) || ['No instructions available'];
-  const cuisine = recipe.cuisines?.[0] || 'Other';
+  const ingredients = recipe?.extendedIngredients?.map(ing => ing.original || ing.originalString) || ['No ingredients available'];
+  const instructions = recipe?.analyzedInstructions?.[0]?.steps?.map(step => step.step) || ['No instructions available'];
+  const cuisine = recipe?.cuisines?.[0] || 'Other';
 
   return (
     <div className="min-h-screen bg-gray-50">
