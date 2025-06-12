@@ -73,15 +73,15 @@ const HomePage: React.FC = () => {
       .slice(0, 6);
   }, [recipes]);
 
-  // Process featured recipes - ensure they're properly formatted
-  const featuredRecipes = React.useMemo((): SpoonacularRecipe[] => {
+  // Process featured recipes - ensure they're properly formatted with better images
+  const featuredRecipes = React.useMemo(() => {
     if (!featuredData?.results) {
-      // Provide fallback featured recipes with correct SpoonacularRecipe structure
+      // Provide fallback featured recipes with high-quality Unsplash images
       return [
         {
           id: 716429,
           title: "Pasta with Garlic, Scallions, and Broccoli",
-          image: "https://img.spoonacular.com/recipes/716429-312x231.jpg",
+          image: "https://images.unsplash.com/photo-1551183053-bf91a1d81141?w=400&h=300&fit=crop",
           imageType: "jpg",
           readyInMinutes: 25,
           summary: "A delicious and healthy pasta dish perfect for any occasion.",
@@ -91,7 +91,7 @@ const HomePage: React.FC = () => {
         {
           id: 715538,
           title: "Bruschetta with Tomato and Basil",
-          image: "https://img.spoonacular.com/recipes/715538-312x231.jpg",
+          image: "https://images.unsplash.com/photo-1572441713132-51c75654db73?w=400&h=300&fit=crop",
           imageType: "jpg",
           readyInMinutes: 15,
           summary: "Classic Italian appetizer with fresh tomatoes and basil.",
@@ -101,12 +101,42 @@ const HomePage: React.FC = () => {
         {
           id: 782585,
           title: "Cannellini Bean and Sausage Soup",
-          image: "https://img.spoonacular.com/recipes/782585-312x231.jpg",
+          image: "https://images.unsplash.com/photo-1547592166-23ac45744acd?w=400&h=300&fit=crop",
           imageType: "jpg",
           readyInMinutes: 30,
           summary: "Hearty Italian soup with beans and sausage.",
           cuisines: ["Italian"],
           diets: []
+        },
+        {
+          id: 123456,
+          title: "Grilled Chicken Breast",
+          image: "https://images.unsplash.com/photo-1598103442097-8b74394b95c6?w=400&h=300&fit=crop",
+          imageType: "jpg",
+          readyInMinutes: 20,
+          summary: "Simple and delicious grilled chicken perfect for any meal.",
+          cuisines: ["American"],
+          diets: ["gluten free"]
+        },
+        {
+          id: 789012,
+          title: "Chicken Stir Fry",
+          image: "https://images.unsplash.com/photo-1603360946369-dc9bb6258143?w=400&h=300&fit=crop",
+          imageType: "jpg",
+          readyInMinutes: 15,
+          summary: "Quick and healthy chicken stir fry with vegetables.",
+          cuisines: ["Asian"],
+          diets: ["gluten free"]
+        },
+        {
+          id: 345678,
+          title: "Mediterranean Bowl",
+          image: "https://images.unsplash.com/photo-1540420773420-3366772f4999?w=400&h=300&fit=crop",
+          imageType: "jpg",
+          readyInMinutes: 25,
+          summary: "Fresh Mediterranean bowl with vegetables and herbs.",
+          cuisines: ["Mediterranean"],
+          diets: ["vegetarian"]
         }
       ] as SpoonacularRecipe[];
     }
@@ -115,19 +145,19 @@ const HomePage: React.FC = () => {
       .slice(0, 8)
       .map(recipe => ({
         ...recipe,
-        image: recipe.image || '/placeholder.svg'
+        image: recipe.image || 'https://images.unsplash.com/photo-1546554137-f86b9593a222?w=400&h=300&fit=crop'
       }));
   }, [featuredData]);
 
-  // Process quick recipes - ensure they have data
-  const quickRecipes = React.useMemo((): SpoonacularRecipe[] => {
+  // Process quick recipes - ensure they have data with better images
+  const quickRecipes = React.useMemo(() => {
     if (!quickData?.results) {
-      // Provide fallback quick recipes with correct SpoonacularRecipe structure
+      // Provide fallback quick recipes with high-quality Unsplash images
       return [
         {
           id: 715415,
           title: "Red Lentil Soup with Chicken and Turnips",
-          image: "https://img.spoonacular.com/recipes/715415-312x231.jpg",
+          image: "https://images.unsplash.com/photo-1547592180-85f173990554?w=400&h=300&fit=crop",
           imageType: "jpg",
           readyInMinutes: 25,
           summary: "Quick and nutritious soup perfect for busy weeknights.",
@@ -137,7 +167,7 @@ const HomePage: React.FC = () => {
         {
           id: 716406,
           title: "Asparagus and Pea Soup",
-          image: "https://img.spoonacular.com/recipes/716406-312x231.jpg",
+          image: "https://images.unsplash.com/photo-1547592166-23ac45744acd?w=400&h=300&fit=crop",
           imageType: "jpg",
           readyInMinutes: 20,
           summary: "Light and fresh spring soup.",
@@ -147,12 +177,42 @@ const HomePage: React.FC = () => {
         {
           id: 644387,
           title: "Garlicky Kale",
-          image: "https://img.spoonacular.com/recipes/644387-312x231.jpg",
+          image: "https://images.unsplash.com/photo-1576045057995-568f588f82fb?w=400&h=300&fit=crop",
           imageType: "jpg",
           readyInMinutes: 15,
           summary: "Quick and healthy sautéed kale with garlic.",
           cuisines: ["American"],
           diets: ["vegetarian", "vegan"]
+        },
+        {
+          id: 987654,
+          title: "Quick Chicken Tacos",
+          image: "https://images.unsplash.com/photo-1565299585323-38174c4a6471?w=400&h=300&fit=crop",
+          imageType: "jpg",
+          readyInMinutes: 15,
+          summary: "Fast and flavorful chicken tacos for busy weeknights.",
+          cuisines: ["Mexican"],
+          diets: ["gluten free"]
+        },
+        {
+          id: 456789,
+          title: "Chicken Caesar Salad",
+          image: "https://images.unsplash.com/photo-1546793665-c74683f339c1?w=400&h=300&fit=crop",
+          imageType: "jpg",
+          readyInMinutes: 10,
+          summary: "Classic chicken caesar salad with crisp romaine.",
+          cuisines: ["American"],
+          diets: ["gluten free"]
+        },
+        {
+          id: 112233,
+          title: "Honey Garlic Chicken",
+          image: "https://images.unsplash.com/photo-1598103442097-8b74394b95c6?w=400&h=300&fit=crop",
+          imageType: "jpg",
+          readyInMinutes: 20,
+          summary: "Sweet and savory honey garlic chicken.",
+          cuisines: ["Asian"],
+          diets: []
         }
       ] as SpoonacularRecipe[];
     }
@@ -162,7 +222,7 @@ const HomePage: React.FC = () => {
       .slice(0, 6)
       .map(recipe => ({
         ...recipe,
-        image: recipe.image || '/placeholder.svg'
+        image: recipe.image || 'https://images.unsplash.com/photo-1546554137-f86b9593a222?w=400&h=300&fit=crop'
       }));
   }, [quickData]);
 
