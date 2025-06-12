@@ -74,9 +74,9 @@ const HomePage: React.FC = () => {
   }, [recipes]);
 
   // Process featured recipes - ensure they're properly formatted
-  const featuredRecipes = React.useMemo(() => {
+  const featuredRecipes = React.useMemo((): SpoonacularRecipe[] => {
     if (!featuredData?.results) {
-      // Provide fallback featured recipes
+      // Provide fallback featured recipes with correct SpoonacularRecipe structure
       return [
         {
           id: 716429,
@@ -111,7 +111,7 @@ const HomePage: React.FC = () => {
           diets: [],
           isExternal: true
         }
-      ] as SpoonacularRecipe[];
+      ];
     }
     
     return featuredData.results
@@ -124,9 +124,9 @@ const HomePage: React.FC = () => {
   }, [featuredData]);
 
   // Process quick recipes - ensure they have data
-  const quickRecipes = React.useMemo(() => {
+  const quickRecipes = React.useMemo((): SpoonacularRecipe[] => {
     if (!quickData?.results) {
-      // Provide fallback quick recipes
+      // Provide fallback quick recipes with correct SpoonacularRecipe structure
       return [
         {
           id: 715415,
@@ -161,7 +161,7 @@ const HomePage: React.FC = () => {
           diets: ["vegetarian", "vegan"],
           isExternal: true
         }
-      ] as SpoonacularRecipe[];
+      ];
     }
     
     return quickData.results
@@ -357,7 +357,7 @@ const HomePage: React.FC = () => {
                   featuredRecipes.map((recipe, i) => (
                     <CarouselItem key={i} className="pl-4 md:basis-1/2 lg:basis-1/3">
                       <RecipeCard 
-                        recipe={recipe as SpoonacularRecipe}
+                        recipe={recipe}
                         isExternal={true}
                         onDelete={handleDeleteRecipe}
                       />
@@ -397,7 +397,7 @@ const HomePage: React.FC = () => {
                 quickRecipes.slice(0, 3).map((recipe, i) => (
                   <RecipeCard 
                     key={i}
-                    recipe={recipe as SpoonacularRecipe}
+                    recipe={recipe}
                     isExternal={true}
                     onDelete={handleDeleteRecipe}
                   />

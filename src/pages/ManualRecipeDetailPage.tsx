@@ -122,12 +122,15 @@ const ManualRecipeDetailPage: React.FC = () => {
     'Basic cooking essentials'
   ];
 
-  const instructions = [
-    'This is a curated popular recipe from our collection.',
-    'Follow traditional cooking methods for this type of dish.',
-    'Cook with care and adjust seasonings to taste.',
-    'Detailed step-by-step instructions will be available soon.'
-  ];
+  // Use cooking_instructions from the database if available
+  const instructions = recipe.cooking_instructions 
+    ? recipe.cooking_instructions.split('\n').filter(instruction => instruction.trim())
+    : [
+        'This is a curated popular recipe from our collection.',
+        'Follow traditional cooking methods for this type of dish.',
+        'Cook with care and adjust seasonings to taste.',
+        'Detailed step-by-step instructions will be available soon.'
+      ];
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -216,14 +219,16 @@ const ManualRecipeDetailPage: React.FC = () => {
                 </div>
               )}
 
-              {/* Note about curated content */}
-              <div className="mt-6 p-4 bg-blue-50 rounded-lg">
-                <h3 className="text-lg font-semibold mb-2">Curated Recipe</h3>
-                <p className="text-gray-700">
-                  This is a popular recipe from our curated collection. We're working on adding detailed ingredients and instructions. 
-                  In the meantime, feel free to leave a review and share your experience with this dish!
-                </p>
-              </div>
+              {/* Note about curated content - only show if no cooking instructions */}
+              {!recipe.cooking_instructions && (
+                <div className="mt-6 p-4 bg-blue-50 rounded-lg">
+                  <h3 className="text-lg font-semibold mb-2">Curated Recipe</h3>
+                  <p className="text-gray-700">
+                    This is a popular recipe from our curated collection. We're working on adding detailed ingredients and instructions. 
+                    In the meantime, feel free to leave a review and share your experience with this dish!
+                  </p>
+                </div>
+              )}
               
               {/* Reviews section */}
               <div className="mt-8 pt-6 border-t border-gray-200">
