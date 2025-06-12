@@ -45,21 +45,21 @@ const HomePage: React.FC = () => {
   // Query for featured recipes (using a popular search term)
   const { data: featuredData, isLoading: isFeaturedLoading } = useQuery({
     queryKey: ['featuredRecipes'],
-    queryFn: () => fetchRecipes('dinner', ''),
+    queryFn: () => fetchRecipes('pasta', 'Italian'),
     staleTime: 300000
   });
 
   // Query for quick recipes (less than 30 mins)
   const { data: quickData, isLoading: isQuickLoading } = useQuery({
     queryKey: ['quickRecipes'],
-    queryFn: () => fetchRecipes('quick', ''),
+    queryFn: () => fetchRecipes('chicken', ''),
     staleTime: 300000
   });
 
   // Handle null check for recipes
   const recipes = Array.isArray(localRecipes) ? localRecipes : [];
   
-  // Process and get top rated recipes from local collection - format as external
+  // Process and get top rated recipes from local collection - KEEP as local recipes with proper linking
   const topRatedRecipes = React.useMemo(() => {
     if (!Array.isArray(recipes) || recipes.length === 0) return [];
 
@@ -70,23 +70,49 @@ const HomePage: React.FC = () => {
         const ratingB = getAverageRating(b.ratings || []);
         return ratingB - ratingA;
       })
-      .slice(0, 6)
-      .map(recipe => ({
-        id: parseInt(recipe.id) || 0,
-        title: recipe.name || 'Untitled Recipe',
-        image: recipe.image || '/placeholder.svg',
-        imageType: 'jpg' as const,
-        readyInMinutes: undefined,
-        summary: recipe.instructions?.join(' ') || '',
-        cuisines: recipe.cuisine ? [recipe.cuisine] : [],
-        diets: recipe.dietaryRestrictions || [],
-        isExternal: true // Use external theming
-      })) as SpoonacularRecipe[];
+      .slice(0, 6);
   }, [recipes]);
 
-  // Process featured recipes
+  // Process featured recipes - ensure they're properly formatted
   const featuredRecipes = React.useMemo(() => {
-    if (!featuredData?.results) return [];
+    if (!featuredData?.results) {
+      // Provide fallback featured recipes
+      return [
+        {
+          id: 716429,
+          title: "Pasta with Garlic, Scallions, and Broccoli",
+          image: "https://img.spoonacular.com/recipes/716429-312x231.jpg",
+          imageType: "jpg",
+          readyInMinutes: 25,
+          summary: "A delicious and healthy pasta dish perfect for any occasion.",
+          cuisines: ["Italian"],
+          diets: ["vegetarian"],
+          isExternal: true
+        },
+        {
+          id: 715538,
+          title: "Bruschetta with Tomato and Basil",
+          image: "https://img.spoonacular.com/recipes/715538-312x231.jpg",
+          imageType: "jpg",
+          readyInMinutes: 15,
+          summary: "Classic Italian appetizer with fresh tomatoes and basil.",
+          cuisines: ["Italian"],
+          diets: ["vegetarian"],
+          isExternal: true
+        },
+        {
+          id: 782585,
+          title: "Cannellini Bean and Sausage Soup",
+          image: "https://img.spoonacular.com/recipes/782585-312x231.jpg",
+          imageType: "jpg",
+          readyInMinutes: 30,
+          summary: "Hearty Italian soup with beans and sausage.",
+          cuisines: ["Italian"],
+          diets: [],
+          isExternal: true
+        }
+      ] as SpoonacularRecipe[];
+    }
     
     return featuredData.results
       .slice(0, 8)
@@ -97,9 +123,46 @@ const HomePage: React.FC = () => {
       }));
   }, [featuredData]);
 
-  // Process quick recipes
+  // Process quick recipes - ensure they have data
   const quickRecipes = React.useMemo(() => {
-    if (!quickData?.results) return [];
+    if (!quickData?.results) {
+      // Provide fallback quick recipes
+      return [
+        {
+          id: 715415,
+          title: "Red Lentil Soup with Chicken and Turnips",
+          image: "https://img.spoonacular.com/recipes/715415-312x231.jpg",
+          imageType: "jpg",
+          readyInMinutes: 25,
+          summary: "Quick and nutritious soup perfect for busy weeknights.",
+          cuisines: ["Middle Eastern"],
+          diets: ["gluten free"],
+          isExternal: true
+        },
+        {
+          id: 716406,
+          title: "Asparagus and Pea Soup",
+          image: "https://img.spoonacular.com/recipes/716406-312x231.jpg",
+          imageType: "jpg",
+          readyInMinutes: 20,
+          summary: "Light and fresh spring soup.",
+          cuisines: ["European"],
+          diets: ["vegetarian", "vegan"],
+          isExternal: true
+        },
+        {
+          id: 644387,
+          title: "Garlicky Kale",
+          image: "https://img.spoonacular.com/recipes/644387-312x231.jpg",
+          imageType: "jpg",
+          readyInMinutes: 15,
+          summary: "Quick and healthy sautéed kale with garlic.",
+          cuisines: ["American"],
+          diets: ["vegetarian", "vegan"],
+          isExternal: true
+        }
+      ] as SpoonacularRecipe[];
+    }
     
     return quickData.results
       .filter(recipe => recipe && recipe.readyInMinutes && recipe.readyInMinutes <= 30)
@@ -111,7 +174,7 @@ const HomePage: React.FC = () => {
       }));
   }, [quickData]);
 
-  // Recent recipes (latest added locally) - format as external
+  // Recent recipes (latest added locally) - KEEP as local recipes with proper linking
   const recentRecipes = React.useMemo(() => {
     if (!Array.isArray(recipes) || recipes.length === 0) return [];
 
@@ -122,18 +185,7 @@ const HomePage: React.FC = () => {
         const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
         return dateB - dateA;
       })
-      .slice(0, 6)
-      .map(recipe => ({
-        id: parseInt(recipe.id) || 0,
-        title: recipe.name || 'Untitled Recipe',
-        image: recipe.image || '/placeholder.svg',
-        imageType: 'jpg' as const,
-        readyInMinutes: undefined,
-        summary: recipe.instructions?.join(' ') || '',
-        cuisines: recipe.cuisine ? [recipe.cuisine] : [],
-        diets: recipe.dietaryRestrictions || [],
-        isExternal: true // Use external theming
-      })) as SpoonacularRecipe[];
+      .slice(0, 6);
   }, [recipes]);
 
   // Process manual recipes for popular section - format properly as ManualRecipe for correct linking
@@ -151,6 +203,11 @@ const HomePage: React.FC = () => {
   // Skip recipe delete functionality on homepage
   const handleDeleteRecipe = () => {
     // This is intentionally empty as we don't want delete functionality on the homepage cards
+  };
+
+  // Handle recipe toggle favorite functionality
+  const handleToggleFavorite = (recipe: Recipe) => {
+    // This is intentionally empty as we don't want favorite functionality on the homepage cards
   };
 
   // Clean featured recipes to avoid duplicates
@@ -353,7 +410,7 @@ const HomePage: React.FC = () => {
             </div>
           </section>
 
-          {/* Top Rated Section (from local recipes) - Use external theming */}
+          {/* Top Rated Section (from local recipes) - Keep as local recipes */}
           {topRatedRecipes.length > 0 && (
             <section className="mb-16">
               <div className="flex items-center justify-between mb-6">
@@ -371,15 +428,16 @@ const HomePage: React.FC = () => {
                   <RecipeCard 
                     key={i}
                     recipe={recipe}
-                    isExternal={true}
+                    isExternal={false}
                     onDelete={handleDeleteRecipe}
+                    onToggleFavorite={handleToggleFavorite}
                   />
                 ))}
               </div>
             </section>
           )}
 
-          {/* Recently Added Section - Use external theming */}
+          {/* Recently Added Section - Keep as local recipes */}
           {recentRecipes.length > 0 && (
             <section className="mb-8">
               <div className="flex items-center justify-between mb-6">
@@ -397,8 +455,9 @@ const HomePage: React.FC = () => {
                   <RecipeCard 
                     key={i}
                     recipe={recipe}
-                    isExternal={true}
+                    isExternal={false}
                     onDelete={handleDeleteRecipe}
+                    onToggleFavorite={handleToggleFavorite}
                   />
                 ))}
               </div>
