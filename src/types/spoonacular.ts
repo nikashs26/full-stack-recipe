@@ -30,6 +30,7 @@ export interface SpoonacularRecipe {
     originalString: string;
     original?: string;
   }[];
+  isExternal?: boolean;
 }
 
 export interface SpoonacularSearchResponse {
