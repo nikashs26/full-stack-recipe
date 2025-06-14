@@ -22,62 +22,53 @@ const RecommendedRecipes: React.FC = () => {
     queryFn: loadRecipes,
   });
 
-  const preferences = user?.preferences;
+  // Build search queries based on user preferences
+  const searchQueries = React.useMemo(() => {
+    if (!user?.preferences) return [];
+    
+    const queries = [];
+    
+    // Add cuisine-based searches
+    if (user.preferences.favoriteCuisines?.length > 0) {
+      queries.push(...user.preferences.favoriteCuisines.slice(0, 2)); // Limit to avoid too many API calls
+    }
+    
+    // Add dietary restriction searches
+    if (user.preferences.dietaryRestrictions?.length > 0) {
+      queries.push(...user.preferences.dietaryRestrictions.slice(0, 2));
+    }
+    
+    // If no specific preferences, add some general queries
+    if (queries.length === 0) {
+      queries.push('quick', 'easy');
+    }
+    
+    return queries.slice(0, 3); // Limit total queries
+  }, [user?.preferences]);
 
   // Query external recipes based on user preferences
   const externalQueries = useQuery({
-    queryKey: ['recommendedExternalRecipes', preferences],
+    queryKey: ['recommendedExternalRecipes', searchQueries],
     queryFn: async () => {
-      if (!preferences) return [];
-
+      if (searchQueries.length === 0) return [];
+      
       const allExternalRecipes: SpoonacularRecipe[] = [];
-      const { favoriteCuisines = [], dietaryRestrictions = [] } = preferences;
-
-      // Fetch recipes for favorite cuisines
-      if (favoriteCuisines.length > 0) {
-        for (const cuisine of favoriteCuisines.slice(0, 2)) {
-          try {
-            // Use cuisine parameter for better results
-            const response = await fetchRecipes('', cuisine);
-            if (response?.results) {
-              allExternalRecipes.push(...response.results.slice(0, 6)); // 6 recipes per cuisine
-            }
-          } catch (error) {
-            console.error(`Error fetching recipes for cuisine "${cuisine}":`, error);
-          }
-        }
-      }
-
-      // Fetch recipes for dietary restrictions
-      if (dietaryRestrictions.length > 0) {
-        for (const diet of dietaryRestrictions.slice(0, 2)) {
-          try {
-            // Use diet as a query term, since diet is not a separate param in fetchRecipes
-            const response = await fetchRecipes(diet, '');
-            if (response?.results) {
-              allExternalRecipes.push(...response.results.slice(0, 6)); // 6 recipes per diet
-            }
-          } catch (error) {
-            console.error(`Error fetching recipes for diet "${diet}":`, error);
-          }
-        }
-      }
-
-      // If no preferences or no results, fetch some general popular recipes for variety
-      if (allExternalRecipes.length === 0) {
+      
+      // Fetch recipes for each preference-based query
+      for (const query of searchQueries) {
         try {
-          const response = await fetchRecipes('popular', '');
+          const response = await fetchRecipes(query, '');
           if (response?.results) {
-            allExternalRecipes.push(...response.results.slice(0, 10));
+            allExternalRecipes.push(...response.results.slice(0, 4)); // 4 recipes per query
           }
         } catch (error) {
-          console.error(`Error fetching popular recipes:`, error);
+          console.error(`Error fetching recipes for query "${query}":`, error);
         }
       }
       
       return allExternalRecipes;
     },
-    enabled: !!preferences,
+    enabled: searchQueries.length > 0,
     staleTime: 300000, // Cache for 5 minutes
   });
 
@@ -118,7 +109,7 @@ const RecommendedRecipes: React.FC = () => {
           // Intermediate and advanced users can handle all recipes
         }
 
-        return hasFavoriteCuisine && matchesDietaryNeeds && !hasAllergen && skillLevelMatch;
+        return (hasFavoriteCuisine || matchesDietaryNeeds) && !hasAllergen && skillLevelMatch;
       }).slice(0, 6);
 
       combinedRecipes.push(...filteredLocal.map(recipe => ({ ...recipe, isExternal: false })));
@@ -155,7 +146,7 @@ const RecommendedRecipes: React.FC = () => {
           skillLevelMatch = recipe.readyInMinutes <= 45; // Beginner-friendly: under 45 minutes
         }
 
-        return hasFavoriteCuisine && matchesDietaryNeeds && !hasAllergen && skillLevelMatch;
+        return (hasFavoriteCuisine || matchesDietaryNeeds) && !hasAllergen && skillLevelMatch;
       }).slice(0, 6);
 
       combinedRecipes.push(...filteredExternal.map(recipe => ({ ...recipe, isExternal: true })));
