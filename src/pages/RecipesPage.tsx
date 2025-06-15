@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Header from '../components/Header';
@@ -12,8 +13,7 @@ import { Recipe } from '../types/recipe';
 import { SpoonacularRecipe } from '../types/spoonacular';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '../context/AuthContext';
-import { ThumbsUp, ChefHat, Loader2 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { ChefHat } from 'lucide-react';
 
 const RecipesPage: React.FC = () => {
   const { user, isAuthenticated } = useAuth();
@@ -84,85 +84,6 @@ const RecipesPage: React.FC = () => {
       }
     },
     enabled: !!(searchTerm || ingredientTerm),
-    staleTime: 300000,
-  });
-
-  // New query for recommendations based on user preferences
-  const { data: recommendedRecipes = [], isLoading: recommendationsLoading } = useQuery({
-    queryKey: ['recommendedRecipes', user?.preferences],
-    queryFn: async () => {
-      const preferences = user?.preferences;
-      const allRecommendedRecipes: SpoonacularRecipe[] = [];
-
-      try {
-        if (preferences?.favoriteCuisines?.length > 0) {
-          // Fetch recipes for favorite cuisines
-          for (const cuisine of preferences.favoriteCuisines.slice(0, 2)) {
-            console.log(`Fetching recommendations for cuisine: ${cuisine}`);
-            const response = await fetchRecipes('', cuisine);
-            if (response?.results && Array.isArray(response.results)) {
-              const realRecipes = response.results.filter(recipe => 
-                recipe.id > 1000 && 
-                recipe.title && 
-                !recipe.title.toLowerCase().includes('fallback') &&
-                recipe.image && 
-                recipe.image.includes('http')
-              );
-              allRecommendedRecipes.push(...realRecipes.slice(0, 4));
-            }
-          }
-        }
-
-        if (preferences?.dietaryRestrictions?.length > 0) {
-          // Fetch recipes for dietary restrictions
-          for (const diet of preferences.dietaryRestrictions.slice(0, 2)) {
-            console.log(`Fetching recommendations for diet: ${diet}`);
-            const response = await fetchRecipes(diet, '');
-            if (response?.results && Array.isArray(response.results)) {
-              const realRecipes = response.results.filter(recipe => 
-                recipe.id > 1000 &&
-                recipe.title && 
-                !recipe.title.toLowerCase().includes('fallback') &&
-                recipe.image && 
-                recipe.image.includes('http')
-              );
-              allRecommendedRecipes.push(...realRecipes.slice(0, 3));
-            }
-          }
-        }
-
-        // If no specific preferences or limited results, get popular recipes
-        if (allRecommendedRecipes.length < 3) {
-          console.log('Fetching popular recipes for recommendations');
-          const response = await fetchRecipes('popular', '');
-          if (response?.results && Array.isArray(response.results)) {
-            const realRecipes = response.results.filter(recipe => 
-              recipe.id > 1000 &&
-              recipe.title && 
-              !recipe.title.toLowerCase().includes('fallback') &&
-              recipe.image && 
-              recipe.image.includes('http')
-            );
-            allRecommendedRecipes.push(...realRecipes.slice(0, 6));
-          }
-        }
-
-        // Remove duplicates and limit to 8 recipes
-        const seenIds = new Set();
-        const uniqueRecommendations = allRecommendedRecipes.filter(recipe => {
-          if (seenIds.has(recipe.id)) return false;
-          seenIds.add(recipe.id);
-          return true;
-        });
-
-        console.log(`Found ${uniqueRecommendations.length} recommended recipes`);
-        return uniqueRecommendations.slice(0, 8);
-      } catch (error) {
-        console.error('Error fetching recommended recipes:', error);
-        return [];
-      }
-    },
-    enabled: isAuthenticated, // Show for all authenticated users
     staleTime: 300000,
   });
 
@@ -285,76 +206,7 @@ const RecipesPage: React.FC = () => {
             onClearFilters={handleClearFilters}
           />
 
-          {/* Recommendations Section - Show for all authenticated users */}
-          {isAuthenticated && (
-            <section className="mb-12">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold text-gray-900 flex items-center">
-                  <ThumbsUp className="mr-2 h-6 w-6 text-recipe-secondary" />
-                  {user?.preferences ? 'Recommended for You' : 'Popular Recipes'}
-                </h2>
-                <div className="flex items-center gap-4">
-                  <span className="text-sm text-gray-500">
-                    {user?.preferences ? 'Based on your preferences' : 'Discover new recipes'}
-                  </span>
-                  {!user?.preferences && (
-                    <Link 
-                      to="/preferences" 
-                      className="text-sm text-recipe-primary hover:text-recipe-primary/80 underline"
-                    >
-                      Set preferences →
-                    </Link>
-                  )}
-                </div>
-              </div>
-              
-              {recommendationsLoading ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                  {Array.from({ length: 8 }).map((_, i) => (
-                    <div key={i} className="h-64 bg-gray-200 animate-pulse rounded-lg flex items-center justify-center">
-                      <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
-                    </div>
-                  ))}
-                </div>
-              ) : recommendedRecipes.length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-8">
-                  {recommendedRecipes.map((recipe, i) => (
-                    <RecipeCard 
-                      key={`recommended-${recipe.id}-${i}`}
-                      recipe={recipe}
-                      isExternal={true}
-                      onDelete={handleDeleteRecipe}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-8 border border-dashed border-gray-300 rounded-lg mb-8">
-                  <p className="text-gray-500 mb-2">
-                    {user?.preferences 
-                      ? 'No recommendations available right now.' 
-                      : 'No popular recipes available right now.'
-                    }
-                  </p>
-                  <p className="text-sm text-gray-400">
-                    {user?.preferences 
-                      ? 'Check back soon for new recipes!' 
-                      : 'Set your preferences to get personalized recommendations!'
-                    }
-                  </p>
-                  {!user?.preferences && (
-                    <Link 
-                      to="/preferences" 
-                      className="inline-block mt-2 text-recipe-primary hover:text-recipe-primary/80 underline"
-                    >
-                      Set Preferences
-                    </Link>
-                  )}
-                </div>
-              )}
-            </section>
-          )}
-
-          {/* All Recipes Section */}
+          {/* All Recipes Section - Only section on this page */}
           <section>
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl font-bold text-gray-900 flex items-center">

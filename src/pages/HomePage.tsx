@@ -11,13 +11,12 @@ import { SpoonacularRecipe } from '../types/spoonacular';
 import RecipeCard from '../components/RecipeCard';
 import ManualRecipeCard from '../components/ManualRecipeCard';
 import { getAverageRating } from '../utils/recipeUtils';
-import { ChefHat, TrendingUp, Award, Clock, Search } from 'lucide-react';
+import { ChefHat, TrendingUp, Award, Clock, Search, ThumbsUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '../context/AuthContext';
-import RecommendedRecipes from '../components/RecommendedRecipes';
 
 const HomePage: React.FC = () => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   
   // Query for local recipes
   const { data: localRecipes = [], isLoading: isLocalLoading } = useQuery({
@@ -42,6 +41,71 @@ const HomePage: React.FC = () => {
     },
     staleTime: 60000,
     retry: 2
+  });
+
+  // Query for recommended recipes based on user preferences
+  const { data: recommendedRecipes = [], isLoading: isRecommendedLoading } = useQuery({
+    queryKey: ['recommendedRecipes', user?.preferences],
+    queryFn: async () => {
+      if (!user?.preferences) return [];
+      
+      const allRecommendedRecipes: SpoonacularRecipe[] = [];
+      const { favoriteCuisines = [], dietaryRestrictions = [] } = user.preferences;
+
+      try {
+        // Fetch recipes for favorite cuisines with proper tags
+        if (favoriteCuisines.length > 0) {
+          for (const cuisine of favoriteCuisines.slice(0, 2)) {
+            console.log(`Fetching recommended recipes for cuisine: ${cuisine}`);
+            const response = await fetchRecipes('', cuisine);
+            if (response?.results && Array.isArray(response.results)) {
+              const realRecipes = response.results.filter(recipe => 
+                recipe.id > 1000 && 
+                recipe.title && 
+                !recipe.title.toLowerCase().includes('fallback') &&
+                recipe.image && 
+                recipe.image.includes('http')
+              );
+              allRecommendedRecipes.push(...realRecipes.slice(0, 4));
+            }
+          }
+        }
+
+        // Fetch recipes for dietary restrictions with proper tags
+        if (dietaryRestrictions.length > 0) {
+          for (const diet of dietaryRestrictions.slice(0, 2)) {
+            console.log(`Fetching recommended recipes for diet: ${diet}`);
+            const response = await fetchRecipes(diet, '');
+            if (response?.results && Array.isArray(response.results)) {
+              const realRecipes = response.results.filter(recipe => 
+                recipe.id > 1000 &&
+                recipe.title && 
+                !recipe.title.toLowerCase().includes('fallback') &&
+                recipe.image && 
+                recipe.image.includes('http')
+              );
+              allRecommendedRecipes.push(...realRecipes.slice(0, 3));
+            }
+          }
+        }
+
+        // Remove duplicates
+        const seenIds = new Set();
+        const uniqueRecommended = allRecommendedRecipes.filter(recipe => {
+          if (seenIds.has(recipe.id)) return false;
+          seenIds.add(recipe.id);
+          return true;
+        });
+
+        console.log(`Found ${uniqueRecommended.length} recommended recipes based on preferences`);
+        return uniqueRecommended.slice(0, 8);
+      } catch (error) {
+        console.error('Error fetching recommended recipes:', error);
+        return [];
+      }
+    },
+    enabled: isAuthenticated && !!user?.preferences,
+    staleTime: 300000
   });
 
   // Query for featured external recipes
@@ -253,8 +317,49 @@ const HomePage: React.FC = () => {
         </section>
 
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-          {/* Personalized Recommendations - Only for authenticated users */}
-          {isAuthenticated && <RecommendedRecipes />}
+          {/* Recommended Recipes Section - Only for authenticated users with preferences */}
+          {isAuthenticated && user?.preferences && (
+            <section className="mb-16">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-3xl font-bold text-gray-900 flex items-center">
+                  <ThumbsUp className="mr-2 h-6 w-6 text-recipe-secondary" />
+                  Recommended Recipes
+                </h2>
+                <div className="flex items-center gap-4">
+                  <span className="text-sm text-gray-500">
+                    Based on your preferences
+                  </span>
+                  <Link to="/recipes" className="text-recipe-primary hover:text-recipe-primary/80">
+                    View all →
+                  </Link>
+                </div>
+              </div>
+              
+              {isRecommendedLoading ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                  {Array.from({ length: 8 }).map((_, i) => (
+                    <div key={i} className="h-64 bg-gray-200 animate-pulse rounded-lg"></div>
+                  ))}
+                </div>
+              ) : recommendedRecipes.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                  {recommendedRecipes.map((recipe, i) => (
+                    <RecipeCard 
+                      key={`recommended-${recipe.id}-${i}`}
+                      recipe={recipe}
+                      isExternal={true}
+                      onDelete={handleDeleteRecipe}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12 border border-dashed border-gray-300 rounded-lg">
+                  <p className="text-gray-500 mb-2">No recommendations available right now</p>
+                  <p className="text-sm text-gray-400">Check back soon for new recipes based on your preferences!</p>
+                </div>
+              )}
+            </section>
+          )}
 
           {/* Popular Manual Recipes - Always show */}
           <section className="mb-16">
