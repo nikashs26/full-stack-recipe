@@ -13,13 +13,6 @@ import ManualRecipeCard from '../components/ManualRecipeCard';
 import { getAverageRating } from '../utils/recipeUtils';
 import { ChefHat, TrendingUp, Award, Clock, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import {
-  Carousel,
-  CarouselContent,
-  CarouselItem,
-  CarouselNext,
-  CarouselPrevious,
-} from "@/components/ui/carousel";
 import { useAuth } from '../context/AuthContext';
 import RecommendedRecipes from '../components/RecommendedRecipes';
 
@@ -33,76 +26,57 @@ const HomePage: React.FC = () => {
     staleTime: 60000
   });
 
-  // Query for manual recipes
-  const { data: manualRecipes = [], isLoading: isManualLoading } = useQuery({
+  // Query for manual recipes with better error handling
+  const { data: manualRecipes = [], isLoading: isManualLoading, error: manualError } = useQuery({
     queryKey: ['manualRecipes'],
-    queryFn: fetchManualRecipes,
-    staleTime: 60000
+    queryFn: async () => {
+      console.log('Fetching manual recipes for homepage...');
+      try {
+        const recipes = await fetchManualRecipes();
+        console.log('Manual recipes fetched:', recipes.length);
+        return recipes;
+      } catch (error) {
+        console.error('Error fetching manual recipes:', error);
+        return [];
+      }
+    },
+    staleTime: 60000,
+    retry: 2
   });
 
-  // Query for multiple sets of external recipes with better variety
+  // Query for featured external recipes
   const { data: featuredData, isLoading: isFeaturedLoading } = useQuery({
     queryKey: ['featuredRecipes'],
     queryFn: async () => {
       try {
-        const [pastaResult, chickenResult, vegetarianResult, dessertResult] = await Promise.all([
-          fetchRecipes('pasta', 'Italian'),
-          fetchRecipes('chicken', ''),
-          fetchRecipes('vegetarian', ''),
-          fetchRecipes('dessert', '')
+        console.log('Fetching featured recipes...');
+        const [pastaResult, chickenResult, vegetarianResult] = await Promise.all([
+          fetchRecipes('pasta', 'Italian').catch(() => ({ results: [] })),
+          fetchRecipes('chicken', '').catch(() => ({ results: [] })),
+          fetchRecipes('vegetarian', '').catch(() => ({ results: [] }))
         ]);
         
-        // Combine and deduplicate by ID
         const allRecipes = [
           ...(pastaResult?.results || []),
           ...(chickenResult?.results || []),
-          ...(vegetarianResult?.results || []),
-          ...(dessertResult?.results || [])
+          ...(vegetarianResult?.results || [])
         ];
         
-        // Remove duplicates based on ID
-        const uniqueRecipes = allRecipes.filter((recipe, index, self) => 
-          index === self.findIndex(r => r.id === recipe.id)
-        );
+        // Remove duplicates and filter out invalid recipes
+        const uniqueRecipes = allRecipes
+          .filter((recipe, index, self) => 
+            recipe && recipe.id && index === self.findIndex(r => r.id === recipe.id)
+          )
+          .filter(recipe => 
+            recipe.title && 
+            !recipe.title.toLowerCase().includes('fallback') &&
+            recipe.image
+          );
         
-        return {
-          results: uniqueRecipes.slice(0, 16) // More recipes
-        };
+        console.log('Featured recipes processed:', uniqueRecipes.length);
+        return { results: uniqueRecipes.slice(0, 12) };
       } catch (error) {
         console.error('Featured recipes failed:', error);
-        return { results: [] };
-      }
-    },
-    staleTime: 300000
-  });
-
-  // Query for quick recipes with more variety
-  const { data: quickData, isLoading: isQuickLoading } = useQuery({
-    queryKey: ['quickRecipes'],
-    queryFn: async () => {
-      try {
-        const [breakfastResult, saladResult, snackResult] = await Promise.all([
-          fetchRecipes('breakfast', ''),
-          fetchRecipes('salad', ''),
-          fetchRecipes('snack', '')
-        ]);
-        
-        const allRecipes = [
-          ...(breakfastResult?.results || []),
-          ...(saladResult?.results || []),
-          ...(snackResult?.results || [])
-        ];
-        
-        // Remove duplicates
-        const uniqueRecipes = allRecipes.filter((recipe, index, self) => 
-          index === self.findIndex(r => r.id === recipe.id)
-        );
-        
-        return {
-          results: uniqueRecipes.slice(0, 12)
-        };
-      } catch (error) {
-        console.error('Quick recipes failed:', error);
         return { results: [] };
       }
     },
@@ -116,7 +90,7 @@ const HomePage: React.FC = () => {
     if (!featuredData?.results) return [];
     
     return featuredData.results
-      .slice(0, 16)
+      .slice(0, 12)
       .map(recipe => ({
         ...recipe,
         image: recipe.image || '/placeholder.svg',
@@ -124,30 +98,24 @@ const HomePage: React.FC = () => {
       }));
   }, [featuredData]);
 
-  // Process quick recipes
-  const quickRecipes = React.useMemo((): SpoonacularRecipe[] => {
-    if (!quickData?.results) return [];
-    
-    return quickData.results
-      .slice(0, 12)
-      .map(recipe => ({
-        ...recipe,
-        image: recipe.image || '/placeholder.svg',
-        isExternal: true
-      }));
-  }, [quickData]);
-
-  // Process popular recipes from manual recipes - ensure they show up
+  // Process popular recipes from manual recipes
   const popularRecipes = React.useMemo(() => {
-    if (!Array.isArray(manualRecipes) || manualRecipes.length === 0) return [];
+    console.log('Processing popular recipes, manual recipes available:', manualRecipes.length);
     
-    console.log('Manual recipes for popular section:', manualRecipes);
-    return manualRecipes
-      .slice(0, 16) // Show more manual recipes
+    if (!Array.isArray(manualRecipes) || manualRecipes.length === 0) {
+      console.log('No manual recipes available for popular section');
+      return [];
+    }
+    
+    const processed = manualRecipes
+      .slice(0, 12)
       .map(recipe => ({
         ...recipe,
         image: recipe.image || '/placeholder.svg'
       }));
+      
+    console.log('Popular recipes processed:', processed.length);
+    return processed;
   }, [manualRecipes]);
 
   // Top rated local recipes
@@ -184,8 +152,6 @@ const HomePage: React.FC = () => {
   const handleToggleFavorite = (recipe: Recipe) => {
     // Intentionally empty
   };
-
-  const isLoading = isLocalLoading || isFeaturedLoading || isQuickLoading || isManualLoading;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -283,15 +249,21 @@ const HomePage: React.FC = () => {
                   <div key={i} className="h-64 bg-gray-200 animate-pulse rounded-lg"></div>
                 ))}
               </div>
+            ) : manualError ? (
+              <div className="text-center py-12 border border-dashed border-gray-300 rounded-lg">
+                <p className="text-gray-500 mb-2">Unable to load popular recipes</p>
+                <p className="text-sm text-gray-400">Please try refreshing the page</p>
+              </div>
             ) : popularRecipes.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {popularRecipes.slice(0, 12).map((recipe, i) => (
+                {popularRecipes.slice(0, 8).map((recipe, i) => (
                   <ManualRecipeCard key={`popular-${recipe.id}-${i}`} recipe={recipe} />
                 ))}
               </div>
             ) : (
               <div className="text-center py-12 border border-dashed border-gray-300 rounded-lg">
-                <p className="text-gray-500">No manual recipes available yet.</p>
+                <p className="text-gray-500 mb-2">No popular recipes available yet</p>
+                <p className="text-sm text-gray-400">Check back soon for new recipes!</p>
               </div>
             )}
           </section>
@@ -316,7 +288,7 @@ const HomePage: React.FC = () => {
               </div>
             ) : featuredRecipes.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {featuredRecipes.slice(0, 12).map((recipe, i) => (
+                {featuredRecipes.slice(0, 8).map((recipe, i) => (
                   <RecipeCard 
                     key={`featured-${recipe.id}-${i}`}
                     recipe={recipe}
@@ -328,42 +300,6 @@ const HomePage: React.FC = () => {
             ) : (
               <div className="text-center py-12 border border-dashed border-gray-300 rounded-lg">
                 <p className="text-gray-500">Loading featured recipes...</p>
-              </div>
-            )}
-          </section>
-
-          {/* Quick & Easy */}
-          <section className="mb-16">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-3xl font-bold text-gray-900 flex items-center">
-                <Clock className="mr-2 h-6 w-6 text-recipe-secondary" />
-                Quick & Easy
-              </h2>
-              <Link to="/recipes" className="text-recipe-primary hover:text-recipe-primary/80">
-                View all →
-              </Link>
-            </div>
-            
-            {isQuickLoading ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {Array.from({ length: 8 }).map((_, i) => (
-                  <div key={i} className="h-64 bg-gray-200 animate-pulse rounded-lg"></div>
-                ))}
-              </div>
-            ) : quickRecipes.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {quickRecipes.slice(0, 12).map((recipe, i) => (
-                  <RecipeCard 
-                    key={`quick-${recipe.id}-${i}`}
-                    recipe={recipe}
-                    isExternal={true}
-                    onDelete={handleDeleteRecipe}
-                  />
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-12 border border-dashed border-gray-300 rounded-lg">
-                <p className="text-gray-500">Loading quick recipes...</p>
               </div>
             )}
           </section>

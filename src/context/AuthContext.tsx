@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '../integrations/supabase/client';
@@ -44,30 +45,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Load user preferences from Supabase
   const loadUserPreferences = async (userEmail: string): Promise<UserPreferences | undefined> => {
     try {
+      console.log('Loading preferences for user:', userEmail);
       const { data, error } = await supabase
         .from('sign_ups')
         .select('preferences')
         .eq('email', userEmail)
-        .single();
+        .maybeSingle();
 
       if (error && error.code !== 'PGRST116') { // PGRST116 is "not found"
         console.error('Error loading user preferences:', error);
         return undefined;
       }
 
-      // Safely cast the preferences data with proper validation
-      const preferences = data?.preferences;
+      if (!data?.preferences) {
+        console.log('No preferences found for user');
+        return undefined;
+      }
+
+      // Safely validate the preferences data
+      const preferences = data.preferences;
       if (preferences && typeof preferences === 'object' && !Array.isArray(preferences)) {
-        // Validate that the object has the required properties
-        const validatedPreferences = preferences as unknown as UserPreferences;
-        if (
-          Array.isArray(validatedPreferences.favoriteCuisines) &&
-          Array.isArray(validatedPreferences.dietaryRestrictions) &&
-          Array.isArray(validatedPreferences.allergens) &&
-          typeof validatedPreferences.cookingSkillLevel === 'string'
-        ) {
-          return validatedPreferences;
-        }
+        const prefObj = preferences as any;
+        
+        // Create a validated preferences object
+        const validatedPreferences: UserPreferences = {
+          favoriteCuisines: Array.isArray(prefObj.favoriteCuisines) ? prefObj.favoriteCuisines : [],
+          dietaryRestrictions: Array.isArray(prefObj.dietaryRestrictions) ? prefObj.dietaryRestrictions : [],
+          allergens: Array.isArray(prefObj.allergens) ? prefObj.allergens : [],
+          cookingSkillLevel: ['beginner', 'intermediate', 'advanced'].includes(prefObj.cookingSkillLevel) 
+            ? prefObj.cookingSkillLevel 
+            : 'beginner'
+        };
+        
+        console.log('Loaded preferences:', validatedPreferences);
+        return validatedPreferences;
       }
 
       return undefined;
@@ -78,52 +89,90 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
+    let mounted = true;
+
     // Set up auth state listener first
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         console.log('Auth state changed:', event, session?.user?.email);
+        
+        if (!mounted) return;
+        
         setSession(session);
         
         if (session?.user) {
-          // Load preferences for the user
-          const preferences = await loadUserPreferences(session.user.email!);
-          setUser({
-            ...session.user,
-            preferences
-          });
+          try {
+            // Load preferences for the user
+            const preferences = await loadUserPreferences(session.user.email!);
+            if (mounted) {
+              setUser({
+                ...session.user,
+                preferences
+              });
+            }
+          } catch (error) {
+            console.error('Error loading user data:', error);
+            if (mounted) {
+              setUser(session.user);
+            }
+          }
         } else {
-          setUser(null);
+          if (mounted) {
+            setUser(null);
+          }
         }
         
-        setIsLoading(false);
+        if (mounted) {
+          setIsLoading(false);
+        }
       }
     );
 
     // Then check for existing session
     supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!mounted) return;
+      
       console.log('Initial session check:', session?.user?.email);
       setSession(session);
       
       if (session?.user) {
-        const preferences = await loadUserPreferences(session.user.email!);
-        setUser({
-          ...session.user,
-          preferences
-        });
+        try {
+          const preferences = await loadUserPreferences(session.user.email!);
+          if (mounted) {
+            setUser({
+              ...session.user,
+              preferences
+            });
+          }
+        } catch (error) {
+          console.error('Error loading initial user data:', error);
+          if (mounted) {
+            setUser(session.user);
+          }
+        }
       } else {
-        setUser(null);
+        if (mounted) {
+          setUser(null);
+        }
       }
       
-      setIsLoading(false);
+      if (mounted) {
+        setIsLoading(false);
+      }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signIn = async (email: string, password: string) => {
     try {
+      console.log('Attempting sign in for:', email);
       setIsLoading(true);
-      const { error } = await supabase.auth.signInWithPassword({
+      
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
@@ -135,16 +184,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           description: error.message,
           variant: 'destructive',
         });
-      } else {
+        return { error };
+      }
+
+      if (data.user) {
+        console.log('Sign in successful for:', data.user.email);
         toast({
           title: 'Welcome back!',
           description: 'You have been signed in successfully.',
         });
       }
 
-      return { error };
+      return { error: null };
     } catch (error) {
       console.error('Unexpected sign in error:', error);
+      toast({
+        title: 'Sign In Failed',
+        description: 'An unexpected error occurred. Please try again.',
+        variant: 'destructive',
+      });
       return { error };
     } finally {
       setIsLoading(false);
@@ -153,10 +211,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signUp = async (email: string, password: string) => {
     try {
+      console.log('Attempting sign up for:', email);
       setIsLoading(true);
       const redirectUrl = `${window.location.origin}/`;
       
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -171,16 +230,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           description: error.message,
           variant: 'destructive',
         });
-      } else {
-        toast({
-          title: 'Account Created!',
-          description: 'Please check your email to verify your account.',
-        });
+        return { error };
       }
 
-      return { error };
+      console.log('Sign up result:', data);
+      toast({
+        title: 'Account Created!',
+        description: 'Please check your email to verify your account.',
+      });
+
+      return { error: null };
     } catch (error) {
       console.error('Unexpected sign up error:', error);
+      toast({
+        title: 'Sign Up Failed',
+        description: 'An unexpected error occurred. Please try again.',
+        variant: 'destructive',
+      });
       return { error };
     } finally {
       setIsLoading(false);
@@ -189,6 +255,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signOut = async () => {
     try {
+      console.log('Attempting sign out');
       const { error } = await supabase.auth.signOut();
       if (error) {
         console.error('Sign out error:', error);
@@ -198,6 +265,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           variant: 'destructive',
         });
       } else {
+        console.log('Sign out successful');
         toast({
           title: 'Signed Out',
           description: 'You have been signed out successfully.',
@@ -209,15 +277,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const updatePreferences = async (preferences: UserPreferences) => {
-    if (!user) return;
+    if (!user) {
+      console.error('No user found when updating preferences');
+      return;
+    }
 
     try {
+      console.log('Updating preferences for user:', user.email, preferences);
+      
       // Add user to our sign_ups table with preferences
       const { error } = await supabase
         .from('sign_ups')
         .upsert({
           email: user.email!,
-          preferences: preferences as any,
+          preferences: preferences,
         }, {
           onConflict: 'email'
         });
@@ -230,6 +303,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           variant: 'destructive',
         });
       } else {
+        console.log('Preferences updated successfully');
         // Update local user state
         setUser(prev => prev ? { ...prev, preferences } : null);
         toast({
