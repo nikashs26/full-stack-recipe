@@ -116,123 +116,256 @@ const ExternalRecipeDetailPage: React.FC = () => {
   // Function to generate fallback ingredients based on recipe title
   const generateFallbackIngredients = (title: string): string[] => {
     const titleLower = title.toLowerCase();
+    console.log('Generating fallback ingredients for:', titleLower);
     
-    // Common cooking ingredients
-    const baseIngredients = ['salt', 'black pepper', 'olive oil'];
-    
-    // Recipe-specific ingredients based on title keywords
-    if (titleLower.includes('chicken')) {
+    // More specific ingredient mapping based on common recipe patterns
+    if (titleLower.includes('chicken') && titleLower.includes('breast')) {
       return [
-        '1 lb chicken breast, boneless and skinless',
+        '4 boneless skinless chicken breasts (6 oz each)',
         '2 tablespoons olive oil',
         '1 teaspoon garlic powder',
         '1 teaspoon paprika',
-        'Salt and pepper to taste',
-        '1 onion, diced',
-        '2 cloves garlic, minced'
+        '1/2 teaspoon dried thyme',
+        'Salt and black pepper to taste',
+        '1 medium onion, diced',
+        '3 cloves garlic, minced'
       ];
     }
     
-    if (titleLower.includes('pasta')) {
+    if (titleLower.includes('chicken') && (titleLower.includes('thigh') || titleLower.includes('leg'))) {
       return [
-        '12 oz pasta (your choice of shape)',
+        '8 chicken thighs (bone-in, skin-on)',
         '2 tablespoons olive oil',
-        '3 cloves garlic, minced',
-        '1 onion, diced',
-        '1 can (14 oz) diced tomatoes',
+        '1 teaspoon smoked paprika',
+        '1 teaspoon dried rosemary',
+        '1 teaspoon garlic powder',
+        'Salt and black pepper to taste',
+        '1 lemon, sliced',
+        '4 cloves garlic, whole'
+      ];
+    }
+    
+    if (titleLower.includes('pasta') && titleLower.includes('marinara')) {
+      return [
+        '1 lb spaghetti or penne pasta',
+        '2 tablespoons olive oil',
+        '1 large onion, diced',
+        '4 cloves garlic, minced',
+        '1 can (28 oz) crushed tomatoes',
+        '2 tablespoons tomato paste',
+        '1 teaspoon dried basil',
+        '1/2 teaspoon dried oregano',
         'Salt and pepper to taste',
         'Fresh basil leaves',
         'Parmesan cheese, grated'
       ];
     }
     
-    if (titleLower.includes('salad')) {
+    if (titleLower.includes('pasta') && titleLower.includes('alfredo')) {
       return [
-        '4 cups mixed greens',
-        '1 cucumber, sliced',
-        '2 tomatoes, chopped',
-        '1/4 red onion, thinly sliced',
-        '2 tablespoons olive oil',
-        '1 tablespoon balsamic vinegar',
-        'Salt and pepper to taste'
+        '1 lb fettuccine pasta',
+        '1/2 cup butter',
+        '1 cup heavy cream',
+        '1 1/2 cups freshly grated Parmesan cheese',
+        '3 cloves garlic, minced',
+        '1/4 teaspoon nutmeg',
+        'Salt and white pepper to taste',
+        'Fresh parsley for garnish'
       ];
     }
     
-    if (titleLower.includes('soup')) {
+    if (titleLower.includes('beef') && titleLower.includes('stir fry')) {
       return [
-        '2 tablespoons olive oil',
-        '1 onion, diced',
-        '2 carrots, chopped',
-        '2 celery stalks, chopped',
-        '4 cups broth (chicken or vegetable)',
+        '1 lb beef sirloin, sliced thin',
+        '2 tablespoons vegetable oil',
+        '1 red bell pepper, sliced',
+        '1 green bell pepper, sliced',
+        '1 medium onion, sliced',
         '2 cloves garlic, minced',
-        'Salt and pepper to taste',
-        'Fresh herbs (thyme, parsley)'
+        '1 tablespoon fresh ginger, minced',
+        '3 tablespoons soy sauce',
+        '1 tablespoon oyster sauce',
+        '1 teaspoon cornstarch',
+        'Green onions for garnish'
       ];
     }
     
-    if (titleLower.includes('salmon') || titleLower.includes('fish')) {
+    if (titleLower.includes('salmon')) {
       return [
-        '4 salmon fillets (6 oz each)',
+        '4 salmon fillets (6 oz each), skin removed',
         '2 tablespoons olive oil',
-        '2 tablespoons lemon juice',
+        '2 tablespoons fresh lemon juice',
         '2 cloves garlic, minced',
-        '1 teaspoon dried dill',
-        'Salt and pepper to taste',
+        '1 tablespoon fresh dill, chopped',
+        '1 teaspoon lemon zest',
+        'Salt and black pepper to taste',
         'Lemon wedges for serving'
+      ];
+    }
+    
+    if (titleLower.includes('caesar') && titleLower.includes('salad')) {
+      return [
+        '1 large head romaine lettuce, chopped',
+        '1/2 cup mayonnaise',
+        '2 tablespoons fresh lemon juice',
+        '2 cloves garlic, minced',
+        '1 teaspoon Worcestershire sauce',
+        '1/2 cup grated Parmesan cheese',
+        '2 tablespoons olive oil',
+        '1 cup croutons',
+        'Salt and black pepper to taste'
+      ];
+    }
+    
+    if (titleLower.includes('chocolate') && titleLower.includes('chip') && titleLower.includes('cookie')) {
+      return [
+        '2 1/4 cups all-purpose flour',
+        '1 teaspoon baking soda',
+        '1 teaspoon salt',
+        '1 cup butter, softened',
+        '3/4 cup granulated sugar',
+        '3/4 cup brown sugar, packed',
+        '2 large eggs',
+        '2 teaspoons vanilla extract',
+        '2 cups chocolate chips'
+      ];
+    }
+    
+    if (titleLower.includes('pancake')) {
+      return [
+        '2 cups all-purpose flour',
+        '2 tablespoons sugar',
+        '2 teaspoons baking powder',
+        '1 teaspoon salt',
+        '2 large eggs',
+        '1 3/4 cups milk',
+        '1/4 cup melted butter',
+        '1 teaspoon vanilla extract',
+        'Butter for cooking',
+        'Maple syrup for serving'
+      ];
+    }
+    
+    // Generic fallback based on main ingredient
+    if (titleLower.includes('chicken')) {
+      return [
+        '2 lbs chicken (cuts as needed)',
+        '2 tablespoons cooking oil',
+        '1 onion, diced',
+        '3 cloves garlic, minced',
+        'Salt and pepper to taste',
+        'Herbs and spices as desired'
+      ];
+    }
+    
+    if (titleLower.includes('beef')) {
+      return [
+        '1.5 lbs beef (cut as needed)',
+        '2 tablespoons oil',
+        '1 onion, diced',
+        '2 cloves garlic, minced',
+        'Salt and black pepper',
+        'Beef broth or wine as needed'
+      ];
+    }
+    
+    if (titleLower.includes('pasta')) {
+      return [
+        '1 lb pasta (shape as preferred)',
+        '2 tablespoons olive oil',
+        '3 cloves garlic, minced',
+        '1 onion, diced',
+        'Salt and pepper to taste',
+        'Parmesan cheese for serving'
       ];
     }
     
     // Default fallback
     return [
-      'Main ingredient (as specified in recipe title)',
-      '2 tablespoons olive oil',
-      '1 onion, diced',
-      '2 cloves garlic, minced',
+      'Main ingredients as specified in recipe title',
+      '2 tablespoons cooking oil or butter',
+      '1 onion, diced (if savory dish)',
+      '2-3 cloves garlic, minced (if savory dish)',
       'Salt and pepper to taste',
-      'Additional seasonings as needed'
+      'Additional seasonings as appropriate'
     ];
   };
 
   // Function to generate fallback instructions based on recipe title
   const generateFallbackInstructions = (title: string): string[] => {
     const titleLower = title.toLowerCase();
+    console.log('Generating fallback instructions for:', titleLower);
     
-    if (titleLower.includes('chicken')) {
+    // More specific instruction mapping
+    if (titleLower.includes('chicken') && titleLower.includes('breast')) {
       return [
-        'Preheat your oven to 375°F (190°C).',
-        'Season the chicken breast with salt, pepper, garlic powder, and paprika.',
+        'Preheat oven to 375°F (190°C).',
+        'Pat chicken breasts dry and season both sides with salt, pepper, garlic powder, paprika, and thyme.',
         'Heat olive oil in a large oven-safe skillet over medium-high heat.',
-        'Sear the chicken for 3-4 minutes on each side until golden brown.',
-        'Add diced onion and minced garlic to the skillet and cook for 2 minutes.',
-        'Transfer the skillet to the preheated oven and bake for 15-20 minutes.',
-        'Check that internal temperature reaches 165°F (74°C).',
-        'Let rest for 5 minutes before serving.'
+        'Sear chicken breasts for 3-4 minutes on each side until golden brown.',
+        'Add diced onion around the chicken and cook for 2-3 minutes.',
+        'Add minced garlic and cook for another minute until fragrant.',
+        'Transfer skillet to preheated oven and bake for 15-20 minutes.',
+        'Check that internal temperature reaches 165°F (74°C) with a meat thermometer.',
+        'Let rest for 5 minutes before slicing and serving.'
       ];
     }
     
-    if (titleLower.includes('pasta')) {
+    if (titleLower.includes('pasta') && titleLower.includes('marinara')) {
       return [
-        'Bring a large pot of salted water to boil.',
-        'Cook pasta according to package directions until al dente.',
-        'While pasta cooks, heat olive oil in a large skillet over medium heat.',
-        'Add diced onion and cook until softened, about 5 minutes.',
-        'Add minced garlic and cook for another minute.',
-        'Add diced tomatoes and seasonings, simmer for 10 minutes.',
-        'Drain pasta and add to the sauce.',
-        'Toss well and serve with fresh basil and Parmesan cheese.'
+        'Bring a large pot of salted water to boil for the pasta.',
+        'Heat olive oil in a large skillet over medium heat.',
+        'Add diced onion and cook until softened and translucent, about 5-7 minutes.',
+        'Add minced garlic and cook for another minute until fragrant.',
+        'Stir in tomato paste and cook for 1 minute.',
+        'Add crushed tomatoes, basil, oregano, salt, and pepper.',
+        'Simmer sauce for 15-20 minutes, stirring occasionally.',
+        'Meanwhile, cook pasta according to package directions until al dente.',
+        'Drain pasta and toss with the marinara sauce.',
+        'Serve immediately topped with fresh basil and Parmesan cheese.'
       ];
     }
     
-    if (titleLower.includes('salad')) {
+    if (titleLower.includes('salmon')) {
       return [
-        'Wash and dry all vegetables thoroughly.',
-        'Chop tomatoes and slice cucumber and red onion.',
-        'In a large bowl, combine mixed greens with prepared vegetables.',
-        'In a small bowl, whisk together olive oil and balsamic vinegar.',
-        'Season dressing with salt and pepper.',
-        'Drizzle dressing over salad just before serving.',
-        'Toss gently and serve immediately.'
+        'Preheat oven to 400°F (200°C) and line a baking sheet with parchment paper.',
+        'Pat salmon fillets dry with paper towels.',
+        'In a small bowl, whisk together olive oil, lemon juice, minced garlic, and dill.',
+        'Place salmon on the prepared baking sheet.',
+        'Brush the oil mixture evenly over each fillet.',
+        'Season with salt, pepper, and lemon zest.',
+        'Bake for 12-15 minutes until fish flakes easily with a fork.',
+        'Internal temperature should reach 145°F (63°C).',
+        'Serve immediately with lemon wedges.'
+      ];
+    }
+    
+    if (titleLower.includes('stir fry')) {
+      return [
+        'Slice beef thinly against the grain and set aside.',
+        'Heat 1 tablespoon oil in a large wok or skillet over high heat.',
+        'Add beef and stir-fry for 2-3 minutes until browned. Remove and set aside.',
+        'Add remaining oil to the pan.',
+        'Add bell peppers and onion, stir-fry for 2-3 minutes until crisp-tender.',
+        'Add garlic and ginger, stir-fry for 30 seconds until fragrant.',
+        'Return beef to the pan.',
+        'Add soy sauce and oyster sauce, toss everything together.',
+        'Cook for another 1-2 minutes until heated through.',
+        'Garnish with green onions and serve over rice.'
+      ];
+    }
+    
+    if (titleLower.includes('cookie')) {
+      return [
+        'Preheat oven to 375°F (190°C).',
+        'In a medium bowl, whisk together flour, baking soda, and salt.',
+        'In a large bowl, cream together softened butter and both sugars until light and fluffy.',
+        'Beat in eggs one at a time, then add vanilla extract.',
+        'Gradually mix in the flour mixture until just combined.',
+        'Fold in chocolate chips.',
+        'Drop rounded tablespoons of dough onto ungreased baking sheets.',
+        'Bake for 9-11 minutes until edges are golden brown.',
+        'Cool on baking sheets for 5 minutes before transferring to a wire rack.'
       ];
     }
     
@@ -249,41 +382,15 @@ const ExternalRecipeDetailPage: React.FC = () => {
       ];
     }
     
-    if (titleLower.includes('salmon') || titleLower.includes('fish')) {
+    if (titleLower.includes('salad')) {
       return [
-        'Preheat oven to 400°F (200°C).',
-        'Pat salmon fillets dry and place on a baking sheet.',
-        'In a small bowl, mix olive oil, lemon juice, garlic, and dill.',
-        'Brush the mixture over salmon fillets.',
-        'Season with salt and pepper.',
-        'Bake for 12-15 minutes until fish flakes easily.',
-        'Serve immediately with lemon wedges.'
-      ];
-    }
-    
-    if (titleLower.includes('stir fry') || titleLower.includes('stirfry')) {
-      return [
-        'Heat oil in a large wok or skillet over high heat.',
-        'Add protein first and cook until nearly done, then remove.',
-        'Add harder vegetables (like carrots, broccoli) and stir-fry for 2-3 minutes.',
-        'Add softer vegetables (like bell peppers, snap peas) and cook 1-2 minutes.',
-        'Return protein to the pan.',
-        'Add sauce and toss everything together.',
-        'Cook for another minute until heated through.',
-        'Serve immediately over rice or noodles.'
-      ];
-    }
-    
-    if (titleLower.includes('burger')) {
-      return [
-        'Preheat grill or skillet to medium-high heat.',
-        'Form ground meat into patties, slightly larger than buns.',
-        'Season patties with salt and pepper.',
-        'Cook patties for 3-4 minutes per side for medium doneness.',
-        'Add cheese in the last minute if desired.',
-        'Toast buns lightly on the grill or in a toaster.',
-        'Assemble burgers with desired toppings.',
-        'Serve immediately while hot.'
+        'Wash and dry all vegetables thoroughly.',
+        'Chop tomatoes and slice cucumber and red onion.',
+        'In a large bowl, combine mixed greens with prepared vegetables.',
+        'In a small bowl, whisk together olive oil and balsamic vinegar.',
+        'Season dressing with salt and pepper.',
+        'Drizzle dressing over salad just before serving.',
+        'Toss gently and serve immediately.'
       ];
     }
     
@@ -338,14 +445,14 @@ const ExternalRecipeDetailPage: React.FC = () => {
       ];
     }
     
-    // Default fallback - still generic but better than before
+    // Default fallback with more specific guidance
     return [
-      `This ${titleLower} recipe requires careful preparation and attention to cooking times.`,
-      'Start by gathering and preparing all ingredients as listed.',
-      'Follow traditional cooking methods appropriate for this type of dish.',
-      'Monitor cooking progress and adjust heat as needed.',
-      'Season thoughtfully and taste as you go.',
-      'Serve according to traditional presentation for this cuisine.'
+      `Prepare this ${titleLower.split(' ')[0]} recipe with attention to timing and technique.`,
+      'Gather and prepare all ingredients before starting to cook.',
+      'Follow proper cooking techniques for the main ingredients involved.',
+      'Monitor cooking progress and adjust heat levels as needed.',
+      'Season and taste throughout the cooking process.',
+      'Serve according to the traditional style for this type of dish.'
     ];
   };
 

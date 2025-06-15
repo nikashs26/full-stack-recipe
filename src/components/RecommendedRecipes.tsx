@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
@@ -27,19 +28,25 @@ const RecommendedRecipes: React.FC = () => {
   });
 
   const preferences = user?.preferences;
+  console.log('RecommendedRecipes - User preferences:', preferences);
 
-  // Query external recipes based on user preferences - avoid fallback data
+  // Query external recipes based on user preferences
   const externalQueries = useQuery({
     queryKey: ['recommendedExternalRecipes', preferences],
     queryFn: async () => {
+      console.log('Fetching external recipes with preferences:', preferences);
+      
       if (!preferences) {
-        // Try to get popular recipes without fallback
+        console.log('No preferences found, fetching popular recipes');
         const response = await fetchRecipes('popular', '');
         return response?.results || [];
       }
 
       const allExternalRecipes: SpoonacularRecipe[] = [];
       const { favoriteCuisines = [], dietaryRestrictions = [] } = preferences;
+      
+      console.log('Favorite cuisines:', favoriteCuisines);
+      console.log('Dietary restrictions:', dietaryRestrictions);
 
       // Fetch recipes for favorite cuisines
       if (favoriteCuisines.length > 0) {
@@ -48,14 +55,14 @@ const RecommendedRecipes: React.FC = () => {
             console.log(`Fetching recipes for cuisine: ${cuisine}`);
             const response = await fetchRecipes('', cuisine);
             if (response?.results && Array.isArray(response.results)) {
-              // Filter out hardcoded fallback recipes
               const realRecipes = response.results.filter(recipe => 
-                recipe.id > 1000 && // Fallback recipes have low IDs
+                recipe.id > 1000 &&
                 recipe.title && 
                 !recipe.title.toLowerCase().includes('fallback') &&
                 recipe.image && 
                 recipe.image.includes('http')
               );
+              console.log(`Found ${realRecipes.length} real recipes for ${cuisine}`);
               allExternalRecipes.push(...realRecipes.slice(0, 6));
             }
           } catch (error) {
@@ -78,6 +85,7 @@ const RecommendedRecipes: React.FC = () => {
                 recipe.image && 
                 recipe.image.includes('http')
               );
+              console.log(`Found ${realRecipes.length} real recipes for ${diet}`);
               allExternalRecipes.push(...realRecipes.slice(0, 4));
             }
           } catch (error) {
@@ -109,12 +117,13 @@ const RecommendedRecipes: React.FC = () => {
       console.log(`Found ${allExternalRecipes.length} external recipes for recommendations`);
       return allExternalRecipes;
     },
-    enabled: true,
+    enabled: !!preferences,
     staleTime: 300000,
   });
 
   // Combine and filter recipes
   const recommendedRecipes = React.useMemo(() => {
+    console.log('Building recommended recipes list');
     const combinedRecipes: any[] = [];
 
     // Add local recipes (first 2)
@@ -124,6 +133,7 @@ const RecommendedRecipes: React.FC = () => {
         isExternal: false,
         type: 'local'
       }));
+      console.log(`Adding ${localToAdd.length} local recipes`);
       combinedRecipes.push(...localToAdd);
     }
 
@@ -134,10 +144,11 @@ const RecommendedRecipes: React.FC = () => {
         isExternal: false,
         type: 'manual'
       }));
+      console.log(`Adding ${manualToAdd.length} manual recipes`);
       combinedRecipes.push(...manualToAdd);
     }
 
-    // Add external recipes (prioritize based on preferences)
+    // Add external recipes
     if (externalQueries.data && Array.isArray(externalQueries.data)) {
       let filteredExternal = externalQueries.data;
 
@@ -168,7 +179,6 @@ const RecommendedRecipes: React.FC = () => {
         });
       }
 
-      // If filtering removed too many recipes, use the original list
       const externalToAdd = (filteredExternal.length >= 3 ? filteredExternal : externalQueries.data)
         .slice(0, 6)
         .map(recipe => ({ 
@@ -177,6 +187,7 @@ const RecommendedRecipes: React.FC = () => {
           type: 'external'
         }));
       
+      console.log(`Adding ${externalToAdd.length} external recipes`);
       combinedRecipes.push(...externalToAdd);
     }
 
@@ -185,16 +196,18 @@ const RecommendedRecipes: React.FC = () => {
       index === self.findIndex(r => r.id === recipe.id && r.type === recipe.type)
     );
 
+    console.log(`Final recommended recipes count: ${uniqueRecipes.length}`);
     return uniqueRecipes.slice(0, 9);
   }, [allRecipes, manualRecipes, externalQueries.data, preferences]);
 
   if (!preferences) {
+    console.log('No preferences found, not showing recommendations');
     return null;
   }
 
   const isLoading = isLocalLoading || isManualLoading || externalQueries.isLoading;
+  console.log('Loading states:', { isLocalLoading, isManualLoading, externalLoading: externalQueries.isLoading });
 
-  // Skip recipe delete functionality on homepage
   const handleDeleteRecipe = () => {
     // Intentionally empty
   };
@@ -249,7 +262,7 @@ const RecommendedRecipes: React.FC = () => {
               to="/preferences" 
               className="text-recipe-primary hover:text-recipe-primary/80 underline"
             >
-              Set your preferences to get recommendations
+              Update your preferences to get better recommendations
             </Link>
           </div>
         )}

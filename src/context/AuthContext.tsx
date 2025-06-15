@@ -47,26 +47,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       console.log('Loading preferences for user:', userEmail);
       
-      // Test Supabase connection first
-      const { data: testData, error: testError } = await supabase
-        .from('sign_ups')
-        .select('count')
-        .limit(1);
-      
-      if (testError) {
-        console.error('Supabase connection test failed:', testError);
-        return undefined;
-      }
-      
-      console.log('Supabase connection successful');
-      
       const { data, error } = await supabase
         .from('sign_ups')
         .select('preferences')
         .eq('email', userEmail)
         .maybeSingle();
 
-      if (error && error.code !== 'PGRST116') { // PGRST116 is "not found"
+      if (error) {
         console.error('Error loading user preferences:', error);
         return undefined;
       }
@@ -76,26 +63,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return undefined;
       }
 
-      // Safely validate the preferences data
-      const preferences = data.preferences;
-      if (preferences && typeof preferences === 'object' && !Array.isArray(preferences)) {
-        const prefObj = preferences as Record<string, any>;
-        
-        // Create a validated preferences object
-        const validatedPreferences: UserPreferences = {
-          favoriteCuisines: Array.isArray(prefObj.favoriteCuisines) ? prefObj.favoriteCuisines : [],
-          dietaryRestrictions: Array.isArray(prefObj.dietaryRestrictions) ? prefObj.dietaryRestrictions : [],
-          allergens: Array.isArray(prefObj.allergens) ? prefObj.allergens : [],
-          cookingSkillLevel: ['beginner', 'intermediate', 'advanced'].includes(prefObj.cookingSkillLevel) 
-            ? prefObj.cookingSkillLevel 
-            : 'beginner'
-        };
-        
-        console.log('Loaded preferences:', validatedPreferences);
-        return validatedPreferences;
-      }
-
-      return undefined;
+      console.log('Loaded preferences:', data.preferences);
+      return data.preferences as UserPreferences;
     } catch (error) {
       console.error('Unexpected error loading preferences:', error);
       return undefined;
@@ -147,7 +116,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             
             if (session?.user) {
               try {
-                // Load preferences for the user
                 const preferences = await loadUserPreferences(session.user.email!);
                 if (mounted) {
                   setUser({
@@ -247,11 +215,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       console.log('Starting sign out process');
       
-      // Clear local state immediately
       setUser(null);
       setSession(null);
       
-      // Clear all local storage items that might be related to auth
       const keysToRemove = [];
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
@@ -261,22 +227,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       keysToRemove.forEach(key => localStorage.removeItem(key));
       
-      // Call Supabase signOut
       const { error } = await supabase.auth.signOut();
       
       if (error) {
         console.error('Supabase sign out error:', error);
-        // Continue with local cleanup even if Supabase fails
       } else {
         console.log('Supabase sign out successful');
       }
       
-      // Force a hard refresh to ensure clean state
       window.location.href = '/';
       
     } catch (error) {
       console.error('Unexpected sign out error:', error);
-      // Even on error, clear local state and redirect
       setUser(null);
       setSession(null);
       localStorage.clear();
@@ -298,25 +260,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       console.log('Updating preferences for user:', user.email, preferences);
       
-      // Test Supabase connection first
-      const { data: testData, error: testError } = await supabase
-        .from('sign_ups')
-        .select('count')
-        .limit(1);
-      
-      if (testError) {
-        console.error('Supabase connection failed during preference update:', testError);
-        toast({
-          title: 'Connection Error',
-          description: 'Unable to connect to database. Please try again.',
-          variant: 'destructive',
-        });
-        return;
-      }
-      
-      console.log('Supabase connection successful for preference update');
-      
-      // Convert UserPreferences to a plain object that matches Json type
       const preferencesJson = {
         favoriteCuisines: preferences.favoriteCuisines,
         dietaryRestrictions: preferences.dietaryRestrictions,
@@ -326,7 +269,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       console.log('Saving preferences JSON:', preferencesJson);
       
-      // Add user to our sign_ups table with preferences
       const { data, error } = await supabase
         .from('sign_ups')
         .upsert({
@@ -348,7 +290,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
       } else {
         console.log('Preferences updated successfully, result:', data);
-        // Update local user state
         setUser(prev => prev ? { ...prev, preferences } : null);
         toast({
           title: 'Preferences Updated',
