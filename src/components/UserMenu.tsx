@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -15,29 +15,23 @@ import { LogIn, LogOut, User } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 const UserMenu: React.FC = () => {
-  const { user, isAuthenticated, isLoading: authLoading, signOut } = useAuth();
-  const [showLoading, setShowLoading] = useState(false);
+  const { user, isAuthenticated, isLoading, signOut } = useAuth();
   const { toast } = useToast();
 
-  // Only show loading for a very short time and only if we're actually loading
-  useEffect(() => {
-    if (authLoading && !isAuthenticated) {
-      setShowLoading(true);
-      
-      // Don't show loading for more than 1 second
-      const timer = setTimeout(() => {
-        console.log('UserMenu loading timeout reached, hiding loading state');
-        setShowLoading(false);
-      }, 1000);
-      
-      return () => clearTimeout(timer);
-    } else {
-      setShowLoading(false);
-    }
-  }, [authLoading, isAuthenticated]);
+  // Show loading only briefly during initial auth check
+  if (isLoading) {
+    return (
+      <div className="flex items-center">
+        <Button variant="ghost" size="sm" disabled>
+          <span className="h-4 w-4 mr-2 animate-spin">⌛</span>
+          Loading...
+        </Button>
+      </div>
+    );
+  }
 
-  // If we're clearly not authenticated and not loading, show sign in buttons
-  if (!isAuthenticated && !showLoading) {
+  // If not authenticated, show sign in buttons
+  if (!isAuthenticated) {
     return (
       <div className="flex items-center gap-2">
         <Link to="/signin">
@@ -51,18 +45,6 @@ const UserMenu: React.FC = () => {
             Sign Up
           </Button>
         </Link>
-      </div>
-    );
-  }
-
-  // Show brief loading state only when actually loading
-  if (showLoading) {
-    return (
-      <div className="flex items-center">
-        <Button variant="ghost" size="sm" disabled>
-          <span className="h-4 w-4 mr-2 animate-spin">⌛</span>
-          Loading...
-        </Button>
       </div>
     );
   }

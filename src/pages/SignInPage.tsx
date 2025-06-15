@@ -61,6 +61,7 @@ const SignInPage: React.FC = () => {
           title: "Success!",
           description: "You're now signed in.",
         });
+        // Navigation will happen automatically via useEffect when isAuthenticated changes
       }
       
     } catch (error: any) {
@@ -74,9 +75,6 @@ const SignInPage: React.FC = () => {
       setIsSubmitting(false);
     }
   };
-
-  // Don't show loading state for too long
-  const shouldShowLoading = authLoading && isAuthenticated === false;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -97,7 +95,7 @@ const SignInPage: React.FC = () => {
                   <FormItem>
                     <FormLabel>Email</FormLabel>
                     <FormControl>
-                      <Input placeholder="your@email.com" {...field} disabled={isSubmitting} />
+                      <Input placeholder="your@email.com" {...field} disabled={isSubmitting || authLoading} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -111,7 +109,7 @@ const SignInPage: React.FC = () => {
                   <FormItem>
                     <FormLabel>Password</FormLabel>
                     <FormControl>
-                      <Input type="password" placeholder="••••••••" {...field} disabled={isSubmitting} />
+                      <Input type="password" placeholder="••••••••" {...field} disabled={isSubmitting || authLoading} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -121,7 +119,7 @@ const SignInPage: React.FC = () => {
               <Button 
                 type="submit" 
                 className="w-full"
-                disabled={isSubmitting || shouldShowLoading}
+                disabled={isSubmitting || authLoading}
               >
                 {isSubmitting ? (
                   <>

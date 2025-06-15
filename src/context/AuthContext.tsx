@@ -93,6 +93,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const initializeAuth = async () => {
       try {
+        console.log('Initializing auth...');
+        
+        // Get current session first
+        const { data: { session: initialSession } } = await supabase.auth.getSession();
+        console.log('Initial session:', initialSession?.user?.email || 'none');
+        
+        if (mounted) {
+          setSession(initialSession);
+          
+          if (initialSession?.user) {
+            try {
+              const preferences = await loadUserPreferences(initialSession.user.email!);
+              if (mounted) {
+                setUser({
+                  ...initialSession.user,
+                  preferences
+                });
+              }
+            } catch (error) {
+              console.error('Error loading initial user data:', error);
+              if (mounted) {
+                setUser(initialSession.user);
+              }
+            }
+          } else {
+            setUser(null);
+          }
+          
+          setIsLoading(false);
+        }
+
         // Set up auth state listener
         const { data: { subscription } } = supabase.auth.onAuthStateChange(
           async (event, session) => {
@@ -123,45 +154,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 setUser(null);
               }
             }
-            
-            if (mounted) {
-              setIsLoading(false);
-            }
           }
         );
-
-        // Check for existing session
-        const { data: { session: initialSession } } = await supabase.auth.getSession();
-        
-        if (!mounted) return;
-        
-        console.log('Initial session check:', initialSession?.user?.email);
-        setSession(initialSession);
-        
-        if (initialSession?.user) {
-          try {
-            const preferences = await loadUserPreferences(initialSession.user.email!);
-            if (mounted) {
-              setUser({
-                ...initialSession.user,
-                preferences
-              });
-            }
-          } catch (error) {
-            console.error('Error loading initial user data:', error);
-            if (mounted) {
-              setUser(initialSession.user);
-            }
-          }
-        } else {
-          if (mounted) {
-            setUser(null);
-          }
-        }
-        
-        if (mounted) {
-          setIsLoading(false);
-        }
 
         return () => {
           mounted = false;
@@ -175,19 +169,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     };
 
-    // Initialize with a timeout to prevent infinite loading
-    const timeoutId = setTimeout(() => {
-      if (mounted && isLoading) {
-        console.log('Auth initialization timeout, setting loading to false');
-        setIsLoading(false);
-      }
-    }, 3000);
-
     const cleanup = initializeAuth();
     
     return () => {
       mounted = false;
-      clearTimeout(timeoutId);
       cleanup?.then(fn => fn?.());
     };
   }, []);
@@ -195,7 +180,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signIn = async (email: string, password: string) => {
     try {
       console.log('Attempting sign in for:', email);
-      setIsLoading(true);
       
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
@@ -204,40 +188,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (error) {
         console.error('Sign in error:', error);
-        toast({
-          title: 'Sign In Failed',
-          description: error.message,
-          variant: 'destructive',
-        });
         return { error };
       }
 
       if (data.user) {
         console.log('Sign in successful for:', data.user.email);
-        toast({
-          title: 'Welcome back!',
-          description: 'You have been signed in successfully.',
-        });
       }
 
       return { error: null };
     } catch (error) {
       console.error('Unexpected sign in error:', error);
-      toast({
-        title: 'Sign In Failed',
-        description: 'An unexpected error occurred. Please try again.',
-        variant: 'destructive',
-      });
       return { error };
-    } finally {
-      setIsLoading(false);
     }
   };
 
   const signUp = async (email: string, password: string) => {
     try {
       console.log('Attempting sign up for:', email);
-      setIsLoading(true);
       const redirectUrl = `${window.location.origin}/`;
       
       const { data, error } = await supabase.auth.signUp({
@@ -250,31 +217,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (error) {
         console.error('Sign up error:', error);
-        toast({
-          title: 'Sign Up Failed',
-          description: error.message,
-          variant: 'destructive',
-        });
         return { error };
       }
 
       console.log('Sign up result:', data);
-      toast({
-        title: 'Account Created!',
-        description: 'Please check your email to verify your account.',
-      });
-
       return { error: null };
     } catch (error) {
       console.error('Unexpected sign up error:', error);
-      toast({
-        title: 'Sign Up Failed',
-        description: 'An unexpected error occurred. Please try again.',
-        variant: 'destructive',
-      });
       return { error };
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -284,17 +234,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const { error } = await supabase.auth.signOut();
       if (error) {
         console.error('Sign out error:', error);
-        toast({
-          title: 'Sign Out Failed',
-          description: error.message,
-          variant: 'destructive',
-        });
       } else {
         console.log('Sign out successful');
-        toast({
-          title: 'Signed Out',
-          description: 'You have been signed out successfully.',
-        });
       }
     } catch (error) {
       console.error('Unexpected sign out error:', error);
