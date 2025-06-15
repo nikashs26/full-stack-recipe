@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -22,9 +23,6 @@ import {
 import { useAuth } from '../context/AuthContext';
 import RecommendedRecipes from '../components/RecommendedRecipes';
 
-// Define a type that combines Recipe and SpoonacularRecipe with isExternal flag
-type CombinedRecipe = (Recipe & { isExternal?: boolean }) | (SpoonacularRecipe & { isExternal: boolean });
-
 const HomePage: React.FC = () => {
   const { isAuthenticated } = useAuth();
   
@@ -35,31 +33,122 @@ const HomePage: React.FC = () => {
     staleTime: 60000
   });
 
-  // Query for manual recipes (popular recipes) - ONLY fetch on homepage
+  // Query for manual recipes
   const { data: manualRecipes = [], isLoading: isManualLoading } = useQuery({
     queryKey: ['manualRecipes'],
     queryFn: fetchManualRecipes,
     staleTime: 60000
   });
 
-  // Query for featured recipes (using a popular search term)
+  // Query for featured recipes with fallback
   const { data: featuredData, isLoading: isFeaturedLoading } = useQuery({
     queryKey: ['featuredRecipes'],
-    queryFn: () => fetchRecipes('pasta', 'Italian'),
+    queryFn: async () => {
+      try {
+        return await fetchRecipes('pasta', 'Italian');
+      } catch (error) {
+        console.error('Featured recipes failed, using fallback');
+        // Return fallback data
+        return {
+          results: [
+            {
+              id: 716429,
+              title: "Pasta with Garlic, Scallions, and Broccoli",
+              image: "https://img.spoonacular.com/recipes/716429-312x231.jpg",
+              imageType: "jpg",
+              readyInMinutes: 25,
+              summary: "A delicious and healthy pasta dish perfect for any occasion.",
+              cuisines: ["Italian"],
+              diets: ["vegetarian"],
+              isExternal: true
+            },
+            {
+              id: 715538,
+              title: "Bruschetta with Tomato and Basil",
+              image: "https://img.spoonacular.com/recipes/715538-312x231.jpg",
+              imageType: "jpg",
+              readyInMinutes: 15,
+              summary: "Classic Italian appetizer with fresh tomatoes and basil.",
+              cuisines: ["Italian"],
+              diets: ["vegetarian"],
+              isExternal: true
+            }
+          ]
+        };
+      }
+    },
     staleTime: 300000
   });
 
-  // Query for quick recipes (less than 30 mins)
+  // Query for quick recipes with fallback
   const { data: quickData, isLoading: isQuickLoading } = useQuery({
     queryKey: ['quickRecipes'],
-    queryFn: () => fetchRecipes('chicken', ''),
+    queryFn: async () => {
+      try {
+        return await fetchRecipes('chicken', '');
+      } catch (error) {
+        console.error('Quick recipes failed, using fallback');
+        return {
+          results: [
+            {
+              id: 715415,
+              title: "Red Lentil Soup with Chicken and Turnips",
+              image: "https://img.spoonacular.com/recipes/715415-312x231.jpg",
+              imageType: "jpg",
+              readyInMinutes: 25,
+              summary: "Quick and nutritious soup perfect for busy weeknights.",
+              cuisines: ["Middle Eastern"],
+              diets: ["gluten free"],
+              isExternal: true
+            }
+          ]
+        };
+      }
+    },
     staleTime: 300000
   });
 
-  // Handle null check for recipes
   const recipes = Array.isArray(localRecipes) ? localRecipes : [];
   
-  // Process and get top rated recipes from local collection - KEEP as local recipes with proper linking
+  // Process featured recipes
+  const featuredRecipes = React.useMemo((): SpoonacularRecipe[] => {
+    if (!featuredData?.results) return [];
+    
+    return featuredData.results
+      .slice(0, 8)
+      .map(recipe => ({
+        ...recipe,
+        image: recipe.image || '/placeholder.svg',
+        isExternal: true
+      }));
+  }, [featuredData]);
+
+  // Process quick recipes
+  const quickRecipes = React.useMemo((): SpoonacularRecipe[] => {
+    if (!quickData?.results) return [];
+    
+    return quickData.results
+      .slice(0, 6)
+      .map(recipe => ({
+        ...recipe,
+        image: recipe.image || '/placeholder.svg',
+        isExternal: true
+      }));
+  }, [quickData]);
+
+  // Process popular recipes from manual recipes
+  const popularRecipes = React.useMemo(() => {
+    if (!Array.isArray(manualRecipes) || manualRecipes.length === 0) return [];
+    
+    return manualRecipes
+      .slice(0, 8)
+      .map(recipe => ({
+        ...recipe,
+        image: recipe.image || '/placeholder.svg'
+      }));
+  }, [manualRecipes]);
+
+  // Top rated local recipes
   const topRatedRecipes = React.useMemo(() => {
     if (!Array.isArray(recipes) || recipes.length === 0) return [];
 
@@ -73,114 +162,12 @@ const HomePage: React.FC = () => {
       .slice(0, 6);
   }, [recipes]);
 
-  // Process featured recipes - ensure they're properly formatted
-  const featuredRecipes = React.useMemo((): SpoonacularRecipe[] => {
-    if (!featuredData?.results) {
-      // Provide fallback featured recipes with correct SpoonacularRecipe structure
-      return [
-        {
-          id: 716429,
-          title: "Pasta with Garlic, Scallions, and Broccoli",
-          image: "https://img.spoonacular.com/recipes/716429-312x231.jpg",
-          imageType: "jpg",
-          readyInMinutes: 25,
-          summary: "A delicious and healthy pasta dish perfect for any occasion.",
-          cuisines: ["Italian"],
-          diets: ["vegetarian"],
-          isExternal: true
-        },
-        {
-          id: 715538,
-          title: "Bruschetta with Tomato and Basil",
-          image: "https://img.spoonacular.com/recipes/715538-312x231.jpg",
-          imageType: "jpg",
-          readyInMinutes: 15,
-          summary: "Classic Italian appetizer with fresh tomatoes and basil.",
-          cuisines: ["Italian"],
-          diets: ["vegetarian"],
-          isExternal: true
-        },
-        {
-          id: 782585,
-          title: "Cannellini Bean and Sausage Soup",
-          image: "https://img.spoonacular.com/recipes/782585-312x231.jpg",
-          imageType: "jpg",
-          readyInMinutes: 30,
-          summary: "Hearty Italian soup with beans and sausage.",
-          cuisines: ["Italian"],
-          diets: [],
-          isExternal: true
-        }
-      ];
-    }
-    
-    return featuredData.results
-      .slice(0, 8)
-      .map(recipe => ({
-        ...recipe,
-        image: recipe.image || '/placeholder.svg',
-        isExternal: true
-      }));
-  }, [featuredData]);
-
-  // Process quick recipes - ensure they have data
-  const quickRecipes = React.useMemo((): SpoonacularRecipe[] => {
-    if (!quickData?.results) {
-      // Provide fallback quick recipes with correct SpoonacularRecipe structure
-      return [
-        {
-          id: 715415,
-          title: "Red Lentil Soup with Chicken and Turnips",
-          image: "https://img.spoonacular.com/recipes/715415-312x231.jpg",
-          imageType: "jpg",
-          readyInMinutes: 25,
-          summary: "Quick and nutritious soup perfect for busy weeknights.",
-          cuisines: ["Middle Eastern"],
-          diets: ["gluten free"],
-          isExternal: true
-        },
-        {
-          id: 716406,
-          title: "Asparagus and Pea Soup",
-          image: "https://img.spoonacular.com/recipes/716406-312x231.jpg",
-          imageType: "jpg",
-          readyInMinutes: 20,
-          summary: "Light and fresh spring soup.",
-          cuisines: ["European"],
-          diets: ["vegetarian", "vegan"],
-          isExternal: true
-        },
-        {
-          id: 644387,
-          title: "Garlicky Kale",
-          image: "https://img.spoonacular.com/recipes/644387-312x231.jpg",
-          imageType: "jpg",
-          readyInMinutes: 15,
-          summary: "Quick and healthy sautéed kale with garlic.",
-          cuisines: ["American"],
-          diets: ["vegetarian", "vegan"],
-          isExternal: true
-        }
-      ];
-    }
-    
-    return quickData.results
-      .filter(recipe => recipe && recipe.readyInMinutes && recipe.readyInMinutes <= 30)
-      .slice(0, 6)
-      .map(recipe => ({
-        ...recipe,
-        image: recipe.image || '/placeholder.svg',
-        isExternal: true
-      }));
-  }, [quickData]);
-
-  // Recent recipes (latest added locally) - KEEP as local recipes with proper linking
+  // Recent recipes
   const recentRecipes = React.useMemo(() => {
     if (!Array.isArray(recipes) || recipes.length === 0) return [];
 
     return [...recipes]
       .sort((a, b) => {
-        // Sort by most recently added
         const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
         const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
         return dateB - dateA;
@@ -188,36 +175,20 @@ const HomePage: React.FC = () => {
       .slice(0, 6);
   }, [recipes]);
 
-  // Process manual recipes for popular section - format properly as ManualRecipe for correct linking
-  const popularRecipes = React.useMemo(() => {
-    if (!Array.isArray(manualRecipes) || manualRecipes.length === 0) return [];
-    
-    return manualRecipes
-      .slice(0, 8)
-      .map(recipe => ({
-        ...recipe,
-        image: recipe.image || '/placeholder.svg'
-      }));
-  }, [manualRecipes]);
-
-  // Skip recipe delete functionality on homepage
   const handleDeleteRecipe = () => {
-    // This is intentionally empty as we don't want delete functionality on the homepage cards
+    // Intentionally empty
   };
 
-  // Handle recipe toggle favorite functionality
   const handleToggleFavorite = (recipe: Recipe) => {
-    // This is intentionally empty as we don't want favorite functionality on the homepage cards
+    // Intentionally empty
   };
 
-  // Clean featured recipes to avoid duplicates
   const isLoading = isLocalLoading || isFeaturedLoading || isQuickLoading || isManualLoading;
 
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
       
-      {/* Add margin-top to account for the fixed header */}
       <div className="pt-24 md:pt-28">
         {/* Hero Section */}
         <section className="relative bg-gradient-to-r from-recipe-accent to-recipe-primary py-16 md:py-24">
@@ -266,7 +237,7 @@ const HomePage: React.FC = () => {
         </section>
 
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-          {/* Personalized Recommendations Section */}
+          {/* Personalized Recommendations */}
           {isAuthenticated ? (
             <RecommendedRecipes />
           ) : (
@@ -292,7 +263,7 @@ const HomePage: React.FC = () => {
             </section>
           )}
 
-          {/* Popular Recipes Section - ONLY ON HOMEPAGE */}
+          {/* Popular Recipes */}
           <section className="mb-16">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-3xl font-bold text-gray-900 flex items-center">
@@ -306,24 +277,16 @@ const HomePage: React.FC = () => {
             
             <Carousel className="w-full">
               <CarouselContent className="-ml-4">
-                {isLoading ? (
-                  Array.from({ length: 4 }).map((_, i) => (
-                    <CarouselItem key={i} className="pl-4 md:basis-1/2 lg:basis-1/3">
-                      <div className="h-64 bg-gray-200 animate-pulse rounded-lg"></div>
-                    </CarouselItem>
-                  ))
-                ) : popularRecipes.length > 0 ? (
+                {popularRecipes.length > 0 ? (
                   popularRecipes.map((recipe, i) => (
                     <CarouselItem key={i} className="pl-4 md:basis-1/2 lg:basis-1/3">
-                      <ManualRecipeCard 
-                        recipe={recipe}
-                      />
+                      <ManualRecipeCard recipe={recipe} />
                     </CarouselItem>
                   ))
                 ) : (
                   <CarouselItem className="pl-4 basis-full">
                     <div className="text-center py-12 border border-dashed border-gray-300 rounded-lg">
-                      <p className="text-gray-500">No popular recipes available</p>
+                      <p className="text-gray-500">Loading popular recipes...</p>
                     </div>
                   </CarouselItem>
                 )}
@@ -333,7 +296,7 @@ const HomePage: React.FC = () => {
             </Carousel>
           </section>
 
-          {/* Featured Recipes Section */}
+          {/* Featured Recipes */}
           <section className="mb-16">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-3xl font-bold text-gray-900 flex items-center">
@@ -347,13 +310,7 @@ const HomePage: React.FC = () => {
             
             <Carousel className="w-full">
               <CarouselContent className="-ml-4">
-                {isLoading ? (
-                  Array.from({ length: 4 }).map((_, i) => (
-                    <CarouselItem key={i} className="pl-4 md:basis-1/2 lg:basis-1/3">
-                      <div className="h-64 bg-gray-200 animate-pulse rounded-lg"></div>
-                    </CarouselItem>
-                  ))
-                ) : featuredRecipes.length > 0 ? (
+                {featuredRecipes.length > 0 ? (
                   featuredRecipes.map((recipe, i) => (
                     <CarouselItem key={i} className="pl-4 md:basis-1/2 lg:basis-1/3">
                       <RecipeCard 
@@ -366,7 +323,7 @@ const HomePage: React.FC = () => {
                 ) : (
                   <CarouselItem className="pl-4 basis-full">
                     <div className="text-center py-12 border border-dashed border-gray-300 rounded-lg">
-                      <p className="text-gray-500">No featured recipes available</p>
+                      <p className="text-gray-500">Loading featured recipes...</p>
                     </div>
                   </CarouselItem>
                 )}
@@ -376,7 +333,7 @@ const HomePage: React.FC = () => {
             </Carousel>
           </section>
 
-          {/* Quick & Easy Section */}
+          {/* Quick & Easy */}
           <section className="mb-16">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-3xl font-bold text-gray-900 flex items-center">
@@ -389,11 +346,7 @@ const HomePage: React.FC = () => {
             </div>
             
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {isLoading ? (
-                Array.from({ length: 3 }).map((_, i) => (
-                  <div key={i} className="h-64 bg-gray-200 animate-pulse rounded-lg"></div>
-                ))
-              ) : quickRecipes.length > 0 ? (
+              {quickRecipes.length > 0 ? (
                 quickRecipes.slice(0, 3).map((recipe, i) => (
                   <RecipeCard 
                     key={i}
@@ -404,13 +357,13 @@ const HomePage: React.FC = () => {
                 ))
               ) : (
                 <div className="col-span-full text-center py-12 border border-dashed border-gray-300 rounded-lg">
-                  <p className="text-gray-500">No quick recipes available</p>
+                  <p className="text-gray-500">Loading quick recipes...</p>
                 </div>
               )}
             </div>
           </section>
 
-          {/* Top Rated Section (from local recipes) - Keep as local recipes */}
+          {/* Top Rated Section */}
           {topRatedRecipes.length > 0 && (
             <section className="mb-16">
               <div className="flex items-center justify-between mb-6">
@@ -437,7 +390,7 @@ const HomePage: React.FC = () => {
             </section>
           )}
 
-          {/* Recently Added Section - Keep as local recipes */}
+          {/* Recently Added Section */}
           {recentRecipes.length > 0 && (
             <section className="mb-8">
               <div className="flex items-center justify-between mb-6">
