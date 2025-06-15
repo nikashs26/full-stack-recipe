@@ -16,36 +16,28 @@ import { useToast } from '@/hooks/use-toast';
 
 const UserMenu: React.FC = () => {
   const { user, isAuthenticated, isLoading: authLoading, signOut } = useAuth();
-  const [isLoading, setIsLoading] = useState(false);
+  const [showLoading, setShowLoading] = useState(false);
   const { toast } = useToast();
 
-  // Show loading only for a short time to prevent getting stuck
+  // Only show loading for a very short time and only if we're actually loading
   useEffect(() => {
-    setIsLoading(authLoading);
-    
-    if (authLoading) {
+    if (authLoading && !isAuthenticated) {
+      setShowLoading(true);
+      
+      // Don't show loading for more than 1 second
       const timer = setTimeout(() => {
-        console.log('UserMenu loading timeout reached');
-        setIsLoading(false);
-      }, 1500);
+        console.log('UserMenu loading timeout reached, hiding loading state');
+        setShowLoading(false);
+      }, 1000);
       
       return () => clearTimeout(timer);
+    } else {
+      setShowLoading(false);
     }
-  }, [authLoading]);
+  }, [authLoading, isAuthenticated]);
 
-  // Show loading state briefly
-  if (isLoading) {
-    return (
-      <div className="flex items-center">
-        <Button variant="ghost" size="sm" disabled>
-          <span className="h-4 w-4 mr-2 animate-spin">⌛</span>
-          Loading...
-        </Button>
-      </div>
-    );
-  }
-
-  if (!isAuthenticated) {
+  // If we're clearly not authenticated and not loading, show sign in buttons
+  if (!isAuthenticated && !showLoading) {
     return (
       <div className="flex items-center gap-2">
         <Link to="/signin">
@@ -59,6 +51,18 @@ const UserMenu: React.FC = () => {
             Sign Up
           </Button>
         </Link>
+      </div>
+    );
+  }
+
+  // Show brief loading state only when actually loading
+  if (showLoading) {
+    return (
+      <div className="flex items-center">
+        <Button variant="ghost" size="sm" disabled>
+          <span className="h-4 w-4 mr-2 animate-spin">⌛</span>
+          Loading...
+        </Button>
       </div>
     );
   }

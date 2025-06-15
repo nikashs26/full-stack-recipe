@@ -91,29 +91,66 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     let mounted = true;
 
-    // Set up auth state listener first
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log('Auth state changed:', event, session?.user?.email);
+    const initializeAuth = async () => {
+      try {
+        // Set up auth state listener
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(
+          async (event, session) => {
+            console.log('Auth state changed:', event, session?.user?.email);
+            
+            if (!mounted) return;
+            
+            setSession(session);
+            
+            if (session?.user) {
+              try {
+                // Load preferences for the user
+                const preferences = await loadUserPreferences(session.user.email!);
+                if (mounted) {
+                  setUser({
+                    ...session.user,
+                    preferences
+                  });
+                }
+              } catch (error) {
+                console.error('Error loading user data:', error);
+                if (mounted) {
+                  setUser(session.user);
+                }
+              }
+            } else {
+              if (mounted) {
+                setUser(null);
+              }
+            }
+            
+            if (mounted) {
+              setIsLoading(false);
+            }
+          }
+        );
+
+        // Check for existing session
+        const { data: { session: initialSession } } = await supabase.auth.getSession();
         
         if (!mounted) return;
         
-        setSession(session);
+        console.log('Initial session check:', initialSession?.user?.email);
+        setSession(initialSession);
         
-        if (session?.user) {
+        if (initialSession?.user) {
           try {
-            // Load preferences for the user
-            const preferences = await loadUserPreferences(session.user.email!);
+            const preferences = await loadUserPreferences(initialSession.user.email!);
             if (mounted) {
               setUser({
-                ...session.user,
+                ...initialSession.user,
                 preferences
               });
             }
           } catch (error) {
-            console.error('Error loading user data:', error);
+            console.error('Error loading initial user data:', error);
             if (mounted) {
-              setUser(session.user);
+              setUser(initialSession.user);
             }
           }
         } else {
@@ -125,45 +162,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (mounted) {
           setIsLoading(false);
         }
-      }
-    );
 
-    // Then check for existing session
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (!mounted) return;
-      
-      console.log('Initial session check:', session?.user?.email);
-      setSession(session);
-      
-      if (session?.user) {
-        try {
-          const preferences = await loadUserPreferences(session.user.email!);
-          if (mounted) {
-            setUser({
-              ...session.user,
-              preferences
-            });
-          }
-        } catch (error) {
-          console.error('Error loading initial user data:', error);
-          if (mounted) {
-            setUser(session.user);
-          }
-        }
-      } else {
+        return () => {
+          mounted = false;
+          subscription.unsubscribe();
+        };
+      } catch (error) {
+        console.error('Auth initialization error:', error);
         if (mounted) {
-          setUser(null);
+          setIsLoading(false);
         }
       }
-      
-      if (mounted) {
+    };
+
+    // Initialize with a timeout to prevent infinite loading
+    const timeoutId = setTimeout(() => {
+      if (mounted && isLoading) {
+        console.log('Auth initialization timeout, setting loading to false');
         setIsLoading(false);
       }
-    });
+    }, 3000);
 
+    const cleanup = initializeAuth();
+    
     return () => {
       mounted = false;
-      subscription.unsubscribe();
+      clearTimeout(timeoutId);
+      cleanup?.then(fn => fn?.());
     };
   }, []);
 

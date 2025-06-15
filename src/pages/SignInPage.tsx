@@ -40,24 +40,34 @@ const SignInPage: React.FC = () => {
   }, [isAuthenticated, navigate]);
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
-    if (isSubmitting || authLoading) return;
+    if (isSubmitting) return;
     
     try {
       setIsSubmitting(true);
       console.log("Attempting to sign in with:", values.email);
       
-      await signIn(values.email, values.password);
+      const result = await signIn(values.email, values.password);
       
-      toast({
-        title: "Success!",
-        description: "You're now signed in.",
-      });
+      if (result.error) {
+        console.error("Sign in failed:", result.error);
+        toast({
+          title: "Sign in failed",
+          description: result.error.message || "Invalid email or password. Please check your credentials.",
+          variant: "destructive"
+        });
+      } else {
+        console.log("Sign in successful");
+        toast({
+          title: "Success!",
+          description: "You're now signed in.",
+        });
+      }
       
     } catch (error: any) {
-      console.error("Sign in error:", error);
+      console.error("Unexpected sign in error:", error);
       toast({
         title: "Sign in failed",
-        description: error.message || "Invalid email or password. Please check your credentials.",
+        description: "An unexpected error occurred. Please try again.",
         variant: "destructive"
       });
     } finally {
@@ -65,7 +75,8 @@ const SignInPage: React.FC = () => {
     }
   };
 
-  const isLoading = isSubmitting || authLoading;
+  // Don't show loading state for too long
+  const shouldShowLoading = authLoading && isAuthenticated === false;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -86,7 +97,7 @@ const SignInPage: React.FC = () => {
                   <FormItem>
                     <FormLabel>Email</FormLabel>
                     <FormControl>
-                      <Input placeholder="your@email.com" {...field} disabled={isLoading} />
+                      <Input placeholder="your@email.com" {...field} disabled={isSubmitting} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -100,7 +111,7 @@ const SignInPage: React.FC = () => {
                   <FormItem>
                     <FormLabel>Password</FormLabel>
                     <FormControl>
-                      <Input type="password" placeholder="••••••••" {...field} disabled={isLoading} />
+                      <Input type="password" placeholder="••••••••" {...field} disabled={isSubmitting} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -110,9 +121,9 @@ const SignInPage: React.FC = () => {
               <Button 
                 type="submit" 
                 className="w-full"
-                disabled={isLoading}
+                disabled={isSubmitting || shouldShowLoading}
               >
-                {isLoading ? (
+                {isSubmitting ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Signing in...
