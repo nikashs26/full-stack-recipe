@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '../integrations/supabase/client';
@@ -288,17 +287,38 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         allergens: preferences.allergens
       };
       
-      const { data, error } = await supabase
+      // First, try to update existing record
+      const { data: existingData, error: selectError } = await supabase
         .from('sign_ups')
-        .upsert({
-          email: user.email,
-          preferences: preferencesJson,
-        }, {
-          onConflict: 'email'
-        })
-        .select();
+        .select('id')
+        .eq('email', user.email)
+        .maybeSingle();
 
-      console.log('Upsert result:', { data, error });
+      console.log('Existing record check:', { existingData, selectError });
+
+      let result;
+      if (existingData) {
+        // Update existing record
+        console.log('Updating existing record for:', user.email);
+        result = await supabase
+          .from('sign_ups')
+          .update({ preferences: preferencesJson })
+          .eq('email', user.email)
+          .select();
+      } else {
+        // Insert new record
+        console.log('Inserting new record for:', user.email);
+        result = await supabase
+          .from('sign_ups')
+          .insert({ 
+            email: user.email,
+            preferences: preferencesJson 
+          })
+          .select();
+      }
+
+      const { data, error } = result;
+      console.log('Save preferences result:', { data, error });
 
       if (error) {
         console.error('Error updating preferences:', error);
