@@ -114,16 +114,50 @@ const ExternalRecipeDetailPage: React.FC = () => {
 
   const avgRating = Number(getAverageRating());
 
-  // Better parsing of ingredients and instructions with fallback content
+  // Improved parsing of ingredients and instructions
   const ingredients = recipe?.extendedIngredients?.length > 0 
-    ? recipe.extendedIngredients.map(ing => ing.original || ing.originalString || `${ing.amount || ''} ${ing.unit || ''} ${ing.name || ''}`.trim()).filter(Boolean)
-    : ['This is a popular recipe from our collection. Detailed ingredients will be available soon.'];
+    ? recipe.extendedIngredients.map(ing => {
+        // Better formatting for ingredients
+        const amount = ing.amount || '';
+        const unit = ing.unit || '';
+        const name = ing.name || ing.originalString || '';
+        const original = ing.original || ing.originalString;
+        
+        // Use original if available, otherwise construct from parts
+        return original || `${amount} ${unit} ${name}`.trim();
+      }).filter(Boolean)
+    : ['Detailed ingredients will be available soon. Check the source URL for complete recipe details.'];
     
-  const instructions = recipe?.analyzedInstructions?.[0]?.steps?.length > 0
-    ? recipe.analyzedInstructions[0].steps.map(step => step.step).filter(Boolean)
-    : recipe?.instructions 
-      ? [recipe.instructions]
-      : ['This is a popular recipe from our collection. Detailed cooking instructions will be available soon. In the meantime, you can search online for similar recipes or check the source URL if available.'];
+  const instructions = (() => {
+    // First try analyzedInstructions
+    if (recipe?.analyzedInstructions?.[0]?.steps?.length > 0) {
+      return recipe.analyzedInstructions[0].steps
+        .map(step => step.step)
+        .filter(Boolean);
+    }
+    
+    // Then try instructions field
+    if (recipe?.instructions && typeof recipe.instructions === 'string') {
+      // Clean up HTML tags and split by sentences/line breaks
+      const cleanInstructions = recipe.instructions
+        .replace(/<[^>]*>/g, '') // Remove HTML tags
+        .replace(/\n\s*\n/g, '\n') // Remove double line breaks
+        .trim();
+      
+      if (cleanInstructions) {
+        // Split by line breaks or numbered steps
+        const steps = cleanInstructions
+          .split(/\n|\d+\.|\.\s/)
+          .map(step => step.trim())
+          .filter(step => step.length > 10); // Only keep substantial steps
+        
+        return steps.length > 0 ? steps : [cleanInstructions];
+      }
+    }
+    
+    // Fallback
+    return ['Detailed cooking instructions will be available soon. Please check the source URL for complete recipe details.'];
+  })();
       
   const cuisine = recipe?.cuisines?.[0] || 'International';
 
