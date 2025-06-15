@@ -40,69 +40,51 @@ const HomePage: React.FC = () => {
     staleTime: 60000
   });
 
-  // Query for featured recipes with fallback
+  // Query for multiple sets of external recipes to populate homepage
   const { data: featuredData, isLoading: isFeaturedLoading } = useQuery({
     queryKey: ['featuredRecipes'],
     queryFn: async () => {
       try {
-        return await fetchRecipes('pasta', 'Italian');
-      } catch (error) {
-        console.error('Featured recipes failed, using fallback');
-        // Return fallback data
+        const [pastaResult, chickenResult, saladResult] = await Promise.all([
+          fetchRecipes('pasta', 'Italian'),
+          fetchRecipes('chicken', ''),
+          fetchRecipes('salad', '')
+        ]);
+        
         return {
           results: [
-            {
-              id: 716429,
-              title: "Pasta with Garlic, Scallions, and Broccoli",
-              image: "https://img.spoonacular.com/recipes/716429-312x231.jpg",
-              imageType: "jpg",
-              readyInMinutes: 25,
-              summary: "A delicious and healthy pasta dish perfect for any occasion.",
-              cuisines: ["Italian"],
-              diets: ["vegetarian"],
-              isExternal: true
-            },
-            {
-              id: 715538,
-              title: "Bruschetta with Tomato and Basil",
-              image: "https://img.spoonacular.com/recipes/715538-312x231.jpg",
-              imageType: "jpg",
-              readyInMinutes: 15,
-              summary: "Classic Italian appetizer with fresh tomatoes and basil.",
-              cuisines: ["Italian"],
-              diets: ["vegetarian"],
-              isExternal: true
-            }
+            ...(pastaResult?.results || []).slice(0, 4),
+            ...(chickenResult?.results || []).slice(0, 4),
+            ...(saladResult?.results || []).slice(0, 4)
           ]
         };
+      } catch (error) {
+        console.error('Featured recipes failed:', error);
+        return { results: [] };
       }
     },
     staleTime: 300000
   });
 
-  // Query for quick recipes with fallback
+  // Query for quick recipes
   const { data: quickData, isLoading: isQuickLoading } = useQuery({
     queryKey: ['quickRecipes'],
     queryFn: async () => {
       try {
-        return await fetchRecipes('chicken', '');
-      } catch (error) {
-        console.error('Quick recipes failed, using fallback');
+        const [breakfastResult, dessertResult] = await Promise.all([
+          fetchRecipes('breakfast', ''),
+          fetchRecipes('dessert', '')
+        ]);
+        
         return {
           results: [
-            {
-              id: 715415,
-              title: "Red Lentil Soup with Chicken and Turnips",
-              image: "https://img.spoonacular.com/recipes/715415-312x231.jpg",
-              imageType: "jpg",
-              readyInMinutes: 25,
-              summary: "Quick and nutritious soup perfect for busy weeknights.",
-              cuisines: ["Middle Eastern"],
-              diets: ["gluten free"],
-              isExternal: true
-            }
+            ...(breakfastResult?.results || []).slice(0, 6),
+            ...(dessertResult?.results || []).slice(0, 6)
           ]
         };
+      } catch (error) {
+        console.error('Quick recipes failed:', error);
+        return { results: [] };
       }
     },
     staleTime: 300000
@@ -115,7 +97,7 @@ const HomePage: React.FC = () => {
     if (!featuredData?.results) return [];
     
     return featuredData.results
-      .slice(0, 8)
+      .slice(0, 12)
       .map(recipe => ({
         ...recipe,
         image: recipe.image || '/placeholder.svg',
@@ -128,7 +110,7 @@ const HomePage: React.FC = () => {
     if (!quickData?.results) return [];
     
     return quickData.results
-      .slice(0, 6)
+      .slice(0, 9)
       .map(recipe => ({
         ...recipe,
         image: recipe.image || '/placeholder.svg',
@@ -136,12 +118,13 @@ const HomePage: React.FC = () => {
       }));
   }, [quickData]);
 
-  // Process popular recipes from manual recipes
+  // Process popular recipes from manual recipes - ensure they show up
   const popularRecipes = React.useMemo(() => {
     if (!Array.isArray(manualRecipes) || manualRecipes.length === 0) return [];
     
+    console.log('Manual recipes for popular section:', manualRecipes);
     return manualRecipes
-      .slice(0, 8)
+      .slice(0, 12)
       .map(recipe => ({
         ...recipe,
         image: recipe.image || '/placeholder.svg'
@@ -159,7 +142,7 @@ const HomePage: React.FC = () => {
         const ratingB = getAverageRating(b.ratings || []);
         return ratingB - ratingA;
       })
-      .slice(0, 6);
+      .slice(0, 9);
   }, [recipes]);
 
   // Recent recipes
@@ -172,7 +155,7 @@ const HomePage: React.FC = () => {
         const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
         return dateB - dateA;
       })
-      .slice(0, 6);
+      .slice(0, 9);
   }, [recipes]);
 
   const handleDeleteRecipe = () => {
@@ -263,7 +246,7 @@ const HomePage: React.FC = () => {
             </section>
           )}
 
-          {/* Popular Recipes */}
+          {/* Popular Manual Recipes */}
           <section className="mb-16">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-3xl font-bold text-gray-900 flex items-center">
@@ -275,32 +258,30 @@ const HomePage: React.FC = () => {
               </Link>
             </div>
             
-            <Carousel className="w-full">
-              <CarouselContent className="-ml-4">
-                {popularRecipes.length > 0 ? (
-                  popularRecipes.map((recipe, i) => (
-                    <CarouselItem key={i} className="pl-4 md:basis-1/2 lg:basis-1/3">
-                      <ManualRecipeCard recipe={recipe} />
-                    </CarouselItem>
-                  ))
-                ) : (
-                  <CarouselItem className="pl-4 basis-full">
-                    <div className="text-center py-12 border border-dashed border-gray-300 rounded-lg">
-                      <p className="text-gray-500">Loading popular recipes...</p>
-                    </div>
-                  </CarouselItem>
-                )}
-              </CarouselContent>
-              <CarouselPrevious className="hidden md:flex" />
-              <CarouselNext className="hidden md:flex" />
-            </Carousel>
+            {isManualLoading ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="h-64 bg-gray-200 animate-pulse rounded-lg"></div>
+                ))}
+              </div>
+            ) : popularRecipes.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {popularRecipes.slice(0, 8).map((recipe, i) => (
+                  <ManualRecipeCard key={`popular-${recipe.id}-${i}`} recipe={recipe} />
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-12 border border-dashed border-gray-300 rounded-lg">
+                <p className="text-gray-500">No manual recipes available yet.</p>
+              </div>
+            )}
           </section>
 
-          {/* Featured Recipes */}
+          {/* Featured External Recipes */}
           <section className="mb-16">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-3xl font-bold text-gray-900 flex items-center">
-                <Award className="mr-2 h-6 w-6 text-recipe-secondary" />
+                <ChefHat className="mr-2 h-6 w-6 text-recipe-secondary" />
                 Featured Recipes
               </h2>
               <Link to="/recipes" className="text-recipe-primary hover:text-recipe-primary/80">
@@ -308,29 +289,28 @@ const HomePage: React.FC = () => {
               </Link>
             </div>
             
-            <Carousel className="w-full">
-              <CarouselContent className="-ml-4">
-                {featuredRecipes.length > 0 ? (
-                  featuredRecipes.map((recipe, i) => (
-                    <CarouselItem key={i} className="pl-4 md:basis-1/2 lg:basis-1/3">
-                      <RecipeCard 
-                        recipe={recipe}
-                        isExternal={true}
-                        onDelete={handleDeleteRecipe}
-                      />
-                    </CarouselItem>
-                  ))
-                ) : (
-                  <CarouselItem className="pl-4 basis-full">
-                    <div className="text-center py-12 border border-dashed border-gray-300 rounded-lg">
-                      <p className="text-gray-500">Loading featured recipes...</p>
-                    </div>
-                  </CarouselItem>
-                )}
-              </CarouselContent>
-              <CarouselPrevious className="hidden md:flex" />
-              <CarouselNext className="hidden md:flex" />
-            </Carousel>
+            {isFeaturedLoading ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="h-64 bg-gray-200 animate-pulse rounded-lg"></div>
+                ))}
+              </div>
+            ) : featuredRecipes.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {featuredRecipes.slice(0, 8).map((recipe, i) => (
+                  <RecipeCard 
+                    key={`featured-${recipe.id}-${i}`}
+                    recipe={recipe}
+                    isExternal={true}
+                    onDelete={handleDeleteRecipe}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-12 border border-dashed border-gray-300 rounded-lg">
+                <p className="text-gray-500">Loading featured recipes...</p>
+              </div>
+            )}
           </section>
 
           {/* Quick & Easy */}
@@ -345,22 +325,28 @@ const HomePage: React.FC = () => {
               </Link>
             </div>
             
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {quickRecipes.length > 0 ? (
-                quickRecipes.slice(0, 3).map((recipe, i) => (
+            {isQuickLoading ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="h-64 bg-gray-200 animate-pulse rounded-lg"></div>
+                ))}
+              </div>
+            ) : quickRecipes.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {quickRecipes.slice(0, 8).map((recipe, i) => (
                   <RecipeCard 
-                    key={i}
+                    key={`quick-${recipe.id}-${i}`}
                     recipe={recipe}
                     isExternal={true}
                     onDelete={handleDeleteRecipe}
                   />
-                ))
-              ) : (
-                <div className="col-span-full text-center py-12 border border-dashed border-gray-300 rounded-lg">
-                  <p className="text-gray-500">Loading quick recipes...</p>
-                </div>
-              )}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-12 border border-dashed border-gray-300 rounded-lg">
+                <p className="text-gray-500">Loading quick recipes...</p>
+              </div>
+            )}
           </section>
 
           {/* Top Rated Section */}
@@ -376,10 +362,10 @@ const HomePage: React.FC = () => {
                 </Link>
               </div>
               
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {topRatedRecipes.slice(0, 3).map((recipe, i) => (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {topRatedRecipes.slice(0, 8).map((recipe, i) => (
                   <RecipeCard 
-                    key={i}
+                    key={`top-rated-${recipe.id}-${i}`}
                     recipe={recipe}
                     isExternal={false}
                     onDelete={handleDeleteRecipe}
@@ -403,10 +389,10 @@ const HomePage: React.FC = () => {
                 </Link>
               </div>
               
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {recentRecipes.slice(0, 3).map((recipe, i) => (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {recentRecipes.slice(0, 8).map((recipe, i) => (
                   <RecipeCard 
-                    key={i}
+                    key={`recent-${recipe.id}-${i}`}
                     recipe={recipe}
                     isExternal={false}
                     onDelete={handleDeleteRecipe}
