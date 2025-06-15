@@ -66,12 +66,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.log('Raw preferences from DB:', data.preferences);
       
       // Safely convert the Json type to UserPreferences with type checking
-      const rawPrefs = data.preferences as unknown;
+      const rawPrefs = data.preferences;
       
       // Type guard to ensure we have the right structure
       if (
         rawPrefs && 
         typeof rawPrefs === 'object' && 
+        !Array.isArray(rawPrefs) &&
         'favoriteCuisines' in rawPrefs &&
         'dietaryRestrictions' in rawPrefs &&
         'cookingSkillLevel' in rawPrefs &&
@@ -279,11 +280,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       console.log('Updating preferences for user:', user.email, preferences);
       
+      // Convert UserPreferences to Json-compatible format
+      const preferencesJson = {
+        favoriteCuisines: preferences.favoriteCuisines,
+        dietaryRestrictions: preferences.dietaryRestrictions,
+        cookingSkillLevel: preferences.cookingSkillLevel,
+        allergens: preferences.allergens
+      };
+      
       const { data, error } = await supabase
         .from('sign_ups')
         .upsert({
           email: user.email,
-          preferences: preferences,
+          preferences: preferencesJson,
         }, {
           onConflict: 'email'
         })
