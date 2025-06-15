@@ -114,49 +114,69 @@ const ExternalRecipeDetailPage: React.FC = () => {
 
   const avgRating = Number(getAverageRating());
 
-  // Improved parsing of ingredients and instructions
-  const ingredients = recipe?.extendedIngredients?.length > 0 
-    ? recipe.extendedIngredients.map(ing => {
-        // Better formatting for ingredients
-        const amount = ing.amount || '';
-        const unit = ing.unit || '';
-        const name = ing.name || ing.originalString || '';
-        const original = ing.original || ing.originalString;
-        
-        // Use original if available, otherwise construct from parts
-        return original || `${amount} ${unit} ${name}`.trim();
-      }).filter(Boolean)
-    : ['Detailed ingredients will be available soon. Check the source URL for complete recipe details.'];
+  // Better ingredient parsing - handle all possible ingredient formats
+  const ingredients = (() => {
+    console.log('Recipe data for ingredients:', recipe);
     
-  const instructions = (() => {
-    // First try analyzedInstructions
-    if (recipe?.analyzedInstructions?.[0]?.steps?.length > 0) {
-      return recipe.analyzedInstructions[0].steps
-        .map(step => step.step)
-        .filter(Boolean);
+    if (recipe?.extendedIngredients && Array.isArray(recipe.extendedIngredients) && recipe.extendedIngredients.length > 0) {
+      return recipe.extendedIngredients.map(ing => {
+        // Try different properties in order of preference
+        if (ing.original) return ing.original;
+        if (ing.originalString) return ing.originalString;
+        
+        // Construct from parts
+        const parts = [];
+        if (ing.amount && ing.amount > 0) parts.push(ing.amount.toString());
+        if (ing.unit) parts.push(ing.unit);
+        if (ing.name) parts.push(ing.name);
+        
+        return parts.length > 0 ? parts.join(' ') : 'Ingredient';
+      }).filter(Boolean);
     }
     
-    // Then try instructions field
-    if (recipe?.instructions && typeof recipe.instructions === 'string') {
-      // Clean up HTML tags and split by sentences/line breaks
+    // Check if we have any ingredient data at all
+    if (recipe?.summary && recipe.summary.includes('ingredient')) {
+      return ['Please check the original source for detailed ingredients'];
+    }
+    
+    return ['Ingredients not available - please check source URL'];
+  })();
+
+  // Better instruction parsing
+  const instructions = (() => {
+    console.log('Recipe data for instructions:', recipe);
+    
+    // First try analyzedInstructions
+    if (recipe?.analyzedInstructions && Array.isArray(recipe.analyzedInstructions) && recipe.analyzedInstructions.length > 0) {
+      const steps = recipe.analyzedInstructions[0].steps;
+      if (steps && Array.isArray(steps) && steps.length > 0) {
+        return steps
+          .filter(step => step.step && step.step.trim().length > 0)
+          .map(step => step.step.trim());
+      }
+    }
+    
+    // Then try the instructions field
+    if (recipe?.instructions && typeof recipe.instructions === 'string' && recipe.instructions.trim().length > 0) {
+      // Clean HTML and parse instructions
       const cleanInstructions = recipe.instructions
         .replace(/<[^>]*>/g, '') // Remove HTML tags
-        .replace(/\n\s*\n/g, '\n') // Remove double line breaks
+        .replace(/&nbsp;/g, ' ') // Replace HTML entities
+        .replace(/\s+/g, ' ') // Normalize whitespace
         .trim();
       
-      if (cleanInstructions) {
-        // Split by line breaks or numbered steps
+      if (cleanInstructions.length > 50) { // Only if substantial content
+        // Try to split into steps
         const steps = cleanInstructions
-          .split(/\n|\d+\.|\.\s/)
+          .split(/(?:\d+\.|\n|\.(?=\s*[A-Z]))/) // Split on numbers, newlines, or sentences
           .map(step => step.trim())
-          .filter(step => step.length > 10); // Only keep substantial steps
+          .filter(step => step.length > 20); // Only keep substantial steps
         
         return steps.length > 0 ? steps : [cleanInstructions];
       }
     }
     
-    // Fallback
-    return ['Detailed cooking instructions will be available soon. Please check the source URL for complete recipe details.'];
+    return ['Instructions not available - please check source URL'];
   })();
       
   const cuisine = recipe?.cuisines?.[0] || 'International';

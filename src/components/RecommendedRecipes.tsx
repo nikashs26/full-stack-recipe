@@ -29,22 +29,35 @@ const RecommendedRecipes: React.FC = () => {
 
   const preferences = user?.preferences;
 
-  // Query external recipes based on user preferences
+  // Query external recipes based on user preferences - avoid fallback data
   const externalQueries = useQuery({
     queryKey: ['recommendedExternalRecipes', preferences],
     queryFn: async () => {
-      if (!preferences) return [];
+      if (!preferences) {
+        // Try to get popular recipes without fallback
+        const response = await fetchRecipes('popular', '');
+        return response?.results || [];
+      }
 
       const allExternalRecipes: SpoonacularRecipe[] = [];
-      const { favoriteCuisines = [] } = preferences;
+      const { favoriteCuisines = [], dietaryRestrictions = [] } = preferences;
 
-      // Fetch recipes for favorite cuisines with more generous search
+      // Fetch recipes for favorite cuisines
       if (favoriteCuisines.length > 0) {
         for (const cuisine of favoriteCuisines.slice(0, 3)) {
           try {
+            console.log(`Fetching recipes for cuisine: ${cuisine}`);
             const response = await fetchRecipes('', cuisine);
-            if (response?.results) {
-              allExternalRecipes.push(...response.results.slice(0, 8));
+            if (response?.results && Array.isArray(response.results)) {
+              // Filter out hardcoded fallback recipes
+              const realRecipes = response.results.filter(recipe => 
+                recipe.id > 1000 && // Fallback recipes have low IDs
+                recipe.title && 
+                !recipe.title.toLowerCase().includes('fallback') &&
+                recipe.image && 
+                recipe.image.includes('http')
+              );
+              allExternalRecipes.push(...realRecipes.slice(0, 6));
             }
           } catch (error) {
             console.error(`Error fetching recipes for cuisine "${cuisine}":`, error);
@@ -52,21 +65,52 @@ const RecommendedRecipes: React.FC = () => {
         }
       }
 
-      // If no preferences or limited results, fetch popular recipes
-      if (allExternalRecipes.length < 6) {
+      // Fetch recipes for dietary restrictions
+      if (dietaryRestrictions.length > 0) {
+        for (const diet of dietaryRestrictions.slice(0, 2)) {
+          try {
+            console.log(`Fetching recipes for diet: ${diet}`);
+            const response = await fetchRecipes(diet, '');
+            if (response?.results && Array.isArray(response.results)) {
+              const realRecipes = response.results.filter(recipe => 
+                recipe.id > 1000 &&
+                recipe.title && 
+                !recipe.title.toLowerCase().includes('fallback') &&
+                recipe.image && 
+                recipe.image.includes('http')
+              );
+              allExternalRecipes.push(...realRecipes.slice(0, 4));
+            }
+          } catch (error) {
+            console.error(`Error fetching recipes for diet "${diet}":`, error);
+          }
+        }
+      }
+
+      // If no preferences or limited results, try getting popular recipes
+      if (allExternalRecipes.length < 3) {
         try {
+          console.log('Fetching popular recipes as fallback');
           const response = await fetchRecipes('popular', '');
-          if (response?.results) {
-            allExternalRecipes.push(...response.results.slice(0, 12));
+          if (response?.results && Array.isArray(response.results)) {
+            const realRecipes = response.results.filter(recipe => 
+              recipe.id > 1000 &&
+              recipe.title && 
+              !recipe.title.toLowerCase().includes('fallback') &&
+              recipe.image && 
+              recipe.image.includes('http')
+            );
+            allExternalRecipes.push(...realRecipes.slice(0, 6));
           }
         } catch (error) {
-          console.error(`Error fetching popular recipes:`, error);
+          console.error('Error fetching popular recipes:', error);
         }
       }
       
+      console.log(`Found ${allExternalRecipes.length} external recipes for recommendations`);
       return allExternalRecipes;
     },
-    enabled: true, // Always fetch some recommendations
+    enabled: true,
     staleTime: 300000,
   });
 
@@ -74,9 +118,9 @@ const RecommendedRecipes: React.FC = () => {
   const recommendedRecipes = React.useMemo(() => {
     const combinedRecipes: any[] = [];
 
-    // Add local recipes (first 3)
+    // Add local recipes (first 2)
     if (Array.isArray(allRecipes) && allRecipes.length > 0) {
-      const localToAdd = allRecipes.slice(0, 3).map(recipe => ({ 
+      const localToAdd = allRecipes.slice(0, 2).map(recipe => ({ 
         ...recipe, 
         isExternal: false,
         type: 'local'
@@ -84,9 +128,9 @@ const RecommendedRecipes: React.FC = () => {
       combinedRecipes.push(...localToAdd);
     }
 
-    // Add manual recipes (first 3)
+    // Add manual recipes (first 2)
     if (Array.isArray(manualRecipes) && manualRecipes.length > 0) {
-      const manualToAdd = manualRecipes.slice(0, 3).map(recipe => ({ 
+      const manualToAdd = manualRecipes.slice(0, 2).map(recipe => ({ 
         ...recipe, 
         isExternal: false,
         type: 'manual'
@@ -94,32 +138,52 @@ const RecommendedRecipes: React.FC = () => {
       combinedRecipes.push(...manualToAdd);
     }
 
-    // Add external recipes
+    // Add external recipes (prioritize based on preferences)
     if (externalQueries.data && Array.isArray(externalQueries.data)) {
-      // Simple filtering - just check if cuisine preference matches
-      const filtered = preferences?.favoriteCuisines?.length > 0
-        ? externalQueries.data.filter((recipe: SpoonacularRecipe) => 
-            !preferences.favoriteCuisines || 
-            preferences.favoriteCuisines.some(c => 
-              recipe.cuisines?.some(cuisine => 
-                cuisine?.toLowerCase().includes(c.toLowerCase())
-              ) || 
-              recipe.title?.toLowerCase().includes(c.toLowerCase())
-            )
-          )
-        : externalQueries.data;
+      let filteredExternal = externalQueries.data;
 
-      const externalToAdd = (filtered || externalQueries.data).slice(0, 6).map(recipe => ({ 
-        ...recipe, 
-        isExternal: true,
-        type: 'external'
-      }));
+      // Apply preference-based filtering if preferences exist
+      if (preferences?.favoriteCuisines?.length > 0) {
+        filteredExternal = externalQueries.data.filter((recipe: SpoonacularRecipe) => {
+          const recipeCuisines = recipe.cuisines || [];
+          const recipeTitle = recipe.title?.toLowerCase() || '';
+          
+          return preferences.favoriteCuisines.some(prefCuisine => 
+            recipeCuisines.some(cuisine => 
+              cuisine?.toLowerCase().includes(prefCuisine.toLowerCase())
+            ) || 
+            recipeTitle.includes(prefCuisine.toLowerCase())
+          );
+        });
+      }
+
+      // Apply dietary restriction filtering if specified
+      if (preferences?.dietaryRestrictions?.length > 0) {
+        filteredExternal = filteredExternal.filter((recipe: SpoonacularRecipe) => {
+          const recipeDiets = recipe.diets || [];
+          return preferences.dietaryRestrictions.some(prefDiet => 
+            recipeDiets.some(diet => 
+              diet?.toLowerCase().includes(prefDiet.toLowerCase())
+            )
+          );
+        });
+      }
+
+      // If filtering removed too many recipes, use the original list
+      const externalToAdd = (filteredExternal.length >= 3 ? filteredExternal : externalQueries.data)
+        .slice(0, 6)
+        .map(recipe => ({ 
+          ...recipe, 
+          isExternal: true,
+          type: 'external'
+        }));
+      
       combinedRecipes.push(...externalToAdd);
     }
 
     // Remove duplicates and return first 9
     const uniqueRecipes = combinedRecipes.filter((recipe, index, self) => 
-      index === self.findIndex(r => r.id === recipe.id)
+      index === self.findIndex(r => r.id === recipe.id && r.type === recipe.type)
     );
 
     return uniqueRecipes.slice(0, 9);
