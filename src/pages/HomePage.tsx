@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -18,6 +17,15 @@ import { useAuth } from '../context/AuthContext';
 const HomePage: React.FC = () => {
   const { isAuthenticated, user } = useAuth();
   
+  // Debug logging for auth state
+  console.log('HomePage auth debug:', {
+    isAuthenticated,
+    hasUser: !!user,
+    userEmail: user?.email,
+    hasPreferences: !!user?.preferences,
+    preferences: user?.preferences
+  });
+
   // Query for local recipes
   const { data: localRecipes = [], isLoading: isLocalLoading } = useQuery({
     queryKey: ['localRecipes'],
@@ -317,7 +325,18 @@ const HomePage: React.FC = () => {
         </section>
 
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-          {/* Recommended Recipes Section - Only for authenticated users with preferences */}
+          {/* Debug info - temporary */}
+          <div className="mb-4 p-4 bg-gray-100 rounded-lg text-sm">
+            <p><strong>Debug Info:</strong></p>
+            <p>Authenticated: {isAuthenticated ? 'Yes' : 'No'}</p>
+            <p>User: {user?.email || 'None'}</p>
+            <p>Has Preferences: {user?.preferences ? 'Yes' : 'No'}</p>
+            {user?.preferences && (
+              <p>Preferences: {JSON.stringify(user.preferences, null, 2)}</p>
+            )}
+          </div>
+
+          {/* Recommended Recipes Section - Show for authenticated users with preferences */}
           {isAuthenticated && user?.preferences && (
             <section className="mb-16">
               <div className="flex items-center justify-between mb-6">
@@ -358,6 +377,39 @@ const HomePage: React.FC = () => {
                   <p className="text-sm text-gray-400">Check back soon for new recipes based on your preferences!</p>
                 </div>
               )}
+            </section>
+          )}
+
+          {/* Show message for non-authenticated users */}
+          {!isAuthenticated && (
+            <section className="mb-16">
+              <div className="text-center py-12 border border-dashed border-gray-300 rounded-lg">
+                <ThumbsUp className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">Get Personalized Recommendations</h3>
+                <p className="text-gray-500 mb-4">Sign in and set your preferences to see recipes tailored just for you!</p>
+                <div className="flex gap-4 justify-center">
+                  <Link to="/signin">
+                    <Button variant="outline">Sign In</Button>
+                  </Link>
+                  <Link to="/signup">
+                    <Button>Sign Up</Button>
+                  </Link>
+                </div>
+              </div>
+            </section>
+          )}
+
+          {/* Show message for authenticated users without preferences */}
+          {isAuthenticated && !user?.preferences && (
+            <section className="mb-16">
+              <div className="text-center py-12 border border-dashed border-gray-300 rounded-lg">
+                <ThumbsUp className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">Set Your Preferences</h3>
+                <p className="text-gray-500 mb-4">Tell us your favorite cuisines and dietary restrictions to get personalized recipe recommendations!</p>
+                <Link to="/preferences">
+                  <Button>Set Preferences</Button>
+                </Link>
+              </div>
             </section>
           )}
 
