@@ -63,18 +63,18 @@ const HomePage: React.FC = () => {
         ];
         
         // Remove duplicates and filter out invalid recipes
+        const seenIds = new Set();
         const uniqueRecipes = allRecipes
-          .filter((recipe, index, self) => 
-            recipe && recipe.id && index === self.findIndex(r => r.id === recipe.id)
-          )
-          .filter(recipe => 
-            recipe.title && 
-            !recipe.title.toLowerCase().includes('fallback') &&
-            recipe.image
-          );
+          .filter(recipe => {
+            if (!recipe || !recipe.id || seenIds.has(recipe.id)) return false;
+            seenIds.add(recipe.id);
+            return recipe.title && 
+                   !recipe.title.toLowerCase().includes('fallback') &&
+                   recipe.image;
+          });
         
         console.log('Featured recipes processed:', uniqueRecipes.length);
-        return { results: uniqueRecipes.slice(0, 12) };
+        return { results: uniqueRecipes.slice(0, 8) };
       } catch (error) {
         console.error('Featured recipes failed:', error);
         return { results: [] };
@@ -85,12 +85,19 @@ const HomePage: React.FC = () => {
 
   const recipes = Array.isArray(localRecipes) ? localRecipes : [];
   
-  // Process featured recipes
+  // Process featured recipes with strict deduplication
   const featuredRecipes = React.useMemo((): SpoonacularRecipe[] => {
     if (!featuredData?.results) return [];
     
+    const seenTitles = new Set();
     return featuredData.results
-      .slice(0, 12)
+      .filter(recipe => {
+        const normalizedTitle = recipe.title?.toLowerCase().trim();
+        if (!normalizedTitle || seenTitles.has(normalizedTitle)) return false;
+        seenTitles.add(normalizedTitle);
+        return true;
+      })
+      .slice(0, 8)
       .map(recipe => ({
         ...recipe,
         image: recipe.image || '/placeholder.svg',
@@ -98,7 +105,7 @@ const HomePage: React.FC = () => {
       }));
   }, [featuredData]);
 
-  // Process popular recipes from manual recipes
+  // Process popular recipes from manual recipes with deduplication
   const popularRecipes = React.useMemo(() => {
     console.log('Processing popular recipes, manual recipes available:', manualRecipes.length);
     
@@ -107,8 +114,15 @@ const HomePage: React.FC = () => {
       return [];
     }
     
+    const seenTitles = new Set();
     const processed = manualRecipes
-      .slice(0, 12)
+      .filter(recipe => {
+        const normalizedTitle = recipe.title?.toLowerCase().trim();
+        if (!normalizedTitle || seenTitles.has(normalizedTitle)) return false;
+        seenTitles.add(normalizedTitle);
+        return true;
+      })
+      .slice(0, 8)
       .map(recipe => ({
         ...recipe,
         image: recipe.image || '/placeholder.svg'
@@ -118,31 +132,45 @@ const HomePage: React.FC = () => {
     return processed;
   }, [manualRecipes]);
 
-  // Top rated local recipes
+  // Top rated local recipes with deduplication
   const topRatedRecipes = React.useMemo(() => {
     if (!Array.isArray(recipes) || recipes.length === 0) return [];
 
+    const seenNames = new Set();
     return [...recipes]
-      .filter(recipe => recipe && recipe.ratings && recipe.ratings.length > 0)
+      .filter(recipe => {
+        if (!recipe?.ratings?.length) return false;
+        const normalizedName = recipe.name?.toLowerCase().trim();
+        if (!normalizedName || seenNames.has(normalizedName)) return false;
+        seenNames.add(normalizedName);
+        return true;
+      })
       .sort((a, b) => {
         const ratingA = getAverageRating(a.ratings || []);
         const ratingB = getAverageRating(b.ratings || []);
         return ratingB - ratingA;
       })
-      .slice(0, 9);
+      .slice(0, 8);
   }, [recipes]);
 
-  // Recent recipes
+  // Recent recipes with deduplication
   const recentRecipes = React.useMemo(() => {
     if (!Array.isArray(recipes) || recipes.length === 0) return [];
 
+    const seenNames = new Set();
     return [...recipes]
+      .filter(recipe => {
+        const normalizedName = recipe.name?.toLowerCase().trim();
+        if (!normalizedName || seenNames.has(normalizedName)) return false;
+        seenNames.add(normalizedName);
+        return true;
+      })
       .sort((a, b) => {
         const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
         const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
         return dateB - dateA;
       })
-      .slice(0, 9);
+      .slice(0, 8);
   }, [recipes]);
 
   const handleDeleteRecipe = () => {
@@ -244,8 +272,8 @@ const HomePage: React.FC = () => {
             </div>
             
             {isManualLoading ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {Array.from({ length: 6 }).map((_, i) => (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {Array.from({ length: 8 }).map((_, i) => (
                   <div key={i} className="h-64 bg-gray-200 animate-pulse rounded-lg"></div>
                 ))}
               </div>
@@ -256,8 +284,8 @@ const HomePage: React.FC = () => {
               </div>
             ) : popularRecipes.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {popularRecipes.slice(0, 8).map((recipe, i) => (
-                  <ManualRecipeCard key={`popular-${recipe.id}-${i}`} recipe={recipe} />
+                {popularRecipes.map((recipe, i) => (
+                  <ManualRecipeCard key={`popular-${recipe.id}`} recipe={recipe} />
                 ))}
               </div>
             ) : (
@@ -281,16 +309,16 @@ const HomePage: React.FC = () => {
             </div>
             
             {isFeaturedLoading ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {Array.from({ length: 8 }).map((_, i) => (
                   <div key={i} className="h-64 bg-gray-200 animate-pulse rounded-lg"></div>
                 ))}
               </div>
             ) : featuredRecipes.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {featuredRecipes.slice(0, 8).map((recipe, i) => (
+                {featuredRecipes.map((recipe) => (
                   <RecipeCard 
-                    key={`featured-${recipe.id}-${i}`}
+                    key={`featured-${recipe.id}`}
                     recipe={recipe}
                     isExternal={true}
                     onDelete={handleDeleteRecipe}
@@ -318,9 +346,9 @@ const HomePage: React.FC = () => {
               </div>
               
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {topRatedRecipes.slice(0, 8).map((recipe, i) => (
+                {topRatedRecipes.map((recipe) => (
                   <RecipeCard 
-                    key={`top-rated-${recipe.id}-${i}`}
+                    key={`top-rated-${recipe.id}`}
                     recipe={recipe}
                     isExternal={false}
                     onDelete={handleDeleteRecipe}
@@ -345,9 +373,9 @@ const HomePage: React.FC = () => {
               </div>
               
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {recentRecipes.slice(0, 8).map((recipe, i) => (
+                {recentRecipes.map((recipe) => (
                   <RecipeCard 
-                    key={`recent-${recipe.id}-${i}`}
+                    key={`recent-${recipe.id}`}
                     recipe={recipe}
                     isExternal={false}
                     onDelete={handleDeleteRecipe}
