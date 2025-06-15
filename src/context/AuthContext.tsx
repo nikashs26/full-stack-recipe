@@ -65,7 +65,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Safely validate the preferences data
       const preferences = data.preferences;
       if (preferences && typeof preferences === 'object' && !Array.isArray(preferences)) {
-        const prefObj = preferences as any;
+        const prefObj = preferences as Record<string, any>;
         
         // Create a validated preferences object
         const validatedPreferences: UserPreferences = {
@@ -285,12 +285,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       console.log('Updating preferences for user:', user.email, preferences);
       
+      // Convert UserPreferences to a plain object that matches Json type
+      const preferencesJson = {
+        favoriteCuisines: preferences.favoriteCuisines,
+        dietaryRestrictions: preferences.dietaryRestrictions,
+        cookingSkillLevel: preferences.cookingSkillLevel,
+        allergens: preferences.allergens
+      };
+      
       // Add user to our sign_ups table with preferences
       const { error } = await supabase
         .from('sign_ups')
         .upsert({
           email: user.email!,
-          preferences: preferences,
+          preferences: preferencesJson,
         }, {
           onConflict: 'email'
         });
@@ -320,6 +328,85 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
     }
   };
+
+  useEffect(() => {
+    let mounted = true;
+
+    // Set up auth state listener first
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        console.log('Auth state changed:', event, session?.user?.email);
+        
+        if (!mounted) return;
+        
+        setSession(session);
+        
+        if (session?.user) {
+          try {
+            // Load preferences for the user
+            const preferences = await loadUserPreferences(session.user.email!);
+            if (mounted) {
+              setUser({
+                ...session.user,
+                preferences
+              });
+            }
+          } catch (error) {
+            console.error('Error loading user data:', error);
+            if (mounted) {
+              setUser(session.user);
+            }
+          }
+        } else {
+          if (mounted) {
+            setUser(null);
+          }
+        }
+        
+        if (mounted) {
+          setIsLoading(false);
+        }
+      }
+    );
+
+    // Then check for existing session
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!mounted) return;
+      
+      console.log('Initial session check:', session?.user?.email);
+      setSession(session);
+      
+      if (session?.user) {
+        try {
+          const preferences = await loadUserPreferences(session.user.email!);
+          if (mounted) {
+            setUser({
+              ...session.user,
+              preferences
+            });
+          }
+        } catch (error) {
+          console.error('Error loading initial user data:', error);
+          if (mounted) {
+            setUser(session.user);
+          }
+        }
+      } else {
+        if (mounted) {
+          setUser(null);
+        }
+      }
+      
+      if (mounted) {
+        setIsLoading(false);
+      }
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
 
   const value = {
     user,
