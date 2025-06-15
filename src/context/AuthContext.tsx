@@ -63,8 +63,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return undefined;
       }
 
-      console.log('Loaded preferences:', data.preferences);
-      return data.preferences as UserPreferences;
+      console.log('Raw preferences from DB:', data.preferences);
+      
+      // Safely convert the Json type to UserPreferences with type checking
+      const rawPrefs = data.preferences as unknown;
+      
+      // Type guard to ensure we have the right structure
+      if (
+        rawPrefs && 
+        typeof rawPrefs === 'object' && 
+        'favoriteCuisines' in rawPrefs &&
+        'dietaryRestrictions' in rawPrefs &&
+        'cookingSkillLevel' in rawPrefs &&
+        'allergens' in rawPrefs
+      ) {
+        const preferences = rawPrefs as UserPreferences;
+        console.log('Parsed preferences:', preferences);
+        return preferences;
+      } else {
+        console.error('Invalid preferences structure:', rawPrefs);
+        return undefined;
+      }
     } catch (error) {
       console.error('Unexpected error loading preferences:', error);
       return undefined;
@@ -247,8 +266,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const updatePreferences = async (preferences: UserPreferences) => {
-    if (!user) {
-      console.error('No user found when updating preferences');
+    if (!user?.email) {
+      console.error('No user email found when updating preferences');
       toast({
         title: 'Error',
         description: 'You must be signed in to update preferences.',
@@ -260,20 +279,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       console.log('Updating preferences for user:', user.email, preferences);
       
-      const preferencesJson = {
-        favoriteCuisines: preferences.favoriteCuisines,
-        dietaryRestrictions: preferences.dietaryRestrictions,
-        cookingSkillLevel: preferences.cookingSkillLevel,
-        allergens: preferences.allergens
-      };
-      
-      console.log('Saving preferences JSON:', preferencesJson);
-      
       const { data, error } = await supabase
         .from('sign_ups')
         .upsert({
-          email: user.email!,
-          preferences: preferencesJson,
+          email: user.email,
+          preferences: preferences,
         }, {
           onConflict: 'email'
         })
