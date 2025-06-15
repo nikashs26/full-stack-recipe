@@ -114,51 +114,38 @@ const ExternalRecipeDetailPage: React.FC = () => {
 
   const avgRating = Number(getAverageRating());
 
-  // Better ingredient parsing with more comprehensive data extraction
+  // Better ingredient parsing - only show actual data if available
   const ingredients = (() => {
-    console.log('Full recipe data for ingredients analysis:', recipe);
+    console.log('Full recipe data for ingredients:', recipe);
     
-    // Try extendedIngredients first - this is the most detailed
+    // Try extendedIngredients first
     if (recipe?.extendedIngredients && Array.isArray(recipe.extendedIngredients) && recipe.extendedIngredients.length > 0) {
       console.log('Found extendedIngredients:', recipe.extendedIngredients);
       return recipe.extendedIngredients.map(ing => {
-        // Use original or originalString as first choice
         if (ing.original && ing.original.trim()) return ing.original.trim();
         if (ing.originalString && ing.originalString.trim()) return ing.originalString.trim();
         
-        // Construct from available parts
+        // Only construct if we have meaningful data
         const parts = [];
         if (ing.amount && ing.amount > 0) {
-          // Format amount nicely
           const amount = ing.amount % 1 === 0 ? ing.amount.toString() : ing.amount.toFixed(2).replace(/\.?0+$/, '');
           parts.push(amount);
         }
         if (ing.unit && ing.unit.trim()) parts.push(ing.unit.trim());
         if (ing.name && ing.name.trim()) parts.push(ing.name.trim());
         
-        const result = parts.length > 0 ? parts.join(' ') : 'Ingredient information unavailable';
-        console.log('Constructed ingredient:', result);
-        return result;
+        return parts.length > 1 ? parts.join(' ') : ing.name || 'Ingredient';
       }).filter(ingredient => ingredient && ingredient.trim().length > 0);
     }
     
-    // Fallback: try to extract from summary or instructions if they contain ingredient info
-    if (recipe?.summary) {
-      const summaryText = recipe.summary.replace(/<[^>]*>/g, '').toLowerCase();
-      if (summaryText.includes('ingredient') || summaryText.includes('cup') || summaryText.includes('tablespoon')) {
-        console.log('Found ingredient mentions in summary');
-        return ['Check the source URL below for detailed ingredients'];
-      }
-    }
-    
-    return ['Ingredients not available in API response - please check source URL'];
+    return [];
   })();
 
-  // Better instruction parsing with more comprehensive extraction
+  // Better instruction parsing - only show actual data if available
   const instructions = (() => {
-    console.log('Full recipe data for instructions analysis:', recipe);
+    console.log('Full recipe data for instructions:', recipe);
     
-    // Try analyzedInstructions first - this is the most structured
+    // Try analyzedInstructions first
     if (recipe?.analyzedInstructions && Array.isArray(recipe.analyzedInstructions) && recipe.analyzedInstructions.length > 0) {
       console.log('Found analyzedInstructions:', recipe.analyzedInstructions);
       const allSteps = [];
@@ -166,7 +153,7 @@ const ExternalRecipeDetailPage: React.FC = () => {
       recipe.analyzedInstructions.forEach(instructionSet => {
         if (instructionSet.steps && Array.isArray(instructionSet.steps)) {
           instructionSet.steps.forEach(step => {
-            if (step.step && step.step.trim().length > 0) {
+            if (step.step && step.step.trim().length > 10) { // Only meaningful steps
               allSteps.push(step.step.trim());
             }
           });
@@ -174,50 +161,39 @@ const ExternalRecipeDetailPage: React.FC = () => {
       });
       
       if (allSteps.length > 0) {
-        console.log('Extracted steps from analyzedInstructions:', allSteps);
         return allSteps;
       }
     }
     
     // Try the instructions field
-    if (recipe?.instructions && typeof recipe.instructions === 'string' && recipe.instructions.trim().length > 0) {
+    if (recipe?.instructions && typeof recipe.instructions === 'string' && recipe.instructions.trim().length > 20) {
       console.log('Found instructions field:', recipe.instructions);
       
-      // Clean HTML and parse instructions
       let cleanInstructions = recipe.instructions
-        .replace(/<[^>]*>/g, '') // Remove HTML tags
-        .replace(/&nbsp;/g, ' ') // Replace HTML entities
+        .replace(/<[^>]*>/g, '')
+        .replace(/&nbsp;/g, ' ')
         .replace(/&amp;/g, '&')
         .replace(/&lt;/g, '<')
         .replace(/&gt;/g, '>')
-        .replace(/\s+/g, ' ') // Normalize whitespace
+        .replace(/\s+/g, ' ')
         .trim();
       
-      if (cleanInstructions.length > 20) { // Only if substantial content
-        // Try to split into numbered steps
-        let steps = [];
-        
-        // Look for numbered steps (1., 2., etc.)
-        const numberedSteps = cleanInstructions.split(/\d+\.\s+/).filter(step => step.trim().length > 10);
+      if (cleanInstructions.length > 20) {
+        const numberedSteps = cleanInstructions.split(/\d+\.\s+/).filter(step => step.trim().length > 15);
         if (numberedSteps.length > 1) {
-          steps = numberedSteps.slice(1); // Remove first empty element
+          return numberedSteps.slice(1);
         } else {
-          // Try splitting on sentence boundaries for longer sentences
-          const sentences = cleanInstructions.split(/\.\s+(?=[A-Z])/).filter(step => step.trim().length > 15);
+          const sentences = cleanInstructions.split(/\.\s+(?=[A-Z])/).filter(step => step.trim().length > 20);
           if (sentences.length > 1) {
-            steps = sentences.map(sentence => sentence.endsWith('.') ? sentence : sentence + '.');
+            return sentences.map(sentence => sentence.endsWith('.') ? sentence : sentence + '.');
           } else {
-            // Use the whole text as one step
-            steps = [cleanInstructions];
+            return [cleanInstructions];
           }
         }
-        
-        console.log('Extracted instruction steps:', steps);
-        return steps.filter(step => step.trim().length > 0);
       }
     }
     
-    return ['Instructions not available in API response - please check source URL'];
+    return [];
   })();
       
   const cuisine = recipe?.cuisines?.[0] || 'International';
@@ -282,18 +258,40 @@ const ExternalRecipeDetailPage: React.FC = () => {
               )}
 
               <h2 className="text-2xl font-semibold mb-4">Ingredients</h2>
-              <ul className="list-disc list-inside mb-6 space-y-1">
-                {ingredients.map((ingredient, index) => (
-                  <li key={index} className="text-gray-700">{ingredient}</li>
-                ))}
-              </ul>
+              {ingredients.length > 0 ? (
+                <ul className="list-disc list-inside mb-6 space-y-1">
+                  {ingredients.map((ingredient, index) => (
+                    <li key={index} className="text-gray-700">{ingredient}</li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <p className="text-gray-700">
+                    Ingredients are not available from the API for this recipe. 
+                    {recipe.sourceUrl && (
+                      <span> Please check the <a href={recipe.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">original source</a> for the complete ingredient list.</span>
+                    )}
+                  </p>
+                </div>
+              )}
 
               <h2 className="text-2xl font-semibold mb-4">Instructions</h2>
-              <ol className="list-decimal list-inside space-y-3">
-                {instructions.map((instruction, index) => (
-                  <li key={index} className="text-gray-700 leading-relaxed">{instruction}</li>
-                ))}
-              </ol>
+              {instructions.length > 0 ? (
+                <ol className="list-decimal list-inside space-y-3">
+                  {instructions.map((instruction, index) => (
+                    <li key={index} className="text-gray-700 leading-relaxed">{instruction}</li>
+                  ))}
+                </ol>
+              ) : (
+                <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <p className="text-gray-700">
+                    Cooking instructions are not available from the API for this recipe. 
+                    {recipe.sourceUrl && (
+                      <span> Please check the <a href={recipe.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">original source</a> for the complete instructions.</span>
+                    )}
+                  </p>
+                </div>
+              )}
               
               {/* Source URL if available */}
               {recipe.sourceUrl && (

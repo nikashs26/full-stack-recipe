@@ -12,8 +12,12 @@ interface UserPreferences {
   allergens: string[];
 }
 
+interface ExtendedUser extends User {
+  preferences?: UserPreferences;
+}
+
 interface AuthContextType {
-  user: User | null;
+  user: ExtendedUser | null;
   session: Session | null;
   isAuthenticated: boolean;
   isLoading: boolean;
@@ -34,10 +38,31 @@ export const useAuth = () => {
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<ExtendedUser | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
+
+  // Load user preferences from Supabase
+  const loadUserPreferences = async (userEmail: string): Promise<UserPreferences | undefined> => {
+    try {
+      const { data, error } = await supabase
+        .from('sign_ups')
+        .select('preferences')
+        .eq('email', userEmail)
+        .single();
+
+      if (error && error.code !== 'PGRST116') { // PGRST116 is "not found"
+        console.error('Error loading user preferences:', error);
+        return undefined;
+      }
+
+      return data?.preferences as UserPreferences;
+    } catch (error) {
+      console.error('Unexpected error loading preferences:', error);
+      return undefined;
+    }
+  };
 
   useEffect(() => {
     // Set up auth state listener first
@@ -45,16 +70,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       async (event, session) => {
         console.log('Auth state changed:', event, session?.user?.email);
         setSession(session);
-        setUser(session?.user ?? null);
+        
+        if (session?.user) {
+          // Load preferences for the user
+          const preferences = await loadUserPreferences(session.user.email!);
+          setUser({
+            ...session.user,
+            preferences
+          });
+        } else {
+          setUser(null);
+        }
+        
         setIsLoading(false);
       }
     );
 
     // Then check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       console.log('Initial session check:', session?.user?.email);
       setSession(session);
-      setUser(session?.user ?? null);
+      
+      if (session?.user) {
+        const preferences = await loadUserPreferences(session.user.email!);
+        setUser({
+          ...session.user,
+          preferences
+        });
+      } else {
+        setUser(null);
+      }
+      
       setIsLoading(false);
     });
 
@@ -158,7 +204,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .from('sign_ups')
         .upsert({
           email: user.email!,
-          preferences: preferences,
+          preferences: preferences as any,
         }, {
           onConflict: 'email'
         });
@@ -171,6 +217,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           variant: 'destructive',
         });
       } else {
+        // Update local user state
+        setUser(prev => prev ? { ...prev, preferences } : null);
         toast({
           title: 'Preferences Updated',
           description: 'Your preferences have been saved successfully.',
@@ -187,10 +235,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const value = {
-    user: user && {
-      ...user,
-      preferences: session?.user ? undefined : undefined, // We'll load this separately when needed
-    },
+    user,
     session,
     isAuthenticated: !!user,
     isLoading,

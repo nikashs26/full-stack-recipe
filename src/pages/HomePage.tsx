@@ -40,23 +40,33 @@ const HomePage: React.FC = () => {
     staleTime: 60000
   });
 
-  // Query for multiple sets of external recipes to populate homepage
+  // Query for multiple sets of external recipes with better variety
   const { data: featuredData, isLoading: isFeaturedLoading } = useQuery({
     queryKey: ['featuredRecipes'],
     queryFn: async () => {
       try {
-        const [pastaResult, chickenResult, saladResult] = await Promise.all([
+        const [pastaResult, chickenResult, vegetarianResult, dessertResult] = await Promise.all([
           fetchRecipes('pasta', 'Italian'),
           fetchRecipes('chicken', ''),
-          fetchRecipes('salad', '')
+          fetchRecipes('vegetarian', ''),
+          fetchRecipes('dessert', '')
         ]);
         
+        // Combine and deduplicate by ID
+        const allRecipes = [
+          ...(pastaResult?.results || []),
+          ...(chickenResult?.results || []),
+          ...(vegetarianResult?.results || []),
+          ...(dessertResult?.results || [])
+        ];
+        
+        // Remove duplicates based on ID
+        const uniqueRecipes = allRecipes.filter((recipe, index, self) => 
+          index === self.findIndex(r => r.id === recipe.id)
+        );
+        
         return {
-          results: [
-            ...(pastaResult?.results || []).slice(0, 4),
-            ...(chickenResult?.results || []).slice(0, 4),
-            ...(saladResult?.results || []).slice(0, 4)
-          ]
+          results: uniqueRecipes.slice(0, 16) // More recipes
         };
       } catch (error) {
         console.error('Featured recipes failed:', error);
@@ -66,21 +76,30 @@ const HomePage: React.FC = () => {
     staleTime: 300000
   });
 
-  // Query for quick recipes
+  // Query for quick recipes with more variety
   const { data: quickData, isLoading: isQuickLoading } = useQuery({
     queryKey: ['quickRecipes'],
     queryFn: async () => {
       try {
-        const [breakfastResult, dessertResult] = await Promise.all([
+        const [breakfastResult, saladResult, snackResult] = await Promise.all([
           fetchRecipes('breakfast', ''),
-          fetchRecipes('dessert', '')
+          fetchRecipes('salad', ''),
+          fetchRecipes('snack', '')
         ]);
         
+        const allRecipes = [
+          ...(breakfastResult?.results || []),
+          ...(saladResult?.results || []),
+          ...(snackResult?.results || [])
+        ];
+        
+        // Remove duplicates
+        const uniqueRecipes = allRecipes.filter((recipe, index, self) => 
+          index === self.findIndex(r => r.id === recipe.id)
+        );
+        
         return {
-          results: [
-            ...(breakfastResult?.results || []).slice(0, 6),
-            ...(dessertResult?.results || []).slice(0, 6)
-          ]
+          results: uniqueRecipes.slice(0, 12)
         };
       } catch (error) {
         console.error('Quick recipes failed:', error);
@@ -97,7 +116,7 @@ const HomePage: React.FC = () => {
     if (!featuredData?.results) return [];
     
     return featuredData.results
-      .slice(0, 12)
+      .slice(0, 16)
       .map(recipe => ({
         ...recipe,
         image: recipe.image || '/placeholder.svg',
@@ -110,7 +129,7 @@ const HomePage: React.FC = () => {
     if (!quickData?.results) return [];
     
     return quickData.results
-      .slice(0, 9)
+      .slice(0, 12)
       .map(recipe => ({
         ...recipe,
         image: recipe.image || '/placeholder.svg',
@@ -124,7 +143,7 @@ const HomePage: React.FC = () => {
     
     console.log('Manual recipes for popular section:', manualRecipes);
     return manualRecipes
-      .slice(0, 12)
+      .slice(0, 16) // Show more manual recipes
       .map(recipe => ({
         ...recipe,
         image: recipe.image || '/placeholder.svg'
@@ -266,7 +285,7 @@ const HomePage: React.FC = () => {
               </div>
             ) : popularRecipes.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {popularRecipes.slice(0, 8).map((recipe, i) => (
+                {popularRecipes.slice(0, 12).map((recipe, i) => (
                   <ManualRecipeCard key={`popular-${recipe.id}-${i}`} recipe={recipe} />
                 ))}
               </div>
@@ -291,13 +310,13 @@ const HomePage: React.FC = () => {
             
             {isFeaturedLoading ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {Array.from({ length: 6 }).map((_, i) => (
+                {Array.from({ length: 8 }).map((_, i) => (
                   <div key={i} className="h-64 bg-gray-200 animate-pulse rounded-lg"></div>
                 ))}
               </div>
             ) : featuredRecipes.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {featuredRecipes.slice(0, 8).map((recipe, i) => (
+                {featuredRecipes.slice(0, 12).map((recipe, i) => (
                   <RecipeCard 
                     key={`featured-${recipe.id}-${i}`}
                     recipe={recipe}
@@ -327,13 +346,13 @@ const HomePage: React.FC = () => {
             
             {isQuickLoading ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {Array.from({ length: 6 }).map((_, i) => (
+                {Array.from({ length: 8 }).map((_, i) => (
                   <div key={i} className="h-64 bg-gray-200 animate-pulse rounded-lg"></div>
                 ))}
               </div>
             ) : quickRecipes.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {quickRecipes.slice(0, 8).map((recipe, i) => (
+                {quickRecipes.slice(0, 12).map((recipe, i) => (
                   <RecipeCard 
                     key={`quick-${recipe.id}-${i}`}
                     recipe={recipe}

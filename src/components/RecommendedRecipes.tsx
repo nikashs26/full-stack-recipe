@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
@@ -189,7 +188,7 @@ const RecommendedRecipes: React.FC = () => {
     return uniqueRecipes.slice(0, 9);
   }, [allRecipes, manualRecipes, externalQueries.data, preferences]);
 
-  if (!user?.preferences) {
+  if (!preferences) {
     return null;
   }
 
