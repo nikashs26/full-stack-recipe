@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -103,31 +102,30 @@ const UserPreferencesPage: React.FC = () => {
   };
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
-    try {
-      setIsLoading(true);
-      // Convert form values to UserPreferences type
-      const userPreferences: UserPreferences = {
-        dietaryRestrictions: values.dietaryRestrictions,
-        favoriteCuisines: values.favoriteCuisines,
-        allergens: values.allergens,
-        cookingSkillLevel: values.cookingSkillLevel
-      };
-      
-      await updatePreferences(userPreferences);
-      
+    setIsLoading(true);
+    // Convert form values to UserPreferences type
+    const userPreferences: UserPreferences = {
+      dietaryRestrictions: values.dietaryRestrictions,
+      favoriteCuisines: values.favoriteCuisines,
+      allergens: values.allergens,
+      cookingSkillLevel: values.cookingSkillLevel
+    };
+
+    const success = await updatePreferences(userPreferences);
+    setIsLoading(false);
+
+    if (success) {
       toast({
         title: "Preferences saved!",
         description: `Your recipe recommendations will now include ${values.favoriteCuisines.length} cuisine types and respect ${values.dietaryRestrictions.length} dietary restrictions.`,
       });
       navigate('/');
-    } catch (error) {
+    } else {
       toast({
         title: "Failed to save preferences",
         description: "Please try again.",
         variant: "destructive"
       });
-    } finally {
-      setIsLoading(false);
     }
   };
 

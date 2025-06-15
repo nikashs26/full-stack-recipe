@@ -23,7 +23,7 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signUp: (email: string, password: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
-  updatePreferences: (preferences: UserPreferences) => Promise<void>;
+  updatePreferences: (preferences: UserPreferences) => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -42,7 +42,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
-  // Load user preferences from Supabase
   const loadUserPreferences = async (userEmail: string): Promise<UserPreferences | undefined> => {
     try {
       const { data, error } = await supabase
@@ -52,19 +51,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .maybeSingle();
 
       if (error) {
-        console.error('Error loading user preferences:', error);
         return undefined;
       }
-
       if (!data?.preferences) {
         return undefined;
       }
-      
       const rawPrefs = data.preferences;
-      
       if (
-        rawPrefs && 
-        typeof rawPrefs === 'object' && 
+        rawPrefs &&
+        typeof rawPrefs === 'object' &&
         !Array.isArray(rawPrefs) &&
         'favoriteCuisines' in rawPrefs &&
         'dietaryRestrictions' in rawPrefs &&
@@ -73,10 +68,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       ) {
         return rawPrefs as unknown as UserPreferences;
       }
-      
       return undefined;
-    } catch (error) {
-      console.error('Unexpected error loading preferences:', error);
+    } catch {
       return undefined;
     }
   };
@@ -87,10 +80,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const initializeAuth = async () => {
       try {
         const { data: { session: initialSession } } = await supabase.auth.getSession();
-        
+
         if (mounted) {
           setSession(initialSession);
-          
+
           if (initialSession?.user) {
             try {
               const preferences = await loadUserPreferences(initialSession.user.email!);
@@ -100,8 +93,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   preferences
                 });
               }
-            } catch (error) {
-              console.error('Error loading initial user data:', error);
+            } catch {
               if (mounted) {
                 setUser(initialSession.user);
               }
@@ -114,9 +106,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const { data: { subscription } } = supabase.auth.onAuthStateChange(
           async (event, session) => {
             if (!mounted) return;
-            
+
             setSession(session);
-            
+
             if (session?.user) {
               try {
                 const preferences = await loadUserPreferences(session.user.email!);
@@ -126,8 +118,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     preferences
                   });
                 }
-              } catch (error) {
-                console.error('Error loading user data:', error);
+              } catch {
                 if (mounted) {
                   setUser(session.user);
                 }
@@ -148,8 +139,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           mounted = false;
           subscription.unsubscribe();
         };
-      } catch (error) {
-        console.error('Auth initialization error:', error);
+      } catch {
         if (mounted) {
           setIsLoading(false);
         }
@@ -157,7 +147,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     const cleanup = initializeAuth();
-    
+
     return () => {
       mounted = false;
       cleanup?.then(fn => fn?.());
@@ -166,19 +156,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signIn = async (email: string, password: string) => {
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const { error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
       if (error) {
-        console.error('Sign in error:', error);
         return { error };
       }
 
       return { error: null };
     } catch (error) {
-      console.error('Unexpected sign in error:', error);
       return { error };
     }
   };
@@ -186,8 +174,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signUp = async (email: string, password: string) => {
     try {
       const redirectUrl = `${window.location.origin}/`;
-      
-      const { data, error } = await supabase.auth.signUp({
+
+      const { error } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -196,13 +184,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       if (error) {
-        console.error('Sign up error:', error);
         return { error };
       }
 
       return { error: null };
     } catch (error) {
-      console.error('Unexpected sign up error:', error);
       return { error };
     }
   };
@@ -211,7 +197,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       setUser(null);
       setSession(null);
-      
+
       const keysToRemove = [];
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
@@ -220,17 +206,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
       keysToRemove.forEach(key => localStorage.removeItem(key));
-      
+
       const { error } = await supabase.auth.signOut();
-      
+
       if (error) {
-        console.error('Supabase sign out error:', error);
+        // Handle error silently
       }
-      
+
       window.location.href = '/';
-      
-    } catch (error) {
-      console.error('Unexpected sign out error:', error);
+
+    } catch {
       setUser(null);
       setSession(null);
       localStorage.clear();
@@ -238,6 +223,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  // --- FIXED: This now always returns true/false, and always updates user in state after save
   const updatePreferences = async (preferences: UserPreferences) => {
     if (!user?.email) {
       toast({
@@ -245,7 +231,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         description: 'You must be signed in to update preferences.',
         variant: 'destructive',
       });
-      return;
+      return false;
     }
 
     try {
@@ -255,38 +241,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         cookingSkillLevel: preferences.cookingSkillLevel,
         allergens: preferences.allergens
       };
-      
-      const { data, error } = await supabase
+
+      // Upsert (insert if new, update if exists)
+      const { error } = await supabase
         .from('sign_ups')
-        .upsert({
-          email: user.email,
-          preferences: preferencesJson,
-        }, {
-          onConflict: 'email'
-        })
-        .select();
+        .upsert(
+          {
+            email: user.email,
+            preferences: preferencesJson,
+          },
+          { onConflict: 'email' }
+        );
 
       if (error) {
-        console.error('Error updating preferences:', error);
         toast({
           title: 'Error',
           description: `Failed to update preferences: ${error.message}`,
           variant: 'destructive',
         });
+        return false;
       } else {
-        setUser(prev => prev ? { ...prev, preferences } : null);
+        // Also update in local state!
+        setUser(prev => prev ? { ...prev, preferences: preferencesJson } : null);
         toast({
           title: 'Preferences Updated',
           description: 'Your preferences have been saved successfully.',
         });
+        return true;
       }
-    } catch (error) {
-      console.error('Unexpected error updating preferences:', error);
+    } catch {
       toast({
         title: 'Error',
         description: 'An unexpected error occurred while saving preferences.',
         variant: 'destructive',
       });
+      return false;
     }
   };
 
