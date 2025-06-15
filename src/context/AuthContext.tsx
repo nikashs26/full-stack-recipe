@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '../integrations/supabase/client';
@@ -56,10 +55,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return undefined;
       }
 
-      // Safely cast the preferences data
+      // Safely cast the preferences data with proper validation
       const preferences = data?.preferences;
       if (preferences && typeof preferences === 'object' && !Array.isArray(preferences)) {
-        return preferences as UserPreferences;
+        // Validate that the object has the required properties
+        const validatedPreferences = preferences as unknown as UserPreferences;
+        if (
+          Array.isArray(validatedPreferences.favoriteCuisines) &&
+          Array.isArray(validatedPreferences.dietaryRestrictions) &&
+          Array.isArray(validatedPreferences.allergens) &&
+          typeof validatedPreferences.cookingSkillLevel === 'string'
+        ) {
+          return validatedPreferences;
+        }
       }
 
       return undefined;
