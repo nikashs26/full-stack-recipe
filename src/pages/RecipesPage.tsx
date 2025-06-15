@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Header from '../components/Header';
@@ -62,7 +63,7 @@ const RecipesPage: React.FC = () => {
       console.log(`Fetching recipes with query: "${searchTerm}" and ingredient: "${ingredientTerm}"`);
       
       try {
-        const response = await fetchRecipes(searchTerm, '', ingredientTerm);
+        const response = await fetchRecipes(searchTerm, '');
         
         if (response?.results && Array.isArray(response.results)) {
           const validRecipes = response.results.filter(recipe => 
@@ -225,6 +226,46 @@ const RecipesPage: React.FC = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  // Get unique cuisines from local recipes for the filter
+  const uniqueCuisines = useMemo(() => {
+    const cuisines = new Set<string>();
+    localRecipes.forEach(recipe => {
+      if (recipe.cuisine) {
+        cuisines.add(recipe.cuisine);
+      }
+    });
+    return Array.from(cuisines).sort();
+  }, [localRecipes]);
+
+  // Handler functions for FilterBar
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchTerm(e.target.value);
+    setCurrentPage(1);
+  };
+
+  const handleIngredientChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setIngredientTerm(e.target.value);
+    setCurrentPage(1);
+  };
+
+  const handleDietaryFilterChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setDietaryFilter(e.target.value);
+    setCurrentPage(1);
+  };
+
+  const handleCuisineFilterChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setCuisineFilter(e.target.value);
+    setCurrentPage(1);
+  };
+
+  const handleClearFilters = () => {
+    setSearchTerm('');
+    setIngredientTerm('');
+    setDietaryFilter('');
+    setCuisineFilter('');
+    setCurrentPage(1);
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
@@ -237,14 +278,15 @@ const RecipesPage: React.FC = () => {
           
           <FilterBar
             searchTerm={searchTerm}
-            onSearchChange={setSearchTerm}
+            onSearchChange={handleSearchChange}
             dietaryFilter={dietaryFilter}
-            onDietaryFilterChange={setDietaryFilter}
+            onDietaryFilterChange={handleDietaryFilterChange}
             cuisineFilter={cuisineFilter}
-            onCuisineFilterChange={setCuisineFilter}
+            onCuisineFilterChange={handleCuisineFilterChange}
             ingredientTerm={ingredientTerm}
-            onIngredientChange={setIngredientTerm}
-            recipes={localRecipes}
+            onIngredientChange={handleIngredientChange}
+            cuisines={uniqueCuisines}
+            onClearFilters={handleClearFilters}
           />
 
           {/* Recommendations Section */}
