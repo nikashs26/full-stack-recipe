@@ -55,10 +55,17 @@ const HomePage: React.FC = () => {
   const { data: recommendedRecipes = [], isLoading: isRecommendedLoading } = useQuery({
     queryKey: ['recommendedRecipes', user?.preferences],
     queryFn: async () => {
-      if (!user?.preferences) return [];
+      console.log('Fetching recommended recipes, preferences:', user?.preferences);
+      
+      if (!user?.preferences) {
+        console.log('No preferences found, skipping recommendations');
+        return [];
+      }
       
       const allRecommendedRecipes: SpoonacularRecipe[] = [];
       const { favoriteCuisines = [], dietaryRestrictions = [] } = user.preferences;
+
+      console.log('User preferences for recommendations:', { favoriteCuisines, dietaryRestrictions });
 
       try {
         // Fetch recipes for favorite cuisines with proper tags
@@ -334,6 +341,8 @@ const HomePage: React.FC = () => {
             {user?.preferences && (
               <p>Preferences: {JSON.stringify(user.preferences, null, 2)}</p>
             )}
+            <p>Recommended Recipes Count: {recommendedRecipes.length}</p>
+            <p>Recommended Loading: {isRecommendedLoading ? 'Yes' : 'No'}</p>
           </div>
 
           {/* Recommended Recipes Section - Show for authenticated users with preferences */}

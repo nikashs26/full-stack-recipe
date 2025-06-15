@@ -46,6 +46,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const loadUserPreferences = async (userEmail: string): Promise<UserPreferences | undefined> => {
     try {
       console.log('Loading preferences for user:', userEmail);
+      
+      // Test Supabase connection first
+      const { data: testData, error: testError } = await supabase
+        .from('sign_ups')
+        .select('count')
+        .limit(1);
+      
+      if (testError) {
+        console.error('Supabase connection test failed:', testError);
+        return undefined;
+      }
+      
+      console.log('Supabase connection successful');
+      
       const { data, error } = await supabase
         .from('sign_ups')
         .select('preferences')
@@ -273,11 +287,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const updatePreferences = async (preferences: UserPreferences) => {
     if (!user) {
       console.error('No user found when updating preferences');
+      toast({
+        title: 'Error',
+        description: 'You must be signed in to update preferences.',
+        variant: 'destructive',
+      });
       return;
     }
 
     try {
       console.log('Updating preferences for user:', user.email, preferences);
+      
+      // Test Supabase connection first
+      const { data: testData, error: testError } = await supabase
+        .from('sign_ups')
+        .select('count')
+        .limit(1);
+      
+      if (testError) {
+        console.error('Supabase connection failed during preference update:', testError);
+        toast({
+          title: 'Connection Error',
+          description: 'Unable to connect to database. Please try again.',
+          variant: 'destructive',
+        });
+        return;
+      }
+      
+      console.log('Supabase connection successful for preference update');
       
       // Convert UserPreferences to a plain object that matches Json type
       const preferencesJson = {
@@ -287,25 +324,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         allergens: preferences.allergens
       };
       
+      console.log('Saving preferences JSON:', preferencesJson);
+      
       // Add user to our sign_ups table with preferences
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('sign_ups')
         .upsert({
           email: user.email!,
           preferences: preferencesJson,
         }, {
           onConflict: 'email'
-        });
+        })
+        .select();
+
+      console.log('Upsert result:', { data, error });
 
       if (error) {
         console.error('Error updating preferences:', error);
         toast({
           title: 'Error',
-          description: 'Failed to update preferences. Please try again.',
+          description: `Failed to update preferences: ${error.message}`,
           variant: 'destructive',
         });
       } else {
-        console.log('Preferences updated successfully');
+        console.log('Preferences updated successfully, result:', data);
         // Update local user state
         setUser(prev => prev ? { ...prev, preferences } : null);
         toast({
@@ -317,7 +359,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.error('Unexpected error updating preferences:', error);
       toast({
         title: 'Error',
-        description: 'An unexpected error occurred.',
+        description: 'An unexpected error occurred while saving preferences.',
         variant: 'destructive',
       });
     }
