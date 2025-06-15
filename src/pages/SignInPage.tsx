@@ -55,10 +55,11 @@ const SignInPage: React.FC = () => {
           description: result.error.message || "Invalid email or password. Please check your credentials.",
           variant: "destructive"
         });
+        form.setError("password", { message: "Invalid credentials" });
       } else {
         console.log("Sign in successful");
         toast({
-          title: "Success!",
+          title: "Welcome back!",
           description: "You're now signed in.",
         });
         // Navigation will happen automatically via useEffect when isAuthenticated changes
@@ -71,6 +72,7 @@ const SignInPage: React.FC = () => {
         description: "An unexpected error occurred. Please try again.",
         variant: "destructive"
       });
+      form.setError("password", { message: "An error occurred during sign in" });
     } finally {
       setIsSubmitting(false);
     }
