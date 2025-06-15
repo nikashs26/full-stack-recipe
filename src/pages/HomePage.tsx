@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -33,7 +32,6 @@ const HomePage: React.FC = () => {
         const recipes = await fetchManualRecipes();
         return recipes;
       } catch (error) {
-        console.error('Error fetching manual recipes:', error);
         return [];
       }
     },
@@ -41,28 +39,28 @@ const HomePage: React.FC = () => {
     retry: 2
   });
 
+  // Ensure user preferences always flow (sometimes undefined if user is slow to load)
+  const userPreferences = user?.preferences;
+
   // Query for recommended recipes based on user preferences
   const { data: recommendedRecipes = [], isLoading: isRecommendedLoading } = useQuery({
-    queryKey: ['recommendedRecipes', user?.preferences],
+    queryKey: ['recommendedRecipes', userPreferences],
     queryFn: async () => {
-      if (!user?.preferences) {
-        return [];
-      }
-      
+      if (!userPreferences) return [];
       const allRecommendedRecipes: SpoonacularRecipe[] = [];
-      const { favoriteCuisines = [], dietaryRestrictions = [] } = user.preferences;
+      const { favoriteCuisines = [], dietaryRestrictions = [] } = userPreferences;
 
       try {
-        // Fetch recipes for favorite cuisines with proper tags
+        // Fetch recipes for favorite cuisines
         if (favoriteCuisines.length > 0) {
           for (const cuisine of favoriteCuisines.slice(0, 2)) {
             const response = await fetchRecipes('', cuisine);
             if (response?.results && Array.isArray(response.results)) {
-              const realRecipes = response.results.filter(recipe => 
-                recipe.id > 1000 && 
-                recipe.title && 
+              const realRecipes = response.results.filter(recipe =>
+                recipe.id > 1000 &&
+                recipe.title &&
                 !recipe.title.toLowerCase().includes('fallback') &&
-                recipe.image && 
+                recipe.image &&
                 recipe.image.includes('http')
               );
               allRecommendedRecipes.push(...realRecipes.slice(0, 4));
@@ -70,16 +68,16 @@ const HomePage: React.FC = () => {
           }
         }
 
-        // Fetch recipes for dietary restrictions with proper tags
+        // Fetch recipes for dietary restrictions
         if (dietaryRestrictions.length > 0) {
           for (const diet of dietaryRestrictions.slice(0, 2)) {
             const response = await fetchRecipes(diet, '');
             if (response?.results && Array.isArray(response.results)) {
-              const realRecipes = response.results.filter(recipe => 
+              const realRecipes = response.results.filter(recipe =>
                 recipe.id > 1000 &&
-                recipe.title && 
+                recipe.title &&
                 !recipe.title.toLowerCase().includes('fallback') &&
-                recipe.image && 
+                recipe.image &&
                 recipe.image.includes('http')
               );
               allRecommendedRecipes.push(...realRecipes.slice(0, 3));
@@ -87,7 +85,7 @@ const HomePage: React.FC = () => {
           }
         }
 
-        // Remove duplicates
+        // Remove duplicates by id
         const seenIds = new Set();
         const uniqueRecommended = allRecommendedRecipes.filter(recipe => {
           if (seenIds.has(recipe.id)) return false;
@@ -96,12 +94,12 @@ const HomePage: React.FC = () => {
         });
 
         return uniqueRecommended.slice(0, 8);
-      } catch (error) {
-        console.error('Error fetching recommended recipes:', error);
+      } catch {
         return [];
       }
     },
-    enabled: isAuthenticated && !!user?.preferences,
+    // Only run this query if preferences exist and the user is authenticated
+    enabled: Boolean(isAuthenticated && userPreferences),
     staleTime: 300000
   });
 
@@ -303,7 +301,7 @@ const HomePage: React.FC = () => {
 
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           {/* Recommended Recipes Section - Show for authenticated users with preferences */}
-          {isAuthenticated && user?.preferences && (
+          {isAuthenticated && userPreferences && (
             <section className="mb-16">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-3xl font-bold text-gray-900 flex items-center">
@@ -366,7 +364,7 @@ const HomePage: React.FC = () => {
           )}
 
           {/* Show message for authenticated users without preferences */}
-          {isAuthenticated && !user?.preferences && (
+          {isAuthenticated && !userPreferences && (
             <section className="mb-16">
               <div className="text-center py-12 border border-dashed border-gray-300 rounded-lg">
                 <ThumbsUp className="mx-auto h-12 w-12 text-gray-400 mb-4" />
