@@ -7,8 +7,7 @@ import { useToast } from '@/hooks/use-toast';
 interface UserPreferences {
   favoriteCuisines: string[];
   dietaryRestrictions: string[];
-  skillLevel: string;
-  cookingTime: string;
+  cookingSkillLevel: 'beginner' | 'intermediate' | 'advanced';
   allergens: string[];
 }
 
@@ -57,7 +56,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return undefined;
       }
 
-      return data?.preferences as UserPreferences;
+      // Safely cast the preferences data
+      const preferences = data?.preferences;
+      if (preferences && typeof preferences === 'object' && !Array.isArray(preferences)) {
+        return preferences as UserPreferences;
+      }
+
+      return undefined;
     } catch (error) {
       console.error('Unexpected error loading preferences:', error);
       return undefined;

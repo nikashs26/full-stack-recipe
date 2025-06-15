@@ -15,7 +15,7 @@ import { LogIn, LogOut, User } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 const UserMenu: React.FC = () => {
-  const { user, isAuthenticated, isLoading: authLoading, signOut, error } = useAuth();
+  const { user, isAuthenticated, isLoading: authLoading, signOut } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
@@ -32,18 +32,6 @@ const UserMenu: React.FC = () => {
       return () => clearTimeout(timer);
     }
   }, [authLoading]);
-
-  // If there's an auth error, show it
-  useEffect(() => {
-    if (error) {
-      console.error("Auth error in UserMenu:", error);
-      toast({
-        title: "Authentication Issue",
-        description: error,
-        variant: "destructive"
-      });
-    }
-  }, [error, toast]);
 
   // Show loading state briefly
   if (isLoading) {
@@ -101,7 +89,7 @@ const UserMenu: React.FC = () => {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuLabel>
-          {user?.displayName || user?.email}
+          {user?.email}
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem 

@@ -52,7 +52,7 @@ const formSchema = z.object({
 });
 
 const UserPreferencesPage: React.FC = () => {
-  const { user, updateUserPreferences } = useAuth();
+  const { user, updatePreferences } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
@@ -113,7 +113,7 @@ const UserPreferencesPage: React.FC = () => {
         cookingSkillLevel: values.cookingSkillLevel
       };
       
-      await updateUserPreferences(userPreferences);
+      await updatePreferences(userPreferences);
       
       toast({
         title: "Preferences saved!",
