@@ -78,7 +78,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         'cookingSkillLevel' in rawPrefs &&
         'allergens' in rawPrefs
       ) {
-        const preferences = rawPrefs as UserPreferences;
+        const preferences = rawPrefs as unknown as UserPreferences;
         console.log('Parsed preferences:', preferences);
         return preferences;
       } else {
