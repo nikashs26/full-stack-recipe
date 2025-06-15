@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -262,14 +261,91 @@ const ExternalRecipeDetailPage: React.FC = () => {
       ];
     }
     
-    // Default fallback
+    if (titleLower.includes('stir fry') || titleLower.includes('stirfry')) {
+      return [
+        'Heat oil in a large wok or skillet over high heat.',
+        'Add protein first and cook until nearly done, then remove.',
+        'Add harder vegetables (like carrots, broccoli) and stir-fry for 2-3 minutes.',
+        'Add softer vegetables (like bell peppers, snap peas) and cook 1-2 minutes.',
+        'Return protein to the pan.',
+        'Add sauce and toss everything together.',
+        'Cook for another minute until heated through.',
+        'Serve immediately over rice or noodles.'
+      ];
+    }
+    
+    if (titleLower.includes('burger')) {
+      return [
+        'Preheat grill or skillet to medium-high heat.',
+        'Form ground meat into patties, slightly larger than buns.',
+        'Season patties with salt and pepper.',
+        'Cook patties for 3-4 minutes per side for medium doneness.',
+        'Add cheese in the last minute if desired.',
+        'Toast buns lightly on the grill or in a toaster.',
+        'Assemble burgers with desired toppings.',
+        'Serve immediately while hot.'
+      ];
+    }
+    
+    if (titleLower.includes('pizza')) {
+      return [
+        'Preheat oven to 475°F (245°C).',
+        'Roll out pizza dough on a floured surface.',
+        'Transfer dough to a pizza stone or baking sheet.',
+        'Spread sauce evenly, leaving a border for the crust.',
+        'Add cheese and desired toppings.',
+        'Bake for 12-15 minutes until crust is golden and cheese is bubbly.',
+        'Let cool for 2-3 minutes before slicing.',
+        'Serve hot.'
+      ];
+    }
+    
+    if (titleLower.includes('curry')) {
+      return [
+        'Heat oil in a large pot over medium heat.',
+        'Add onions and cook until softened and lightly golden.',
+        'Add garlic, ginger, and spices, cook for 1 minute until fragrant.',
+        'Add curry paste or powder and cook for another minute.',
+        'Add main protein or vegetables and cook until coated.',
+        'Pour in coconut milk or broth and bring to a simmer.',
+        'Reduce heat and simmer for 20-30 minutes until tender.',
+        'Taste and adjust seasoning, serve over rice.'
+      ];
+    }
+    
+    if (titleLower.includes('bread') || titleLower.includes('baking')) {
+      return [
+        'Preheat oven according to recipe temperature.',
+        'Mix dry ingredients in a large bowl.',
+        'In a separate bowl, combine wet ingredients.',
+        'Add wet ingredients to dry ingredients and mix until just combined.',
+        'Pour into prepared baking pan.',
+        'Bake for specified time until golden brown and a toothpick comes out clean.',
+        'Cool in pan for 10 minutes before removing.',
+        'Cool completely before slicing.'
+      ];
+    }
+    
+    if (titleLower.includes('smoothie') || titleLower.includes('drink')) {
+      return [
+        'Add all ingredients to a high-speed blender.',
+        'Start blending on low speed, gradually increasing to high.',
+        'Blend until smooth and creamy, about 1-2 minutes.',
+        'Add more liquid if needed for desired consistency.',
+        'Taste and adjust sweetness if needed.',
+        'Pour into glasses and serve immediately.',
+        'Garnish as desired.'
+      ];
+    }
+    
+    // Default fallback - still generic but better than before
     return [
-      'Prepare all ingredients as specified in the ingredient list.',
-      'Follow basic cooking techniques appropriate for the main ingredients.',
-      'Season with salt and pepper throughout the cooking process.',
-      'Cook until main ingredients are properly done.',
-      'Taste and adjust seasonings before serving.',
-      'Serve hot and enjoy!'
+      `This ${titleLower} recipe requires careful preparation and attention to cooking times.`,
+      'Start by gathering and preparing all ingredients as listed.',
+      'Follow traditional cooking methods appropriate for this type of dish.',
+      'Monitor cooking progress and adjust heat as needed.',
+      'Season thoughtfully and taste as you go.',
+      'Serve according to traditional presentation for this cuisine.'
     ];
   };
 
