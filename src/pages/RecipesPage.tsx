@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Header from '../components/Header';
@@ -14,6 +13,7 @@ import { SpoonacularRecipe } from '../types/spoonacular';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '../context/AuthContext';
 import { ThumbsUp, ChefHat, Loader2 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 const RecipesPage: React.FC = () => {
   const { user, isAuthenticated } = useAuth();
@@ -91,16 +91,12 @@ const RecipesPage: React.FC = () => {
   const { data: recommendedRecipes = [], isLoading: recommendationsLoading } = useQuery({
     queryKey: ['recommendedRecipes', user?.preferences],
     queryFn: async () => {
-      if (!user?.preferences) {
-        return [];
-      }
-
-      const preferences = user.preferences;
+      const preferences = user?.preferences;
       const allRecommendedRecipes: SpoonacularRecipe[] = [];
 
       try {
-        // Fetch recipes for favorite cuisines
-        if (preferences.favoriteCuisines?.length > 0) {
+        if (preferences?.favoriteCuisines?.length > 0) {
+          // Fetch recipes for favorite cuisines
           for (const cuisine of preferences.favoriteCuisines.slice(0, 2)) {
             console.log(`Fetching recommendations for cuisine: ${cuisine}`);
             const response = await fetchRecipes('', cuisine);
@@ -117,8 +113,8 @@ const RecipesPage: React.FC = () => {
           }
         }
 
-        // Fetch recipes for dietary restrictions
-        if (preferences.dietaryRestrictions?.length > 0) {
+        if (preferences?.dietaryRestrictions?.length > 0) {
+          // Fetch recipes for dietary restrictions
           for (const diet of preferences.dietaryRestrictions.slice(0, 2)) {
             console.log(`Fetching recommendations for diet: ${diet}`);
             const response = await fetchRecipes(diet, '');
@@ -135,7 +131,7 @@ const RecipesPage: React.FC = () => {
           }
         }
 
-        // If no specific preferences, get popular recipes
+        // If no specific preferences or limited results, get popular recipes
         if (allRecommendedRecipes.length < 3) {
           console.log('Fetching popular recipes for recommendations');
           const response = await fetchRecipes('popular', '');
@@ -166,7 +162,7 @@ const RecipesPage: React.FC = () => {
         return [];
       }
     },
-    enabled: isAuthenticated && !!user?.preferences,
+    enabled: isAuthenticated, // Show for all authenticated users
     staleTime: 300000,
   });
 
@@ -289,17 +285,27 @@ const RecipesPage: React.FC = () => {
             onClearFilters={handleClearFilters}
           />
 
-          {/* Recommendations Section */}
-          {isAuthenticated && user?.preferences && (
+          {/* Recommendations Section - Show for all authenticated users */}
+          {isAuthenticated && (
             <section className="mb-12">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-2xl font-bold text-gray-900 flex items-center">
                   <ThumbsUp className="mr-2 h-6 w-6 text-recipe-secondary" />
-                  Recommended for You
+                  {user?.preferences ? 'Recommended for You' : 'Popular Recipes'}
                 </h2>
-                <span className="text-sm text-gray-500">
-                  Based on your preferences
-                </span>
+                <div className="flex items-center gap-4">
+                  <span className="text-sm text-gray-500">
+                    {user?.preferences ? 'Based on your preferences' : 'Discover new recipes'}
+                  </span>
+                  {!user?.preferences && (
+                    <Link 
+                      to="/preferences" 
+                      className="text-sm text-recipe-primary hover:text-recipe-primary/80 underline"
+                    >
+                      Set preferences →
+                    </Link>
+                  )}
+                </div>
               </div>
               
               {recommendationsLoading ? (
@@ -323,9 +329,26 @@ const RecipesPage: React.FC = () => {
                 </div>
               ) : (
                 <div className="text-center py-8 border border-dashed border-gray-300 rounded-lg mb-8">
-                  <p className="text-gray-500">
-                    No recommendations available. Try updating your preferences!
+                  <p className="text-gray-500 mb-2">
+                    {user?.preferences 
+                      ? 'No recommendations available right now.' 
+                      : 'No popular recipes available right now.'
+                    }
                   </p>
+                  <p className="text-sm text-gray-400">
+                    {user?.preferences 
+                      ? 'Check back soon for new recipes!' 
+                      : 'Set your preferences to get personalized recommendations!'
+                    }
+                  </p>
+                  {!user?.preferences && (
+                    <Link 
+                      to="/preferences" 
+                      className="inline-block mt-2 text-recipe-primary hover:text-recipe-primary/80 underline"
+                    >
+                      Set Preferences
+                    </Link>
+                  )}
                 </div>
               )}
             </section>

@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
   DropdownMenu,
@@ -17,6 +17,7 @@ import { useToast } from '@/hooks/use-toast';
 const UserMenu: React.FC = () => {
   const { user, isAuthenticated, isLoading, signOut } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   // Show loading only briefly during initial auth check
   if (isLoading) {
@@ -53,15 +54,27 @@ const UserMenu: React.FC = () => {
     try {
       console.log("Attempting to sign out...");
       await signOut();
+      
+      // Force a page refresh and navigate to home
+      setTimeout(() => {
+        window.location.href = '/';
+      }, 100);
+      
       toast({
         title: "Signed out successfully",
       });
     } catch (error) {
       console.error("Error signing out:", error);
+      
+      // Even if there's an error, try to clear local state and redirect
+      localStorage.clear();
+      setTimeout(() => {
+        window.location.href = '/';
+      }, 100);
+      
       toast({
-        title: "Error signing out",
-        description: "Please try again or refresh the page",
-        variant: "destructive"
+        title: "Signed out",
+        description: "You have been signed out",
       });
     }
   };
@@ -77,6 +90,13 @@ const UserMenu: React.FC = () => {
         <DropdownMenuLabel>
           {user?.email}
         </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <Link to="/preferences" className="cursor-pointer">
+            <User className="mr-2 h-4 w-4" />
+            <span>Preferences</span>
+          </Link>
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem 
           onClick={handleSignOut}
