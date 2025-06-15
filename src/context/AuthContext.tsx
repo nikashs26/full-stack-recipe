@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '../integrations/supabase/client';
@@ -44,8 +45,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Load user preferences from Supabase
   const loadUserPreferences = async (userEmail: string): Promise<UserPreferences | undefined> => {
     try {
-      console.log('Loading preferences for user:', userEmail);
-      
       const { data, error } = await supabase
         .from('sign_ups')
         .select('preferences')
@@ -58,16 +57,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (!data?.preferences) {
-        console.log('No preferences found for user');
         return undefined;
       }
-
-      console.log('Raw preferences from DB:', data.preferences);
       
-      // Safely convert the Json type to UserPreferences with type checking
       const rawPrefs = data.preferences;
       
-      // Type guard to ensure we have the right structure
       if (
         rawPrefs && 
         typeof rawPrefs === 'object' && 
@@ -77,13 +71,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         'cookingSkillLevel' in rawPrefs &&
         'allergens' in rawPrefs
       ) {
-        const preferences = rawPrefs as unknown as UserPreferences;
-        console.log('Parsed preferences:', preferences);
-        return preferences;
-      } else {
-        console.error('Invalid preferences structure:', rawPrefs);
-        return undefined;
+        return rawPrefs as unknown as UserPreferences;
       }
+      
+      return undefined;
     } catch (error) {
       console.error('Unexpected error loading preferences:', error);
       return undefined;
@@ -95,11 +86,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const initializeAuth = async () => {
       try {
-        console.log('Initializing auth...');
-        
-        // Get current session first
         const { data: { session: initialSession } } = await supabase.auth.getSession();
-        console.log('Initial session:', initialSession?.user?.email || 'none');
         
         if (mounted) {
           setSession(initialSession);
@@ -124,11 +111,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         }
 
-        // Set up auth state listener
         const { data: { subscription } } = supabase.auth.onAuthStateChange(
           async (event, session) => {
-            console.log('Auth state changed:', event, session?.user?.email);
-            
             if (!mounted) return;
             
             setSession(session);
@@ -182,21 +166,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signIn = async (email: string, password: string) => {
     try {
-      console.log('Attempting sign in for:', email);
-      
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
-
-      console.log('Sign in result - error:', error);
 
       if (error) {
         console.error('Sign in error:', error);
         return { error };
       }
 
-      console.log('Sign in successful');
       return { error: null };
     } catch (error) {
       console.error('Unexpected sign in error:', error);
@@ -206,7 +185,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signUp = async (email: string, password: string) => {
     try {
-      console.log('Attempting sign up for:', email);
       const redirectUrl = `${window.location.origin}/`;
       
       const { data, error } = await supabase.auth.signUp({
@@ -222,7 +200,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return { error };
       }
 
-      console.log('Sign up result:', data);
       return { error: null };
     } catch (error) {
       console.error('Unexpected sign up error:', error);
@@ -232,8 +209,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signOut = async () => {
     try {
-      console.log('Starting sign out process');
-      
       setUser(null);
       setSession(null);
       
@@ -250,8 +225,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       if (error) {
         console.error('Supabase sign out error:', error);
-      } else {
-        console.log('Supabase sign out successful');
       }
       
       window.location.href = '/';
@@ -267,7 +240,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updatePreferences = async (preferences: UserPreferences) => {
     if (!user?.email) {
-      console.error('No user email found when updating preferences');
       toast({
         title: 'Error',
         description: 'You must be signed in to update preferences.',
@@ -277,9 +249,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     try {
-      console.log('Updating preferences for user:', user.email, preferences);
-      
-      // Convert UserPreferences to Json-compatible format
       const preferencesJson = {
         favoriteCuisines: preferences.favoriteCuisines,
         dietaryRestrictions: preferences.dietaryRestrictions,
@@ -287,38 +256,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         allergens: preferences.allergens
       };
       
-      // First, try to update existing record
-      const { data: existingData, error: selectError } = await supabase
+      const { data, error } = await supabase
         .from('sign_ups')
-        .select('id')
-        .eq('email', user.email)
-        .maybeSingle();
-
-      console.log('Existing record check:', { existingData, selectError });
-
-      let result;
-      if (existingData) {
-        // Update existing record
-        console.log('Updating existing record for:', user.email);
-        result = await supabase
-          .from('sign_ups')
-          .update({ preferences: preferencesJson })
-          .eq('email', user.email)
-          .select();
-      } else {
-        // Insert new record
-        console.log('Inserting new record for:', user.email);
-        result = await supabase
-          .from('sign_ups')
-          .insert({ 
-            email: user.email,
-            preferences: preferencesJson 
-          })
-          .select();
-      }
-
-      const { data, error } = result;
-      console.log('Save preferences result:', { data, error });
+        .upsert({
+          email: user.email,
+          preferences: preferencesJson,
+        }, {
+          onConflict: 'email'
+        })
+        .select();
 
       if (error) {
         console.error('Error updating preferences:', error);
@@ -328,7 +274,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           variant: 'destructive',
         });
       } else {
-        console.log('Preferences updated successfully, result:', data);
         setUser(prev => prev ? { ...prev, preferences } : null);
         toast({
           title: 'Preferences Updated',

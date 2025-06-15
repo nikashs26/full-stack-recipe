@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -16,15 +17,6 @@ import { useAuth } from '../context/AuthContext';
 
 const HomePage: React.FC = () => {
   const { isAuthenticated, user } = useAuth();
-  
-  // Debug logging for auth state
-  console.log('HomePage auth debug:', {
-    isAuthenticated,
-    hasUser: !!user,
-    userEmail: user?.email,
-    hasPreferences: !!user?.preferences,
-    preferences: user?.preferences
-  });
 
   // Query for local recipes
   const { data: localRecipes = [], isLoading: isLocalLoading } = useQuery({
@@ -37,10 +29,8 @@ const HomePage: React.FC = () => {
   const { data: manualRecipes = [], isLoading: isManualLoading, error: manualError } = useQuery({
     queryKey: ['manualRecipes'],
     queryFn: async () => {
-      console.log('Fetching manual recipes for homepage...');
       try {
         const recipes = await fetchManualRecipes();
-        console.log('Manual recipes fetched:', recipes.length);
         return recipes;
       } catch (error) {
         console.error('Error fetching manual recipes:', error);
@@ -55,23 +45,17 @@ const HomePage: React.FC = () => {
   const { data: recommendedRecipes = [], isLoading: isRecommendedLoading } = useQuery({
     queryKey: ['recommendedRecipes', user?.preferences],
     queryFn: async () => {
-      console.log('Fetching recommended recipes, preferences:', user?.preferences);
-      
       if (!user?.preferences) {
-        console.log('No preferences found, skipping recommendations');
         return [];
       }
       
       const allRecommendedRecipes: SpoonacularRecipe[] = [];
       const { favoriteCuisines = [], dietaryRestrictions = [] } = user.preferences;
 
-      console.log('User preferences for recommendations:', { favoriteCuisines, dietaryRestrictions });
-
       try {
         // Fetch recipes for favorite cuisines with proper tags
         if (favoriteCuisines.length > 0) {
           for (const cuisine of favoriteCuisines.slice(0, 2)) {
-            console.log(`Fetching recommended recipes for cuisine: ${cuisine}`);
             const response = await fetchRecipes('', cuisine);
             if (response?.results && Array.isArray(response.results)) {
               const realRecipes = response.results.filter(recipe => 
@@ -89,7 +73,6 @@ const HomePage: React.FC = () => {
         // Fetch recipes for dietary restrictions with proper tags
         if (dietaryRestrictions.length > 0) {
           for (const diet of dietaryRestrictions.slice(0, 2)) {
-            console.log(`Fetching recommended recipes for diet: ${diet}`);
             const response = await fetchRecipes(diet, '');
             if (response?.results && Array.isArray(response.results)) {
               const realRecipes = response.results.filter(recipe => 
@@ -112,7 +95,6 @@ const HomePage: React.FC = () => {
           return true;
         });
 
-        console.log(`Found ${uniqueRecommended.length} recommended recipes based on preferences`);
         return uniqueRecommended.slice(0, 8);
       } catch (error) {
         console.error('Error fetching recommended recipes:', error);
@@ -128,7 +110,6 @@ const HomePage: React.FC = () => {
     queryKey: ['featuredRecipes'],
     queryFn: async () => {
       try {
-        console.log('Fetching featured recipes...');
         const [pastaResult, chickenResult, vegetarianResult] = await Promise.all([
           fetchRecipes('pasta', 'Italian').catch(() => ({ results: [] })),
           fetchRecipes('chicken', '').catch(() => ({ results: [] })),
@@ -152,7 +133,6 @@ const HomePage: React.FC = () => {
                    recipe.image;
           });
         
-        console.log('Featured recipes processed:', uniqueRecipes.length);
         return { results: uniqueRecipes.slice(0, 12) };
       } catch (error) {
         console.error('Featured recipes failed:', error);
@@ -166,8 +146,6 @@ const HomePage: React.FC = () => {
 
   // Global deduplication system - process all recipes together
   const processedRecipes = React.useMemo(() => {
-    console.log('Processing all recipes with global deduplication...');
-    
     const globalSeenTitles = new Set<string>();
     const globalSeenIds = new Set<string | number>();
     
@@ -256,14 +234,6 @@ const HomePage: React.FC = () => {
       }
     }
 
-    console.log('Global deduplication complete:', {
-      popular: popularRecipes.length,
-      featured: featuredRecipes.length,
-      topRated: topRatedRecipes.length,
-      recent: recentRecipes.length,
-      totalSeen: globalSeenTitles.size
-    });
-
     return {
       popularRecipes,
       featuredRecipes,
@@ -332,19 +302,6 @@ const HomePage: React.FC = () => {
         </section>
 
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-          {/* Debug info - temporary */}
-          <div className="mb-4 p-4 bg-gray-100 rounded-lg text-sm">
-            <p><strong>Debug Info:</strong></p>
-            <p>Authenticated: {isAuthenticated ? 'Yes' : 'No'}</p>
-            <p>User: {user?.email || 'None'}</p>
-            <p>Has Preferences: {user?.preferences ? 'Yes' : 'No'}</p>
-            {user?.preferences && (
-              <p>Preferences: {JSON.stringify(user.preferences, null, 2)}</p>
-            )}
-            <p>Recommended Recipes Count: {recommendedRecipes.length}</p>
-            <p>Recommended Loading: {isRecommendedLoading ? 'Yes' : 'No'}</p>
-          </div>
-
           {/* Recommended Recipes Section - Show for authenticated users with preferences */}
           {isAuthenticated && user?.preferences && (
             <section className="mb-16">
