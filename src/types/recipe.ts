@@ -1,5 +1,5 @@
 
-export type DietaryRestriction = 'vegetarian' | 'vegan' | 'gluten-free' | 'carnivore';
+export type DietaryRestriction = 'Vegetarian' | 'Vegan' | 'Gluten-free' | 'Carnivore'| 'Non-Vegetarian';
 export type DifficultyLevel = 'easy' | 'medium' | 'hard';
 
 export interface Folder {

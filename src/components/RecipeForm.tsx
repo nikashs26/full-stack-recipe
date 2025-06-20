@@ -46,10 +46,10 @@ const RecipeForm: React.FC<RecipeFormProps> = ({ initialData, onSubmit, isEdit =
 
   // Available dietary restrictions
   const availableDietaryRestrictions: DietaryRestriction[] = [
-    'vegetarian',
-    'vegan',
-    'gluten-free',
-    'carnivore',
+    'Vegetarian',
+    'Vegan',
+    'Gluten-free',
+    'Carnivore',
   ];
 
   // Available difficulty levels
