@@ -30,13 +30,22 @@ const FALLBACK_RECIPES = [
     readyInMinutes: 25
 },
 {
-  id: 104,
+    id: 104,
+    title: "Super Cheesy Burger",
+    image: "https://thescranline.com/wp-content/uploads/2023/12/CHEESEBURGERS-WEB-07.jpg",
+    cuisines: ["American"],
+    diets: ["Non-Vegetarian"],
+    readyInMinutes: 40
+  },
+{
+  id: 105,
   title: "Chicken 65",
   image: "https://popmenucloud.com/cdn-cgi/image/width%3D3840%2Cheight%3D3840%2Cfit%3Dscale-down%2Cformat%3Dauto%2Cquality%3D60/zvmbjaxg/1f1b9169-865a-47f1-b9b0-092c8f7549d4.png",
   cuisines: ["Indian"],
   diets: ["Non-Vegetarian"],
-  readyInMinutes: 25
+  readyInMinutes: 35
 }
+
 ];
 
 export const fetchRecipes = async (query: string = "", ingredient: string = "") => {

@@ -419,7 +419,7 @@ const HomePage: React.FC = () => {
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-3xl font-bold text-gray-900 flex items-center">
                 <ChefHat className="mr-2 h-6 w-6 text-recipe-secondary" />
-                Featured Recipes
+                Newly Added Recipes
               </h2>
               <Link to="/recipes" className="text-recipe-primary hover:text-recipe-primary/80">
                 View all →
