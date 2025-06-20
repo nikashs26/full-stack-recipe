@@ -227,33 +227,17 @@ def add_seed_data(recipes_collection):
                 "ratings": [4, 4, 4, 5]
             },
             {
-               {
-    "id": "5",
-    "name": "Shepherd's Pie",
-    "title": "Shepherd's Pie",
-    "cuisine": "British",
-    "cuisines": ["British"],
-    "dietaryRestrictions": ["Non-Vegetarian"],
-    "diets": ["Non-Vegetarian"],
-    "ingredients": ["ground round beef", "beef broth", "Worcestershire sauce", "salt", "potatoes", "butter", "onions", "chopped carrots", "corn", "peas"],
-    "instructions": [
-
-        "Bake potatoes until golden",
-        "Boil the potatoes: Place the peeled and quartered potatoes in medium sized pot. Cover with at least an inch of cold water. Add a teaspoon of salt. Bring to a boil, reduce to a simmer, and cook until tender (about 20 minutes).",
-        "Sauté the vegetables: While the potatoes are cooking, melt 4 tablespoons of the butter in a large sauté pan on medium heat. Add the chopped onions and cook until tender, about 6 to 10 minutes.",
-        "If you are including vegetables, add them according to their cooking time. Carrots should be cooked with the onions, because they take as long to cook as the onions do.",
-        "If you are including peas or corn, add them toward the end of the cooking of the onions, or after the meat starts to cook, as they take very little cooking time.",
-        "Add ground beef to the pan with the onions and vegetables. Cook until no longer pink. Drain the pan of excess fat, if necessary (anything more than 1 tablespoon). Season with salt and pepper.",
-        "Add the Worcestershire sauce and beef broth. Bring the broth to a simmer and reduce heat to low. Cook uncovered for 10 minutes, adding more beef broth if necessary to keep the meat from drying out.",
-        "Mash the cooked potatoes: When the potatoes are done cooking (a fork can easily pierce), remove them from the pot and place them in a bowl with the remaining 4 tablespoons of butter. Mash with a fork or potato masher, taste, and adjust seasonings with salt and pepper.",
-        "Layer the meat mixture and mashed potatoes in a casserole dish: Spread the cooked filling in an even layer in a large baking dish (such as a 9 x 13-inch casserole).",
-        "Spread the mashed potatoes over the top of the ground beef. Rough up the surface of the mashed potatoes with a fork so there are peaks that will get well browned. You can even use a fork to make creative designs in the mashed potatoes.",
-        "Bake: Place in a 400°F oven and cook until browned and bubbling, about 30 minutes. If necessary, broil for the last few minutes to help the surface of the mashed potatoes brown."
-    ],
-    "image": "https://www.simplyrecipes.com/thmb/fviw6rJNW_LXdVykXA-tk6hr2II=/750x0/filters:no_upscale():max_bytes(150000):strip_icc():format(webp)/Simply-Recipes-Easy-Shepherds-Pie-Lead-2_SERP-fdf8883477354e85bd05f9243f71657f.jpg",
-    "ratings": [5, 4, 5]
-}
-
+                "id": "5",
+                "name": "Lentil Shepherd's Pie",
+                "title": "Lentil Shepherd's Pie",
+                "cuisine": "British",
+                "cuisines": ["British"],
+                "dietaryRestrictions": ["vegetarian", "vegan"],
+                "diets": ["vegetarian", "vegan"],
+                "ingredients": ["lentils", "carrots", "peas", "potatoes", "plant milk", "vegetable broth"],
+                "instructions": ["Cook lentils with vegetables", "Make mashed potatoes with plant milk", "Layer lentil mixture on the bottom of a dish", "Top with mashed potatoes", "Bake until golden"],
+                "image": "https://via.placeholder.com/400x300",
+                "ratings": [5, 4, 5]
             },
             {
                 "id": "6",
@@ -281,7 +265,7 @@ def add_seed_data(recipes_collection):
                 "image": "https://via.placeholder.com/400x300",
                 "ratings": [4, 4, 3, 5]
             }
-    ]
+        ]
         
         for recipe in initialRecipes:
             try:
