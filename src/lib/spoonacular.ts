@@ -18,17 +18,25 @@ const FALLBACK_RECIPES = [
     title: "Vegetable Curry",
     image: "https://spoonacular.com/recipeImages/vegetable-curry-642129.jpg",
     cuisines: ["Indian"],
-    diets: ["vegetarian", "vegan"],
+    diets: ["Vegatarian"],
     readyInMinutes: 45
   },
   {
     id: 103,
     title: "Chicken Alfredo",
-    image: "https://spoonacular.com/recipeImages/chicken-alfredo-641901.jpg",
+    image: "https://www.billyparisi.com/wp-content/uploads/2025/03/chicken-alfredo-5.jpg",
     cuisines: ["Italian"],
-    diets: ["carnivore"],
+    diets: ["Non-Vegetarian"],
     readyInMinutes: 25
-  }
+},
+{
+  id: 104,
+  title: "Chicken 65",
+  image: "https://popmenucloud.com/cdn-cgi/image/width%3D3840%2Cheight%3D3840%2Cfit%3Dscale-down%2Cformat%3Dauto%2Cquality%3D60/zvmbjaxg/1f1b9169-865a-47f1-b9b0-092c8f7549d4.png",
+  cuisines: ["Indian"],
+  diets: ["Non-Vegetarian"],
+  readyInMinutes: 25
+}
 ];
 
 export const fetchRecipes = async (query: string = "", ingredient: string = "") => {
