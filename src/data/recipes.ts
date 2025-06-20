@@ -60,7 +60,7 @@ export const initialRecipes: Recipe[] = [
     comments: []
   },
 
-  // Fixed Shepherd's Pie Recipe
+
   {
     id: '6',
     name: "Shepherd's Pie",
@@ -86,7 +86,7 @@ export const initialRecipes: Recipe[] = [
   // Carnivore Recipes
   {
     id: '7',
-    name: 'Steak Dinner',
+    name: 'Dinner',
     cuisine: 'American',
     dietaryRestrictions: ['Carnivore'],
     ingredients: ['beef steak', 'salt', 'pepper', 'butter'],
