@@ -24,18 +24,10 @@ const FALLBACK_RECIPES = [
   {
     id: 103,
     title: "Chicken Alfredo",
-    image: "https://www.billyparisi.com/wp-content/uploads/2025/03/chicken-alfredo-5.jpg",
+    image: "https://spoonacular.com/recipeImages/chicken-alfredo-641901.jpg",
     cuisines: ["Italian"],
     diets: ["carnivore"],
     readyInMinutes: 25
-  },
-  {
-  id: 104,
-    title: "Chicken 65",
-    image: "https://popmenucloud.com/cdn-cgi/image/width%3D2400%2Cheight%3D2400%2Cfit%3Dscale-down%2Cformat%3Dauto%2Cquality%3D60/zvmbjaxg/1f1b9169-865a-47f1-b9b0-092c8f7549d4.png",
-    cuisines: ["Indian"],
-    diets: ["Non-Vegeterian"],
-    readyInMinutes: 30
   }
 ];
 
