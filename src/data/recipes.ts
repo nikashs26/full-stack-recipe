@@ -187,5 +187,27 @@ export const initialRecipes: Recipe[] = [
     image: 'https://images.unsplash.com/photo-1571877227200-a0d98ea2fda3?ixlib=rb-4.0.3',
     ratings: [5, 5, 4],
     comments: []
+  },
+  {
+      id: '17',
+            name: "Chicken 65",
+            
+            cuisine: "Indian",
+            dietaryRestrictions: ["non-vegetarian"],
+            ingredients: ["Boneless chicken", "Yogurt", "Ginger garlic paste", "Red chili powder", "Turmeric powder", "Coriander powder", "Cumin powder", "Garam masala", "Lemon juice", "Corn flour", "All-purpose flour", "Egg", "Curry leaves", "Green chilies", "Mustard seeds", "Salt", "Oil for frying"],
+            instructions: ["Cut the boneless chicken into bite-sized pieces",
+"Marinate the chicken with yogurt, ginger garlic paste, red chili powder, turmeric powder, coriander powder, cumin powder, garam masala, lemon juice, and salt",
+"Let the chicken marinate for at least 30 minutes or up to 4 hours",
+"Add corn flour, all-purpose flour, and egg to the marinated chicken and mix well",
+"Heat oil in a deep pan for frying",
+"Fry the chicken pieces in batches until golden brown and crispy",
+"Remove the chicken and drain on paper towels",
+"In a separate pan, heat a little oil and add mustard seeds",
+"Once they splutter, add curry leaves and slit green chilies",
+"Toss in the fried chicken and sauté for a couple of minutes to coat with the tempered spices",
+"Serve hot as an appetizer or side dish"],
+            image: "https://popmenucloud.com/cdn-cgi/image/width%3D3840%2Cheight%3D3840%2Cfit%3Dscale-down%2Cformat%3Dauto%2Cquality%3D60/zvmbjaxg/1f1b9169-865a-47f1-b9b0-092c8f7549d4.png",
+            ratings: [],
+            comments: []
   }
 ];

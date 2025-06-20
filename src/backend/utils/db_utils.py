@@ -264,7 +264,8 @@ def add_seed_data(recipes_collection):
                 "instructions": ["Slice apples and toss with lemon juice", "Mix oats, sugar, cinnamon, and butter", "Place apples in dish and top with oat mixture", "Bake until golden and bubbly"],
                 "image": "https://via.placeholder.com/400x300",
                 "ratings": [4, 4, 3, 5]
-            }
+            },
+
         ]
         
         for recipe in initialRecipes:
