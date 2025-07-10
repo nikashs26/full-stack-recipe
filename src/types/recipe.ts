@@ -1,6 +1,7 @@
 
 export type DietaryRestriction = 'vegetarian' | 'vegan' | 'gluten-free' | 'carnivore' | 'non-vegetarian';
 export type DifficultyLevel = 'easy' | 'medium' | 'hard';
+export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'dessert' | 'any'; // New MealType definition
 
 export interface Folder {
   id: string;
@@ -25,6 +26,7 @@ export interface Recipe {
   updatedAt?: string; // Added this property for consistency
   isFavorite?: boolean; // New property to mark recipes as favorites
   difficulty?: DifficultyLevel; // Added difficulty property
+  mealType: MealType; // New mealType property
 }
 
 export interface Comment {

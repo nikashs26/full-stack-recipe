@@ -1,5 +1,9 @@
 
+<<<<<<< HEAD
 import React, { useState, useEffect } from 'react';
+=======
+import React from 'react';
+>>>>>>> a0fa3e0 (test agent)
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '@/hooks/use-toast';
@@ -18,10 +22,17 @@ const formSchema = z.object({
 });
 
 const SignInPage: React.FC = () => {
+<<<<<<< HEAD
   const { signIn, isAuthenticated, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
+=======
+  const { signIn, isLoading } = useAuth(); // Get isLoading from AuthContext
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  // const [isLoading, setIsLoading] = useState(false); // REMOVED local state
+>>>>>>> a0fa3e0 (test agent)
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -31,10 +42,21 @@ const SignInPage: React.FC = () => {
     }
   });
 
+<<<<<<< HEAD
   // Redirect if authenticated
   useEffect(() => {
     if (isAuthenticated) {
       console.log("User is authenticated, redirecting to home");
+=======
+  const onSubmit = async (values: z.infer<typeof formSchema>) => {
+    try {
+      // setIsLoading(true); // REMOVED local state update
+      await signIn(values.email, values.password);
+      toast({
+        title: "Success!",
+        description: "You're now signed in.",
+      });
+>>>>>>> a0fa3e0 (test agent)
       navigate('/');
     }
   }, [isAuthenticated, navigate]);
@@ -74,7 +96,11 @@ const SignInPage: React.FC = () => {
       });
       form.setError("password", { message: "An error occurred during sign in" });
     } finally {
+<<<<<<< HEAD
       setIsSubmitting(false);
+=======
+      // setIsLoading(false); // REMOVED local state update
+>>>>>>> a0fa3e0 (test agent)
     }
   };
 
