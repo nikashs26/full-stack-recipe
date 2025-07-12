@@ -39,13 +39,13 @@ in_memory_recipes = []
 
 # Initialize MongoDB connection
 mongo_client, recipes_collection, folders_collection, mongo_available = initialize_mongodb(
-    MONGO_URI, 
+                MONGO_URI, 
     MONGO_CONNECT_TIMEOUT_MS, 
     MONGO_RETRY_COUNT
 )
-
-# If connection successful, add seed data if needed
-if mongo_available and recipes_collection:
+    
+    # If connection successful, add seed data if needed
+    if mongo_available and recipes_collection:
     add_seed_data(recipes_collection)
 else:
     print("Using in-memory storage as fallback")

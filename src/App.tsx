@@ -22,13 +22,12 @@ import UserPreferencesPage from "./pages/UserPreferencesPage";
 import { Link } from "react-router-dom";
 import { Database } from "lucide-react";
 import { AuthProvider } from "./context/AuthContext";
-<<<<<<< HEAD
+
 import ManualRecipeDetailPage from "./pages/ManualRecipeDetailPage";
-=======
+
 import { FolderDetail } from './components/folders/FolderDetail';
-import Favorites from './pages/Favorites';
 import MealPlannerPage from './pages/MealPlannerPage'; // Import the new MealPlannerPage
->>>>>>> a0fa3e0 (test agent)
+
 
 const queryClient = new QueryClient();
 
@@ -52,7 +51,6 @@ const App = () => (
               <Route path="/" element={<HomePage />} />
               <Route path="/recipes" element={<RecipesPage />} />
               <Route path="/folders" element={<FoldersPage />} />
-              <Route path="/folders/:id" element={<FolderDetail />} />
               <Route path="/favorites" element={<FavoritesPage />} />
               <Route path="/shopping-list" element={<ShoppingListPage />} />
               <Route path="/recipe/:id" element={<RecipeDetailPage />} />

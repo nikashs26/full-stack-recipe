@@ -1,92 +1,114 @@
 
 import React, { useState, useEffect } from 'react';
 import Header from '../components/Header';
-import { ShoppingListItem, Recipe } from '../types/recipe';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { loadRecipes } from '../utils/storage';
+import { ShoppingListItem, Recipe } from '../types/recipe'; // Keep Recipe for now if needed elsewhere
+import { useQuery, useQueryClient } from '@tanstack/react-query'; // Keep if you still need other queries
+import { loadRecipes } from '../utils/storage'; // Keep if you still need to load recipes
 import { Check, ShoppingCart, Trash2, RefreshCw } from 'lucide-react';
-import { v4 as uuidv4 } from 'uuid';
+import { v4 as uuidv4 } from 'uuid'; // Keep for unique item IDs if necessary
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 
-const ShoppingListPage: React.FC = () => {
-  const [shoppingList, setShoppingList] = useState<ShoppingListItem[]>([]);
-  const [selectedRecipeId, setSelectedRecipeId] = useState<string | null>(null);
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
-  
-  // Fetch recipes
-  const { data: recipes = [] } = useQuery({
-    queryKey: ['recipes'],
-    queryFn: loadRecipes
-  });
+// Define the structure of the agent-generated shopping list
+interface AgentShoppingList {
+  [category: string]: {
+    [ingredient: string]: number; // ingredient name: count
+  };
+}
 
-  // Load shopping list from localStorage
+// Define a structure for individual display items (might merge count into ingredient name for display)
+interface DisplayShoppingListItem {
+  id: string; // Unique ID for React keying and checkbox state
+  category: string;
+  name: string; // e.g., "Milk (2 units)" or "Onions"
+  originalIngredient: string; // The original ingredient string from the backend
+  checked: boolean;
+}
+
+const ShoppingListPage: React.FC = () => {
+  const [agentShoppingList, setAgentShoppingList] = useState<AgentShoppingList | null>(null);
+  const [displayList, setDisplayList] = useState<DisplayShoppingListItem[]>([]);
+  const { toast } = useToast();
+
   useEffect(() => {
-    const loadShoppingList = () => {
+    const loadAgentShoppingList = () => {
       try {
-        const storedList = localStorage.getItem('recipe-shopping-list');
-        return storedList ? JSON.parse(storedList) : [];
+        const storedList = localStorage.getItem('agent-shopping-list');
+        if (storedList) {
+          const parsedList: AgentShoppingList = JSON.parse(storedList);
+          setAgentShoppingList(parsedList);
+          
+          // Flatten and prepare for display with unique IDs and initial checked state
+          const flattenedList: DisplayShoppingListItem[] = [];
+          Object.entries(parsedList).forEach(([category, ingredients]) => {
+            Object.entries(ingredients).forEach(([ingredient, count]) => {
+              flattenedList.push({
+                id: uuidv4(),
+                category,
+                name: count > 1 ? `${ingredient} (${count} units)` : ingredient,
+                originalIngredient: ingredient, // Store original for potential future use
+                checked: false,
+              });
+            });
+          });
+          // Sort by category then by ingredient name
+          flattenedList.sort((a, b) => {
+            if (a.category < b.category) return -1;
+            if (a.category > b.category) return 1;
+            return a.name.localeCompare(b.name);
+          });
+          setDisplayList(flattenedList);
+
+        } else {
+          setAgentShoppingList({}); // Empty object if no list found
+          setDisplayList([]);
+        }
       } catch (error) {
-        console.error('Failed to load shopping list:', error);
-        return [];
+        console.error('Failed to load agent-generated shopping list:', error);
+        setAgentShoppingList({});
+        setDisplayList([]);
+        toast({
+          title: "Error",
+          description: "Failed to load your shopping list.",
+          variant: "destructive",
+        });
       }
     };
     
-    setShoppingList(loadShoppingList());
+    loadAgentShoppingList();
   }, []);
 
-  // Save shopping list to localStorage
-  const saveShoppingList = (items: ShoppingListItem[]) => {
-    try {
-      localStorage.setItem('recipe-shopping-list', JSON.stringify(items));
-      setShoppingList(items);
-    } catch (error) {
-      console.error('Failed to save shopping list:', error);
-    }
-  };
-
-  const handleAddToShoppingList = () => {
-    if (!selectedRecipeId) return;
-    
-    const recipe = recipes.find((r: Recipe) => r.id === selectedRecipeId);
-    if (!recipe) return;
-    
-    const newItems: ShoppingListItem[] = recipe.ingredients.map(ingredient => ({
-      id: uuidv4(),
-      ingredient,
-      recipeId: recipe.id,
-      recipeName: recipe.name,
-      checked: false
-    }));
-    
-    const updatedList = [...shoppingList, ...newItems];
-    saveShoppingList(updatedList);
-    
-    toast({
-      title: "Added to shopping list",
-      description: `Ingredients from "${recipe.name}" have been added to your shopping list.`
-    });
-    
-    setSelectedRecipeId(null);
+  // Save display list to localStorage (not strictly necessary if only reading from agent-list)
+  // But good for persistence of checked state
+  const saveDisplayList = (items: DisplayShoppingListItem[]) => {
+    setDisplayList(items);
+    // If you want to persist checked state across sessions for the *agent-generated* list
+    // you'd need a more complex structure to map checked state back to categories/ingredients
+    // For simplicity, we'll only persist the checked state locally within this component's lifecycle.
   };
 
   const handleToggleItem = (id: string) => {
-    const updatedList = shoppingList.map(item => 
+    const updatedList = displayList.map(item => 
       item.id === id ? { ...item, checked: !item.checked } : item
     );
-    saveShoppingList(updatedList);
+    saveDisplayList(updatedList);
   };
 
   const handleRemoveItem = (id: string) => {
-    const updatedList = shoppingList.filter(item => item.id !== id);
-    saveShoppingList(updatedList);
+    const updatedList = displayList.filter(item => item.id !== id);
+    saveDisplayList(updatedList);
+    toast({
+      title: "Item removed",
+      description: "Ingredient removed from your shopping list."
+    });
   };
 
   const handleClearList = () => {
     if (window.confirm('Are you sure you want to clear your entire shopping list?')) {
-      saveShoppingList([]);
+      localStorage.removeItem('agent-shopping-list'); // Clear the stored agent list
+      setAgentShoppingList(null);
+      setDisplayList([]);
       toast({
         title: "Shopping list cleared",
         description: "Your shopping list has been cleared."
@@ -95,13 +117,19 @@ const ShoppingListPage: React.FC = () => {
   };
   
   const handleClearChecked = () => {
-    const updatedList = shoppingList.filter(item => !item.checked);
-    saveShoppingList(updatedList);
+    const updatedList = displayList.filter(item => !item.checked);
+    saveDisplayList(updatedList);
     toast({
       title: "Completed items removed",
       description: "All checked items have been removed from your shopping list."
     });
   };
+
+  // Group items by category for rendering
+  const groupedList = displayList.reduce((acc, item) => {
+    (acc[item.category] = acc[item.category] || []).push(item);
+    return acc;
+  }, {} as Record<string, DisplayShoppingListItem[]>);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -113,7 +141,7 @@ const ShoppingListPage: React.FC = () => {
               <ShoppingCart className="text-primary h-6 w-6" />
               <h1 className="text-3xl font-bold">Shopping List</h1>
             </div>
-            {shoppingList.length > 0 && (
+            {displayList.length > 0 && (
               <div className="flex gap-2">
                 <Button 
                   variant="outline" 
@@ -135,9 +163,11 @@ const ShoppingListPage: React.FC = () => {
             )}
           </div>
 
-          <div className="bg-white shadow-sm rounded-lg p-6">
+          {/* Removed manual recipe addition section */}
+          {/* 
+          <div className="bg-white shadow-sm rounded-lg p-6 mb-8">
             <h2 className="text-xl font-semibold mb-4">Add Recipe Ingredients</h2>
-            <div className="flex gap-4 mb-8">
+            <div className="flex gap-4">
               <select 
                 value={selectedRecipeId || ''} 
                 onChange={(e) => setSelectedRecipeId(e.target.value || null)}
@@ -156,49 +186,56 @@ const ShoppingListPage: React.FC = () => {
                 <ShoppingCart className="h-4 w-4" /> Add Ingredients
               </Button>
             </div>
-
-            {shoppingList.length > 0 ? (
-              <div>
-                <h2 className="text-xl font-semibold mb-4">Your Shopping List</h2>
-                <div className="divide-y">
-                  {shoppingList.map((item) => (
-                    <div key={item.id} className="py-3 flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Checkbox 
-                          id={`item-${item.id}`} 
-                          checked={item.checked}
-                          onCheckedChange={() => handleToggleItem(item.id)}
-                        />
-                        <label 
-                          htmlFor={`item-${item.id}`}
-                          className={`${item.checked ? 'line-through text-gray-500' : ''}`}
-                        >
-                          {item.ingredient}
-                          <span className="text-xs text-gray-500 ml-2">
-                            ({item.recipeName})
-                          </span>
-                        </label>
-                      </div>
-                      <button 
-                        onClick={() => handleRemoveItem(item.id)}
-                        className="text-gray-500 hover:text-red-500"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <div className="text-center py-12">
-                <ShoppingCart className="mx-auto h-12 w-12 text-gray-400" strokeWidth={1.5} />
-                <h3 className="mt-2 text-lg font-medium text-gray-900">Your shopping list is empty</h3>
-                <p className="mt-1 text-gray-500">
-                  Add ingredients from your favorite recipes.
-                </p>
-              </div>
-            )}
           </div>
+          */}
+
+          {displayList.length > 0 ? (
+            <div className="bg-white shadow-sm rounded-lg p-6">
+              <h2 className="text-xl font-semibold mb-4">Generated Shopping List</h2>
+              <div className="space-y-6">
+                {Object.keys(groupedList).sort().map(category => (
+                  <div key={category}>
+                    <h3 className="text-lg font-bold text-gray-700 mb-3 border-b pb-2 capitalize">
+                      {category}
+                    </h3>
+                    <div className="divide-y">
+                      {groupedList[category].map((item) => (
+                        <div key={item.id} className="py-3 flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Checkbox 
+                              id={`item-${item.id}`} 
+                              checked={item.checked}
+                              onCheckedChange={() => handleToggleItem(item.id)}
+                            />
+                            <label 
+                              htmlFor={`item-${item.id}`}
+                              className={`${item.checked ? 'line-through text-gray-500' : ''}`}
+                            >
+                              {item.name}
+                            </label>
+                          </div>
+                          <button 
+                            onClick={() => handleRemoveItem(item.id)}
+                            className="text-gray-500 hover:text-red-500"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="text-center py-12">
+              <ShoppingCart className="mx-auto h-12 w-12 text-gray-400" strokeWidth={1.5} />
+              <h3 className="mt-2 text-lg font-medium text-gray-900">No shopping list generated yet</h3>
+              <p className="mt-1 text-gray-500">
+                Go to the <Link to="/meal-planner" className="text-primary hover:underline">Meal Planner</Link> to generate your weekly plan and then create a shopping list.
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </div>

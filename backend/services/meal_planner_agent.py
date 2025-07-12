@@ -121,9 +121,8 @@ class MealPlannerAgent:
 
         eligible_recipes = self._filter_recipes(all_recipes, preferences)
         
-        online_recipe_ideas = []
-        if not eligible_recipes or len(eligible_recipes) < 7: # If few or no eligible recipes, try web search
-            print("Few or no eligible recipes found. Attempting web search for more ideas...")
+        if not eligible_recipes or len(eligible_recipes) < 21: # If few or no eligible recipes (21 for 7 days * 3 meals), try web search
+            print("Few or no eligible recipes found from existing sources. Attempting web search for more ideas...")
             search_query_parts = []
             if preferences.get("dietaryRestrictions"):
                 search_query_parts.extend(preferences["dietaryRestrictions"])
@@ -134,22 +133,23 @@ class MealPlannerAgent:
             if skill_level != "beginner":
                 search_query_parts.append(f"{skill_level} difficulty")
 
-            search_query_parts.append("recipe ideas")
+            search_query_parts.append("recipe") # Make the query more general for recipes
             
             search_query = " ".join(search_query_parts)
-            online_recipe_ideas = self.recipe_service.search_online_recipe_ideas(search_query)
-            print(f"Found {len(online_recipe_ideas)} online recipe ideas.")
+            # Fetch 20 new recipes from online to augment the pool
+            online_recipes = self.recipe_service.search_online_recipe_ideas(search_query, number=20)
+            print(f"Found {len(online_recipes)} online recipes. Adding to the general pool.")
             
-            # Note: For now, these online ideas are just titles/links. 
-            # They cannot be directly added to the meal plan without full recipe data.
-            # The frontend can display these as suggestions.
+            # Add newly found online recipes to the existing all_recipes pool
+            # This allows them to be filtered and chosen in the next step
+            all_recipes.extend(online_recipes)
+            
+            # Re-filter the combined pool of recipes
+            eligible_recipes = self._filter_recipes(all_recipes, preferences)
 
         if not eligible_recipes:
-            # If still no eligible recipes even after considering potential web search expansion
-            return {
-                "error": "No recipes match your preferences. Please adjust them.",
-                "online_ideas": online_recipe_ideas # Include ideas if found
-            }
+            # If still no eligible recipes even after considering web search expansion
+            return {"error": "No recipes match your preferences. Please adjust them."}
 
         weekly_plan = {
             "monday": {"breakfast": None, "lunch": None, "dinner": None},

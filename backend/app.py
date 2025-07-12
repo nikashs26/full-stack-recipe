@@ -13,6 +13,7 @@ from auth import require_auth, get_user_id_from_request
 from routes.favorites import favorites_bp
 from routes.preferences import preferences_bp
 from routes.meal_planner import meal_planner_bp # Import the new meal planner blueprint
+from routes.shopping_list import shopping_list_bp # Import the new shopping list blueprint
 from services.recipe_service import RecipeService # Import RecipeService
 
 # Initialize Flask App
@@ -26,6 +27,7 @@ recipe_service = RecipeService()
 app.register_blueprint(favorites_bp, url_prefix='/api')
 app.register_blueprint(preferences_bp, url_prefix='/api')
 app.register_blueprint(meal_planner_bp, url_prefix='/api') # Register the meal planner blueprint
+app.register_blueprint(shopping_list_bp, url_prefix='/api') # Register the shopping list blueprint
 
 # New route for fetching all recipes
 @app.route('/api/recipes', methods=['GET'])

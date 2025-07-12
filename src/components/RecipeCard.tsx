@@ -194,5 +194,5 @@ const RecipeCard: React.FC<RecipeCardProps> = ({
     </div>
   );
 };
-
 export default RecipeCard;
+

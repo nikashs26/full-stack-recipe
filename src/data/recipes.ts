@@ -207,8 +207,8 @@ export const initialRecipes: Recipe[] = [
   {
       id: '17',
             name: "Chicken 65",
-            
             cuisine: "Indian",
+            mealType: 'dinner',
             dietaryRestrictions: ["non-vegetarian"],
             ingredients: ["Boneless chicken", "Yogurt", "Ginger garlic paste", "Red chili powder", "Turmeric powder", "Coriander powder", "Cumin powder", "Garam masala", "Lemon juice", "Corn flour", "All-purpose flour", "Egg", "Curry leaves", "Green chilies", "Mustard seeds", "Salt", "Oil for frying"],
             instructions: ["Cut the boneless chicken into bite-sized pieces",
@@ -229,8 +229,8 @@ export const initialRecipes: Recipe[] = [
   {
     id: '18',
           name: "Super Cheesy Burger",
-          
           cuisine: "American",
+          mealType: 'dinner',
           dietaryRestrictions: ["non-vegetarian"],
           ingredients: ["Boneless chicken", "Yogurt", "Ginger garlic paste", "Red chili powder", "Turmeric powder", "Coriander powder", "Cumin powder", "Garam masala", "Lemon juice", "Corn flour", "All-purpose flour", "Egg", "Curry leaves", "Green chilies", "Mustard seeds", "Salt", "Oil for frying"],
           instructions: ["Cut the boneless chicken into bite-sized pieces",

@@ -15,65 +15,28 @@ import { LogIn, LogOut, User } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 const UserMenu: React.FC = () => {
-  const { user, isAuthenticated, isLoading, signOut } = useAuth();
+  const { user, signOut } = useAuth(); // isAuthenticated and isLoading are now always true/false based on test mode
   const { toast } = useToast();
   const navigate = useNavigate();
 
-  // Show loading only briefly during initial auth check
-  if (isLoading) {
-    return (
-      <div className="flex items-center">
-        <Button variant="ghost" size="sm" disabled>
-          <span className="h-4 w-4 mr-2 animate-spin">⌛</span>
-          Loading...
-        </Button>
-      </div>
-    );
-  }
-
-  // If not authenticated, show sign in buttons
-  if (!isAuthenticated) {
-    return (
-      <div className="flex items-center gap-2">
-        <Link to="/signin">
-          <Button variant="outline" size="sm">
-            <LogIn className="h-4 w-4 mr-2" />
-            Sign In
-          </Button>
-        </Link>
-        <Link to="/signup">
-          <Button size="sm">
-            Sign Up
-          </Button>
-        </Link>
-      </div>
-    );
-  }
+  // In test mode, we always show the user menu
 
   const handleSignOut = async () => {
     try {
-      console.log("Attempting to sign out...");
+      console.log("Attempting to sign out (Test Mode)...");
       await signOut();
       
-      // Force a page refresh and navigate to home
-      setTimeout(() => {
-        window.location.href = '/';
-      }, 100);
+      // In test mode, we don't need a full page refresh for Supabase cleanup.
+      // Just navigate to home.
+      navigate('/');
       
       toast({
-        title: "Signed out successfully",
+        title: "Signed out successfully (Test Mode)",
       });
     } catch (error) {
-      console.error("Error signing out:", error);
-      
-      // Even if there's an error, try to clear local state and redirect
-      localStorage.clear();
-      setTimeout(() => {
-        window.location.href = '/';
-      }, 100);
-      
+      console.error("Error signing out (Test Mode):", error);
       toast({
-        title: "Signed out",
+        title: "Signed out (Test Mode)",
         description: "You have been signed out",
       });
     }
@@ -83,12 +46,12 @@ const UserMenu: React.FC = () => {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" className="relative h-8 w-8 rounded-full">
-          <User className="h-4 w-4" />
+          <User className="h-4 w-4" /> {/* Always show user icon in test mode */}
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuLabel>
-          {user?.email}
+          {user?.email || "Test User"} {/* Display test user email or a generic name */}
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>

@@ -10,8 +10,7 @@ SPOONACULAR_API_KEY = os.environ.get("SPOONACULAR_API_KEY", "YOUR_SPOONACULAR_AP
 SPOONACULAR_URL = "https://api.spoonacular.com/recipes/complexSearch"
 SPOONACULAR_GET_BY_BY_ID_URL = "https://api.spoonacular.com/recipes/{id}/information"
 
-# Placeholder for a hypothetical external web search API
-# In a real scenario, you'd use a service like Google Custom Search API, Bing Web Search API, etc.
+# Placeholder for a hypothetical external web search API (no longer used for agentic search, Spoonacular preferred)
 EXTERNAL_WEB_SEARCH_API_URL = os.environ.get("EXTERNAL_WEB_SEARCH_API_URL", "https://api.example.com/websearch") # Replace with actual API
 EXTERNAL_WEB_SEARCH_API_KEY = os.environ.get("EXTERNAL_WEB_SEARCH_API_KEY", "YOUR_WEB_SEARCH_API_KEY")
 
@@ -234,92 +233,115 @@ class RecipeService:
                 if "results" in data:
                     spoonacular_recipes = []
                     for r in data["results"]:
-                        # Normalize Spoonacular data to your Recipe format
-                        normalized_diets = []
-                        for diet in r.get("diets", []):
-                            diet_lower = diet.lower()
-                            if "vegetarian" in diet_lower:
-                                normalized_diets.append("vegetarian")
-                            if "vegan" in diet_lower:
-                                normalized_diets.append("vegan")
-                            if "gluten" in diet_lower and "free" in diet_lower:
-                                normalized_diets.append("gluten-free")
-                            if "carnivore" in diet_lower or "meat" in diet_lower:
-                                normalized_diets.append("carnivore")
-                        
-                        # Infer mealType from Spoonacular data (more comprehensive logic)
-                        meal_type = "any"
-                        if r.get("dishTypes"):
-                            dish_types = [dt.lower() for dt in r["dishTypes"]]
-                            if "breakfast" in dish_types or "brunch" in dish_types or "morning meal" in dish_types:
-                                meal_type = "breakfast"
-                            elif "lunch" in dish_types or "midday meal" in dish_types:
-                                meal_type = "lunch"
-                            elif "dinner" in dish_types or "supper" in dish_types or "main course" in dish_types:
-                                meal_type = "dinner"
-                            elif "snack" in dish_types or "appetizer" in dish_types or "dessert" in dish_types:
-                                meal_type = "snack"
-                        # Fallback: infer from title if not already set and title is suggestive
-                        if meal_type == "any" and r.get("title"):
-                            title_lower = r["title"].lower()
-                            if any(word in title_lower for word in ["omelette", "pancakes", "waffles", "scrambled", "french toast", "oats", "smoothie", "cereal", "eggs"]):
-                                meal_type = "breakfast"
-                            elif any(word in title_lower for word in ["sandwich", "soup", "salad", "wrap", "bowl", "tuna", "chicken salad"]):
-                                meal_type = "lunch"
-                            elif any(word in title_lower for word in ["roast", "stew", "curry", "pasta", "bake", "casserole", "pie", "steak", "chili", "stir-fry"]):
-                                meal_type = "dinner"
-
-                        spoonacular_recipes.append({
-                            "id": str(r.get("id")),
-                            "name": r.get("title"),
-                            "cuisine": r.get("cuisines", ["Unknown"])[0] if r.get("cuisines") else "Unknown",
-                            "dietaryRestrictions": normalized_diets,
-                            "ingredients": [ing.get("original") for ing in r.get("extendedIngredients", []) if ing.get("original")],
-                            "instructions": r.get("instructions", r.get("summary", "No instructions provided.")),
-                            "image": r.get("image", "/placeholder.svg"),
-                            "difficulty": "intermediate", # Spoonacular doesn't provide difficulty, set default
-                            "mealType": meal_type # Include inferred mealType
-                        })
+                        spoonacular_recipes.append(self._normalize_spoonacular_recipe(r))
                     recipes.extend(spoonacular_recipes)
-                    print(f"Fetched {len(spoonacular_recipes)} recipes from Spoonacular.")
+                    print(f"Added {len(spoonacular_recipes)} recipes from Spoonacular to the pool.")
             except requests.exceptions.RequestException as e:
                 print(f"Error fetching from Spoonacular API: {e}")
+            except Exception as e:
+                print(f"An unexpected error occurred during Spoonacular fetch: {e}")
 
-        # Ensure unique recipes (in case of overlap from MongoDB, in-memory, and Spoonacular)
-        unique_recipes = {r["id"]: r for r in recipes if "id" in r}.values()
-        return list(unique_recipes)
+        return recipes
 
-    def search_online_recipe_ideas(self, query: str) -> List[Dict[str, str]]:
+    def _normalize_spoonacular_recipe(self, spoonacular_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Normalizes Spoonacular recipe data to the internal Recipe format."""
+        normalized_diets = []
+        for diet in spoonacular_data.get("diets", []):
+            diet_lower = diet.lower()
+            if "vegetarian" in diet_lower:
+                normalized_diets.append("vegetarian")
+            if "vegan" in diet_lower:
+                normalized_diets.append("vegan")
+            if "gluten" in diet_lower and "free" in diet_lower:
+                normalized_diets.append("gluten-free")
+            if "carnivore" in diet_lower or "meat" in diet_lower or "paleo" in diet_lower: 
+                normalized_diets.append("carnivore")
+            if "ketogenic" in diet_lower:
+                normalized_diets.append("keto")
+
+        # Infer mealType from Spoonacular dishTypes or title, defaulting to 'any'
+        meal_type = "any"
+        dish_types = [dt.lower() for dt in spoonacular_data.get("dishTypes", [])]
+        if "breakfast" in dish_types:
+            meal_type = "breakfast"
+        elif "lunch" in dish_types:
+            meal_type = "lunch"
+        elif "dinner" in dish_types or "main course" in dish_types:
+            meal_type = "dinner"
+        elif "dessert" in dish_types:
+            meal_type = "dessert"
+        elif "snack" in dish_types:
+            meal_type = "snack"
+        
+        # Fallback to title if dishTypes is not helpful
+        if meal_type == "any" and spoonacular_data.get("title"):
+            title_lower = spoonacular_data["title"].lower()
+            if "breakfast" in title_lower: meal_type = "breakfast"
+            elif "lunch" in title_lower: meal_type = "lunch"
+            elif "dinner" in title_lower: meal_type = "dinner"
+            elif "dessert" in title_lower: meal_type = "dessert"
+            elif "snack" in title_lower: meal_type = "snack"
+
+
+        return {
+            "id": str(spoonacular_data.get("id")), 
+            "name": spoonacular_data.get("title", "Untitled Recipe"),
+            "cuisine": spoonacular_data.get("cuisine", spoonacular_data.get("cuisines", ["Unknown"])[0] if spoonacular_data.get("cuisines") else "Unknown"),
+            "dietaryRestrictions": list(set(normalized_diets)), 
+            "ingredients": [ing.get("original", "") for ing in spoonacular_data.get("extendedIngredients", []) if ing.get("original")],
+            "instructions": spoonacular_data.get("instructions", "No instructions provided.") or "No instructions provided.", 
+            "image": spoonacular_data.get("image", "/placeholder.svg"),
+            "difficulty": "medium", 
+            "mealType": meal_type,
+            "ratings": [], 
+            "comments": [] 
+        }
+
+    def search_online_recipe_ideas(self, query: str, number: int = 10) -> List[Dict[str, Any]]:
         """
-        Simulates performing a web search for recipe ideas.
-        Returns a list of dictionaries with 'title' and 'link'.
-        In a real scenario, this would call a paid web search API.
+        Searches for online recipe ideas using Spoonacular API and returns full recipe data.
         """
-        print(f"Simulating web search for: {query}")
-        if not EXTERNAL_WEB_SEARCH_API_KEY or EXTERNAL_WEB_SEARCH_API_KEY == "YOUR_WEB_SEARCH_API_KEY":
-            print("WARNING: External Web Search API Key not set. Using mock results.")
-            return [
-                {"title": f"Mock Recipe Idea 1 for {query}", "link": "https://example.com/mock1"},
-                {"title": f"Mock Recipe Idea 2 for {query}", "link": "https://example.com/mock2"},
-                {"title": f"Mock Recipe Idea 3 for {query}", "link": "https://example.com/mock3"},
-            ]
-
+        print(f"Searching Spoonacular for online recipe ideas with query: '{query}'")
         try:
-            params = {
-                "q": query,
-                "apiKey": EXTERNAL_WEB_SEARCH_API_KEY, # Use your actual web search API key
-                "num": 3 # Number of results to fetch
+            # Step 1: Perform a complex search to get recipe IDs and basic info
+            search_params = {
+                "apiKey": SPOONACULAR_API_KEY,
+                "query": query,
+                "number": number,
+                "addRecipeInformation": False, 
+                "fillIngredients": False,
             }
-            # This URL needs to be replaced with a real web search API endpoint
-            response = requests.get(EXTERNAL_WEB_SEARCH_API_URL, params=params, timeout=5)
-            response.raise_for_status() # Raise HTTPError for bad responses (4xx or 5xx)
-            data = response.json()
+            search_response = requests.get(SPOONACULAR_URL, params=search_params, timeout=10)
+            search_response.raise_for_status()
+            search_data = search_response.json()
 
-            # Assuming the external web search API returns results in a 'items' key
-            # Adjust this parsing based on the actual API's response structure
-            if "items" in data:
-                return [{"title": item.get("title"), "link": item.get("link")} for item in data["items"]]
-            return []
+            if "results" not in search_data or not search_data["results"]:
+                print(f"No initial search results from Spoonacular for query: '{query}'")
+                return []
+
+            recipe_ids = [r["id"] for r in search_data["results"]]
+            
+            # Step 2: Fetch full information for each recipe ID
+            full_recipes: List[Dict[str, Any]] = []
+            for recipe_id in recipe_ids:
+                info_url = SPOONACULAR_GET_BY_BY_ID_URL.format(id=recipe_id)
+                info_params = {
+                    "apiKey": SPOONACULAR_API_KEY,
+                    "includeNutrition": False, 
+                }
+                info_response = requests.get(info_url, params=info_params, timeout=10)
+                info_response.raise_for_status()
+                recipe_data = info_response.json()
+                
+                # Normalize and add to list
+                full_recipes.append(self._normalize_spoonacular_recipe(recipe_data))
+            
+            print(f"Successfully fetched and normalized {len(full_recipes)} online recipes from Spoonacular.")
+            return full_recipes
+
         except requests.exceptions.RequestException as e:
-            print(f"Error during simulated web search: {e}")
+            print(f"Error during Spoonacular API request for online ideas: {e}")
+            return []
+        except Exception as e:
+            print(f"An unexpected error occurred during Spoonacular online ideas search: {e}")
             return []

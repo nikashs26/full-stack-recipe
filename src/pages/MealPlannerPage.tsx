@@ -4,7 +4,7 @@ import Header from '../components/Header';
 import { Button } from '@/components/ui/button';
 import { Recipe } from '../types/recipe'; // Assuming you have a Recipe type
 import { useAuth } from '../context/AuthContext'; // To get user ID
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 interface MealPlan {
   [day: string]: {
@@ -24,6 +24,7 @@ const MealPlannerPage: React.FC = () => {
   const [mealPlan, setMealPlan] = useState<MealPlan | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   const generatePlan = async () => {
     if (!isAuthenticated || !user?.id) {
@@ -76,7 +77,7 @@ const MealPlannerPage: React.FC = () => {
             )}
           </div>
 
-          <div className="flex justify-center mb-8">
+          <div className="flex justify-center mb-8 gap-4">
             <Button 
               onClick={generatePlan}
               disabled={loading || !isAuthenticated}
@@ -84,6 +85,45 @@ const MealPlannerPage: React.FC = () => {
             >
               {loading ? "Generating Plan..." : "Generate My Weekly Plan"}
             </Button>
+
+            {mealPlan && (
+              <Button
+                onClick={async () => {
+                  setLoading(true);
+                  setError(null);
+                  try {
+                    const token = localStorage.getItem('token');
+                    const response = await fetch('/api/shopping-list/generate', {
+                      method: 'POST',
+                      headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json',
+                      },
+                      body: JSON.stringify({ weekly_plan: mealPlan }),
+                    });
+
+                    if (!response.ok) {
+                      const errorData = await response.json();
+                      throw new Error(errorData.error || "Failed to generate shopping list");
+                    }
+
+                    const data = await response.json();
+                    localStorage.setItem('agent-shopping-list', JSON.stringify(data.shopping_list));
+                    navigate('/shopping-list');
+
+                  } catch (err: any) {
+                    console.error("Error generating shopping list:", err);
+                    setError(err.message || "An unexpected error occurred while generating shopping list.");
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
+                disabled={loading || !mealPlan}
+                className="px-8 py-3 text-lg bg-green-500 hover:bg-green-600"
+              >
+                {loading ? "Generating List..." : "Generate Shopping List"}
+              </Button>
+            )}
           </div>
 
           {error && (

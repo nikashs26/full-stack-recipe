@@ -83,6 +83,14 @@ const Header: React.FC = () => {
                 </li>
                 <li>
                   <Link 
+                    to="/shopping-list" 
+                    className="text-gray-600 hover:text-recipe-primary transition-colors"
+                  >
+                    Shopping List
+                  </Link>
+                </li>
+                <li>
+                  <Link 
                     to="/add-recipe" 
                     className="bg-recipe-primary hover:bg-recipe-primary/90 text-white px-3 py-1 rounded-md flex items-center"
                   >
@@ -147,6 +155,13 @@ const Header: React.FC = () => {
                   onClick={() => setMobileMenuOpen(false)}
                 >
                   Meal Planner
+                </Link>
+                <Link 
+                  to="/shopping-list"
+                  className="block text-gray-600 hover:text-recipe-primary"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  Shopping List
                 </Link>
               </>
             )}
