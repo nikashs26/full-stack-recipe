@@ -1,6 +1,6 @@
 
 
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useMemo, useCallback } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase'; // Using '../lib/supabase' for consistency
 import { useToast } from '@/hooks/use-toast';
@@ -176,18 +176,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []); // Empty dependency array means this runs once on mount
 
-  // Diagnostic log for state changes (can be commented out in production)
-  useEffect(() => {
-    console.log("AuthContext State (Diagnostic):", {
-      user: user?.email,
-      isAuthenticated: !!user,
-      isLoading,
-      session: !!session
-    });
-  }, [user, session, isLoading]);
+  // Diagnostic log for state changes (commented out to prevent infinite re-renders)
+  // useEffect(() => {
+  //   console.log("AuthContext State (Diagnostic):", {
+  //     user: user?.email,
+  //     isAuthenticated: !!user,
+  //     isLoading,
+  //     session: !!session
+  //   });
+  // }, [user, session, isLoading]);
 
 
-  const signIn = async (email: string, password: string) => {
+  const signIn = useCallback(async (email: string, password: string) => {
     setIsLoading(true); // Start loading on sign in attempt
     console.log('AuthContext: Attempting to sign in user:', email);
     try {
@@ -209,9 +209,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setIsLoading(false); // Turn off loading on unexpected error
       return { error: error.message || "An unexpected error occurred during sign-in." };
     }
-  };
+  }, []);
 
-  const signUp = async (email: string, password: string) => {
+  const signUp = useCallback(async (email: string, password: string) => {
     setIsLoading(true); // Start loading on sign up attempt
     console.log('AuthContext: Attempting to sign up user:', email);
     try {
@@ -261,9 +261,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setIsLoading(false); // Turn off loading on unexpected error
       return { error: error.message || "An unexpected error occurred during sign-up." };
     }
-  };
+  }, [user]);
 
-  const signOut = async () => {
+  const signOut = useCallback(async () => {
     setIsLoading(true); // Indicate loading for sign out
     console.log("AuthContext: Attempting to sign out user.");
     try {
@@ -286,9 +286,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setIsLoading(false); // Turn off loading on unexpected error
       throw error;
     }
-  };
+  }, [toast]);
 
-  const updatePreferences = async (preferences: UserPreferences) => {
+  const updatePreferences = useCallback(async (preferences: UserPreferences) => {
     console.log("AuthContext: Attempting to update preferences:", preferences);
     if (!user?.email) {
       toast({
@@ -375,9 +375,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
       return false;
     }
-  };
+  }, [user, toast]);
 
-  const value = {
+  const value = useMemo(() => ({
     user,
     session,
     isAuthenticated: !!user,
@@ -386,7 +386,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     signUp,
     signOut,
     updatePreferences,
-  };
+  }), [user, session, isLoading, signIn, signUp, signOut, updatePreferences]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

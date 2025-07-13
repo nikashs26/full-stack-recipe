@@ -1,75 +1,69 @@
 
-import React from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import React, { useState, useRef, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { LogIn, LogOut, User } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
+import { User, Settings, ChefHat, ShoppingCart } from 'lucide-react';
 
 const UserMenu: React.FC = () => {
-  const { user, signOut } = useAuth(); // isAuthenticated and isLoading are now always true/false based on test mode
-  const { toast } = useToast();
-  const navigate = useNavigate();
+  const [isOpen, setIsOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
 
-  // In test mode, we always show the user menu
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
 
-  const handleSignOut = async () => {
-    try {
-      console.log("Attempting to sign out (Test Mode)...");
-      await signOut();
-      
-      // In test mode, we don't need a full page refresh for Supabase cleanup.
-      // Just navigate to home.
-      navigate('/');
-      
-      toast({
-        title: "Signed out successfully (Test Mode)",
-      });
-    } catch (error) {
-      console.error("Error signing out (Test Mode):", error);
-      toast({
-        title: "Signed out (Test Mode)",
-        description: "You have been signed out",
-      });
-    }
-  };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" className="relative h-8 w-8 rounded-full">
-          <User className="h-4 w-4" /> {/* Always show user icon in test mode */}
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-56">
-        <DropdownMenuLabel>
-          {user?.email || "Test User"} {/* Display test user email or a generic name */}
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem asChild>
-          <Link to="/preferences" className="cursor-pointer">
-            <User className="mr-2 h-4 w-4" />
-            <span>Preferences</span>
-          </Link>
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem 
-          onClick={handleSignOut}
-          className="cursor-pointer text-red-600 focus:text-red-600"
-        >
-          <LogOut className="mr-2 h-4 w-4" />
-          <span>Sign out</span>
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <div className="relative" ref={menuRef}>
+      <Button 
+        variant="ghost" 
+        className="relative h-8 w-8 rounded-full"
+        onClick={() => setIsOpen(!isOpen)}
+      >
+        <User className="h-4 w-4" />
+      </Button>
+      
+      {isOpen && (
+        <div className="absolute right-0 mt-2 w-56 bg-white rounded-md shadow-lg border border-gray-200 z-50">
+          <div className="py-1">
+            <div className="px-4 py-2 text-sm font-medium text-gray-900 border-b border-gray-100">
+              Recipe App User
+            </div>
+            <Link
+              to="/preferences"
+              className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+              onClick={() => setIsOpen(false)}
+            >
+              <Settings className="mr-2 h-4 w-4" />
+              Preferences
+            </Link>
+            <Link
+              to="/meal-planner"
+              className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+              onClick={() => setIsOpen(false)}
+            >
+              <ChefHat className="mr-2 h-4 w-4" />
+              🤖 AI Meal Planner
+            </Link>
+            <Link
+              to="/shopping-list"
+              className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+              onClick={() => setIsOpen(false)}
+            >
+              <ShoppingCart className="mr-2 h-4 w-4" />
+              Shopping List
+            </Link>
+          </div>
+        </div>
+      )}
+    </div>
   );
 };
 

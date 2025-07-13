@@ -20,15 +20,26 @@ class UserPreferencesService:
         )
 
     def get_preferences(self, user_id: str):
+        print(f'🔥 USER_PREFERENCES_SERVICE: get_preferences called for user_id: {user_id}')
+        
         results = self.collection.get(
             ids=[user_id],
             include=['documents']
         )
+        
+        print(f'🔥 USER_PREFERENCES_SERVICE: ChromaDB results: {results}')
+        
         if results and results["documents"]:
+            print(f'🔥 USER_PREFERENCES_SERVICE: Found documents: {results["documents"]}')
             # Parse the JSON string back to dict
             try:
                 preferences = json.loads(results["documents"][0])
+                print(f'🔥 USER_PREFERENCES_SERVICE: Parsed preferences: {preferences}')
                 return preferences
-            except json.JSONDecodeError:
+            except json.JSONDecodeError as e:
+                print(f'🔥 USER_PREFERENCES_SERVICE: JSON decode error: {e}')
                 return None
+        else:
+            print(f'🔥 USER_PREFERENCES_SERVICE: No documents found for user_id: {user_id}')
+        
         return None 

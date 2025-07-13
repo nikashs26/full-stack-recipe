@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Search, ChefHat, ThumbsUp, Award, TrendingUp, Clock } from 'lucide-react';
@@ -19,21 +19,36 @@ const HomePage: React.FC = () => {
   // Load user preferences on mount
   useEffect(() => {
     const loadPreferences = async () => {
+      console.log('🔥 HOMEPAGE: Loading preferences...');
       try {
-        const response = await fetch('/api/temp-preferences');
+        const response = await fetch('http://localhost:5001/api/temp-preferences', {
+          credentials: 'include' // Include cookies for session
+        });
+        console.log('🔥 HOMEPAGE: Response status:', response.status);
+        
         if (response.ok) {
           const data = await response.json();
+          console.log('🔥 HOMEPAGE: Response data:', data);
+          
           if (data.preferences) {
+            console.log('🔥 HOMEPAGE: Setting user preferences:', data.preferences);
             setUserPreferences(data.preferences);
+          } else {
+            console.log('🔥 HOMEPAGE: No preferences found in response');
           }
+        } else {
+          console.log('🔥 HOMEPAGE: Response not ok');
         }
       } catch (error) {
-        console.error('Error loading preferences:', error);
+        console.error('🔥 HOMEPAGE: Error loading preferences:', error);
       }
     };
 
     loadPreferences();
   }, []);
+
+  // Memoize userPreferences to prevent unnecessary re-renders
+  const memoizedUserPreferences = useMemo(() => userPreferences, [userPreferences]);
 
   // Query for local recipes
   const { data: localRecipes = [], isLoading: isLocalLoading } = useQuery({
@@ -59,12 +74,12 @@ const HomePage: React.FC = () => {
 
   // Query for recommended recipes based on user preferences
   const { data: recommendedRecipes = [], isLoading: isRecommendedLoading } = useQuery({
-    queryKey: ['recommendedRecipes', userPreferences],
+    queryKey: ['recommendedRecipes', memoizedUserPreferences],
     queryFn: async () => {
-      if (!userPreferences) return [];
+      if (!memoizedUserPreferences) return [];
 
       const allRecommendedRecipes: SpoonacularRecipe[] = [];
-      const { favoriteCuisines = [], dietaryRestrictions = [] } = userPreferences;
+      const { favoriteCuisines = [], dietaryRestrictions = [] } = memoizedUserPreferences;
 
              // Get recommendations based on favorite cuisines
        for (const cuisine of favoriteCuisines.slice(0, 2)) {
@@ -98,7 +113,7 @@ const HomePage: React.FC = () => {
       return uniqueRecipes.slice(0, 12);
     },
     staleTime: 300000,
-    enabled: !!userPreferences
+    enabled: !!memoizedUserPreferences
   });
 
   // Query for featured recipes
@@ -116,64 +131,15 @@ const HomePage: React.FC = () => {
     staleTime: 300000
   });
 
-     // Process recipes for different sections
-   const processedRecipes = {
-     popularRecipes: manualRecipes.slice(0, 8),
-     featuredRecipes: featuredRecipes.slice(0, 8),
-     topRatedRecipes: localRecipes.filter(recipe => recipe.ratings && recipe.ratings.length > 0).slice(0, 8),
-     recentRecipes: localRecipes.slice(0, 8)
-   };
+  // Process recipes for different sections using useMemo to prevent infinite re-renders
+  const processedRecipes = useMemo(() => ({
+    popularRecipes: manualRecipes.slice(0, 8),
+    featuredRecipes: featuredRecipes.slice(0, 8),
+    topRatedRecipes: localRecipes.filter(recipe => recipe.ratings && recipe.ratings.length > 0).slice(0, 8),
+    recentRecipes: localRecipes.slice(0, 8)
+  }), [manualRecipes, featuredRecipes, localRecipes]);
 
-  // Track seen recipes to avoid duplicates
-  const [seenRecipes, setSeenRecipes] = useState<Set<string>>(new Set());
 
-  useEffect(() => {
-    const allRecipeIds = new Set<string>();
-    
-    // Add recommended recipe IDs
-    recommendedRecipes.forEach(recipe => {
-      allRecipeIds.add(`recommended-${recipe.id}`);
-    });
-    
-    // Add other recipe IDs
-    processedRecipes.popularRecipes.forEach(recipe => {
-      allRecipeIds.add(`popular-${recipe.id}`);
-    });
-    
-    processedRecipes.featuredRecipes.forEach(recipe => {
-      allRecipeIds.add(`featured-${recipe.id}`);
-    });
-    
-    processedRecipes.topRatedRecipes.forEach(recipe => {
-      allRecipeIds.add(`top-rated-${recipe.id}`);
-    });
-    
-    processedRecipes.recentRecipes.forEach(recipe => {
-      allRecipeIds.add(`recent-${recipe.id}`);
-    });
-    
-    setSeenRecipes(allRecipeIds);
-  }, [recommendedRecipes, processedRecipes]);
-
-  const normalizeTitle = (title: string) => {
-    return title.toLowerCase().replace(/[^a-z0-9]/g, '');
-  };
-
-  const isRecipeSeen = (recipe: any, type: string) => {
-    const recipeKey = `${type}-${recipe.id}`;
-    const normalizedTitle = normalizeTitle(recipe.name || recipe.title || '');
-    
-    for (const seenKey of seenRecipes) {
-      if (seenKey === recipeKey) continue;
-      
-      const [, seenId] = seenKey.split('-', 2);
-      if (seenId === String(recipe.id)) {
-        return true;
-      }
-    }
-    
-    return false;
-  };
 
   const handleDeleteRecipe = () => {
     // Placeholder for delete functionality
@@ -218,7 +184,7 @@ const HomePage: React.FC = () => {
 
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           {/* Recommended Recipes Section - Show when preferences are set */}
-          {userPreferences && (
+          {memoizedUserPreferences && (
             <section className="mb-16">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-3xl font-bold text-gray-900 flex items-center">
@@ -262,7 +228,7 @@ const HomePage: React.FC = () => {
           )}
 
           {/* Show message when no preferences are set */}
-          {!userPreferences && (
+          {!memoizedUserPreferences && (
             <section className="mb-16">
               <div className="text-center py-12 border border-dashed border-gray-300 rounded-lg">
                 <ThumbsUp className="mx-auto h-12 w-12 text-gray-400 mb-4" />

@@ -12,21 +12,30 @@ def save_temp_preferences():
     Save temporary preferences for users without authentication
     Creates a session-based user ID and stores preferences in ChromaDB
     """
+    print('🔥 BACKEND: POST /temp-preferences called')
     try:
         data = request.get_json()
+        print(f'🔥 BACKEND: Received data: {data}')
+        
         if not data:
+            print('🔥 BACKEND: No data provided')
             return jsonify({"error": "No data provided"}), 400
         
         # Extract preferences from the request
         preferences_data = data.get('preferences', {})
+        print(f'🔥 BACKEND: Extracted preferences_data: {preferences_data}')
+        
         if not preferences_data:
+            print('🔥 BACKEND: No preferences data provided')
             return jsonify({"error": "No preferences data provided"}), 400
         
         # Get or create a session-based user ID
         if 'temp_user_id' not in session:
             session['temp_user_id'] = f"temp_user_{str(uuid.uuid4())[:8]}"
+            print(f'🔥 BACKEND: Created new temp_user_id: {session["temp_user_id"]}')
         
         temp_user_id = session['temp_user_id']
+        print(f'🔥 BACKEND: Using temp_user_id: {temp_user_id}')
         
         # Validate and set defaults for preferences
         processed_preferences = {
@@ -38,17 +47,25 @@ def save_temp_preferences():
             'maxCookingTime': preferences_data.get('maxCookingTime', "30 minutes")
         }
         
-        # Save to ChromaDB
-        user_preferences_service.save_preferences(temp_user_id, processed_preferences)
+        print(f'🔥 BACKEND: Processed preferences: {processed_preferences}')
         
-        return jsonify({
+        # Save to ChromaDB
+        print('🔥 BACKEND: Saving to ChromaDB...')
+        user_preferences_service.save_preferences(temp_user_id, processed_preferences)
+        print('🔥 BACKEND: Successfully saved to ChromaDB!')
+        
+        response_data = {
             "success": True,
             "message": "Temporary preferences saved successfully",
             "temp_user_id": temp_user_id,
             "preferences": processed_preferences
-        }), 200
+        }
+        
+        print(f'🔥 BACKEND: Returning response: {response_data}')
+        return jsonify(response_data), 200
         
     except Exception as e:
+        print(f'🔥 BACKEND: Error in save_temp_preferences: {str(e)}')
         return jsonify({"error": str(e)}), 500
 
 @temp_preferences_bp.route('/temp-preferences', methods=['GET'])
@@ -56,9 +73,11 @@ def get_temp_preferences():
     """
     Get temporary preferences for the current session
     """
+    print('🔥 BACKEND: GET /temp-preferences called')
     try:
         # Check if we have a temp user ID in session
         if 'temp_user_id' not in session:
+            print('🔥 BACKEND: No temp_user_id in session')
             return jsonify({
                 "success": False,
                 "message": "No temporary preferences found",
@@ -66,9 +85,11 @@ def get_temp_preferences():
             }), 200
         
         temp_user_id = session['temp_user_id']
+        print(f'🔥 BACKEND: Getting preferences for temp_user_id: {temp_user_id}')
         
         # Get preferences from ChromaDB
         preferences = user_preferences_service.get_preferences(temp_user_id)
+        print(f'🔥 BACKEND: Retrieved preferences from ChromaDB: {preferences}')
         
         if preferences:
             return jsonify({

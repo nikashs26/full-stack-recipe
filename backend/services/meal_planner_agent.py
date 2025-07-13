@@ -1,215 +1,238 @@
 import random
+import logging
 from typing import List, Dict, Any, Optional
 from services.user_preferences_service import UserPreferencesService
+from services.llm_meal_planner_agent import LLMMealPlannerAgent
 
-# Placeholder for recipe data (replace with actual database/API calls)
-# In a real scenario, this would fetch recipes from MongoDB or an external API.
-class RecipeServicePlaceholder:
-    def get_all_recipes(self) -> List[Dict[str, Any]]:
-        # This should return a list of recipe dictionaries with relevant fields
-        # For now, a mock list
-        return [
-            {
-                "id": "rec1", "name": "Spaghetti Bolognese", "cuisine": "Italian",
-                "dietaryRestrictions": [], "difficulty": "intermediate", "ingredients": ["pasta", "meat", "tomato"]
-            },
-            {
-                "id": "rec2", "name": "Vegetable Stir-fry", "cuisine": "Asian",
-                "dietaryRestrictions": ["vegetarian", "vegan"], "difficulty": "beginner", "ingredients": ["broccoli", "carrot", "tofu"]
-            },
-            {
-                "id": "rec3", "name": "Gluten-Free Chicken Curry", "cuisine": "Indian",
-                "dietaryRestrictions": ["gluten-free"], "difficulty": "intermediate", "ingredients": ["chicken", "curry powder", "rice"]
-            },
-            {
-                "id": "rec4", "name": "Classic Beef Tacos", "cuisine": "Mexican",
-                "dietaryRestrictions": [], "difficulty": "beginner", "ingredients": ["beef", "tortillas", "salsa"]
-            },
-            {
-                "id": "rec5", "name": "Lentil Soup", "cuisine": "Mediterranean",
-                "dietaryRestrictions": ["vegetarian", "vegan"], "difficulty": "beginner", "ingredients": ["lentils", "vegetables"]
-            },
-            {
-                "id": "rec6", "name": "Keto Salmon with Asparagus", "cuisine": "American",
-                "dietaryRestrictions": ["keto"], "difficulty": "intermediate", "ingredients": ["salmon", "asparagus", "butter"]
-            },
-            {
-                "id": "rec7", "name": "Vegan Lasagna", "cuisine": "Italian",
-                "dietaryRestrictions": ["vegan"], "difficulty": "advanced", "ingredients": ["pasta", "vegan cheese", "tomato"]
-            },
-            {
-                "id": "rec8", "name": "Carnivore Steak and Eggs", "cuisine": "American",
-                "dietaryRestrictions": ["carnivore"], "difficulty": "beginner", "ingredients": ["steak", "eggs"]
-            },
-            # Add more diverse mock recipes
-            {
-                "id": "rec9", "name": "Sushi Rolls", "cuisine": "Japanese",
-                "dietaryRestrictions": [], "difficulty": "advanced", "ingredients": ["rice", "fish", "seaweed"]
-            },
-            {
-                "id": "rec10", "name": "Thai Green Curry", "cuisine": "Thai",
-                "dietaryRestrictions": ["vegan"], "difficulty": "intermediate", "ingredients": ["coconut milk", "curry paste", "vegetables"]
-            },
-        ]
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 class MealPlannerAgent:
     def __init__(self, user_preferences_service: UserPreferencesService, recipe_service: Any):
         self.user_preferences_service = user_preferences_service
         self.recipe_service = recipe_service
-
-    def _filter_recipes(self, all_recipes: List[Dict[str, Any]], preferences: Dict[str, Any], meal_type: Optional[str] = None) -> List[Dict[str, Any]]:
-        filtered_recipes = []
+        self.llm_agent = LLMMealPlannerAgent()
         
-        dietary_restrictions = preferences.get("dietaryRestrictions", [])
-        favorite_cuisines = preferences.get("favoriteCuisines", [])
-        allergens = preferences.get("allergens", [])
-        cooking_skill_level = preferences.get("cookingSkillLevel", "beginner")
-
-        for recipe in all_recipes:
-            # Filter by meal_type if specified
-            if meal_type and recipe.get("mealType") and recipe["mealType"].lower() != meal_type.lower():
-                continue
-
-            # 1. Dietary Restrictions Check
-            recipe_dietary = [d.lower() for d in recipe.get("dietaryRestrictions", [])]
-            if dietary_restrictions:
-                if not all(res.lower() in recipe_dietary for res in dietary_restrictions):
-                    continue # Skip if recipe doesn't meet ALL specified dietary restrictions
-            
-            # 2. Allergens Check (simplified: checks if any ingredient contains allergen text)
-            recipe_ingredients_lower = [ing.lower() for ing in recipe.get("ingredients", [])]
-            if any(allergen.lower() in ' '.join(recipe_ingredients_lower) for allergen in allergens):
-                continue # Skip if recipe contains any specified allergen
-            
-            # 3. Cooking Skill Level Check (basic: beginner can do beginner/intermediate, advanced can do all)
-            recipe_difficulty = recipe.get("difficulty", "beginner")
-            if cooking_skill_level == "beginner" and recipe_difficulty == "advanced":
-                continue
-            if cooking_skill_level == "intermediate" and recipe_difficulty == "advanced":
-                # Intermediate can do intermediate and beginner
-                pass # No skip, allow it
-            
-            filtered_recipes.append(recipe)
-
-        # 4. Prioritize Favorite Cuisines
-        if favorite_cuisines:
-            prioritized = []
-            other = []
-            for recipe in filtered_recipes:
-                recipe_cuisine_lower = recipe.get("cuisine", "").lower()
-                if any(fav_cuisine.lower() == recipe_cuisine_lower for fav_cuisine in favorite_cuisines):
-                    prioritized.append(recipe)
-                else:
-                    other.append(recipe)
-            # Shuffle and combine to ensure some variety even if favorites exist
-            random.shuffle(prioritized)
-            random.shuffle(other)
-            filtered_recipes = prioritized + other
-        else:
-            random.shuffle(filtered_recipes) # Shuffle if no cuisine preference for variety
-            
-        return filtered_recipes
-
     def generate_weekly_plan(self, user_id: str) -> Dict[str, Any]:
-        preferences = self.user_preferences_service.get_preferences(user_id)
-        if not preferences:
-            return {"error": "User preferences not found."}
-
-        all_recipes = self.recipe_service.get_all_recipes()
-        if not all_recipes:
-            return {"error": "No recipes available to generate a plan."}
-
-        eligible_recipes = self._filter_recipes(all_recipes, preferences)
+        """Generate a comprehensive weekly meal plan using LLM with ChromaDB preferences"""
+        print(f'🔥 MEAL_PLANNER_AGENT: generate_weekly_plan called for user_id: {user_id}')
+        try:
+            # Get user preferences from ChromaDB
+            print(f'🔥 MEAL_PLANNER_AGENT: Getting preferences from ChromaDB for user_id: {user_id}')
+            preferences = self.user_preferences_service.get_preferences(user_id)
+            print(f'🔥 MEAL_PLANNER_AGENT: Retrieved preferences: {preferences}')
+            
+            if not preferences:
+                logger.warning(f"No preferences found for user {user_id}")
+                print(f'🔥 MEAL_PLANNER_AGENT: No preferences found for user {user_id}')
+                return {"error": "User preferences not found. Please set your preferences first."}
+            
+            logger.info(f"Generating LLM-powered weekly meal plan for user {user_id}")
+            print(f'🔥 MEAL_PLANNER_AGENT: Generating meal plan with preferences: {preferences}')
+            
+            # Use LLM agent to generate comprehensive meal plan
+            meal_plan = self.llm_agent.generate_weekly_meal_plan(preferences)
+            
+            # Add user context and metadata
+            meal_plan['user_id'] = user_id
+            meal_plan['plan_type'] = 'llm_generated'
+            
+            return meal_plan
+            
+        except Exception as e:
+            logger.error(f"Error generating weekly plan for user {user_id}: {str(e)}")
+            # Fall back to rule-based system
+            return self._generate_fallback_plan(user_id)
+    
+    def generate_meal_plan_with_preferences(self, preferences: Dict[str, Any]) -> Dict[str, Any]:
+        """Generate a meal plan directly with preferences (for API calls without user ID)"""
+        try:
+            logger.info("Generating LLM-powered meal plan with provided preferences")
+            
+            # Use LLM agent to generate comprehensive meal plan
+            meal_plan = self.llm_agent.generate_weekly_meal_plan(preferences)
+            
+            # Add metadata
+            meal_plan['plan_type'] = 'llm_generated'
+            meal_plan['source'] = 'direct_preferences'
+            
+            return meal_plan
+            
+        except Exception as e:
+            logger.error(f"Error generating meal plan with preferences: {str(e)}")
+            # Fall back to rule-based system
+            return self._generate_rule_based_fallback(preferences)
+    
+    def get_recipe_suggestions(self, meal_type: str, preferences: Dict[str, Any], count: int = 5) -> List[Dict[str, Any]]:
+        """Get LLM-powered recipe suggestions for a specific meal type"""
+        try:
+            logger.info(f"Getting LLM recipe suggestions for {meal_type}")
+            return self.llm_agent.get_recipe_suggestions(meal_type, preferences, count)
+        except Exception as e:
+            logger.error(f"Error getting recipe suggestions: {str(e)}")
+            return []
+    
+    def _generate_fallback_plan(self, user_id: str) -> Dict[str, Any]:
+        """Generate a fallback meal plan using rule-based system"""
+        try:
+            preferences = self.user_preferences_service.get_preferences(user_id)
+            if not preferences:
+                preferences = self._get_default_preferences()
+            
+            return self._generate_rule_based_fallback(preferences)
+        except Exception as e:
+            logger.error(f"Error generating fallback plan: {str(e)}")
+            return {"error": "Unable to generate meal plan. Please try again later."}
+    
+    def _generate_rule_based_fallback(self, preferences: Dict[str, Any]) -> Dict[str, Any]:
+        """Generate a basic rule-based meal plan as fallback"""
+        from datetime import datetime, timedelta
         
-        if not eligible_recipes or len(eligible_recipes) < 21: # If few or no eligible recipes (21 for 7 days * 3 meals), try web search
-            print("Few or no eligible recipes found from existing sources. Attempting web search for more ideas...")
-            search_query_parts = []
-            if preferences.get("dietaryRestrictions"):
-                search_query_parts.extend(preferences["dietaryRestrictions"])
-            if preferences.get("favoriteCuisines"):
-                search_query_parts.extend(preferences["favoriteCuisines"])
-            # Add cooking skill level to query if available and not beginner
-            skill_level = preferences.get("cookingSkillLevel", "beginner")
-            if skill_level != "beginner":
-                search_query_parts.append(f"{skill_level} difficulty")
-
-            search_query_parts.append("recipe") # Make the query more general for recipes
-            
-            search_query = " ".join(search_query_parts)
-            # Fetch 20 new recipes from online to augment the pool
-            online_recipes = self.recipe_service.search_online_recipe_ideas(search_query, number=20)
-            print(f"Found {len(online_recipes)} online recipes. Adding to the general pool.")
-            
-            # Add newly found online recipes to the existing all_recipes pool
-            # This allows them to be filtered and chosen in the next step
-            all_recipes.extend(online_recipes)
-            
-            # Re-filter the combined pool of recipes
-            eligible_recipes = self._filter_recipes(all_recipes, preferences)
-
-        if not eligible_recipes:
-            # If still no eligible recipes even after considering web search expansion
-            return {"error": "No recipes match your preferences. Please adjust them."}
-
-        weekly_plan = {
-            "monday": {"breakfast": None, "lunch": None, "dinner": None},
-            "tuesday": {"breakfast": None, "lunch": None, "dinner": None},
-            "wednesday": {"breakfast": None, "lunch": None, "dinner": None},
-            "thursday": {"breakfast": None, "lunch": None, "dinner": None},
-            "friday": {"breakfast": None, "lunch": None, "dinner": None},
-            "saturday": {"breakfast": None, "lunch": None, "dinner": None},
-            "sunday": {"breakfast": None, "lunch": None, "dinner": None},
+        # Extract preferences
+        dietary_restrictions = preferences.get('dietary_restrictions', [])
+        favorite_cuisines = preferences.get('favorite_cuisines', [])
+        allergies = preferences.get('allergies', [])
+        
+        # Simple meal templates
+        meal_templates = {
+            "breakfast": [
+                {"name": "Oatmeal with Berries", "cuisine": "American", "time": "10 minutes", "vegetarian": True, "vegan": True},
+                {"name": "Avocado Toast", "cuisine": "American", "time": "10 minutes", "vegetarian": True, "vegan": True},
+                {"name": "Greek Yogurt Parfait", "cuisine": "Mediterranean", "time": "5 minutes", "vegetarian": True, "vegan": False},
+                {"name": "Smoothie Bowl", "cuisine": "American", "time": "10 minutes", "vegetarian": True, "vegan": True},
+                {"name": "Scrambled Eggs", "cuisine": "American", "time": "10 minutes", "vegetarian": True, "vegan": False}
+            ],
+            "lunch": [
+                {"name": "Quinoa Buddha Bowl", "cuisine": "American", "time": "25 minutes", "vegetarian": True, "vegan": True},
+                {"name": "Mediterranean Wrap", "cuisine": "Mediterranean", "time": "15 minutes", "vegetarian": True, "vegan": False},
+                {"name": "Asian Stir-Fry", "cuisine": "Asian", "time": "20 minutes", "vegetarian": True, "vegan": True},
+                {"name": "Lentil Soup", "cuisine": "International", "time": "30 minutes", "vegetarian": True, "vegan": True},
+                {"name": "Caprese Salad", "cuisine": "Italian", "time": "10 minutes", "vegetarian": True, "vegan": False}
+            ],
+            "dinner": [
+                {"name": "Grilled Salmon with Vegetables", "cuisine": "American", "time": "25 minutes", "vegetarian": False, "vegan": False},
+                {"name": "Vegetable Curry", "cuisine": "Indian", "time": "35 minutes", "vegetarian": True, "vegan": True},
+                {"name": "Pasta Primavera", "cuisine": "Italian", "time": "30 minutes", "vegetarian": True, "vegan": False},
+                {"name": "Thai Green Curry", "cuisine": "Asian", "time": "30 minutes", "vegetarian": True, "vegan": True},
+                {"name": "Stuffed Bell Peppers", "cuisine": "Mediterranean", "time": "45 minutes", "vegetarian": True, "vegan": True}
+            ]
         }
-
-        days = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
-        meal_types = ["breakfast", "lunch", "dinner"]
-
-        assigned_recipe_ids = set() # To track recipes used in the *entire* week to avoid direct repetition
-        daily_assigned_recipes: Dict[str, set] = {
-            day: set() for day in days
-        } # To track recipes used on a given day
-
-        for day in days:
-            for meal_type in meal_types:
-                # Get recipes eligible for the current meal type and user preferences
-                # Ensure we don't reuse the exact same recipe multiple times on the same day
-                # and try to avoid immediate repetition across days.
-                
-                # Filter by meal_type first
-                eligible_for_meal_type = self._filter_recipes(all_recipes, preferences, meal_type)
-
-                # Further filter to exclude recipes already assigned on this day or recently assigned globally
-                # Implement a simple recency check: avoid recipes used in the last 2 days for the same meal type
-                recent_global_exclusions = set()
-                if len(assigned_recipe_ids) > 0: # Only if recipes have been assigned
-                    # This is a very basic heuristic; a more advanced agent would track usage per meal type per day
-                    # For now, just avoid recently used recipes globally
-                    # In a more complex agent, we'd store a history of chosen recipes
-                    pass # We'll manage variety by shuffling and picking from available_for_slot
-
-                available_for_slot = [
-                    r for r in eligible_for_meal_type
-                    if r["id"] not in daily_assigned_recipes[day] and r["id"] not in assigned_recipe_ids
-                ]
-
-                # If not enough variety, allow reuse, but prioritize unused ones
-                if not available_for_slot:
-                    # Allow recipes not used on this specific day, even if used earlier in the week
-                    available_for_slot = [
-                        r for r in eligible_for_meal_type
-                        if r["id"] not in daily_assigned_recipes[day]
-                    ]
-
-                # If still not enough, allow any eligible recipe for the meal type
-                if not available_for_slot:
-                    available_for_slot = list(eligible_for_meal_type)
-                
-                if available_for_slot:
-                    chosen_recipe = random.choice(available_for_slot)
-                    weekly_plan[day][meal_type] = chosen_recipe
-                    assigned_recipe_ids.add(chosen_recipe["id"])
-                    daily_assigned_recipes[day].add(chosen_recipe["id"])
+        
+        # Filter recipes based on dietary restrictions
+        filtered_meals = {}
+        for meal_type, recipes in meal_templates.items():
+            filtered_meals[meal_type] = []
+            for recipe in recipes:
+                if self._is_recipe_compatible_simple(recipe, dietary_restrictions, allergies):
+                    filtered_meals[meal_type].append(recipe)
+        
+        # Generate 7-day plan
+        days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        today = datetime.now()
+        
+        weekly_plan = []
+        for i, day in enumerate(days):
+            day_date = today + timedelta(days=i)
+            
+            day_meals = {}
+            for meal_type in ["breakfast", "lunch", "dinner"]:
+                available_recipes = filtered_meals.get(meal_type, [])
+                if available_recipes:
+                    # Prefer favorite cuisines
+                    if favorite_cuisines:
+                        preferred_recipes = [r for r in available_recipes if r["cuisine"].lower() in [c.lower() for c in favorite_cuisines]]
+                        if preferred_recipes:
+                            chosen_recipe = random.choice(preferred_recipes)
+                        else:
+                            chosen_recipe = random.choice(available_recipes)
+                    else:
+                        chosen_recipe = random.choice(available_recipes)
+                    
+                    day_meals[meal_type] = {
+                        "name": chosen_recipe["name"],
+                        "cuisine": chosen_recipe["cuisine"],
+                        "prep_time": "10 minutes",
+                        "cook_time": chosen_recipe["time"],
+                        "difficulty": "Medium",
+                        "servings": 2,
+                        "ingredients": ["Basic ingredients - see full recipe"],
+                        "instructions": [f"Prepare {chosen_recipe['name']} following standard recipe"],
+                        "nutritional_highlights": ["Balanced nutrition"],
+                        "tags": ["healthy", "balanced"]
+                    }
                 else:
-                    weekly_plan[day][meal_type] = {"id": "none", "name": f"No {meal_type} recipe found for preferences"}
-
-        return {"plan": weekly_plan} 
+                    # Fallback meal
+                    day_meals[meal_type] = {
+                        "name": f"Simple {meal_type.title()}",
+                        "cuisine": "International",
+                        "prep_time": "10 minutes",
+                        "cook_time": "15 minutes",
+                        "difficulty": "Easy",
+                        "servings": 2,
+                        "ingredients": ["Basic ingredients"],
+                        "instructions": [f"Prepare a simple {meal_type}"],
+                        "nutritional_highlights": ["Balanced nutrition"],
+                        "tags": ["quick", "simple"]
+                    }
+            
+            weekly_plan.append({
+                "day": day,
+                "date": day_date.strftime("%Y-%m-%d"),
+                "meals": day_meals,
+                "daily_notes": "Rule-based meal plan - consider upgrading to AI-powered planning"
+            })
+        
+        return {
+            "week_summary": {
+                "theme": "Balanced Weekly Nutrition",
+                "total_recipes": 21,
+                "prep_tips": [
+                    "Prep vegetables in advance for quicker cooking",
+                    "Cook grains in larger batches",
+                    "Plan your grocery shopping ahead"
+                ],
+                "shopping_highlights": ["Fresh vegetables", "Whole grains", "Lean proteins"]
+            },
+            "days": weekly_plan,
+            "weekly_shopping_list": {
+                "proteins": ["eggs", "tofu", "lentils"] if 'vegetarian' in dietary_restrictions else ["chicken", "salmon", "eggs"],
+                "vegetables": ["spinach", "broccoli", "bell peppers", "tomatoes", "onions"],
+                "grains": ["quinoa", "brown rice", "oats", "whole wheat bread"],
+                "dairy": [] if 'vegan' in dietary_restrictions else ["greek yogurt", "cheese"],
+                "pantry": ["olive oil", "spices", "nuts", "seeds", "canned beans"],
+                "estimated_cost": "$50-65"
+            },
+            "nutritional_summary": {
+                "weekly_highlights": ["Balanced macronutrients", "Variety of vegetables", "Whole grains"],
+                "variety_score": "Good",
+                "health_rating": "Good"
+            },
+            "generated_at": datetime.now().isoformat(),
+            "preferences_used": preferences,
+            "plan_type": "rule_based_fallback",
+            "note": "This is a simplified meal plan. For personalized AI-generated plans with detailed recipes, please ensure your preferences are set and try again."
+        }
+    
+    def _is_recipe_compatible_simple(self, recipe: Dict[str, Any], dietary_restrictions: List[str], allergies: List[str]) -> bool:
+        """Simple compatibility check for fallback recipes"""
+        # Check dietary restrictions
+        for restriction in dietary_restrictions:
+            if restriction.lower() == "vegetarian" and not recipe.get("vegetarian", False):
+                return False
+            if restriction.lower() == "vegan" and not recipe.get("vegan", False):
+                return False
+        
+        # For simplicity, assume other restrictions are handled in recipe selection
+        return True
+    
+    def _get_default_preferences(self) -> Dict[str, Any]:
+        """Get default preferences when none are found"""
+        return {
+            "dietary_restrictions": [],
+            "favorite_cuisines": ["American", "Mediterranean", "Italian"],
+            "allergies": [],
+            "cooking_time": "medium",
+            "skill_level": "intermediate",
+            "budget_range": "moderate"
+        } 

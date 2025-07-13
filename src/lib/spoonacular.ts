@@ -1,7 +1,7 @@
 // URLs for API endpoints - fallback to mock data when not available
-const API_DB_RECIPES = "http://localhost:5000/recipes";
-const API_URL = "http://localhost:5000/get_recipes";
-const API_URL_RECIPE_BY_ID = "http://localhost:5000/get_recipe_by_id";
+const API_DB_RECIPES = "http://localhost:5001/recipes";
+const API_URL = "http://localhost:5001/get_recipes";
+const API_URL_RECIPE_BY_ID = "http://localhost:5001/get_recipe_by_id";
 
 // Fallback data for when the API is unavailable
 const FALLBACK_RECIPES = [

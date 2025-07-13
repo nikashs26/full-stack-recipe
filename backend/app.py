@@ -20,7 +20,9 @@ from services.recipe_service import RecipeService # Import RecipeService
 
 # Initialize Flask App
 app = Flask(__name__)
-CORS(app) # Enable CORS for all routes
+
+# Configure CORS to support credentials (for sessions)
+CORS(app, supports_credentials=True, origins=['http://localhost:8080', 'http://localhost:8081', 'http://localhost:8082'])
 
 # Configure session
 app.config['SECRET_KEY'] = 'your-secret-key-for-sessions'  # Change this in production

@@ -45,7 +45,7 @@ export const getDatabaseStatus = async (): Promise<{
   try {
     // First try direct API endpoint for testing MongoDB
     try {
-      const testResponse = await fetch('http://localhost:5000/test-mongodb');
+      const testResponse = await fetch('http://localhost:5001/test-mongodb');
       if (testResponse.ok) {
         const testData = await testResponse.json();
         console.log("Direct MongoDB test results:", testData);
@@ -120,7 +120,7 @@ export const testDirectConnection = async (): Promise<{
   details?: any;
 }> => {
   try {
-    const response = await fetch('http://localhost:5000/test-mongodb');
+    const response = await fetch('http://localhost:5001/test-mongodb');
     if (!response.ok) {
       throw new Error(`Failed to test MongoDB connection: ${response.status} ${response.statusText}`);
     }

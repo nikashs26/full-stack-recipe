@@ -60,6 +60,7 @@ const UserPreferencesPage: React.FC = () => {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const [currentPreferences, setCurrentPreferences] = useState<UserPreferences | null>(null);
+  const [hasChanges, setHasChanges] = useState(false);
   
   // Initialize form with current preferences
   const form = useForm<z.infer<typeof formSchema>>({
@@ -76,7 +77,9 @@ const UserPreferencesPage: React.FC = () => {
   useEffect(() => {
     const loadPreferences = async () => {
       try {
-        const response = await fetch('/api/temp-preferences');
+        const response = await fetch('http://localhost:5001/api/temp-preferences', {
+          credentials: 'include' // Include cookies for session
+        });
         if (response.ok) {
           const data = await response.json();
           if (data.preferences) {
@@ -98,8 +101,78 @@ const UserPreferencesPage: React.FC = () => {
     loadPreferences();
   }, [form]);
 
+  // Auto-save preferences when form changes
+  useEffect(() => {
+    if (!hasChanges) return;
+
+    const timeoutId = setTimeout(async () => {
+      const values = form.getValues();
+      await savePreferences(values, false); // Save without showing success message
+    }, 1000); // Auto-save after 1 second of no changes
+
+    return () => clearTimeout(timeoutId);
+  }, [form.watch(), hasChanges]);
+
   // Create a convenience variable for the current form values
   const preferences = form.watch();
+
+  const savePreferences = async (values: z.infer<typeof formSchema>, showToast: boolean = true) => {
+    console.log('🔥 FRONTEND: Starting to save preferences...');
+    console.log('🔥 FRONTEND: Values to save:', values);
+    
+    const preferencesPayload = {
+      preferences: {
+        dietaryRestrictions: values.dietaryRestrictions,
+        favoriteCuisines: values.favoriteCuisines,
+        allergens: values.allergens,
+        cookingSkillLevel: values.cookingSkillLevel
+      }
+    };
+    
+    console.log('🔥 FRONTEND: Payload being sent:', JSON.stringify(preferencesPayload, null, 2));
+    
+    try {
+      const response = await fetch('http://localhost:5001/api/temp-preferences', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include', // Include cookies for session
+        body: JSON.stringify(preferencesPayload),
+      });
+
+      console.log('🔥 FRONTEND: Response status:', response.status);
+      console.log('🔥 FRONTEND: Response headers:', response.headers);
+      
+      const responseData = await response.json();
+      console.log('🔥 FRONTEND: Response data:', responseData);
+      
+      if (response.ok) {
+        console.log('🔥 FRONTEND: Preferences saved successfully!');
+        setHasChanges(false);
+        if (showToast) {
+          toast({
+            title: "Preferences saved!",
+            description: `Your recipe recommendations will now include ${values.favoriteCuisines.length} cuisine types and respect ${values.dietaryRestrictions.length} dietary restrictions.`,
+          });
+        }
+        return true;
+      } else {
+        console.log('🔥 FRONTEND: Failed to save preferences - response not ok');
+        throw new Error('Failed to save preferences');
+      }
+    } catch (error) {
+      console.error('🔥 FRONTEND: Error saving preferences:', error);
+      if (showToast) {
+        toast({
+          title: "Failed to save preferences",
+          description: "Please try again.",
+          variant: "destructive"
+        });
+      }
+      return false;
+    }
+  };
 
   const handleDietaryChange = (id: string) => {
     const currentValues = form.getValues('dietaryRestrictions');
@@ -108,6 +181,7 @@ const UserPreferencesPage: React.FC = () => {
       : [...currentValues, id];
     
     form.setValue('dietaryRestrictions', newValues);
+    setHasChanges(true);
   };
 
   const handleCuisineChange = (id: string) => {
@@ -117,6 +191,7 @@ const UserPreferencesPage: React.FC = () => {
       : [...currentValues, id];
     
     form.setValue('favoriteCuisines', newValues);
+    setHasChanges(true);
   };
 
   const handleAllergenChange = (id: string) => {
@@ -126,49 +201,21 @@ const UserPreferencesPage: React.FC = () => {
       : [...currentValues, id];
     
     form.setValue('allergens', newValues);
+    setHasChanges(true);
   };
 
   const handleSkillLevelChange = (value: string) => {
     form.setValue('cookingSkillLevel', value as 'beginner' | 'intermediate' | 'advanced');
+    setHasChanges(true);
   };
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     setIsLoading(true);
-    
-    try {
-      const response = await fetch('/api/temp-preferences', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          preferences: {
-            dietaryRestrictions: values.dietaryRestrictions,
-            favoriteCuisines: values.favoriteCuisines,
-            allergens: values.allergens,
-            cookingSkillLevel: values.cookingSkillLevel
-          }
-        }),
-      });
+    const success = await savePreferences(values, true);
+    setIsLoading(false);
 
-      if (response.ok) {
-        toast({
-          title: "Preferences saved!",
-          description: `Your recipe recommendations will now include ${values.favoriteCuisines.length} cuisine types and respect ${values.dietaryRestrictions.length} dietary restrictions.`,
-        });
-        navigate('/');
-      } else {
-        throw new Error('Failed to save preferences');
-      }
-    } catch (error) {
-      console.error('Error saving preferences:', error);
-      toast({
-        title: "Failed to save preferences",
-        description: "Please try again.",
-        variant: "destructive"
-      });
-    } finally {
-      setIsLoading(false);
+    if (success) {
+      navigate('/');
     }
   };
 
@@ -183,7 +230,7 @@ const UserPreferencesPage: React.FC = () => {
             <div className="flex items-center justify-center mt-4 p-3 bg-blue-50 rounded-lg">
               <Info className="h-4 w-4 text-blue-600 mr-2" />
               <span className="text-sm text-blue-800">
-                Your preferences help us find relevant recipes using ChromaDB's intelligent matching
+                Your preferences are automatically saved as you make changes
               </span>
             </div>
           </div>
@@ -299,7 +346,7 @@ const UserPreferencesPage: React.FC = () => {
                   className="w-full md:w-auto"
                   disabled={isLoading}
                 >
-                  {isLoading ? "Saving..." : "Save Preferences & Get Recommendations"}
+                  {isLoading ? "Saving..." : "Save & Go to Home"}
                 </Button>
               </div>
             </form>
