@@ -1,17 +1,22 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import Header from '../components/Header';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Form, FormField, FormItem, FormLabel } from '@/components/ui/form';
-import { UserPreferences } from '../types/auth';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Info } from 'lucide-react';
+
+interface UserPreferences {
+  dietaryRestrictions: string[];
+  favoriteCuisines: string[];
+  allergens: string[];
+  cookingSkillLevel: 'beginner' | 'intermediate' | 'advanced';
+}
 
 const dietaryOptions = [
   { id: 'vegetarian', label: 'Vegetarian', description: 'No meat or fish' },
@@ -51,21 +56,47 @@ const formSchema = z.object({
 });
 
 const UserPreferencesPage: React.FC = () => {
-  const { user, updatePreferences } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
+  const [currentPreferences, setCurrentPreferences] = useState<UserPreferences | null>(null);
   
-  // Initialize form with user preferences
+  // Initialize form with current preferences
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      dietaryRestrictions: user?.preferences?.dietaryRestrictions || [],
-      favoriteCuisines: user?.preferences?.favoriteCuisines || [],
-      allergens: user?.preferences?.allergens || [],
-      cookingSkillLevel: user?.preferences?.cookingSkillLevel || 'beginner'
+      dietaryRestrictions: [],
+      favoriteCuisines: [],
+      allergens: [],
+      cookingSkillLevel: 'beginner'
     }
   });
+
+  // Load current preferences on mount
+  useEffect(() => {
+    const loadPreferences = async () => {
+      try {
+        const response = await fetch('/api/temp-preferences');
+        if (response.ok) {
+          const data = await response.json();
+          if (data.preferences) {
+            setCurrentPreferences(data.preferences);
+            // Update form with loaded preferences
+            form.reset({
+              dietaryRestrictions: data.preferences.dietaryRestrictions || [],
+              favoriteCuisines: data.preferences.favoriteCuisines || [],
+              allergens: data.preferences.allergens || [],
+              cookingSkillLevel: data.preferences.cookingSkillLevel || 'beginner'
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Error loading preferences:', error);
+      }
+    };
+
+    loadPreferences();
+  }, [form]);
 
   // Create a convenience variable for the current form values
   const preferences = form.watch();
@@ -103,29 +134,41 @@ const UserPreferencesPage: React.FC = () => {
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     setIsLoading(true);
-    // Convert form values to UserPreferences type
-    const userPreferences: UserPreferences = {
-      dietaryRestrictions: values.dietaryRestrictions,
-      favoriteCuisines: values.favoriteCuisines,
-      allergens: values.allergens,
-      cookingSkillLevel: values.cookingSkillLevel
-    };
-
-    const success = await updatePreferences(userPreferences);
-    setIsLoading(false);
-
-    if (success) {
-      toast({
-        title: "Preferences saved!",
-        description: `Your recipe recommendations will now include ${values.favoriteCuisines.length} cuisine types and respect ${values.dietaryRestrictions.length} dietary restrictions.`,
+    
+    try {
+      const response = await fetch('/api/temp-preferences', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          preferences: {
+            dietaryRestrictions: values.dietaryRestrictions,
+            favoriteCuisines: values.favoriteCuisines,
+            allergens: values.allergens,
+            cookingSkillLevel: values.cookingSkillLevel
+          }
+        }),
       });
-      navigate('/');
-    } else {
+
+      if (response.ok) {
+        toast({
+          title: "Preferences saved!",
+          description: `Your recipe recommendations will now include ${values.favoriteCuisines.length} cuisine types and respect ${values.dietaryRestrictions.length} dietary restrictions.`,
+        });
+        navigate('/');
+      } else {
+        throw new Error('Failed to save preferences');
+      }
+    } catch (error) {
+      console.error('Error saving preferences:', error);
       toast({
         title: "Failed to save preferences",
         description: "Please try again.",
         variant: "destructive"
       });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -140,7 +183,7 @@ const UserPreferencesPage: React.FC = () => {
             <div className="flex items-center justify-center mt-4 p-3 bg-blue-50 rounded-lg">
               <Info className="h-4 w-4 text-blue-600 mr-2" />
               <span className="text-sm text-blue-800">
-                Your preferences help us find relevant recipes from both our local collection and external sources
+                Your preferences help us find relevant recipes using ChromaDB's intelligent matching
               </span>
             </div>
           </div>

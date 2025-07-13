@@ -63,6 +63,22 @@ const Header: React.FC = () => {
                 Recipes
               </Link>
             </li>
+            <li>
+              <Link 
+                to="/meal-planner" 
+                className="text-gray-600 hover:text-recipe-primary transition-colors font-medium"
+              >
+                🤖 AI Meal Planner
+              </Link>
+            </li>
+            <li>
+              <Link 
+                to="/shopping-list" 
+                className="text-gray-600 hover:text-recipe-primary transition-colors"
+              >
+                Shopping List
+              </Link>
+            </li>
             {isAuthenticated && (
               <>
                 <li>
@@ -71,22 +87,6 @@ const Header: React.FC = () => {
                     className="text-gray-600 hover:text-recipe-primary transition-colors"
                   >
                     Favorites
-                  </Link>
-                </li>
-                <li>
-                  <Link 
-                    to="/meal-planner" 
-                    className="text-gray-600 hover:text-recipe-primary transition-colors"
-                  >
-                    Meal Planner
-                  </Link>
-                </li>
-                <li>
-                  <Link 
-                    to="/shopping-list" 
-                    className="text-gray-600 hover:text-recipe-primary transition-colors"
-                  >
-                    Shopping List
                   </Link>
                 </li>
                 <li>
@@ -125,6 +125,20 @@ const Header: React.FC = () => {
             >
               Recipes
             </Link>
+            <Link 
+              to="/meal-planner"
+              className="block text-gray-600 hover:text-recipe-primary font-medium"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              🤖 AI Meal Planner
+            </Link>
+            <Link 
+              to="/shopping-list"
+              className="block text-gray-600 hover:text-recipe-primary"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              Shopping List
+            </Link>
             {isAuthenticated && (
               <>
                 <Link 
@@ -148,20 +162,6 @@ const Header: React.FC = () => {
                   onClick={() => setMobileMenuOpen(false)}
                 >
                   Folders
-                </Link>
-                <Link 
-                  to="/meal-planner"
-                  className="block text-gray-600 hover:text-recipe-primary"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  Meal Planner
-                </Link>
-                <Link 
-                  to="/shopping-list"
-                  className="block text-gray-600 hover:text-recipe-primary"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  Shopping List
                 </Link>
               </>
             )}

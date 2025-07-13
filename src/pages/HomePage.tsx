@@ -1,21 +1,39 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
+import { Search, ChefHat, ThumbsUp, Award, TrendingUp, Clock } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import Header from '../components/Header';
-import { loadRecipes } from '../utils/storage';
-import { fetchRecipes } from '../lib/spoonacular';
-import { fetchManualRecipes } from '../lib/manualRecipes';
-import { Recipe } from '../types/recipe';
-import { SpoonacularRecipe } from '../types/spoonacular';
 import RecipeCard from '../components/RecipeCard';
 import ManualRecipeCard from '../components/ManualRecipeCard';
-import { getAverageRating } from '../utils/recipeUtils';
-import { ChefHat, TrendingUp, Award, Clock, Search, ThumbsUp } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { useAuth } from '../context/AuthContext';
+import { Recipe } from '../types/recipe';
+import { SpoonacularRecipe } from '../types/spoonacular';
+import { loadRecipes } from '../utils/storage';
+import { fetchManualRecipes } from '../lib/manualRecipes';
+import { fetchRecipes } from '../lib/spoonacular';
 
 const HomePage: React.FC = () => {
-  const { isAuthenticated, user } = useAuth();
+  // Remove authentication dependency - work without auth
+  const [userPreferences, setUserPreferences] = useState<any>(null);
+
+  // Load user preferences on mount
+  useEffect(() => {
+    const loadPreferences = async () => {
+      try {
+        const response = await fetch('/api/temp-preferences');
+        if (response.ok) {
+          const data = await response.json();
+          if (data.preferences) {
+            setUserPreferences(data.preferences);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading preferences:', error);
+      }
+    };
+
+    loadPreferences();
+  }, []);
 
   // Query for local recipes
   const { data: localRecipes = [], isLoading: isLocalLoading } = useQuery({
@@ -39,213 +57,130 @@ const HomePage: React.FC = () => {
     retry: 2
   });
 
-  // Ensure user preferences always flow (sometimes undefined if user is slow to load)
-  const userPreferences = user?.preferences;
-
   // Query for recommended recipes based on user preferences
   const { data: recommendedRecipes = [], isLoading: isRecommendedLoading } = useQuery({
     queryKey: ['recommendedRecipes', userPreferences],
     queryFn: async () => {
       if (!userPreferences) return [];
+
       const allRecommendedRecipes: SpoonacularRecipe[] = [];
       const { favoriteCuisines = [], dietaryRestrictions = [] } = userPreferences;
 
-      try {
-        // Fetch recipes for favorite cuisines
-        if (favoriteCuisines.length > 0) {
-          for (const cuisine of favoriteCuisines.slice(0, 2)) {
-            const response = await fetchRecipes('', cuisine);
-            if (response?.results && Array.isArray(response.results)) {
-              const realRecipes = response.results.filter(recipe =>
-                recipe.id > 1000 &&
-                recipe.title &&
-                !recipe.title.toLowerCase().includes('fallback') &&
-                recipe.image &&
-                recipe.image.includes('http')
-              );
-              allRecommendedRecipes.push(...realRecipes.slice(0, 4));
-            }
-          }
-        }
+             // Get recommendations based on favorite cuisines
+       for (const cuisine of favoriteCuisines.slice(0, 2)) {
+         try {
+           const results = await fetchRecipes(cuisine, '');
+           if (results?.results) {
+             allRecommendedRecipes.push(...results.results.slice(0, 6));
+           }
+         } catch (error) {
+           console.error(`Error fetching ${cuisine} recipes:`, error);
+         }
+       }
 
-        // Fetch recipes for dietary restrictions
-        if (dietaryRestrictions.length > 0) {
-          for (const diet of dietaryRestrictions.slice(0, 2)) {
-            const response = await fetchRecipes(diet, '');
-            if (response?.results && Array.isArray(response.results)) {
-              const realRecipes = response.results.filter(recipe =>
-                recipe.id > 1000 &&
-                recipe.title &&
-                !recipe.title.toLowerCase().includes('fallback') &&
-                recipe.image &&
-                recipe.image.includes('http')
-              );
-              allRecommendedRecipes.push(...realRecipes.slice(0, 3));
-            }
-          }
-        }
+       // Get recommendations based on dietary restrictions
+       for (const diet of dietaryRestrictions.slice(0, 2)) {
+         try {
+           const results = await fetchRecipes(diet, '');
+           if (results?.results) {
+             allRecommendedRecipes.push(...results.results.slice(0, 6));
+           }
+         } catch (error) {
+           console.error(`Error fetching ${diet} recipes:`, error);
+         }
+       }
 
-        // Remove duplicates by id
-        const seenIds = new Set();
-        const uniqueRecommended = allRecommendedRecipes.filter(recipe => {
-          if (seenIds.has(recipe.id)) return false;
-          seenIds.add(recipe.id);
-          return true;
-        });
+      // Remove duplicates and limit results
+      const uniqueRecipes = allRecommendedRecipes.filter((recipe, index, self) => 
+        index === self.findIndex(r => r.id === recipe.id)
+      );
 
-        return uniqueRecommended.slice(0, 8);
-      } catch {
-        return [];
-      }
+      return uniqueRecipes.slice(0, 12);
     },
-    // Only run this query if preferences exist and the user is authenticated
-    enabled: Boolean(isAuthenticated && userPreferences),
-    staleTime: 300000
+    staleTime: 300000,
+    enabled: !!userPreferences
   });
 
-  // Query for featured external recipes
-  const { data: featuredData, isLoading: isFeaturedLoading } = useQuery({
+  // Query for featured recipes
+  const { data: featuredRecipes = [], isLoading: isFeaturedLoading } = useQuery({
     queryKey: ['featuredRecipes'],
-    queryFn: async () => {
-      try {
-        const [pastaResult, chickenResult, vegetarianResult] = await Promise.all([
-          fetchRecipes('pasta', 'Italian').catch(() => ({ results: [] })),
-          fetchRecipes('chicken', '').catch(() => ({ results: [] })),
-          fetchRecipes('vegetarian', '').catch(() => ({ results: [] }))
-        ]);
-        
-        const allRecipes = [
-          ...(pastaResult?.results || []),
-          ...(chickenResult?.results || []),
-          ...(vegetarianResult?.results || [])
-        ];
-        
-        // Remove duplicates and filter out invalid recipes
-        const seenIds = new Set();
-        const uniqueRecipes = allRecipes
-          .filter(recipe => {
-            if (!recipe || !recipe.id || seenIds.has(recipe.id)) return false;
-            seenIds.add(recipe.id);
-            return recipe.title && 
-                   !recipe.title.toLowerCase().includes('fallback') &&
-                   recipe.image;
-          });
-        
-        return { results: uniqueRecipes.slice(0, 12) };
-      } catch (error) {
-        console.error('Featured recipes failed:', error);
-        return { results: [] };
-      }
-    },
+         queryFn: async () => {
+       try {
+         const results = await fetchRecipes('healthy', '');
+         return results?.results || [];
+       } catch (error) {
+         console.error('Error fetching featured recipes:', error);
+         return [];
+       }
+     },
     staleTime: 300000
   });
 
-  const recipes = Array.isArray(localRecipes) ? localRecipes : [];
+     // Process recipes for different sections
+   const processedRecipes = {
+     popularRecipes: manualRecipes.slice(0, 8),
+     featuredRecipes: featuredRecipes.slice(0, 8),
+     topRatedRecipes: localRecipes.filter(recipe => recipe.ratings && recipe.ratings.length > 0).slice(0, 8),
+     recentRecipes: localRecipes.slice(0, 8)
+   };
 
-  // Global deduplication system - process all recipes together
-  const processedRecipes = React.useMemo(() => {
-    const globalSeenTitles = new Set<string>();
-    const globalSeenIds = new Set<string | number>();
+  // Track seen recipes to avoid duplicates
+  const [seenRecipes, setSeenRecipes] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    const allRecipeIds = new Set<string>();
     
-    // Helper function to normalize titles for comparison
-    const normalizeTitle = (title: string) => {
-      return title.toLowerCase().trim().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ');
-    };
+    // Add recommended recipe IDs
+    recommendedRecipes.forEach(recipe => {
+      allRecipeIds.add(`recommended-${recipe.id}`);
+    });
     
-    // Helper function to check if recipe is already seen
-    const isRecipeSeen = (recipe: any, type: string) => {
-      const normalizedTitle = normalizeTitle(recipe.title || recipe.name || '');
-      const recipeId = `${type}-${recipe.id}`;
+    // Add other recipe IDs
+    processedRecipes.popularRecipes.forEach(recipe => {
+      allRecipeIds.add(`popular-${recipe.id}`);
+    });
+    
+    processedRecipes.featuredRecipes.forEach(recipe => {
+      allRecipeIds.add(`featured-${recipe.id}`);
+    });
+    
+    processedRecipes.topRatedRecipes.forEach(recipe => {
+      allRecipeIds.add(`top-rated-${recipe.id}`);
+    });
+    
+    processedRecipes.recentRecipes.forEach(recipe => {
+      allRecipeIds.add(`recent-${recipe.id}`);
+    });
+    
+    setSeenRecipes(allRecipeIds);
+  }, [recommendedRecipes, processedRecipes]);
+
+  const normalizeTitle = (title: string) => {
+    return title.toLowerCase().replace(/[^a-z0-9]/g, '');
+  };
+
+  const isRecipeSeen = (recipe: any, type: string) => {
+    const recipeKey = `${type}-${recipe.id}`;
+    const normalizedTitle = normalizeTitle(recipe.name || recipe.title || '');
+    
+    for (const seenKey of seenRecipes) {
+      if (seenKey === recipeKey) continue;
       
-      if (!normalizedTitle || globalSeenTitles.has(normalizedTitle) || globalSeenIds.has(recipeId)) {
+      const [, seenId] = seenKey.split('-', 2);
+      if (seenId === String(recipe.id)) {
         return true;
       }
-      
-      globalSeenTitles.add(normalizedTitle);
-      globalSeenIds.add(recipeId);
-      return false;
-    };
-
-    // Process manual recipes for popular section
-    const popularRecipes: any[] = [];
-    if (Array.isArray(manualRecipes) && manualRecipes.length > 0) {
-      for (const recipe of manualRecipes) {
-        if (popularRecipes.length >= 8) break;
-        if (!isRecipeSeen(recipe, 'manual')) {
-          popularRecipes.push({
-            ...recipe,
-            image: recipe.image || '/placeholder.svg'
-          });
-        }
-      }
     }
-
-    // Process external recipes for featured section
-    const featuredRecipes: SpoonacularRecipe[] = [];
-    if (featuredData?.results && Array.isArray(featuredData.results)) {
-      for (const recipe of featuredData.results) {
-        if (featuredRecipes.length >= 8) break;
-        if (!isRecipeSeen(recipe, 'external')) {
-          featuredRecipes.push({
-            ...recipe,
-            image: recipe.image || '/placeholder.svg',
-            isExternal: true
-          });
-        }
-      }
-    }
-
-    // Process local recipes for top rated section
-    const topRatedRecipes: Recipe[] = [];
-    if (Array.isArray(recipes) && recipes.length > 0) {
-      const sortedByRating = [...recipes]
-        .filter(recipe => recipe?.ratings?.length)
-        .sort((a, b) => {
-          const ratingA = getAverageRating(a.ratings || []);
-          const ratingB = getAverageRating(b.ratings || []);
-          return ratingB - ratingA;
-        });
-
-      for (const recipe of sortedByRating) {
-        if (topRatedRecipes.length >= 8) break;
-        if (!isRecipeSeen(recipe, 'local')) {
-          topRatedRecipes.push(recipe);
-        }
-      }
-    }
-
-    // Process local recipes for recent section
-    const recentRecipes: Recipe[] = [];
-    if (Array.isArray(recipes) && recipes.length > 0) {
-      const sortedByDate = [...recipes]
-        .sort((a, b) => {
-          const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-          const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-          return dateB - dateA;
-        });
-
-      for (const recipe of sortedByDate) {
-        if (recentRecipes.length >= 8) break;
-        if (!isRecipeSeen(recipe, 'local-recent')) {
-          recentRecipes.push(recipe);
-        }
-      }
-    }
-
-    return {
-      popularRecipes,
-      featuredRecipes,
-      topRatedRecipes,
-      recentRecipes
-    };
-  }, [recipes, manualRecipes, featuredData]);
+    
+    return false;
+  };
 
   const handleDeleteRecipe = () => {
-    // Intentionally empty
+    // Placeholder for delete functionality
   };
 
   const handleToggleFavorite = (recipe: Recipe) => {
-    // Intentionally empty
+    // Placeholder for favorite functionality
   };
 
   return (
@@ -261,9 +196,7 @@ const HomePage: React.FC = () => {
                 Discover Delicious Recipes
               </h1>
               <p className="text-xl text-white/90 mb-8 max-w-3xl mx-auto">
-                {isAuthenticated 
-                  ? "Your personalized recipe collection awaits" 
-                  : "Find, save, and create your favorite recipes all in one place"}
+                Your personalized recipe collection awaits
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <Link to="/recipes">
@@ -272,41 +205,25 @@ const HomePage: React.FC = () => {
                     Browse All Recipes
                   </Button>
                 </Link>
-                {isAuthenticated ? (
-                  <Link to="/preferences">
-                    <Button size="lg" variant="outline" className="w-full sm:w-auto bg-white/10 text-white hover:bg-white/20">
-                      <ChefHat className="mr-2 h-4 w-4" />
-                      Update Preferences
-                    </Button>
-                  </Link>
-                ) : (
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    <Link to="/signin">
-                      <Button size="lg" variant="outline" className="w-full sm:w-auto bg-white/10 text-white hover:bg-white/20">
-                        Sign In
-                      </Button>
-                    </Link>
-                    <Link to="/signup">
-                      <Button size="lg" variant="outline" className="w-full sm:w-auto bg-white/10 text-white hover:bg-white/20">
-                        <ChefHat className="mr-2 h-4 w-4" />
-                        Sign Up
-                      </Button>
-                    </Link>
-                  </div>
-                )}
+                <Link to="/preferences">
+                  <Button size="lg" variant="outline" className="w-full sm:w-auto bg-white/10 text-white hover:bg-white/20">
+                    <ChefHat className="mr-2 h-4 w-4" />
+                    Set Your Preferences
+                  </Button>
+                </Link>
               </div>
             </div>
           </div>
         </section>
 
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-          {/* Recommended Recipes Section - Show for authenticated users with preferences */}
-          {isAuthenticated && userPreferences && (
+          {/* Recommended Recipes Section - Show when preferences are set */}
+          {userPreferences && (
             <section className="mb-16">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-3xl font-bold text-gray-900 flex items-center">
                   <ThumbsUp className="mr-2 h-6 w-6 text-recipe-secondary" />
-                  Recommended Recipes
+                  Recommended for You
                 </h2>
                 <div className="flex items-center gap-4">
                   <span className="text-sm text-gray-500">
@@ -344,34 +261,15 @@ const HomePage: React.FC = () => {
             </section>
           )}
 
-          {/* Show message for non-authenticated users */}
-          {!isAuthenticated && (
+          {/* Show message when no preferences are set */}
+          {!userPreferences && (
             <section className="mb-16">
               <div className="text-center py-12 border border-dashed border-gray-300 rounded-lg">
                 <ThumbsUp className="mx-auto h-12 w-12 text-gray-400 mb-4" />
                 <h3 className="text-xl font-semibold text-gray-900 mb-2">Get Personalized Recommendations</h3>
-                <p className="text-gray-500 mb-4">Sign in and set your preferences to see recipes tailored just for you!</p>
-                <div className="flex gap-4 justify-center">
-                  <Link to="/signin">
-                    <Button variant="outline">Sign In</Button>
-                  </Link>
-                  <Link to="/signup">
-                    <Button>Sign Up</Button>
-                  </Link>
-                </div>
-              </div>
-            </section>
-          )}
-
-          {/* Show message for authenticated users without preferences */}
-          {isAuthenticated && !userPreferences && (
-            <section className="mb-16">
-              <div className="text-center py-12 border border-dashed border-gray-300 rounded-lg">
-                <ThumbsUp className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">Set Your Preferences</h3>
-                <p className="text-gray-500 mb-4">Tell us your favorite cuisines and dietary restrictions to get personalized recipe recommendations!</p>
+                <p className="text-gray-500 mb-4">Set your preferences to see recipes tailored just for you!</p>
                 <Link to="/preferences">
-                  <Button>Set Preferences</Button>
+                  <Button>Set Your Preferences</Button>
                 </Link>
               </div>
             </section>

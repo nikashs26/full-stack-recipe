@@ -9,7 +9,22 @@ export interface MealPlan {
 export interface MealPlanItem {
   id: string;
   name: string;
-  // Add any other properties of a recipe that are used in the meal plan item
+  description: string;
+  cuisine: string;
+  cookingTime: string;
+  difficulty: 'beginner' | 'intermediate' | 'advanced';
+  ingredients: string[];
+  instructions: string;
 }
 
-export type MealType = 'breakfast' | 'lunch' | 'dinner'; 
+export interface MealPlanResponse {
+  success: boolean;
+  plan: MealPlan;
+  preferences_used: any;
+  llm_used?: string;
+  error?: string;
+}
+
+export type MealType = 'breakfast' | 'lunch' | 'dinner';
+
+export type WeekDay = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday'; 

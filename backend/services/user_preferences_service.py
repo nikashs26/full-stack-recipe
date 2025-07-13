@@ -1,32 +1,34 @@
 import chromadb
-from chromadb.config import Settings
+import json
 
 class UserPreferencesService:
     def __init__(self):
-        self.client = chromadb.Client(Settings(
-            chroma_db_impl="duckdb+parquet",
-            persist_directory="./chroma_db" # Ensure this matches your existing ChromaDB path
-        ))
+        # Use the new ChromaDB client configuration
+        self.client = chromadb.PersistentClient(path="./chroma_db")
         self.collection = self.client.get_or_create_collection("user_preferences")
 
     def save_preferences(self, user_id: str, preferences: dict):
-        # Store preferences as a document in ChromaDB
-        # Each user has one preferences document, so we can upsert
+        # Store preferences as a JSON document in ChromaDB
+        # Convert preferences to JSON string for storage
+        preferences_json = json.dumps(preferences)
+        
+        # Store with simple metadata
         self.collection.upsert(
-            documents=[str(preferences)], # Storing preferences as string for simplicity, or use a better embedding if needed
-            metadatas=[{"user_id": user_id, **preferences}], # Store individual preferences as metadata for querying
-            ids=[user_id] # Use user_id as the unique ID for their preferences document
+            documents=[preferences_json], 
+            metadatas=[{"user_id": user_id, "type": "preferences"}], 
+            ids=[user_id] 
         )
 
     def get_preferences(self, user_id: str):
         results = self.collection.get(
             ids=[user_id],
-            include=['metadatas']
+            include=['documents']
         )
-        if results and results["metadatas"]:
-            # Return the stored preferences from metadata
-            # Exclude user_id from the returned dict if it's already implicitly available
-            prefs = results["metadatas"][0]
-            prefs.pop("user_id", None)
-            return prefs
+        if results and results["documents"]:
+            # Parse the JSON string back to dict
+            try:
+                preferences = json.loads(results["documents"][0])
+                return preferences
+            except json.JSONDecodeError:
+                return None
         return None 
