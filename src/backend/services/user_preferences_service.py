@@ -3,11 +3,8 @@ import json
 
 class UserPreferencesService:
     def __init__(self):
-        # Use the new ChromaDB client configuration with absolute path
-        import os
-        chroma_path = os.path.abspath("./chroma_db")
-        os.makedirs(chroma_path, exist_ok=True)
-        self.client = chromadb.PersistentClient(path=chroma_path)
+        # Use the new ChromaDB client configuration
+        self.client = chromadb.PersistentClient(path="./chroma_db")
         self.collection = self.client.get_or_create_collection("user_preferences")
 
     def save_preferences(self, user_id: str, preferences: dict):

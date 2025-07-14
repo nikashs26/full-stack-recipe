@@ -9,7 +9,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Info } from 'lucide-react';
+import { Info, DollarSign, Users } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 interface UserPreferences {
   dietaryRestrictions: string[];
@@ -77,7 +79,7 @@ const UserPreferencesPage: React.FC = () => {
   useEffect(() => {
     const loadPreferences = async () => {
       try {
-        const response = await fetch('http://localhost:5001/api/temp-preferences', {
+        const response = await fetch('http://localhost:5003/api/temp-preferences', {
           credentials: 'include' // Include cookies for session
         });
         if (response.ok) {
@@ -132,7 +134,7 @@ const UserPreferencesPage: React.FC = () => {
     console.log('🔥 FRONTEND: Payload being sent:', JSON.stringify(preferencesPayload, null, 2));
     
     try {
-      const response = await fetch('http://localhost:5001/api/temp-preferences', {
+      const response = await fetch('http://localhost:5003/api/temp-preferences', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

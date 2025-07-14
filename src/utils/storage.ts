@@ -37,23 +37,19 @@ export const loadRecipes = async (): Promise<Recipe[]> => {
           const dbRecipes = await getAllRecipesFromDB();
           
           if (dbRecipes?.results && Array.isArray(dbRecipes.results) && dbRecipes.results.length > 0) {
-            // Map the recipes from DB format to our app format
-            const mappedRecipes = dbRecipes.results.map((dbRecipe: any) => ({
-              id: dbRecipe.id || dbRecipe._id,
-              name: dbRecipe.title || dbRecipe.name,
-              cuisine: dbRecipe.cuisine || (dbRecipe.cuisines && dbRecipe.cuisines[0]) || "Unknown",
-              dietaryRestrictions: dbRecipe.dietaryRestrictions || dbRecipe.diets || [],
-              ingredients: dbRecipe.ingredients || [],
-              instructions: dbRecipe.instructions || [],
-              image: dbRecipe.image || '/placeholder.svg',
-              ratings: dbRecipe.ratings || [],
-              comments: dbRecipe.comments || []
-            }));
+            // Check if these are local Recipe format or Spoonacular format
+            const firstRecipe = dbRecipes.results[0];
             
-            // Update local storage with the latest recipes from MongoDB
-            localStorage.setItem(RECIPES_STORAGE_KEY, JSON.stringify(mappedRecipes));
-            console.log(`Loaded ${mappedRecipes.length} recipes from MongoDB`);
-            return mappedRecipes;
+            // If it has 'name' field, it's local Recipe format
+            if (firstRecipe.name) {
+              console.log(`Loaded ${dbRecipes.results.length} local recipes from MongoDB`);
+              localStorage.setItem(RECIPES_STORAGE_KEY, JSON.stringify(dbRecipes.results));
+              return dbRecipes.results;
+            } else {
+              // If it has 'title' field, it's Spoonacular format - don't use these for local recipes
+              console.log("MongoDB returned Spoonacular format recipes, using local storage instead");
+              return localRecipes;
+            }
           } else {
             console.log("No recipes found in MongoDB - initializing with default recipes");
             

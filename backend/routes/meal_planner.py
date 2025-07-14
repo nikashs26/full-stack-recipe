@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify, session
 import logging
-from services.meal_planner_agent import MealPlannerAgent
+from services.llm_meal_planner_agent import LLMMealPlannerAgent
 from services.user_preferences_service import UserPreferencesService
 
 # Configure logging
@@ -11,7 +11,7 @@ meal_planner_bp = Blueprint('meal_planner', __name__)
 
 # Initialize services
 user_preferences_service = UserPreferencesService()
-meal_planner_agent = MealPlannerAgent(user_preferences_service, None)
+llm_meal_planner_agent = LLMMealPlannerAgent()
 
 @meal_planner_bp.route('/meal-plan/generate', methods=['GET', 'POST'])
 def generate_meal_plan():
@@ -27,8 +27,9 @@ def generate_meal_plan():
             
             if preferences:
                 logger.info(f"Using provided preferences: {list(preferences.keys())}")
-                # Use the preferences directly for meal plan generation
-                plan_result = meal_planner_agent.generate_meal_plan_with_preferences(preferences)
+                # Use the LLM agent directly for meal plan generation
+                print(f'🔥 MEAL_PLANNER_ROUTE: Using LLM agent with preferences: {preferences}')
+                plan_result = llm_meal_planner_agent.generate_weekly_meal_plan(preferences)
                 
                 if "error" in plan_result:
                     logger.error(f"Error generating meal plan: {plan_result['error']}")
@@ -76,7 +77,8 @@ def generate_meal_plan():
                     "error": "Preferences not found. Please set your preferences first."
                 }), 400
             
-            plan_result = meal_planner_agent.generate_meal_plan_with_preferences(preferences)
+            print(f'🔥 MEAL_PLANNER_ROUTE: Using LLM agent with session preferences: {preferences}')
+            plan_result = llm_meal_planner_agent.generate_weekly_meal_plan(preferences)
             
             if "error" in plan_result:
                 logger.error(f"Error generating meal plan: {plan_result['error']}")
@@ -121,7 +123,7 @@ def regenerate_meal():
         
         # Use LLM to get recipe suggestions for the specific meal type
         meal_type = data['mealType']
-        recipes = meal_planner_agent.get_recipe_suggestions(meal_type, preferences, count=1)
+        recipes = llm_meal_planner_agent.get_recipe_suggestions(meal_type, preferences, count=1)
         
         if recipes:
             new_meal = recipes[0]
@@ -134,7 +136,7 @@ def regenerate_meal():
         else:
             # Fall back to generating a full plan and extracting the meal
             logger.info("Falling back to full meal plan generation")
-            plan_result = meal_planner_agent.generate_meal_plan_with_preferences(preferences)
+            plan_result = llm_meal_planner_agent.generate_weekly_meal_plan(preferences)
             
             if "error" in plan_result:
                 return jsonify({"error": plan_result["error"]}), 400
@@ -178,7 +180,7 @@ def get_recipe_suggestions():
             logger.warning("No preferences provided for recipe suggestions")
             return jsonify({"error": "No preferences provided"}), 400
         
-        recipes = meal_planner_agent.get_recipe_suggestions(meal_type, preferences, count)
+        recipes = llm_meal_planner_agent.get_recipe_suggestions(meal_type, preferences, count)
         
         return jsonify({
             "success": True,
@@ -224,7 +226,7 @@ def health_check():
         }
         
         # Test the LLM agent (this will use fallback if LLM is not available)
-        plan_result = meal_planner_agent.generate_meal_plan_with_preferences(test_preferences)
+        plan_result = llm_meal_planner_agent.generate_weekly_meal_plan(test_preferences)
         
         return jsonify({
             "success": True,
@@ -232,7 +234,7 @@ def health_check():
             "llm_available": plan_result.get("plan_type") == "llm_generated",
             "fallback_working": plan_result.get("plan_type") == "rule_based_fallback",
             "services": {
-                "meal_planner_agent": "working",
+                "llm_meal_planner_agent": "working",
                 "user_preferences_service": "working"
             }
         }), 200

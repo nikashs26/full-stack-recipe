@@ -51,26 +51,20 @@ const RecipesPage: React.FC = () => {
     staleTime: 300000,
   });
 
-  // Query for external recipes based on search
+  // Query for external recipes - load by default and filter based on search
   const { data: externalRecipes = [], isLoading: externalLoading } = useQuery({
     queryKey: ['externalRecipes', searchTerm, ingredientTerm],
     queryFn: async () => {
-      if (!searchTerm && !ingredientTerm) {
-        console.log('No search criteria provided, returning empty results');
-        return [];
-      }
-
       console.log(`Fetching recipes with query: "${searchTerm}" and ingredient: "${ingredientTerm}"`);
       
       try {
-        const response = await fetchRecipes(searchTerm, '');
+        const response = await fetchRecipes(searchTerm, ingredientTerm);
         
         if (response?.results && Array.isArray(response.results)) {
           const validRecipes = response.results.filter(recipe => 
             recipe && 
             recipe.id && 
-            recipe.title && 
-            !recipe.title.toLowerCase().includes('fallback')
+            recipe.title
           );
           
           console.log(`Fetched ${validRecipes.length} valid external recipes`);
@@ -83,7 +77,6 @@ const RecipesPage: React.FC = () => {
         return [];
       }
     },
-    enabled: !!(searchTerm || ingredientTerm),
     staleTime: 300000,
   });
 
@@ -226,6 +219,17 @@ const RecipesPage: React.FC = () => {
               </div>
             ) : currentRecipes.length > 0 ? (
               <>
+                {/* Debug info */}
+                <div className="mb-4 p-4 bg-blue-100 rounded-lg">
+                  <h3 className="font-bold">Debug Info:</h3>
+                  <p>Local recipes: {localRecipes.length}</p>
+                  <p>Manual recipes: {manualRecipes.length}</p>
+                  <p>External recipes: {externalRecipes.length}</p>
+                  <p>All recipes: {allRecipes.length}</p>
+                  <p>Current recipes: {currentRecipes.length}</p>
+                  <p>Loading states: local={localLoading.toString()}, manual={manualLoading.toString()}, external={externalLoading.toString()}</p>
+                </div>
+                
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                   {currentRecipes.map((recipe, index) => {
                     const key = `${recipe.type}-${recipe.id}-${index}`;

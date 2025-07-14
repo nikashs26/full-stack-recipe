@@ -21,7 +21,7 @@ const HomePage: React.FC = () => {
     const loadPreferences = async () => {
       console.log('🔥 HOMEPAGE: Loading preferences...');
       try {
-        const response = await fetch('http://localhost:5001/api/temp-preferences', {
+        const response = await fetch('http://localhost:5003/api/temp-preferences', {
           credentials: 'include' // Include cookies for session
         });
         console.log('🔥 HOMEPAGE: Response status:', response.status);
@@ -76,58 +76,115 @@ const HomePage: React.FC = () => {
   const { data: recommendedRecipes = [], isLoading: isRecommendedLoading } = useQuery({
     queryKey: ['recommendedRecipes', memoizedUserPreferences],
     queryFn: async () => {
-      if (!memoizedUserPreferences) return [];
-
+      console.log('🔥 HOMEPAGE: Fetching recommended recipes with preferences:', memoizedUserPreferences);
       const allRecommendedRecipes: SpoonacularRecipe[] = [];
-      const { favoriteCuisines = [], dietaryRestrictions = [] } = memoizedUserPreferences;
 
-             // Get recommendations based on favorite cuisines
-       for (const cuisine of favoriteCuisines.slice(0, 2)) {
-         try {
-           const results = await fetchRecipes(cuisine, '');
-           if (results?.results) {
-             allRecommendedRecipes.push(...results.results.slice(0, 6));
-           }
-         } catch (error) {
-           console.error(`Error fetching ${cuisine} recipes:`, error);
-         }
-       }
+      if (memoizedUserPreferences) {
+        const { favoriteCuisines = [], dietaryRestrictions = [] } = memoizedUserPreferences;
+        console.log('🔥 HOMEPAGE: Favorite cuisines:', favoriteCuisines);
+        console.log('🔥 HOMEPAGE: Dietary restrictions:', dietaryRestrictions);
 
-       // Get recommendations based on dietary restrictions
-       for (const diet of dietaryRestrictions.slice(0, 2)) {
-         try {
-           const results = await fetchRecipes(diet, '');
-           if (results?.results) {
-             allRecommendedRecipes.push(...results.results.slice(0, 6));
-           }
-         } catch (error) {
-           console.error(`Error fetching ${diet} recipes:`, error);
-         }
-       }
+        // Get recommendations based on favorite cuisines
+        for (const cuisine of favoriteCuisines.slice(0, 2)) {
+          try {
+            console.log(`🔥 HOMEPAGE: Fetching recipes for cuisine: ${cuisine}`);
+            const results = await fetchRecipes(cuisine, '');
+            if (results?.results) {
+              // Filter recipes to only include those that actually match the cuisine from API data
+              const cuisineFilteredRecipes = results.results.filter(recipe => {
+                const recipeCuisines = recipe.cuisines || [];
+                const recipeTitle = recipe.title?.toLowerCase() || '';
+                
+                // Primary check: Does the recipe's cuisine array contain the requested cuisine?
+                const directCuisineMatch = recipeCuisines.some(recipeCuisine => 
+                  recipeCuisine?.toLowerCase() === cuisine.toLowerCase()
+                );
+                
+                // Secondary check: Does the recipe title contain the cuisine name?
+                const titleMatch = recipeTitle.includes(cuisine.toLowerCase());
+                
+                // If it's a direct match, accept it
+                if (directCuisineMatch || titleMatch) {
+                  console.log(`🔥 HOMEPAGE: ✅ Recipe "${recipe.title}" matches ${cuisine} cuisine (cuisines: ${recipeCuisines.join(', ')})`);
+                  return true;
+                }
+                
+                // If no direct match, reject it
+                console.log(`🔥 HOMEPAGE: ❌ Recipe "${recipe.title}" does not match ${cuisine} cuisine (cuisines: ${recipeCuisines.join(', ')})`);
+                return false;
+              });
+              
+              console.log(`🔥 HOMEPAGE: Found ${cuisineFilteredRecipes.length} recipes matching ${cuisine} cuisine`);
+              allRecommendedRecipes.push(...cuisineFilteredRecipes.slice(0, 6));
+            }
+          } catch (error) {
+            console.error(`Error fetching ${cuisine} recipes:`, error);
+          }
+        }
+
+        // Get recommendations based on dietary restrictions
+        for (const diet of dietaryRestrictions.slice(0, 2)) {
+          try {
+            console.log(`🔥 HOMEPAGE: Fetching recipes for diet: ${diet}`);
+            const results = await fetchRecipes(diet, '');
+            if (results?.results) {
+              // Filter recipes to only include those that match the dietary restriction
+              const dietFilteredRecipes = results.results.filter(recipe => {
+                const recipeDiets = recipe.diets || [];
+                const matchesDiet = recipeDiets.some(recipeDiet => 
+                  recipeDiet?.toLowerCase().includes(diet.toLowerCase())
+                );
+                
+                console.log(`🔥 HOMEPAGE: Recipe "${recipe.title}" diets: ${recipeDiets.join(', ')}, matches ${diet}: ${matchesDiet}`);
+                return matchesDiet;
+              });
+              
+              console.log(`🔥 HOMEPAGE: Found ${dietFilteredRecipes.length} recipes matching ${diet} diet`);
+              allRecommendedRecipes.push(...dietFilteredRecipes.slice(0, 6));
+            }
+          } catch (error) {
+            console.error(`Error fetching ${diet} recipes:`, error);
+          }
+        }
+      }
+
+      // If no preferences or no results from preferences, get some default recipes
+      if (allRecommendedRecipes.length === 0) {
+        try {
+          console.log('🔥 HOMEPAGE: No preference-based results, fetching default recipes');
+          const results = await fetchRecipes('', ''); // This will return all fallback recipes
+          if (results?.results) {
+            allRecommendedRecipes.push(...results.results.slice(0, 12));
+          }
+        } catch (error) {
+          console.error('Error fetching default recipes:', error);
+        }
+      }
 
       // Remove duplicates and limit results
       const uniqueRecipes = allRecommendedRecipes.filter((recipe, index, self) => 
         index === self.findIndex(r => r.id === recipe.id)
       );
 
+      console.log(`🔥 HOMEPAGE: Final recommended recipes count: ${uniqueRecipes.length}`);
       return uniqueRecipes.slice(0, 12);
     },
-    staleTime: 300000,
-    enabled: !!memoizedUserPreferences
+    staleTime: 300000
   });
 
   // Query for featured recipes
   const { data: featuredRecipes = [], isLoading: isFeaturedLoading } = useQuery({
     queryKey: ['featuredRecipes'],
-         queryFn: async () => {
-       try {
-         const results = await fetchRecipes('healthy', '');
-         return results?.results || [];
-       } catch (error) {
-         console.error('Error fetching featured recipes:', error);
-         return [];
-       }
-     },
+    queryFn: async () => {
+      try {
+        // Fetch a variety of recipes instead of just "healthy"
+        const results = await fetchRecipes('', ''); // Empty query will get popular/default recipes
+        return results?.results || [];
+      } catch (error) {
+        console.error('Error fetching featured recipes:', error);
+        return [];
+      }
+    },
     staleTime: 300000
   });
 

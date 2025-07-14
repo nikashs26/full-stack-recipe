@@ -4,6 +4,7 @@ import requests
 from typing import Dict, List, Optional, Any
 from datetime import datetime, timedelta
 import logging
+import re
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -114,7 +115,10 @@ class LLMMealPlannerAgent:
                         print(f'🔥 OLLAMA: Extracted JSON string length: {len(json_str)} characters')
                         print(f'🔥 OLLAMA: JSON preview (first 500 chars): {json_str[:500]}...')
                         
-                        raw_meal_plan = json.loads(json_str)
+                        # Try to fix common JSON issues
+                        fixed_json_str = self._fix_common_json_issues(json_str)
+                        
+                        raw_meal_plan = json.loads(fixed_json_str)
                         print(f'🔥 OLLAMA: Successfully parsed JSON meal plan')
                         print(f'🔥 OLLAMA: Raw meal plan keys: {list(raw_meal_plan.keys())}')
                         
@@ -130,6 +134,15 @@ class LLMMealPlannerAgent:
                     print(f'🔥 OLLAMA: JSON decode error: {e}')
                     print(f'🔥 OLLAMA: Problematic JSON string: {json_str[:200]}...')
                     logger.warning("Failed to parse Ollama response as JSON")
+                    
+                    # Try alternative JSON extraction methods
+                    try:
+                        alternative_plan = self._extract_meal_plan_from_text(meal_plan_text, preferences)
+                        if alternative_plan:
+                            print(f'🔥 OLLAMA: Successfully extracted meal plan using alternative method')
+                            return alternative_plan
+                    except Exception as alt_e:
+                        print(f'🔥 OLLAMA: Alternative extraction also failed: {alt_e}')
             else:
                 print(f'🔥 OLLAMA: Request failed with status {response.status_code}')
                 print(f'🔥 OLLAMA: Error response: {response.text}')
@@ -207,10 +220,14 @@ class LLMMealPlannerAgent:
         dietary_restrictions = preferences.get('dietary_restrictions', preferences.get('dietaryRestrictions', []))
         favorite_cuisines = preferences.get('favorite_cuisines', preferences.get('favoriteCuisines', []))
         allergies = preferences.get('allergies', preferences.get('allergens', []))
+        weekly_budget = preferences.get('weekly_budget', preferences.get('weeklyBudget', ''))
+        serving_amount = preferences.get('serving_amount', preferences.get('servingAmount', ''))
         
         print(f'🔥 PROMPT_BUILDER: Extracted dietary_restrictions: {dietary_restrictions}')
         print(f'🔥 PROMPT_BUILDER: Extracted favorite_cuisines: {favorite_cuisines}')
         print(f'🔥 PROMPT_BUILDER: Extracted allergies: {allergies}')
+        print(f'🔥 PROMPT_BUILDER: Extracted weekly_budget: {weekly_budget}')
+        print(f'🔥 PROMPT_BUILDER: Extracted serving_amount: {serving_amount}')
         
         # Build dietary info
         dietary_info = []
@@ -220,10 +237,25 @@ class LLMMealPlannerAgent:
             dietary_info.append(f"Preferred cuisines: {', '.join(favorite_cuisines)}")
         if allergies:
             dietary_info.append(f"Allergies: {', '.join(allergies)}")
+        if weekly_budget:
+            dietary_info.append(f"Weekly budget: ${weekly_budget}")
+        if serving_amount:
+            dietary_info.append(f"Serving {serving_amount} people")
         
         dietary_text = '. '.join(dietary_info) if dietary_info else "No specific dietary restrictions"
         
+        # Build budget and serving context
+        budget_context = ""
+        if weekly_budget:
+            budget_context = f"Keep the total estimated cost under ${weekly_budget} for the week. "
+        
+        serving_context = ""
+        if serving_amount:
+            serving_context = f"Scale all recipes to serve {serving_amount} people. "
+        
         prompt = f"""Create a 7-day meal plan. {dietary_text}.
+
+{budget_context}{serving_context}Focus on affordable, nutritious ingredients that provide good value.
 
 Return ONLY valid JSON in this format:
 {{
@@ -241,10 +273,11 @@ Return ONLY valid JSON in this format:
       "dinner": {{"name": "Stir Fry", "ingredients": ["vegetables", "rice", "sauce"]}}
     }}
   ],
-  "shopping_list": ["oats", "berries", "milk", "quinoa", "vegetables", "olive oil", "pasta", "herbs", "bread", "avocado", "tomato", "broth", "rice", "sauce"]
+  "shopping_list": ["oats", "berries", "milk", "quinoa", "vegetables", "olive oil", "pasta", "herbs", "bread", "avocado", "tomato", "broth", "rice", "sauce"],
+  "estimated_cost": "$45"
 }}
 
-Generate all 7 days (Monday through Sunday) with breakfast, lunch, and dinner for each day. Make sure all meals follow the dietary requirements."""
+Generate all 7 days (Monday through Sunday) with breakfast, lunch, and dinner for each day. Make sure all meals follow the dietary requirements and budget constraints."""
         
         return prompt
     
@@ -256,6 +289,11 @@ Generate all 7 days (Monday through Sunday) with breakfast, lunch, and dinner fo
             # Get the days from the simple plan
             days_data = simple_plan.get('days', [])
             shopping_list = simple_plan.get('shopping_list', [])
+            estimated_cost = simple_plan.get('estimated_cost', '$45-60')
+            
+            # Get budget and serving from preferences
+            weekly_budget = preferences.get('weekly_budget', preferences.get('weeklyBudget', ''))
+            serving_amount = preferences.get('serving_amount', preferences.get('servingAmount', '2'))
             
             # Convert each day to full format
             full_days = []
@@ -276,7 +314,7 @@ Generate all 7 days (Monday through Sunday) with breakfast, lunch, and dinner fo
                             "prep_time": "15 minutes",
                             "cook_time": "20 minutes", 
                             "difficulty": "Easy",
-                            "servings": 2,
+                            "servings": int(serving_amount) if serving_amount else 2,
                             "ingredients": simple_meal.get('ingredients', []),
                             "instructions": [f"Prepare {simple_meal.get('name', 'the meal')} with the listed ingredients"],
                             "nutritional_highlights": ["Balanced nutrition"],
@@ -310,7 +348,7 @@ Generate all 7 days (Monday through Sunday) with breakfast, lunch, and dinner fo
                     "grains": [item for item in shopping_list if item in ['oats', 'rice', 'pasta', 'bread', 'quinoa']],
                     "dairy": [item for item in shopping_list if item in ['milk', 'yogurt', 'cheese']],
                     "pantry": [item for item in shopping_list if item in ['olive oil', 'herbs', 'spices', 'sauce']],
-                    "estimated_cost": "$45-60"
+                    "estimated_cost": estimated_cost if estimated_cost else (f"${weekly_budget}" if weekly_budget else "$45-60")
                 },
                 "nutritional_summary": {
                     "weekly_highlights": ["Variety of meals", "Balanced nutrition", "Fresh ingredients"],
@@ -450,36 +488,135 @@ Make the meals healthy, varied, and follow the dietary restrictions."""
         # Get current date
         today = datetime.now()
         
-        # Basic meal templates based on preferences
+        # Extract preferences
         dietary_restrictions = preferences.get('dietary_restrictions', preferences.get('dietaryRestrictions', []))
+        favorite_cuisines = preferences.get('favorite_cuisines', preferences.get('favoriteCuisines', []))
+        cooking_skill = preferences.get('cooking_skill_level', preferences.get('cookingSkillLevel', 'intermediate'))
+        max_time = preferences.get('max_cooking_time', preferences.get('maxCookingTime', '30 minutes'))
+        
         is_vegetarian = 'vegetarian' in [r.lower() for r in dietary_restrictions]
         is_vegan = 'vegan' in [r.lower() for r in dietary_restrictions]
         
         print(f'🔥 FALLBACK: Dietary restrictions: {dietary_restrictions}')
+        print(f'🔥 FALLBACK: Favorite cuisines: {favorite_cuisines}')
         print(f'🔥 FALLBACK: Is vegetarian: {is_vegetarian}')
         print(f'🔥 FALLBACK: Is vegan: {is_vegan}')
         
-        # Simple fallback meals
-        fallback_meals = {
+        # Cuisine-specific meal templates
+        cuisine_meals = {
+            "indian": {
+                "breakfast": [
+                    {"name": "Masala Chai with Paratha", "cuisine": "Indian", "vegetarian": True, "vegan": False},
+                    {"name": "Poha (Flattened Rice)", "cuisine": "Indian", "vegetarian": True, "vegan": True},
+                    {"name": "Upma with Vegetables", "cuisine": "Indian", "vegetarian": True, "vegan": True},
+                    {"name": "Idli with Sambar", "cuisine": "Indian", "vegetarian": True, "vegan": True},
+                ],
+                "lunch": [
+                    {"name": "Dal Rice with Pickle", "cuisine": "Indian", "vegetarian": True, "vegan": True},
+                    {"name": "Chana Masala with Roti", "cuisine": "Indian", "vegetarian": True, "vegan": True},
+                    {"name": "Vegetable Biryani", "cuisine": "Indian", "vegetarian": True, "vegan": True},
+                    {"name": "Rajma with Basmati Rice", "cuisine": "Indian", "vegetarian": True, "vegan": True},
+                ],
+                "dinner": [
+                    {"name": "Palak Paneer with Naan", "cuisine": "Indian", "vegetarian": True, "vegan": False},
+                    {"name": "Aloo Gobi with Chapati", "cuisine": "Indian", "vegetarian": True, "vegan": True},
+                    {"name": "Mixed Vegetable Curry", "cuisine": "Indian", "vegetarian": True, "vegan": True},
+                    {"name": "Dal Tadka with Rice", "cuisine": "Indian", "vegetarian": True, "vegan": True},
+                ]
+            },
+            "italian": {
+                "breakfast": [
+                    {"name": "Cappuccino with Cornetto", "cuisine": "Italian", "vegetarian": True, "vegan": False},
+                    {"name": "Italian Toast with Tomato", "cuisine": "Italian", "vegetarian": True, "vegan": True},
+                    {"name": "Ricotta Pancakes", "cuisine": "Italian", "vegetarian": True, "vegan": False},
+                ],
+                "lunch": [
+                    {"name": "Margherita Pizza", "cuisine": "Italian", "vegetarian": True, "vegan": False},
+                    {"name": "Pasta Aglio e Olio", "cuisine": "Italian", "vegetarian": True, "vegan": True},
+                    {"name": "Caprese Salad", "cuisine": "Italian", "vegetarian": True, "vegan": False},
+                    {"name": "Minestrone Soup", "cuisine": "Italian", "vegetarian": True, "vegan": True},
+                ],
+                "dinner": [
+                    {"name": "Spaghetti Carbonara", "cuisine": "Italian", "vegetarian": False, "vegan": False},
+                    {"name": "Eggplant Parmigiana", "cuisine": "Italian", "vegetarian": True, "vegan": False},
+                    {"name": "Pasta Primavera", "cuisine": "Italian", "vegetarian": True, "vegan": False},
+                    {"name": "Risotto with Mushrooms", "cuisine": "Italian", "vegetarian": True, "vegan": False},
+                ]
+            },
+            "mediterranean": {
+                "breakfast": [
+                    {"name": "Greek Yogurt with Honey", "cuisine": "Mediterranean", "vegetarian": True, "vegan": False},
+                    {"name": "Avocado Toast with Feta", "cuisine": "Mediterranean", "vegetarian": True, "vegan": False},
+                    {"name": "Mediterranean Smoothie Bowl", "cuisine": "Mediterranean", "vegetarian": True, "vegan": True},
+                ],
+                "lunch": [
+                    {"name": "Greek Salad", "cuisine": "Mediterranean", "vegetarian": True, "vegan": False},
+                    {"name": "Hummus with Pita", "cuisine": "Mediterranean", "vegetarian": True, "vegan": True},
+                    {"name": "Mediterranean Wrap", "cuisine": "Mediterranean", "vegetarian": True, "vegan": False},
+                    {"name": "Lentil Soup", "cuisine": "Mediterranean", "vegetarian": True, "vegan": True},
+                ],
+                "dinner": [
+                    {"name": "Grilled Vegetables with Quinoa", "cuisine": "Mediterranean", "vegetarian": True, "vegan": True},
+                    {"name": "Stuffed Bell Peppers", "cuisine": "Mediterranean", "vegetarian": True, "vegan": True},
+                    {"name": "Mediterranean Pasta", "cuisine": "Mediterranean", "vegetarian": True, "vegan": False},
+                    {"name": "Falafel with Tahini", "cuisine": "Mediterranean", "vegetarian": True, "vegan": True},
+                ]
+            },
+            "american": {
+                "breakfast": [
+                    {"name": "Pancakes with Syrup", "cuisine": "American", "vegetarian": True, "vegan": False},
+                    {"name": "Avocado Toast", "cuisine": "American", "vegetarian": True, "vegan": True},
+                    {"name": "Overnight Oats", "cuisine": "American", "vegetarian": True, "vegan": True},
+                    {"name": "Smoothie Bowl", "cuisine": "American", "vegetarian": True, "vegan": True},
+                ],
+                "lunch": [
+                    {"name": "Quinoa Buddha Bowl", "cuisine": "American", "vegetarian": True, "vegan": True},
+                    {"name": "Grilled Cheese Sandwich", "cuisine": "American", "vegetarian": True, "vegan": False},
+                    {"name": "Caesar Salad", "cuisine": "American", "vegetarian": True, "vegan": False},
+                    {"name": "Veggie Burger", "cuisine": "American", "vegetarian": True, "vegan": True},
+                ],
+                "dinner": [
+                    {"name": "Grilled Portobello Mushroom", "cuisine": "American", "vegetarian": True, "vegan": True},
+                    {"name": "Mac and Cheese", "cuisine": "American", "vegetarian": True, "vegan": False},
+                    {"name": "BBQ Jackfruit Sandwich", "cuisine": "American", "vegetarian": True, "vegan": True},
+                    {"name": "Stuffed Sweet Potato", "cuisine": "American", "vegetarian": True, "vegan": True},
+                ]
+            }
+        }
+        
+        # Default fallback meals if no specific cuisine is found
+        default_meals = {
             "breakfast": [
-                {"name": "Oatmeal with Berries", "cuisine": "American", "vegetarian": True, "vegan": True},
-                {"name": "Avocado Toast", "cuisine": "American", "vegetarian": True, "vegan": True},
-                {"name": "Greek Yogurt Parfait", "cuisine": "Mediterranean", "vegetarian": True, "vegan": False},
-                {"name": "Smoothie Bowl", "cuisine": "American", "vegetarian": True, "vegan": True},
+                {"name": "Overnight Oats", "cuisine": "International", "vegetarian": True, "vegan": True},
+                {"name": "Avocado Toast", "cuisine": "International", "vegetarian": True, "vegan": True},
+                {"name": "Smoothie Bowl", "cuisine": "International", "vegetarian": True, "vegan": True},
+                {"name": "Greek Yogurt Parfait", "cuisine": "International", "vegetarian": True, "vegan": False},
             ],
             "lunch": [
-                {"name": "Quinoa Buddha Bowl", "cuisine": "American", "vegetarian": True, "vegan": True},
-                {"name": "Mediterranean Wrap", "cuisine": "Mediterranean", "vegetarian": True, "vegan": False},
+                {"name": "Quinoa Buddha Bowl", "cuisine": "International", "vegetarian": True, "vegan": True},
                 {"name": "Lentil Soup", "cuisine": "International", "vegetarian": True, "vegan": True},
-                {"name": "Asian Stir-Fry", "cuisine": "Asian", "vegetarian": True, "vegan": True},
+                {"name": "Veggie Wrap", "cuisine": "International", "vegetarian": True, "vegan": True},
+                {"name": "Mixed Green Salad", "cuisine": "International", "vegetarian": True, "vegan": True},
             ],
             "dinner": [
-                {"name": "Grilled Salmon with Vegetables", "cuisine": "American", "vegetarian": False, "vegan": False},
-                {"name": "Vegetable Curry", "cuisine": "Indian", "vegetarian": True, "vegan": True},
-                {"name": "Pasta Primavera", "cuisine": "Italian", "vegetarian": True, "vegan": False},
-                {"name": "Stuffed Bell Peppers", "cuisine": "Mediterranean", "vegetarian": True, "vegan": True},
+                {"name": "Vegetable Stir-Fry", "cuisine": "International", "vegetarian": True, "vegan": True},
+                {"name": "Stuffed Bell Peppers", "cuisine": "International", "vegetarian": True, "vegan": True},
+                {"name": "Mushroom Risotto", "cuisine": "International", "vegetarian": True, "vegan": False},
+                {"name": "Roasted Vegetable Bowl", "cuisine": "International", "vegetarian": True, "vegan": True},
             ]
         }
+        
+        # Choose meals based on favorite cuisines
+        available_meals = default_meals
+        if favorite_cuisines:
+            print(f'🔥 FALLBACK: Using cuisine-specific meals for: {favorite_cuisines}')
+            # Use the first favorite cuisine that we have meals for
+            for cuisine in favorite_cuisines:
+                cuisine_lower = cuisine.lower()
+                if cuisine_lower in cuisine_meals:
+                    available_meals = cuisine_meals[cuisine_lower]
+                    print(f'🔥 FALLBACK: Found meals for cuisine: {cuisine}')
+                    break
         
         # Generate 7 days
         days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
@@ -490,73 +627,239 @@ Make the meals healthy, varied, and follow the dietary restrictions."""
             
             day_meals = {}
             for meal_type in ["breakfast", "lunch", "dinner"]:
-                available_meals = fallback_meals[meal_type]
+                available_for_meal = available_meals[meal_type]
                 
                 # Filter by dietary restrictions
                 filtered_meals = []
-                for meal in available_meals:
+                for meal in available_for_meal:
                     if is_vegan and not meal.get("vegan", False):
                         continue
-                    if is_vegetarian and not meal.get("vegetarian", False):
+                    if is_vegetarian and not meal.get("vegetarian", True):
                         continue
                     filtered_meals.append(meal)
                 
+                # If no meals pass the filter, use the original list
                 if not filtered_meals:
-                    filtered_meals = available_meals  # Fallback to all meals
+                    filtered_meals = available_for_meal
                 
-                # Pick a meal (rotate through options)
-                chosen_meal = filtered_meals[i % len(filtered_meals)]
+                # Select a meal (cycle through to avoid repetition)
+                selected_meal = filtered_meals[i % len(filtered_meals)]
                 
                 day_meals[meal_type] = {
-                    "name": chosen_meal["name"],
-                    "cuisine": chosen_meal["cuisine"],
-                    "prep_time": "10 minutes",
-                    "cook_time": "20 minutes",
-                    "difficulty": "Easy",
-                    "servings": 2,
-                    "ingredients": ["Basic ingredients - see recipe database"],
-                    "instructions": [f"Prepare {chosen_meal['name']} following standard recipe"],
-                    "nutritional_highlights": ["Balanced nutrition", "Fresh ingredients"],
-                    "tags": ["healthy", "balanced"]
+                    "name": selected_meal["name"],
+                    "ingredients": ["ingredients vary"],  # Simplified for fallback
+                    "cuisine": selected_meal["cuisine"]
                 }
             
             weekly_plan.append({
                 "day": day,
                 "date": day_date.strftime("%Y-%m-%d"),
-                "meals": day_meals,
-                "daily_notes": "Generated using rule-based system - upgrade to free LLM for more personalization"
+                **day_meals
             })
         
+        # Generate shopping list based on cuisine
+        shopping_list = self._generate_cuisine_shopping_list(favorite_cuisines, dietary_restrictions)
+        
         return {
-            "week_summary": {
-                "theme": "Balanced Weekly Nutrition",
-                "total_recipes": 21,
-                "prep_tips": [
-                    "Prep vegetables in advance for quicker cooking",
-                    "Cook grains in larger batches",
-                    "Plan your grocery shopping ahead"
-                ],
-                "shopping_highlights": ["Fresh vegetables", "Whole grains", "Lean proteins"]
-            },
+            "week_summary": f"Fallback meal plan focusing on {', '.join(favorite_cuisines) if favorite_cuisines else 'varied'} cuisine",
             "days": weekly_plan,
-            "weekly_shopping_list": {
-                "proteins": ["tofu", "lentils", "quinoa"] if is_vegetarian else ["chicken", "salmon", "eggs"],
-                "vegetables": ["spinach", "broccoli", "bell peppers", "tomatoes", "onions"],
-                "grains": ["quinoa", "brown rice", "oats", "whole wheat bread"],
-                "dairy": [] if is_vegan else ["greek yogurt", "cheese"],
-                "pantry": ["olive oil", "spices", "nuts", "seeds", "canned beans"],
-                "estimated_cost": "$50-65"
-            },
+            "weekly_shopping_list": shopping_list,
             "nutritional_summary": {
-                "weekly_highlights": ["Balanced macronutrients", "Variety of vegetables", "Whole grains"],
-                "variety_score": "Good",
-                "health_rating": "Good"
+                "focus": "Balanced nutrition with emphasis on fresh ingredients",
+                "dietary_accommodations": dietary_restrictions
             },
             "generated_at": datetime.now().isoformat(),
             "preferences_used": preferences,
-            "plan_type": "rule_based_fallback",
-            "note": "This is a fallback meal plan. Install Ollama or set up Hugging Face API for AI-generated plans."
+            "plan_type": "fallback_cuisine_focused"
         }
+    
+    def _generate_cuisine_shopping_list(self, favorite_cuisines: List[str], dietary_restrictions: List[str]) -> List[Dict[str, Any]]:
+        """Generate a shopping list based on favorite cuisines"""
+        
+        cuisine_ingredients = {
+            "indian": [
+                {"item": "Basmati Rice", "category": "Grains", "estimated_cost": 3.00},
+                {"item": "Red Lentils (Dal)", "category": "Legumes", "estimated_cost": 2.50},
+                {"item": "Chickpeas", "category": "Legumes", "estimated_cost": 2.00},
+                {"item": "Garam Masala", "category": "Spices", "estimated_cost": 3.50},
+                {"item": "Turmeric", "category": "Spices", "estimated_cost": 2.00},
+                {"item": "Cumin Seeds", "category": "Spices", "estimated_cost": 2.50},
+                {"item": "Coriander Seeds", "category": "Spices", "estimated_cost": 2.00},
+                {"item": "Onions", "category": "Vegetables", "estimated_cost": 2.00},
+                {"item": "Tomatoes", "category": "Vegetables", "estimated_cost": 3.00},
+                {"item": "Ginger", "category": "Vegetables", "estimated_cost": 1.50},
+                {"item": "Garlic", "category": "Vegetables", "estimated_cost": 1.00},
+                {"item": "Coconut Oil", "category": "Oils", "estimated_cost": 4.00},
+                {"item": "Paneer", "category": "Dairy", "estimated_cost": 4.50},
+                {"item": "Yogurt", "category": "Dairy", "estimated_cost": 3.00},
+            ],
+            "italian": [
+                {"item": "Pasta (Various)", "category": "Grains", "estimated_cost": 4.00},
+                {"item": "Arborio Rice", "category": "Grains", "estimated_cost": 3.50},
+                {"item": "Canned Tomatoes", "category": "Canned Goods", "estimated_cost": 2.50},
+                {"item": "Olive Oil", "category": "Oils", "estimated_cost": 5.00},
+                {"item": "Parmesan Cheese", "category": "Dairy", "estimated_cost": 6.00},
+                {"item": "Mozzarella", "category": "Dairy", "estimated_cost": 4.00},
+                {"item": "Fresh Basil", "category": "Herbs", "estimated_cost": 2.50},
+                {"item": "Garlic", "category": "Vegetables", "estimated_cost": 1.00},
+                {"item": "Onions", "category": "Vegetables", "estimated_cost": 2.00},
+                {"item": "Mushrooms", "category": "Vegetables", "estimated_cost": 3.00},
+                {"item": "Eggplant", "category": "Vegetables", "estimated_cost": 2.50},
+                {"item": "Zucchini", "category": "Vegetables", "estimated_cost": 2.00},
+            ],
+            "mediterranean": [
+                {"item": "Quinoa", "category": "Grains", "estimated_cost": 4.00},
+                {"item": "Chickpeas", "category": "Legumes", "estimated_cost": 2.00},
+                {"item": "Lentils", "category": "Legumes", "estimated_cost": 2.50},
+                {"item": "Olive Oil", "category": "Oils", "estimated_cost": 5.00},
+                {"item": "Feta Cheese", "category": "Dairy", "estimated_cost": 4.50},
+                {"item": "Greek Yogurt", "category": "Dairy", "estimated_cost": 4.00},
+                {"item": "Cucumbers", "category": "Vegetables", "estimated_cost": 2.00},
+                {"item": "Tomatoes", "category": "Vegetables", "estimated_cost": 3.00},
+                {"item": "Bell Peppers", "category": "Vegetables", "estimated_cost": 3.50},
+                {"item": "Red Onions", "category": "Vegetables", "estimated_cost": 2.00},
+                {"item": "Fresh Herbs", "category": "Herbs", "estimated_cost": 3.00},
+                {"item": "Tahini", "category": "Condiments", "estimated_cost": 5.00},
+            ],
+            "american": [
+                {"item": "Quinoa", "category": "Grains", "estimated_cost": 4.00},
+                {"item": "Brown Rice", "category": "Grains", "estimated_cost": 3.00},
+                {"item": "Oats", "category": "Grains", "estimated_cost": 3.50},
+                {"item": "Black Beans", "category": "Legumes", "estimated_cost": 2.00},
+                {"item": "Avocados", "category": "Vegetables", "estimated_cost": 4.00},
+                {"item": "Sweet Potatoes", "category": "Vegetables", "estimated_cost": 2.50},
+                {"item": "Spinach", "category": "Vegetables", "estimated_cost": 2.00},
+                {"item": "Broccoli", "category": "Vegetables", "estimated_cost": 2.50},
+                {"item": "Carrots", "category": "Vegetables", "estimated_cost": 1.50},
+                {"item": "Cheese", "category": "Dairy", "estimated_cost": 4.00},
+                {"item": "Almond Milk", "category": "Dairy Alternatives", "estimated_cost": 3.50},
+                {"item": "Nuts & Seeds", "category": "Snacks", "estimated_cost": 5.00},
+            ]
+        }
+        
+        # Default shopping list
+        default_shopping_list = [
+            {"item": "Mixed Vegetables", "category": "Vegetables", "estimated_cost": 8.00},
+            {"item": "Fruits", "category": "Fruits", "estimated_cost": 6.00},
+            {"item": "Grains", "category": "Grains", "estimated_cost": 5.00},
+            {"item": "Legumes", "category": "Legumes", "estimated_cost": 4.00},
+            {"item": "Herbs & Spices", "category": "Seasonings", "estimated_cost": 3.00},
+        ]
+        
+        if not favorite_cuisines:
+            return default_shopping_list
+        
+        # Use ingredients from the first favorite cuisine
+        cuisine = favorite_cuisines[0].lower()
+        if cuisine in cuisine_ingredients:
+            shopping_list = cuisine_ingredients[cuisine]
+            
+            # Filter out non-vegan items if needed
+            if 'vegan' in [r.lower() for r in dietary_restrictions]:
+                shopping_list = [item for item in shopping_list if item["category"] not in ["Dairy", "Meat"]]
+            
+            return shopping_list
+        
+        return default_shopping_list
+    
+    def _fix_common_json_issues(self, json_str: str) -> str:
+        """Fix common JSON formatting issues that LLMs make"""
+        print(f'🔥 JSON_FIXER: Attempting to fix JSON issues')
+        
+        # Remove markdown code blocks
+        json_str = json_str.replace('```json', '').replace('```', '')
+        
+        # Fix trailing commas before closing brackets/braces
+        json_str = re.sub(r',(\s*[}\]])', r'\1', json_str)
+        
+        # Fix missing commas between objects
+        json_str = re.sub(r'}\s*{', '},{', json_str)
+        json_str = re.sub(r']\s*\[', '],[', json_str)
+        
+        # Fix single quotes to double quotes
+        json_str = re.sub(r"'([^']*)':", r'"\1":', json_str)
+        json_str = re.sub(r": '([^']*)'", r': "\1"', json_str)
+        
+        # Fix unquoted keys
+        json_str = re.sub(r'(\w+):', r'"\1":', json_str)
+        
+        # Fix serving_size issues (common LLM error)
+        json_str = re.sub(r'"serving_size":\s*([^,}\]]+)', r'"serving_size": "1"', json_str)
+        
+        print(f'🔥 JSON_FIXER: Fixed JSON preview: {json_str[:300]}...')
+        return json_str
+    
+    def _extract_meal_plan_from_text(self, text: str, preferences: Dict[str, Any]) -> Dict[str, Any]:
+        """Extract meal plan information from text when JSON parsing fails"""
+        print(f'🔥 TEXT_EXTRACTOR: Attempting to extract meal plan from text')
+        
+        favorite_cuisines = preferences.get('favorite_cuisines', preferences.get('favoriteCuisines', []))
+        
+        # Look for day patterns
+        import re
+        days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        
+        extracted_days = []
+        for day in days:
+            # Look for day patterns in text
+            day_pattern = rf"{day}[:\s]*.*?(?=(?:{'|'.join(days)})|$)"
+            day_match = re.search(day_pattern, text, re.IGNORECASE | re.DOTALL)
+            
+            if day_match:
+                day_text = day_match.group(0)
+                
+                # Extract meals from day text
+                meals = {}
+                meal_types = ["breakfast", "lunch", "dinner"]
+                
+                for meal_type in meal_types:
+                    meal_pattern = rf"{meal_type}[:\s]*([^,\n]*)"
+                    meal_match = re.search(meal_pattern, day_text, re.IGNORECASE)
+                    
+                    if meal_match:
+                        meal_name = meal_match.group(1).strip()
+                        # Clean up the meal name
+                        meal_name = re.sub(r'^["\s]*|["\s]*$', '', meal_name)
+                        meal_name = re.sub(r'[{}"\[\]]', '', meal_name)
+                        
+                        if meal_name:
+                            meals[meal_type] = {
+                                "name": meal_name,
+                                "ingredients": ["ingredients vary"],
+                                "cuisine": favorite_cuisines[0] if favorite_cuisines else "International"
+                            }
+                
+                if meals:
+                    extracted_days.append({
+                        "day": day,
+                        "date": "",  # Will be filled later
+                        **meals
+                    })
+        
+        if extracted_days:
+            print(f'🔥 TEXT_EXTRACTOR: Successfully extracted {len(extracted_days)} days')
+            
+            # Fill in dates
+            from datetime import datetime, timedelta
+            today = datetime.now()
+            for i, day_plan in enumerate(extracted_days):
+                day_plan["date"] = (today + timedelta(days=i)).strftime("%Y-%m-%d")
+            
+            return {
+                "week_summary": f"LLM-generated meal plan focusing on {', '.join(favorite_cuisines) if favorite_cuisines else 'varied'} cuisine",
+                "days": extracted_days,
+                "weekly_shopping_list": self._generate_cuisine_shopping_list(favorite_cuisines, preferences.get('dietary_restrictions', [])),
+                "nutritional_summary": {
+                    "focus": "LLM-generated with preference-based nutrition",
+                    "dietary_accommodations": preferences.get('dietary_restrictions', [])
+                },
+                "generated_at": datetime.now().isoformat(),
+                "preferences_used": preferences,
+                "plan_type": "llm_text_extracted"
+            }
+        
+        print(f'🔥 TEXT_EXTRACTOR: Failed to extract meaningful meal plan')
+        return None
     
     def get_recipe_suggestions(self, meal_type: str, preferences: Dict[str, Any], count: int = 5) -> List[Dict[str, Any]]:
         """Get recipe suggestions using free LLM or fallback"""

@@ -1,7 +1,7 @@
 // URLs for API endpoints - fallback to mock data when not available
-const API_DB_RECIPES = "http://localhost:5001/recipes";
-const API_URL = "http://localhost:5001/get_recipes";
-const API_URL_RECIPE_BY_ID = "http://localhost:5001/get_recipe_by_id";
+const API_DB_RECIPES = "http://localhost:5003/recipes";
+const API_URL = "http://localhost:5003/get_recipes";
+const API_URL_RECIPE_BY_ID = "http://localhost:5003/get_recipe_by_id";
 
 // Fallback data for when the API is unavailable
 const FALLBACK_RECIPES = [
@@ -18,7 +18,7 @@ const FALLBACK_RECIPES = [
     title: "Vegetable Curry",
     image: "https://spoonacular.com/recipeImages/vegetable-curry-642129.jpg",
     cuisines: ["Indian"],
-    diets: ["Vegatarian"],
+    diets: ["Vegetarian"],
     readyInMinutes: 45
   },
   {
@@ -28,8 +28,8 @@ const FALLBACK_RECIPES = [
     cuisines: ["Italian"],
     diets: ["Non-Vegetarian"],
     readyInMinutes: 25
-},
-{
+  },
+  {
     id: 104,
     title: "Super Cheesy Burger",
     image: "https://thescranline.com/wp-content/uploads/2023/12/CHEESEBURGERS-WEB-07.jpg",
@@ -37,24 +37,122 @@ const FALLBACK_RECIPES = [
     diets: ["Non-Vegetarian"],
     readyInMinutes: 40
   },
-{
-  id: 105,
-  title: "Chicken 65",
-  image: "https://popmenucloud.com/cdn-cgi/image/width%3D3840%2Cheight%3D3840%2Cfit%3Dscale-down%2Cformat%3Dauto%2Cquality%3D60/zvmbjaxg/1f1b9169-865a-47f1-b9b0-092c8f7549d4.png",
-  cuisines: ["Indian"],
-  diets: ["Non-Vegetarian"],
-  readyInMinutes: 35
-}
-
+  {
+    id: 105,
+    title: "Chicken 65",
+    image: "https://popmenucloud.com/cdn-cgi/image/width%3D3840%2Cheight%3D3840%2Cfit%3Dscale-down%2Cformat%3Dauto%2Cquality%3D60/zvmbjaxg/1f1b9169-865a-47f1-b9b0-092c8f7549d4.png",
+    cuisines: ["Indian"],
+    diets: ["Non-Vegetarian"],
+    readyInMinutes: 35
+  },
+  {
+    id: 106,
+    title: "Caesar Salad",
+    image: "https://natashaskitchen.com/wp-content/uploads/2019/01/Caesar-Salad-Recipe-3.jpg",
+    cuisines: ["American"],
+    diets: ["Vegetarian"],
+    readyInMinutes: 15
+  },
+  {
+    id: 107,
+    title: "Spaghetti Carbonara",
+    image: "https://www.recipetineats.com/wp-content/uploads/2019/05/Spaghetti-Carbonara_9.jpg",
+    cuisines: ["Italian"],
+    diets: ["Non-Vegetarian"],
+    readyInMinutes: 20
+  },
+  {
+    id: 108,
+    title: "Thai Green Curry",
+    image: "https://www.recipetineats.com/wp-content/uploads/2014/12/Thai-Green-Curry_1.jpg",
+    cuisines: ["Thai"],
+    diets: ["Vegetarian"],
+    readyInMinutes: 30
+  },
+  {
+    id: 109,
+    title: "BBQ Pulled Pork",
+    image: "https://www.recipetineats.com/wp-content/uploads/2017/05/Slow-Cooker-Pulled-Pork_9.jpg",
+    cuisines: ["American"],
+    diets: ["Non-Vegetarian"],
+    readyInMinutes: 480
+  },
+  {
+    id: 110,
+    title: "Margherita Pizza",
+    image: "https://www.recipetineats.com/wp-content/uploads/2020/05/Margherita-Pizza_9.jpg",
+    cuisines: ["Italian"],
+    diets: ["Vegetarian"],
+    readyInMinutes: 25
+  },
+  {
+    id: 111,
+    title: "Chicken Tikka Masala",
+    image: "https://www.recipetineats.com/wp-content/uploads/2019/01/Chicken-Tikka-Masala_9.jpg",
+    cuisines: ["Indian"],
+    diets: ["Non-Vegetarian"],
+    readyInMinutes: 45
+  },
+  {
+    id: 112,
+    title: "Greek Salad",
+    image: "https://www.recipetineats.com/wp-content/uploads/2016/04/Greek-Salad_7.jpg",
+    cuisines: ["Mediterranean"],
+    diets: ["Vegetarian"],
+    readyInMinutes: 15
+  },
+  {
+    id: 113,
+    title: "Classic Mac and Cheese",
+    image: "https://www.recipetineats.com/wp-content/uploads/2014/04/Baked-Mac-and-Cheese_1.jpg",
+    cuisines: ["American"],
+    diets: ["Vegetarian"],
+    readyInMinutes: 35
+  },
+  {
+    id: 114,
+    title: "Buffalo Wings",
+    image: "https://www.recipetineats.com/wp-content/uploads/2019/07/Buffalo-Wings_8.jpg",
+    cuisines: ["American"],
+    diets: ["Non-Vegetarian"],
+    readyInMinutes: 45
+  },
+  {
+    id: 115,
+    title: "Grilled Cheese Sandwich",
+    image: "https://www.recipetineats.com/wp-content/uploads/2016/02/Grilled-Cheese_7.jpg",
+    cuisines: ["American"],
+    diets: ["Vegetarian"],
+    readyInMinutes: 10
+  },
+  {
+    id: 116,
+    title: "Pancakes",
+    image: "https://www.recipetineats.com/wp-content/uploads/2018/05/Pancakes_9.jpg",
+    cuisines: ["American"],
+    diets: ["Vegetarian"],
+    readyInMinutes: 20
+  },
+  {
+    id: 117,
+    title: "Meatloaf",
+    image: "https://www.recipetineats.com/wp-content/uploads/2018/03/Meatloaf_8.jpg",
+    cuisines: ["American"],
+    diets: ["Non-Vegetarian"],
+    readyInMinutes: 90
+  },
+  {
+    id: 118,
+    title: "Coleslaw",
+    image: "https://www.recipetineats.com/wp-content/uploads/2019/06/Coleslaw_8.jpg",
+    cuisines: ["American"],
+    diets: ["Vegetarian"],
+    readyInMinutes: 15
+  }
 ];
 
 export const fetchRecipes = async (query: string = "", ingredient: string = "") => {
     console.log(`Fetching recipes with query: "${query}" and ingredient: "${ingredient}"`);
-    
-    if (!query && !ingredient) {
-        console.log("No search criteria provided, returning empty results");
-        return { results: [] };
-    }
     
     // Try the API endpoint first which will prioritize MongoDB before making API calls
     try {
@@ -67,7 +165,7 @@ export const fetchRecipes = async (query: string = "", ingredient: string = "") 
         
         // Short timeout to prevent UI hanging
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 20000); // Increased timeout to 20 seconds
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
         
         try {
             const response = await fetch(
@@ -97,28 +195,24 @@ export const fetchRecipes = async (query: string = "", ingredient: string = "") 
                 data.results = [];
             }
 
+            // If no results from API, use fallback data
+            if (data.results.length === 0) {
+                console.log("No results from API, using fallback data");
+                return { 
+                    results: filterFallbackRecipes(query, ingredient),
+                    status: "fallback",
+                    message: "Using fallback data as no API results found" 
+                };
+            }
+
             console.log(`Found ${data.results.length} recipes from MongoDB/API`);
             return data;
         } catch (fetchError) {
             // API fetch failed, use fallback data
             console.log("API fetch failed, using fallback data", fetchError);
             
-            // Filter the fallback data based on the search query
-            const filteredResults = FALLBACK_RECIPES.filter(recipe => {
-                const matchesQuery = query ? 
-                    recipe.title.toLowerCase().includes(query.toLowerCase()) : 
-                    true;
-                    
-                const matchesIngredient = ingredient ? 
-                    // This is a simplification as we don't have ingredients in our fallback data
-                    true : 
-                    true;
-                    
-                return matchesQuery && matchesIngredient;
-            });
-            
             return { 
-                results: filteredResults,
+                results: filterFallbackRecipes(query, ingredient),
                 status: "fallback",
                 message: "Using fallback data as API is unavailable" 
             };
@@ -132,104 +226,205 @@ export const fetchRecipes = async (query: string = "", ingredient: string = "") 
         
         // Return fallback data when API fails
         return { 
-            results: FALLBACK_RECIPES,
+            results: filterFallbackRecipes(query, ingredient),
             status: "fallback",
             message: "Using fallback data as API is unavailable" 
         };
     }
 };
 
-export const fetchRecipeById = async (recipeId: number | string) => {
-    console.log(`Fetching recipe details for ID: ${recipeId}`);
-    
-    if (!recipeId) {
-        console.error("Recipe ID is required");
-        throw new Error("Recipe ID is required");
+// Helper function to filter fallback recipes
+const filterFallbackRecipes = (query: string = "", ingredient: string = "") => {
+    if (!query && !ingredient) {
+        // Return all fallback recipes if no search criteria
+        return FALLBACK_RECIPES;
     }
     
-    // First check if the recipe exists in our fallback data
-    const fallbackRecipe = FALLBACK_RECIPES.find(r => r.id.toString() === recipeId.toString());
+    return FALLBACK_RECIPES.filter(recipe => {
+        const matchesQuery = query ? 
+            recipe.title.toLowerCase().includes(query.toLowerCase()) ||
+            recipe.cuisines.some(cuisine => cuisine.toLowerCase().includes(query.toLowerCase())) : 
+            true;
+            
+        const matchesIngredient = ingredient ? 
+            // This is a simplification as we don't have ingredients in our fallback data
+            recipe.title.toLowerCase().includes(ingredient.toLowerCase()) : 
+            true;
+        
+        // Use actual cuisine data for filtering
+        if (query) {
+            const recipeCuisines = recipe.cuisines || [];
+            
+            // Primary check: Does the recipe's cuisine array contain the requested cuisine?
+            const directCuisineMatch = recipeCuisines.some(cuisine => 
+                cuisine.toLowerCase() === query.toLowerCase()
+            );
+            
+            // Secondary check: Does the recipe title contain the cuisine/query?
+            const titleMatch = recipe.title.toLowerCase().includes(query.toLowerCase());
+            
+            // If it's a direct match, accept it
+            if (directCuisineMatch || titleMatch) {
+                console.log(`✅ Fallback recipe "${recipe.title}" matches ${query} (cuisines: ${recipeCuisines.join(', ')})`);
+                return matchesIngredient;
+            }
+            
+            // If no direct match, reject it
+            console.log(`❌ Fallback recipe "${recipe.title}" does not match ${query} (cuisines: ${recipeCuisines.join(', ')})`);
+            return false;
+        }
+            
+        return matchesQuery && matchesIngredient;
+    });
+};
+
+export const fetchRecipeById = async (recipeId: number | string) => {
+    console.log(`Fetching recipe by ID: ${recipeId}`);
     
-    // Try the API endpoint directly - MongoDB will be checked first
+    // Check if this is a fallback recipe ID
+    const fallbackRecipe = FALLBACK_RECIPES.find(recipe => recipe.id === parseInt(recipeId.toString()));
+    if (fallbackRecipe) {
+        console.log("Found fallback recipe, returning detailed information");
+        return getDetailedFallbackRecipe(fallbackRecipe);
+    }
+    
     try {
-        // Timeout setup to prevent hanging requests
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5-second timeout
+        // Try to fetch from API first
+        const response = await fetch(`${API_URL_RECIPE_BY_ID}?id=${recipeId}`, {
+            signal: AbortSignal.timeout(10000)
+        });
         
-        const url = `${API_URL_RECIPE_BY_ID}?id=${recipeId}`;
-        console.log("Fetching recipe details from:", url);
+        console.log(`Recipe API response status: ${response.status}`);
         
-        try {
-            const response = await fetch(url, { signal: controller.signal });
-            clearTimeout(timeoutId);
-            
-            console.log(`API response status for recipe ${recipeId}: ${response.status}`);
-
-            if (!response.ok) {
-                throw new Error(`Failed to fetch recipe details (Status: ${response.status})`);
-            }
-            
-            const data = await response.json();
-            console.log("Recipe details received:", data);
-            
-            if (!data || typeof data !== 'object') {
-                console.error("Invalid API response format for recipe details", data);
-                throw new Error("Invalid recipe data received");
-            }
-
+        if (!response.ok) {
+            throw new Error(`Failed to fetch recipe (Status: ${response.status})`);
+        }
+        
+        const data = await response.json();
+        console.log("Recipe API response received:", data);
+        
+        if (data && data.id) {
             return data;
-        } catch (fetchError) {
-            console.log("API fetch failed for recipe details, using fallback data if available", fetchError);
-            
-            if (fallbackRecipe) {
-                // Create a more complete recipe object from our minimal fallback data
-                return {
-                    ...fallbackRecipe,
-                    instructions: "This is fallback recipe data as the API is unavailable.",
-                    extendedIngredients: [
-                        { name: "Ingredient 1", amount: 1, unit: "cup", originalString: "1 cup of Ingredient 1" },
-                        { name: "Ingredient 2", amount: 2, unit: "tbsp", originalString: "2 tbsp of Ingredient 2" }
-                    ],
-                    analyzedInstructions: [{
-                        name: "",
-                        steps: [
-                            { number: 1, step: "This is a placeholder step 1." },
-                            { number: 2, step: "This is a placeholder step 2." }
-                        ]
-                    }]
-                };
-            } else {
-                throw new Error("Recipe not found in fallback data");
-            }
+        } else {
+            throw new Error("Invalid recipe data received from API");
         }
     } catch (error) {
-        if (error.name === 'AbortError') {
-            console.error("Request timeout while fetching recipe details");
-        } else {
-            console.error("Error fetching recipe details:", error);
-        }
+        console.error("Error fetching recipe by ID:", error);
         
-        // If we have a fallback recipe, return it
-        if (fallbackRecipe) {
-            return {
-                ...fallbackRecipe,
-                instructions: "This is fallback recipe data as the API is unavailable.",
-                extendedIngredients: [
-                    { name: "Ingredient 1", amount: 1, unit: "cup", originalString: "1 cup of Ingredient 1" },
-                    { name: "Ingredient 2", amount: 2, unit: "tbsp", originalString: "2 tbsp of Ingredient 2" }
-                ],
-                analyzedInstructions: [{
-                    name: "",
-                    steps: [
-                        { number: 1, step: "This is a placeholder step 1." },
-                        { number: 2, step: "This is a placeholder step 2." }
-                    ]
-                }]
-            };
-        } else {
-            throw new Error("Recipe not found and API is unavailable");
-        }
+        // Return a detailed fallback recipe if API fails
+        return getDetailedFallbackRecipe({
+            id: parseInt(recipeId.toString()),
+            title: "Recipe Not Available",
+            image: "https://via.placeholder.com/312x231?text=Recipe+Not+Available",
+            cuisines: ["International"],
+            diets: ["Various"],
+            readyInMinutes: 30
+        });
     }
+};
+
+// Helper function to create detailed recipe information for fallback recipes
+const getDetailedFallbackRecipe = (recipe: any) => {
+    const detailedRecipes = {
+        101: {
+            ...recipe,
+            summary: "Delicious beef tacos with fresh toppings and warm tortillas. A classic Mexican dish that's perfect for any occasion.",
+            ingredients: [
+                { name: "Ground beef", amount: 1, unit: "lb" },
+                { name: "Taco seasoning", amount: 1, unit: "packet" },
+                { name: "Corn tortillas", amount: 8, unit: "pieces" },
+                { name: "Lettuce", amount: 2, unit: "cups shredded" },
+                { name: "Tomatoes", amount: 2, unit: "medium diced" },
+                { name: "Cheese", amount: 1, unit: "cup shredded" },
+                { name: "Sour cream", amount: 0.5, unit: "cup" }
+            ],
+            instructions: [
+                "Brown the ground beef in a large skillet over medium-high heat.",
+                "Add taco seasoning and water according to packet directions.",
+                "Simmer for 5 minutes until sauce thickens.",
+                "Warm tortillas in microwave or on griddle.",
+                "Fill tortillas with beef mixture and desired toppings.",
+                "Serve immediately with lime wedges."
+            ]
+        },
+        102: {
+            ...recipe,
+            summary: "A flavorful and aromatic vegetable curry packed with nutrients and spices. Perfect for vegetarians and curry lovers.",
+            ingredients: [
+                { name: "Mixed vegetables", amount: 3, unit: "cups chopped" },
+                { name: "Coconut milk", amount: 1, unit: "can" },
+                { name: "Curry powder", amount: 2, unit: "tbsp" },
+                { name: "Onion", amount: 1, unit: "large diced" },
+                { name: "Garlic", amount: 3, unit: "cloves minced" },
+                { name: "Ginger", amount: 1, unit: "tbsp fresh grated" },
+                { name: "Vegetable oil", amount: 2, unit: "tbsp" }
+            ],
+            instructions: [
+                "Heat oil in a large pot over medium heat.",
+                "Sauté onion, garlic, and ginger until fragrant.",
+                "Add curry powder and cook for 1 minute.",
+                "Add vegetables and coconut milk.",
+                "Simmer for 20-25 minutes until vegetables are tender.",
+                "Season with salt and pepper to taste.",
+                "Serve over rice or with naan bread."
+            ]
+        },
+        103: {
+            ...recipe,
+            summary: "Creamy chicken alfredo pasta with tender chicken and rich parmesan sauce. A comforting Italian-American classic.",
+            ingredients: [
+                { name: "Chicken breast", amount: 2, unit: "pieces" },
+                { name: "Fettuccine pasta", amount: 12, unit: "oz" },
+                { name: "Heavy cream", amount: 1, unit: "cup" },
+                { name: "Parmesan cheese", amount: 1, unit: "cup grated" },
+                { name: "Butter", amount: 4, unit: "tbsp" },
+                { name: "Garlic", amount: 3, unit: "cloves minced" }
+            ],
+            instructions: [
+                "Cook pasta according to package directions.",
+                "Season and cook chicken until golden brown.",
+                "Slice chicken and set aside.",
+                "Melt butter in the same pan, add garlic.",
+                "Add cream and simmer until slightly thickened.",
+                "Stir in parmesan cheese until melted.",
+                "Toss pasta with sauce and top with chicken."
+            ]
+        },
+        106: {
+            ...recipe,
+            summary: "Classic Caesar salad with crisp romaine lettuce, parmesan cheese, and creamy dressing.",
+            ingredients: [
+                { name: "Romaine lettuce", amount: 2, unit: "heads" },
+                { name: "Parmesan cheese", amount: 0.5, unit: "cup grated" },
+                { name: "Croutons", amount: 1, unit: "cup" },
+                { name: "Caesar dressing", amount: 0.5, unit: "cup" },
+                { name: "Lemon", amount: 1, unit: "piece" }
+            ],
+            instructions: [
+                "Wash and chop romaine lettuce.",
+                "Toss lettuce with Caesar dressing.",
+                "Add croutons and parmesan cheese.",
+                "Squeeze fresh lemon juice over salad.",
+                "Serve immediately."
+            ]
+        }
+    };
+    
+    return detailedRecipes[recipe.id] || {
+        ...recipe,
+        summary: `A delicious ${recipe.title.toLowerCase()} recipe with authentic flavors and fresh ingredients.`,
+        ingredients: [
+            { name: "Main ingredient", amount: 1, unit: "portion" },
+            { name: "Seasonings", amount: 1, unit: "as needed" },
+            { name: "Additional ingredients", amount: 1, unit: "as required" }
+        ],
+        instructions: [
+            "Prepare all ingredients according to recipe requirements.",
+            "Follow traditional cooking methods for this dish.",
+            "Season to taste and serve hot.",
+            "Enjoy your homemade meal!"
+        ]
+    };
 };
 
 // Function to fetch all recipes from MongoDB
@@ -247,19 +442,45 @@ export const getAllRecipesFromDB = async () => {
         }
         
         const data = await response.json();
+        
+        // If MongoDB returns empty results, try to get popular recipes from Spoonacular
+        if (!data.results || data.results.length === 0) {
+            console.log("MongoDB returned empty results, fetching popular recipes from Spoonacular");
+            try {
+                const spoonacularResponse = await fetch(API_URL);
+                if (spoonacularResponse.ok) {
+                    const spoonacularData = await spoonacularResponse.json();
+                    console.log(`Fetched ${spoonacularData.results?.length || 0} popular recipes from Spoonacular`);
+                    return spoonacularData;
+                }
+            } catch (spoonacularError) {
+                console.error("Error fetching from Spoonacular:", spoonacularError);
+            }
+        }
+        
         console.log(`Fetched ${data.results?.length || 0} recipes from MongoDB`);
         return data;
     } catch (error) {
         console.error("Error fetching recipes from MongoDB:", error);
         
-        // Try to get from local storage as backup
+        // If MongoDB fails, try to get popular recipes from Spoonacular
+        console.log("MongoDB failed, trying Spoonacular API");
         try {
-            const localRecipes = localStorage.getItem('dietary-delight-recipes');
-            return { results: localRecipes ? JSON.parse(localRecipes) : [] };
-        } catch (localError) {
-            console.error("Error getting recipes from local storage:", localError);
-            return { results: [] };
+            const spoonacularResponse = await fetch(API_URL);
+            if (spoonacularResponse.ok) {
+                const spoonacularData = await spoonacularResponse.json();
+                console.log(`Fetched ${spoonacularData.results?.length || 0} popular recipes from Spoonacular as fallback`);
+                return spoonacularData;
+            }
+        } catch (spoonacularError) {
+            console.error("Error fetching from Spoonacular:", spoonacularError);
         }
+        
+        // If both fail, return fallback recipes
+        console.log("Both MongoDB and Spoonacular failed, returning fallback recipes");
+        return {
+            results: FALLBACK_RECIPES.slice(0, 12) // Return first 12 fallback recipes
+        };
     }
 };
 

@@ -27,6 +27,15 @@ const RecipeCard: React.FC<RecipeCardProps> = ({
     return null;
   }
 
+  // Debug logging
+  console.log("RecipeCard received recipe:", {
+    id: recipe.id,
+    title: (recipe as any).title,
+    name: (recipe as any).name,
+    isExternal,
+    type: typeof recipe
+  });
+
   // Handle both local and external recipe types with proper null checks
   const recipeId = isExternal 
     ? String((recipe as SpoonacularRecipe).id || "unknown") 
@@ -111,6 +120,11 @@ const RecipeCard: React.FC<RecipeCardProps> = ({
 
   return (
     <div className="recipe-card animate-scale-in bg-white rounded-lg shadow-md overflow-hidden transition-transform hover:shadow-lg">
+      {/* Temporary debug info */}
+      <div className="p-2 bg-yellow-100 text-xs">
+        Debug: ID={recipeId}, Name={recipeName}, External={isExternal ? 'Yes' : 'No'}
+      </div>
+      
       <div className="relative">
         <Link to={cardLink} className="block">
           <div className="relative h-48 w-full overflow-hidden">

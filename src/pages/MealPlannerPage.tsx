@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ChefHat, Clock, RefreshCw, ShoppingCart, Calendar, Utensils, Star, TrendingUp } from 'lucide-react';
+import { ChefHat, Clock, RefreshCw, ShoppingCart, Calendar, Utensils, Star, TrendingUp, DollarSign, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import Header from '../components/Header';
 import { LLMMealPlan, MealPlanResponse, MealType, MealPlanItem } from '../types/mealPlanner';
 
@@ -15,6 +17,8 @@ const MealPlannerPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [preferences, setPreferences] = useState<any>(null);
   const [preferencesLoading, setPreferencesLoading] = useState(true);
+  const [weeklyBudget, setWeeklyBudget] = useState<string>('');
+  const [servingAmount, setServingAmount] = useState<string>('');
   const navigate = useNavigate();
 
   // Load preferences from ChromaDB on mount
@@ -22,7 +26,7 @@ const MealPlannerPage: React.FC = () => {
     const loadPreferences = async () => {
       console.log('🔥 MEAL_PLANNER_PAGE: Loading preferences...');
       try {
-        const response = await fetch('http://localhost:5001/api/temp-preferences', {
+        const response = await fetch('http://localhost:5003/api/temp-preferences', {
           credentials: 'include' // Include cookies for session
         });
         console.log('🔥 MEAL_PLANNER_PAGE: Response status:', response.status);
@@ -34,6 +38,9 @@ const MealPlannerPage: React.FC = () => {
           if (data.preferences) {
             console.log('🔥 MEAL_PLANNER_PAGE: Setting preferences:', data.preferences);
             setPreferences(data.preferences);
+            // Load budget and serving amount from preferences
+            setWeeklyBudget(data.preferences.weeklyBudget || '');
+            setServingAmount(data.preferences.servingAmount || '');
           } else {
             console.log('🔥 MEAL_PLANNER_PAGE: No preferences found in response');
             setError("Please set your preferences first to get personalized meal plans.");
@@ -53,6 +60,45 @@ const MealPlannerPage: React.FC = () => {
     loadPreferences();
   }, []);
 
+  // Save budget and serving amount to ChromaDB
+  const saveBudgetAndServing = async (budget: string, serving: string) => {
+    try {
+      const response = await fetch('http://localhost:5003/api/temp-preferences', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          preferences: {
+            ...preferences,
+            weeklyBudget: budget,
+            servingAmount: serving
+          }
+        }),
+      });
+
+      if (response.ok) {
+        console.log('🔥 MEAL_PLANNER_PAGE: Budget and serving amount saved successfully');
+      } else {
+        console.error('🔥 MEAL_PLANNER_PAGE: Failed to save budget and serving amount');
+      }
+    } catch (error) {
+      console.error('🔥 MEAL_PLANNER_PAGE: Error saving budget and serving amount:', error);
+    }
+  };
+
+  // Auto-save budget and serving amount when they change
+  useEffect(() => {
+    if (weeklyBudget !== '' || servingAmount !== '') {
+      const timeoutId = setTimeout(() => {
+        saveBudgetAndServing(weeklyBudget, servingAmount);
+      }, 1000); // Save after 1 second of no changes
+
+      return () => clearTimeout(timeoutId);
+    }
+  }, [weeklyBudget, servingAmount, preferences]);
+
   const generatePlan = async () => {
     if (!preferences) {
       setError("Please set your preferences first.");
@@ -64,13 +110,17 @@ const MealPlannerPage: React.FC = () => {
     setMealPlan(null);
 
     try {
-      const response = await fetch('http://localhost:5001/api/meal-plan/generate', {
+      const response = await fetch('http://localhost:5003/api/meal-plan/generate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          preferences: preferences
+          preferences: {
+            ...preferences,
+            weeklyBudget: weeklyBudget,
+            servingAmount: servingAmount
+          }
         }),
       });
 
@@ -103,7 +153,7 @@ const MealPlannerPage: React.FC = () => {
     setRegeneratingMeal(mealKey);
 
     try {
-      const response = await fetch('http://localhost:5001/api/meal-plan/regenerate-meal', {
+      const response = await fetch('http://localhost:5003/api/meal-plan/regenerate-meal', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -282,6 +332,52 @@ const MealPlannerPage: React.FC = () => {
               </Card>
             </div>
           )}
+
+          {/* Budget and Serving Amount Inputs */}
+          <div className="max-w-4xl mx-auto mb-8">
+            <Card className="p-6">
+              <h3 className="text-lg font-semibold mb-4 flex items-center">
+                <DollarSign className="h-5 w-5 mr-2" />
+                Meal Planning Settings
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <Label htmlFor="weeklyBudget" className="text-sm font-medium text-gray-700 mb-2 flex items-center">
+                    <DollarSign className="h-4 w-4 mr-1" />
+                    Weekly Budget (USD)
+                  </Label>
+                  <Input
+                    id="weeklyBudget"
+                    type="number"
+                    placeholder="e.g., 100"
+                    value={weeklyBudget}
+                    onChange={(e) => setWeeklyBudget(e.target.value)}
+                    className="w-full"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Set your weekly grocery budget to get cost-conscious meal suggestions
+                  </p>
+                </div>
+                <div>
+                  <Label htmlFor="servingAmount" className="text-sm font-medium text-gray-700 mb-2 flex items-center">
+                    <Users className="h-4 w-4 mr-1" />
+                    Number of People
+                  </Label>
+                  <Input
+                    id="servingAmount"
+                    type="number"
+                    placeholder="e.g., 2"
+                    value={servingAmount}
+                    onChange={(e) => setServingAmount(e.target.value)}
+                    className="w-full"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    How many people will be eating these meals?
+                  </p>
+                </div>
+              </div>
+            </Card>
+          </div>
 
           <div className="flex justify-center mb-8 gap-4">
             <Button 

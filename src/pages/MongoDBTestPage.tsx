@@ -158,7 +158,7 @@ const MongoDBTestPage: React.FC = () => {
   const getDiagnostics = async () => {
     setIsDiagnosticLoading(true);
     try {
-      const response = await fetch('http://localhost:5001/mongodb-diagnostics');
+      const response = await fetch('http://localhost:5002/mongodb-diagnostics');
       if (response.ok) {
         const data = await response.json();
         setDiagnosticData(data);

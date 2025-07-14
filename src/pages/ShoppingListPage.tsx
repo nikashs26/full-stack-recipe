@@ -1,10 +1,11 @@
 
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import Header from '../components/Header';
 import { ShoppingListItem, Recipe } from '../types/recipe'; // Keep Recipe for now if needed elsewhere
 import { useQuery, useQueryClient } from '@tanstack/react-query'; // Keep if you still need other queries
 import { loadRecipes } from '../utils/storage'; // Keep if you still need to load recipes
-import { Check, ShoppingCart, Trash2, RefreshCw } from 'lucide-react';
+import { Check, ShoppingCart, Trash2, RefreshCw, DollarSign } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid'; // Keep for unique item IDs if necessary
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -12,23 +13,30 @@ import { useToast } from '@/hooks/use-toast';
 
 // Define the structure of the agent-generated shopping list
 interface AgentShoppingList {
-  [category: string]: {
-    [ingredient: string]: number; // ingredient name: count
-  };
+  items: {
+    name: string;
+    category: string;
+    completed: boolean;
+  }[];
+  estimated_cost: string;
+  generated_at: string;
+  meal_plan_id: string;
 }
 
-// Define a structure for individual display items (might merge count into ingredient name for display)
+// Define a structure for individual display items
 interface DisplayShoppingListItem {
   id: string; // Unique ID for React keying and checkbox state
   category: string;
-  name: string; // e.g., "Milk (2 units)" or "Onions"
-  originalIngredient: string; // The original ingredient string from the backend
+  name: string;
   checked: boolean;
 }
 
 const ShoppingListPage: React.FC = () => {
   const [agentShoppingList, setAgentShoppingList] = useState<AgentShoppingList | null>(null);
   const [displayList, setDisplayList] = useState<DisplayShoppingListItem[]>([]);
+  const [estimatedCost, setEstimatedCost] = useState<string>('');
+  const [servingAmount, setServingAmount] = useState<string>('');
+  const [weeklyBudget, setWeeklyBudget] = useState<string>('');
   const { toast } = useToast();
 
   useEffect(() => {
@@ -36,22 +44,37 @@ const ShoppingListPage: React.FC = () => {
       try {
         const storedList = localStorage.getItem('agent-shopping-list');
         if (storedList) {
-          const parsedList: AgentShoppingList = JSON.parse(storedList);
+          const parsedList = JSON.parse(storedList);
           setAgentShoppingList(parsedList);
+          setEstimatedCost(parsedList.estimated_cost || '');
           
-          // Flatten and prepare for display with unique IDs and initial checked state
-          const flattenedList: DisplayShoppingListItem[] = [];
-          Object.entries(parsedList).forEach(([category, ingredients]) => {
-            Object.entries(ingredients).forEach(([ingredient, count]) => {
-              flattenedList.push({
-                id: uuidv4(),
-                category,
-                name: count > 1 ? `${ingredient} (${count} units)` : ingredient,
-                originalIngredient: ingredient, // Store original for potential future use
-                checked: false,
+          // Load budget and serving info from preferences
+          const loadPreferences = async () => {
+            try {
+              const response = await fetch('http://localhost:5003/api/temp-preferences', {
+                credentials: 'include' // Include cookies for session
               });
-            });
-          });
+              if (response.ok) {
+                const data = await response.json();
+                if (data.preferences) {
+                  setWeeklyBudget(data.preferences.weeklyBudget || '');
+                  setServingAmount(data.preferences.servingAmount || '');
+                }
+              }
+            } catch (error) {
+              console.error('Error loading preferences:', error);
+            }
+          };
+          loadPreferences();
+          
+          // Convert to display format
+          const flattenedList: DisplayShoppingListItem[] = parsedList.items.map(item => ({
+            id: uuidv4(),
+            category: item.category,
+            name: item.name,
+            checked: item.completed || false,
+          }));
+          
           // Sort by category then by ingredient name
           flattenedList.sort((a, b) => {
             if (a.category < b.category) return -1;
@@ -61,12 +84,12 @@ const ShoppingListPage: React.FC = () => {
           setDisplayList(flattenedList);
 
         } else {
-          setAgentShoppingList({}); // Empty object if no list found
+          setAgentShoppingList(null);
           setDisplayList([]);
         }
       } catch (error) {
         console.error('Failed to load agent-generated shopping list:', error);
-        setAgentShoppingList({});
+        setAgentShoppingList(null);
         setDisplayList([]);
         toast({
           title: "Error",
@@ -190,41 +213,75 @@ const ShoppingListPage: React.FC = () => {
           */}
 
           {displayList.length > 0 ? (
-            <div className="bg-white shadow-sm rounded-lg p-6">
-              <h2 className="text-xl font-semibold mb-4">Generated Shopping List</h2>
-              <div className="space-y-6">
-                {Object.keys(groupedList).sort().map(category => (
-                  <div key={category}>
-                    <h3 className="text-lg font-bold text-gray-700 mb-3 border-b pb-2 capitalize">
-                      {category}
-                    </h3>
-                    <div className="divide-y">
-                      {groupedList[category].map((item) => (
-                        <div key={item.id} className="py-3 flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <Checkbox 
-                              id={`item-${item.id}`} 
-                              checked={item.checked}
-                              onCheckedChange={() => handleToggleItem(item.id)}
-                            />
-                            <label 
-                              htmlFor={`item-${item.id}`}
-                              className={`${item.checked ? 'line-through text-gray-500' : ''}`}
-                            >
-                              {item.name}
-                            </label>
-                          </div>
-                          <button 
-                            onClick={() => handleRemoveItem(item.id)}
-                            className="text-gray-500 hover:text-red-500"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      ))}
+            <div className="space-y-6">
+              {/* Budget and Serving Information */}
+              <div className="bg-white shadow-sm rounded-lg p-6">
+                <h2 className="text-xl font-semibold mb-4 flex items-center">
+                  <DollarSign className="h-5 w-5 mr-2" />
+                  Shopping Summary
+                </h2>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="text-center p-4 bg-blue-50 rounded-lg">
+                    <div className="text-2xl font-bold text-blue-600">{estimatedCost || 'N/A'}</div>
+                    <div className="text-sm text-gray-600">Estimated Cost</div>
+                  </div>
+                  <div className="text-center p-4 bg-green-50 rounded-lg">
+                    <div className="text-2xl font-bold text-green-600">{servingAmount || 'N/A'}</div>
+                    <div className="text-sm text-gray-600">People to Serve</div>
+                  </div>
+                  <div className="text-center p-4 bg-purple-50 rounded-lg">
+                    <div className="text-2xl font-bold text-purple-600">{weeklyBudget ? `$${weeklyBudget}` : 'N/A'}</div>
+                    <div className="text-sm text-gray-600">Weekly Budget</div>
+                  </div>
+                </div>
+                {weeklyBudget && estimatedCost && (
+                  <div className="mt-4 p-3 bg-gray-50 rounded-lg">
+                    <div className="text-sm text-gray-600">
+                      Budget Status: {parseFloat(estimatedCost.replace(/[^0-9.-]+/g,"")) <= parseFloat(weeklyBudget) ? 
+                        <span className="text-green-600 font-semibold">✓ Within Budget</span> : 
+                        <span className="text-red-600 font-semibold">⚠ Over Budget</span>
+                      }
                     </div>
                   </div>
-                ))}
+                )}
+              </div>
+
+              <div className="bg-white shadow-sm rounded-lg p-6">
+                <h2 className="text-xl font-semibold mb-4">Generated Shopping List</h2>
+                <div className="space-y-6">
+                  {Object.keys(groupedList).sort().map(category => (
+                    <div key={category}>
+                      <h3 className="text-lg font-bold text-gray-700 mb-3 border-b pb-2 capitalize">
+                        {category}
+                      </h3>
+                      <div className="divide-y">
+                        {groupedList[category].map((item) => (
+                          <div key={item.id} className="py-3 flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <Checkbox 
+                                id={`item-${item.id}`} 
+                                checked={item.checked}
+                                onCheckedChange={() => handleToggleItem(item.id)}
+                              />
+                              <label 
+                                htmlFor={`item-${item.id}`}
+                                className={`${item.checked ? 'line-through text-gray-500' : ''}`}
+                              >
+                                {item.name}
+                              </label>
+                            </div>
+                            <button 
+                              onClick={() => handleRemoveItem(item.id)}
+                              className="text-gray-500 hover:text-red-500"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           ) : (

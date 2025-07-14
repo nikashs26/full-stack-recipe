@@ -53,20 +53,37 @@ const RecommendedRecipes: React.FC = () => {
         for (const cuisine of favoriteCuisines.slice(0, 3)) {
           try {
             console.log(`Fetching recipes for cuisine: ${cuisine}`);
-            const response = await fetchRecipes('', cuisine);
+            const response = await fetchRecipes(cuisine, '');
             if (response?.results && Array.isArray(response.results)) {
-              const realRecipes = response.results.filter(recipe => 
-                recipe.id > 1000 &&
-                recipe.title && 
-                !recipe.title.toLowerCase().includes('fallback') &&
-                recipe.image && 
-                recipe.image.includes('http')
-              );
-              console.log(`Found ${realRecipes.length} real recipes for ${cuisine}`);
-              allExternalRecipes.push(...realRecipes.slice(0, 6));
+              // Filter recipes to only include those that actually match the cuisine from API data
+              const cuisineFilteredRecipes = response.results.filter(recipe => {
+                const recipeCuisines = recipe.cuisines || [];
+                const recipeTitle = recipe.title?.toLowerCase() || '';
+                
+                // Primary check: Does the recipe's cuisine array contain the requested cuisine?
+                const directCuisineMatch = recipeCuisines.some(recipeCuisine => 
+                  recipeCuisine?.toLowerCase() === cuisine.toLowerCase()
+                );
+                
+                // Secondary check: Does the recipe title contain the cuisine name?
+                const titleMatch = recipeTitle.includes(cuisine.toLowerCase());
+                
+                // If it's a direct match, accept it
+                if (directCuisineMatch || titleMatch) {
+                  console.log(`✅ Recipe "${recipe.title}" matches ${cuisine} cuisine (cuisines: ${recipeCuisines.join(', ')})`);
+                  return true;
+                }
+                
+                // If no direct match, reject it
+                console.log(`❌ Recipe "${recipe.title}" does not match ${cuisine} cuisine (cuisines: ${recipeCuisines.join(', ')})`);
+                return false;
+              });
+              
+              console.log(`Found ${cuisineFilteredRecipes.length} recipes matching ${cuisine} cuisine`);
+              allExternalRecipes.push(...cuisineFilteredRecipes.slice(0, 6));
             }
           } catch (error) {
-            console.error(`Error fetching recipes for cuisine "${cuisine}":`, error);
+            console.error(`Error fetching ${cuisine} recipes:`, error);
           }
         }
       }

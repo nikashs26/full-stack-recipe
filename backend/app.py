@@ -16,6 +16,7 @@ from routes.meal_planner import meal_planner_bp # Import the new meal planner bl
 from routes.shopping_list import shopping_list_bp # Import the new shopping list blueprint
 # from routes.smart_features import smart_features_bp # Import the new smart features blueprint - TEMPORARILY DISABLED
 from routes.temp_preferences import temp_preferences_bp # Import the temporary preferences blueprint
+from routes.recipe_routes import register_recipe_routes # Import the recipe routes registration function
 from services.recipe_service import RecipeService # Import RecipeService
 
 # Initialize Flask App
@@ -32,6 +33,15 @@ app.config['SESSION_COOKIE_SECURE'] = False  # Set to True in production with HT
 # Initialize services
 recipe_service = RecipeService()
 
+# Initialize MongoDB connection (simplified for demo)
+mongo_client = None
+recipes_collection = None
+mongo_available = False
+in_memory_recipes = []
+
+# Register recipe routes
+register_recipe_routes(app, recipes_collection, mongo_available, in_memory_recipes)
+
 # Register blueprints
 app.register_blueprint(favorites_bp, url_prefix='/api')
 app.register_blueprint(preferences_bp, url_prefix='/api')
@@ -40,16 +50,5 @@ app.register_blueprint(shopping_list_bp, url_prefix='/api') # Register the shopp
 # app.register_blueprint(smart_features_bp, url_prefix='/api') # Register the smart features blueprint - TEMPORARILY DISABLED
 app.register_blueprint(temp_preferences_bp, url_prefix='/api') # Register the temporary preferences blueprint
 
-# New route for fetching all recipes
-@app.route('/api/recipes', methods=['GET'])
-@require_auth
-def get_all_recipes():
-    try:
-        recipes = recipe_service.get_all_recipes()
-        return jsonify(recipes), 200
-    except Exception as e:
-        app.logger.error(f"Error fetching all recipes: {e}")
-        return jsonify({"error": "Failed to fetch recipes", "details": str(e)}), 500
-
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5001)  # Use port 5001 to avoid conflicts 
+    app.run(debug=True, host='0.0.0.0', port=5003) 
