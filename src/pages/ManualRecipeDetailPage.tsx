@@ -6,7 +6,7 @@ import Header from '../components/Header';
 import { fetchManualRecipeById } from '../lib/manualRecipes';
 import { Button } from '@/components/ui/button';
 import RecipeReviews, { Review } from '../components/RecipeReviews';
-import { getReviewsByRecipeId, addReview } from '../utils/reviewUtils';
+import { getReviewsByRecipeId, addReview } from '../utils/chromaReviewUtils';
 import { useToast } from '@/hooks/use-toast';
 
 const ManualRecipeDetailPage: React.FC = () => {
@@ -21,7 +21,7 @@ const ManualRecipeDetailPage: React.FC = () => {
     enabled: !!id,
   });
 
-  // Load reviews from Supabase
+  // Load reviews from ChromaDB
   useEffect(() => {
     const loadReviews = async () => {
       if (id) {
@@ -52,20 +52,21 @@ const ManualRecipeDetailPage: React.FC = () => {
     try {
       console.log('Submitting review:', { text, rating, author, recipeId: id });
       
-      const newReviewData = {
+      const savedReview = await addReview({
+        recipeId: id,
+        recipeType: 'manual',
         author: author || "Anonymous",
         text,
-        date: new Date().toISOString(),
-        rating,
-        recipeId: id,
-        recipeType: 'manual' as const
-      };
-
-      const savedReview = await addReview(newReviewData);
+        rating
+      });
       
       if (savedReview) {
         console.log('Review saved successfully:', savedReview);
         setReviews(prevReviews => [savedReview, ...prevReviews]);
+        toast({
+          title: 'Review submitted',
+          description: 'Your review has been added successfully.',
+        });
       } else {
         console.error('Failed to save review - no data returned');
       }
@@ -73,7 +74,7 @@ const ManualRecipeDetailPage: React.FC = () => {
       console.error('Error in handleReviewSubmit:', error);
       toast({
         title: 'Error',
-        description: 'An unexpected error occurred while saving your review.',
+        description: error instanceof Error ? error.message : 'An unexpected error occurred while saving your review.',
         variant: 'destructive'
       });
     }
@@ -95,6 +96,16 @@ const ManualRecipeDetailPage: React.FC = () => {
       <div className="min-h-screen bg-gray-50">
         <Header />
         <main className="pt-24 md:pt-28 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="mb-6">
+            <Button 
+              variant="outline" 
+              onClick={() => navigate('/recipes')}
+              className="mb-4"
+            >
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to Recipes
+            </Button>
+          </div>
           <div className="text-center">
             <h1 className="text-2xl font-bold mb-4">Recipe not found</h1>
             <Button onClick={() => navigate('/recipes')}>Back to Recipes</Button>
@@ -188,16 +199,16 @@ const ManualRecipeDetailPage: React.FC = () => {
               )}
 
               <h2 className="text-2xl font-semibold mb-4">Ingredients</h2>
-              <ul className="list-disc list-inside mb-6">
+              <ul className="list-disc list-inside mb-6 space-y-1">
                 {ingredients.map((ingredient, index) => (
-                  <li key={index} className="mb-1">{ingredient}</li>
+                  <li key={index} className="text-gray-700">{ingredient}</li>
                 ))}
               </ul>
 
               <h2 className="text-2xl font-semibold mb-4">Instructions</h2>
-              <ol className="list-decimal list-inside">
+              <ol className="list-decimal list-inside space-y-3 mb-6">
                 {instructions.map((instruction, index) => (
-                  <li key={index} className="mb-2">{instruction}</li>
+                  <li key={index} className="text-gray-700 leading-relaxed">{instruction}</li>
                 ))}
               </ol>
 

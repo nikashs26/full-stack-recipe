@@ -98,6 +98,18 @@
     @apply bg-recipe-muted text-amber-800;
   }
   
+  .dairy-free-tag {
+    @apply bg-blue-100 text-blue-800;
+  }
+  
+  .keto-tag {
+    @apply bg-purple-100 text-purple-800;
+  }
+  
+  .paleo-tag {
+    @apply bg-orange-100 text-orange-800;
+  }
+  
   .carnivore-tag {
     @apply bg-red-100 text-red-800;
   }

@@ -3,4 +3,9 @@ flask-cors
 chromadb
 pymongo
 python-dotenv
-requests 
+requests
+flask-mail
+werkzeug
+pyjwt
+itsdangerous
+bcrypt 

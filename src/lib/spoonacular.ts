@@ -151,8 +151,8 @@ const FALLBACK_RECIPES = [
   }
 ];
 
-export const fetchRecipes = async (query: string = "", ingredient: string = "") => {
-    console.log(`Fetching recipes with query: "${query}" and ingredient: "${ingredient}"`);
+export const fetchRecipes = async (query: string = "", ingredient: string = "", cuisine: string = "", diet: string = "") => {
+
     
     // Try the API endpoint first which will prioritize MongoDB before making API calls
     try {
@@ -160,6 +160,8 @@ export const fetchRecipes = async (query: string = "", ingredient: string = "") 
         let url = `${API_URL}?`;
         if (query) url += `query=${encodeURIComponent(query)}&`;
         if (ingredient) url += `ingredient=${encodeURIComponent(ingredient)}&`;
+        if (cuisine) url += `cuisine=${encodeURIComponent(cuisine)}&`;
+        if (diet) url += `diet=${encodeURIComponent(diet)}&`;
         
         console.log("Calling recipe API URL:", url);
         
@@ -195,24 +197,25 @@ export const fetchRecipes = async (query: string = "", ingredient: string = "") 
                 data.results = [];
             }
 
-            // If no results from API, use fallback data
-            if (data.results.length === 0) {
-                console.log("No results from API, using fallback data");
-                return { 
-                    results: filterFallbackRecipes(query, ingredient),
-                    status: "fallback",
-                    message: "Using fallback data as no API results found" 
-                };
+            // If we have valid results from API, return them
+            if (data.results.length > 0) {
+                console.log(`Found ${data.results.length} recipes from MongoDB/API`);
+                return data;
             }
 
-            console.log(`Found ${data.results.length} recipes from MongoDB/API`);
-            return data;
+            // If no results from API, use fallback data
+            console.log("No results from API, using fallback data");
+            return { 
+                results: filterFallbackRecipes(query, ingredient, cuisine, diet),
+                status: "fallback",
+                message: "Using fallback data as no API results found" 
+            };
         } catch (fetchError) {
             // API fetch failed, use fallback data
             console.log("API fetch failed, using fallback data", fetchError);
             
             return { 
-                results: filterFallbackRecipes(query, ingredient),
+                results: filterFallbackRecipes(query, ingredient, cuisine, diet),
                 status: "fallback",
                 message: "Using fallback data as API is unavailable" 
             };
@@ -226,7 +229,7 @@ export const fetchRecipes = async (query: string = "", ingredient: string = "") 
         
         // Return fallback data when API fails
         return { 
-            results: filterFallbackRecipes(query, ingredient),
+            results: filterFallbackRecipes(query, ingredient, cuisine, diet),
             status: "fallback",
             message: "Using fallback data as API is unavailable" 
         };
@@ -234,8 +237,8 @@ export const fetchRecipes = async (query: string = "", ingredient: string = "") 
 };
 
 // Helper function to filter fallback recipes
-const filterFallbackRecipes = (query: string = "", ingredient: string = "") => {
-    if (!query && !ingredient) {
+const filterFallbackRecipes = (query: string = "", ingredient: string = "", cuisine: string = "", diet: string = "") => {
+    if (!query && !ingredient && !cuisine && !diet) {
         // Return all fallback recipes if no search criteria
         return FALLBACK_RECIPES;
     }
@@ -243,12 +246,20 @@ const filterFallbackRecipes = (query: string = "", ingredient: string = "") => {
     return FALLBACK_RECIPES.filter(recipe => {
         const matchesQuery = query ? 
             recipe.title.toLowerCase().includes(query.toLowerCase()) ||
-            recipe.cuisines.some(cuisine => cuisine.toLowerCase().includes(query.toLowerCase())) : 
+            recipe.cuisines.some(recipeCuisine => recipeCuisine.toLowerCase().includes(query.toLowerCase())) : 
             true;
             
         const matchesIngredient = ingredient ? 
             // This is a simplification as we don't have ingredients in our fallback data
             recipe.title.toLowerCase().includes(ingredient.toLowerCase()) : 
+            true;
+
+        const matchesCuisine = cuisine ?
+            recipe.cuisines.some(recipeCuisine => recipeCuisine.toLowerCase().includes(cuisine.toLowerCase())) :
+            true;
+
+        const matchesDiet = diet ?
+            recipe.diets.some(recipeDiet => recipeDiet.toLowerCase().includes(diet.toLowerCase())) :
             true;
         
         // Use actual cuisine data for filtering
@@ -256,8 +267,8 @@ const filterFallbackRecipes = (query: string = "", ingredient: string = "") => {
             const recipeCuisines = recipe.cuisines || [];
             
             // Primary check: Does the recipe's cuisine array contain the requested cuisine?
-            const directCuisineMatch = recipeCuisines.some(cuisine => 
-                cuisine.toLowerCase() === query.toLowerCase()
+            const directCuisineMatch = recipeCuisines.some(recipeCuisine => 
+                recipeCuisine.toLowerCase() === query.toLowerCase()
             );
             
             // Secondary check: Does the recipe title contain the cuisine/query?
@@ -266,7 +277,7 @@ const filterFallbackRecipes = (query: string = "", ingredient: string = "") => {
             // If it's a direct match, accept it
             if (directCuisineMatch || titleMatch) {
                 console.log(`✅ Fallback recipe "${recipe.title}" matches ${query} (cuisines: ${recipeCuisines.join(', ')})`);
-                return matchesIngredient;
+                return matchesIngredient && matchesCuisine && matchesDiet;
             }
             
             // If no direct match, reject it
@@ -274,7 +285,7 @@ const filterFallbackRecipes = (query: string = "", ingredient: string = "") => {
             return false;
         }
             
-        return matchesQuery && matchesIngredient;
+        return matchesQuery && matchesIngredient && matchesCuisine && matchesDiet;
     });
 };
 

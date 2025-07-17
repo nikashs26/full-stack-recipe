@@ -23,7 +23,7 @@ const RecipesPage: React.FC = () => {
   const [cuisineFilter, setCuisineFilter] = useState('');
   const [ingredientTerm, setIngredientTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
-  const recipesPerPage = 12;
+  const recipesPerPage = 36; // Increased even more to show more recipes
 
   // Load local recipes
   const loadLocalRecipes = async (): Promise<Recipe[]> => {
@@ -53,12 +53,12 @@ const RecipesPage: React.FC = () => {
 
   // Query for external recipes - load by default and filter based on search
   const { data: externalRecipes = [], isLoading: externalLoading } = useQuery({
-    queryKey: ['externalRecipes', searchTerm, ingredientTerm],
+    queryKey: ['externalRecipes', searchTerm, ingredientTerm, cuisineFilter, dietaryFilter],
     queryFn: async () => {
-      console.log(`Fetching recipes with query: "${searchTerm}" and ingredient: "${ingredientTerm}"`);
+      console.log(`Fetching recipes with query: "${searchTerm}", ingredient: "${ingredientTerm}", cuisine: "${cuisineFilter}", diet: "${dietaryFilter}"`);
       
       try {
-        const response = await fetchRecipes(searchTerm, ingredientTerm);
+        const response = await fetchRecipes(searchTerm, ingredientTerm, cuisineFilter, dietaryFilter);
         
         if (response?.results && Array.isArray(response.results)) {
           const validRecipes = response.results.filter(recipe => 
@@ -78,6 +78,42 @@ const RecipesPage: React.FC = () => {
       }
     },
     staleTime: 300000,
+  });
+
+  // Query to get recipe database stats
+  const { data: recipeStats } = useQuery({
+    queryKey: ['recipeStats'],
+    queryFn: async () => {
+      try {
+        const response = await fetch('http://localhost:5003/recipe-stats');
+        if (response.ok) {
+          return await response.json();
+        }
+        return null;
+      } catch (error) {
+        console.error('Error fetching recipe stats:', error);
+        return null;
+      }
+    },
+    staleTime: 60000, // Refresh every minute
+  });
+
+  // Query to get recipe distribution by cuisine
+  const { data: recipeDistribution } = useQuery({
+    queryKey: ['recipeDistribution'],
+    queryFn: async () => {
+      try {
+        const response = await fetch('http://localhost:5003/recipe-distribution');
+        if (response.ok) {
+          return await response.json();
+        }
+        return null;
+      } catch (error) {
+        console.error('Error fetching recipe distribution:', error);
+        return null;
+      }
+    },
+    staleTime: 60000,
   });
 
   const filteredLocalRecipes = useMemo(() => {
@@ -186,6 +222,31 @@ const RecipesPage: React.FC = () => {
             Recipe Collection
           </h1>
           
+          {/* Recipe Database Stats - Simplified */}
+          {recipeStats && (
+            <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-green-50 rounded-lg border border-blue-200">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-center">
+                <div className="bg-white rounded-lg p-3 shadow-sm">
+                  <div className="text-2xl font-bold text-green-600">{allRecipes.length}</div>
+                  <div className="text-sm text-gray-600">Recipes Found</div>
+                </div>
+                <div className="bg-white rounded-lg p-3 shadow-sm">
+                  <div className="text-2xl font-bold text-purple-600">
+                    {recipeDistribution ? recipeDistribution.distribution?.length || 0 : (recipeStats.enhanced_service_available ? '12+' : '6+')}
+                  </div>
+                  <div className="text-sm text-gray-600">Cuisines Available</div>
+                </div>
+              </div>
+              {recipeStats.enhanced_service_available && (
+                <div className="mt-3 text-center">
+                  <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                    ✨ Enhanced Recipe Service Active - Real recipes from multiple sources
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+          
           <FilterBar
             searchTerm={searchTerm}
             onSearchChange={handleSearchChange}
@@ -199,12 +260,12 @@ const RecipesPage: React.FC = () => {
             onClearFilters={handleClearFilters}
           />
 
-          {/* All Recipes Section - Only section on this page */}
+          {/* All Recipes Section */}
           <section>
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl font-bold text-gray-900 flex items-center">
                 <ChefHat className="mr-2 h-6 w-6 text-recipe-secondary" />
-                All Recipes
+                Recipe Search Results
               </h2>
               <span className="text-sm text-gray-500">
                 {totalRecipes} recipe{totalRecipes !== 1 ? 's' : ''} found
@@ -219,17 +280,6 @@ const RecipesPage: React.FC = () => {
               </div>
             ) : currentRecipes.length > 0 ? (
               <>
-                {/* Debug info */}
-                <div className="mb-4 p-4 bg-blue-100 rounded-lg">
-                  <h3 className="font-bold">Debug Info:</h3>
-                  <p>Local recipes: {localRecipes.length}</p>
-                  <p>Manual recipes: {manualRecipes.length}</p>
-                  <p>External recipes: {externalRecipes.length}</p>
-                  <p>All recipes: {allRecipes.length}</p>
-                  <p>Current recipes: {currentRecipes.length}</p>
-                  <p>Loading states: local={localLoading.toString()}, manual={manualLoading.toString()}, external={externalLoading.toString()}</p>
-                </div>
-                
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                   {currentRecipes.map((recipe, index) => {
                     const key = `${recipe.type}-${recipe.id}-${index}`;
@@ -291,8 +341,19 @@ const RecipesPage: React.FC = () => {
               </>
             ) : (
               <div className="text-center py-12 border border-dashed border-gray-300 rounded-lg">
-                <p className="text-gray-500 mb-4">No recipes found matching your criteria.</p>
-                <p className="text-sm text-gray-400">Try adjusting your search filters or search terms.</p>
+                <ChefHat className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                <p className="text-gray-500 mb-4">
+                  {searchTerm || ingredientTerm || cuisineFilter || dietaryFilter 
+                    ? "No recipes found matching your search criteria." 
+                    : "Start searching for recipes by entering a dish name, ingredient, or selecting filters above."
+                  }
+                </p>
+                <p className="text-sm text-gray-400">
+                  {searchTerm || ingredientTerm || cuisineFilter || dietaryFilter 
+                    ? "Try adjusting your search filters or search terms."
+                    : "Try searching for 'pasta', 'chicken', or browse by cuisine!"
+                  }
+                </p>
               </div>
             )}
           </section>

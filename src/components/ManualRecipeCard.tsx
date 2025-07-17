@@ -1,16 +1,62 @@
 
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Clock, ChefHat } from 'lucide-react';
-import { Database } from "@/integrations/supabase/types";
-
-type ManualRecipe = Database['public']['Tables']['manual_recipes']['Row'];
+import { ManualRecipe } from '../types/manualRecipe';
+import { ChefHat, Clock } from 'lucide-react';
+import { getDietaryTags } from '../utils/recipeUtils';
 
 interface ManualRecipeCardProps {
   recipe: ManualRecipe;
 }
 
 const ManualRecipeCard: React.FC<ManualRecipeCardProps> = ({ recipe }) => {
+  // Enhanced title handling - ONLY apply fallbacks for truly missing titles
+  const displayTitle = (() => {
+    let title = recipe.title || "";
+    
+    // ONLY fix truly empty or "untitled" recipes - be more specific
+    if (!title || 
+        title.trim() === "" || 
+        title.toLowerCase() === "untitled" || 
+        title.toLowerCase() === "untitled recipe" ||
+        title.toLowerCase() === "recipe") {
+      
+      // Strategy 1: Use cuisine
+      if (recipe.cuisine && recipe.cuisine.length > 0) {
+        const mainCuisine = recipe.cuisine[0];
+        title = `Authentic ${mainCuisine} Recipe`;
+      } 
+      // Strategy 2: Use ID-based fallback
+      else {
+        const recipeId = recipe.id || Math.random().toString(36).substr(2, 9);
+        title = `Home Kitchen Recipe #${recipeId}`;
+      }
+    }
+    return title;
+  })();
+
+  // Map diet strings to proper dietary restriction format
+  const mappedDiets = (recipe.diets || [])
+    .filter(diet => diet && typeof diet === 'string')
+    .map(diet => {
+      const dietLower = diet.toLowerCase();
+      // Map common diet names to our standard format
+      if (dietLower.includes('vegetarian')) return 'vegetarian';
+      if (dietLower.includes('vegan')) return 'vegan';
+      if (dietLower.includes('gluten') && dietLower.includes('free')) return 'gluten-free';
+      if (dietLower.includes('dairy') && dietLower.includes('free')) return 'dairy-free';
+      if (dietLower.includes('ketogenic') || dietLower.includes('keto')) return 'keto';
+      if (dietLower.includes('paleo')) return 'paleo';
+      return diet; // Keep original if no mapping found
+    });
+  
+  const dietaryTags = getDietaryTags(mappedDiets as any);
+
+  // Enhanced cuisine display
+  const displayCuisines = recipe.cuisine && recipe.cuisine.length > 0 
+    ? recipe.cuisine.slice(0, 2) // Show max 2 cuisines
+    : ["International"];
+
   return (
     <Link 
       to={`/manual-recipe/${recipe.id}`}
@@ -19,20 +65,20 @@ const ManualRecipeCard: React.FC<ManualRecipeCardProps> = ({ recipe }) => {
       <div className="relative">
         <img
           src={recipe.image || '/placeholder.svg'}
-          alt={recipe.title}
+          alt={displayTitle}
           className="w-full h-48 object-cover"
         />
         <div className="absolute top-3 right-3">
           <div className="bg-blue-600 text-white px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1 shadow-md">
             <ChefHat className="h-3 w-3" />
-            Popular
+            Manual
           </div>
         </div>
       </div>
       
       <div className="p-4">
         <h3 className="text-lg font-semibold text-gray-900 mb-2 line-clamp-2">
-          {recipe.title}
+          {displayTitle}
         </h3>
         
         {recipe.description && (
@@ -42,7 +88,7 @@ const ManualRecipeCard: React.FC<ManualRecipeCardProps> = ({ recipe }) => {
         )}
         
         <div className="flex flex-wrap gap-2 mb-3">
-          {recipe.cuisine && recipe.cuisine.map((cuisine, index) => (
+          {displayCuisines.map((cuisine, index) => (
             <span 
               key={index}
               className="recipe-tag bg-orange-100 text-orange-800"
@@ -52,13 +98,11 @@ const ManualRecipeCard: React.FC<ManualRecipeCardProps> = ({ recipe }) => {
           ))}
         </div>
         
-        <div className="flex flex-wrap gap-2 mb-3">
-          {recipe.diets && recipe.diets.map((diet, index) => (
-            <span 
-              key={index}
-              className="recipe-tag bg-green-100 text-green-800"
-            >
-              {diet}
+        <div className="mb-3">
+          {/* Enhanced dietary tags using our standard format */}
+          {dietaryTags && dietaryTags.length > 0 && dietaryTags.map((tag, index) => (
+            <span key={index} className={`recipe-tag ${tag.class}`}>
+              {tag.text}
             </span>
           ))}
         </div>

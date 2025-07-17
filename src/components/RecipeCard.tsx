@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Edit, Trash2, Star, Clock, Folder, Heart } from 'lucide-react';
 import { Recipe } from '../types/recipe';
 import { getDietaryTags, getAverageRating, formatExternalRecipeCuisine } from '../utils/recipeUtils';
@@ -41,9 +41,76 @@ const RecipeCard: React.FC<RecipeCardProps> = ({
     ? String((recipe as SpoonacularRecipe).id || "unknown") 
     : (recipe as Recipe).id || "unknown";
   
-  const recipeName = isExternal 
-    ? (recipe as SpoonacularRecipe).title || "Untitled Recipe" 
-    : (recipe as Recipe).name || "Untitled Recipe";
+  // Enhanced recipe name handling - ONLY apply fallbacks for truly missing titles
+  const recipeName = (() => {
+    if (isExternal) {
+      const spoonacularRecipe = recipe as SpoonacularRecipe;
+      let title = spoonacularRecipe.title || "";
+      
+      // ONLY fix truly empty or "untitled" recipes - be more specific
+      if (!title || 
+          title.trim() === "" || 
+          title.toLowerCase() === "untitled" || 
+          title.toLowerCase() === "untitled recipe" ||
+          title.toLowerCase() === "recipe") {
+        
+        // Strategy 1: Use cuisines + dish types
+        if (spoonacularRecipe.cuisines && spoonacularRecipe.cuisines.length > 0) {
+          const cuisine = spoonacularRecipe.cuisines[0];
+          if (spoonacularRecipe.dishTypes && spoonacularRecipe.dishTypes.length > 0) {
+            const dishType = spoonacularRecipe.dishTypes[0];
+            title = `${cuisine} ${dishType}`;
+          } else {
+            title = `Traditional ${cuisine} Recipe`;
+          }
+        } 
+        // Strategy 2: Use main ingredient
+        else if (spoonacularRecipe.extendedIngredients && spoonacularRecipe.extendedIngredients.length > 0) {
+          const mainIngredient = spoonacularRecipe.extendedIngredients[0].name || "Special";
+          const formatted = mainIngredient.split(' ').map(word => 
+            word.charAt(0).toUpperCase() + word.slice(1)
+          ).join(' ');
+          title = `Homestyle ${formatted}`;
+        } 
+        // Strategy 3: Appealing fallback
+        else {
+          const recipeId = spoonacularRecipe.id || Math.random().toString(36).substr(2, 9);
+          title = `Chef's Special Recipe #${recipeId}`;
+        }
+      }
+      return title;
+    } else {
+      const localRecipe = recipe as Recipe;
+      let name = localRecipe.name || "";
+      
+      // ONLY fix truly empty or "untitled" recipes - be more specific
+      if (!name || 
+          name.trim() === "" || 
+          name.toLowerCase() === "untitled" || 
+          name.toLowerCase() === "untitled recipe" ||
+          name.toLowerCase() === "recipe") {
+        
+        // Strategy 1: Use cuisine
+        if (localRecipe.cuisine && localRecipe.cuisine !== "Other") {
+          name = `Classic ${localRecipe.cuisine} Recipe`;
+        } 
+        // Strategy 2: Use main ingredient
+        else if (localRecipe.ingredients && localRecipe.ingredients.length > 0) {
+          const mainIngredient = localRecipe.ingredients[0] || "Special";
+          const formatted = mainIngredient.split(' ').map(word => 
+            word.charAt(0).toUpperCase() + word.slice(1)
+          ).join(' ');
+          name = `Home Kitchen ${formatted}`;
+        } 
+        // Strategy 3: Use ID or appealing fallback
+        else {
+          const recipeId = localRecipe.id || Math.random().toString(36).substr(2, 9);
+          name = `Family Recipe #${recipeId}`;
+        }
+      }
+      return name;
+    }
+  })();
   
   // Updated cuisine handling with null checks
   const recipeCuisine = isExternal 
@@ -62,7 +129,7 @@ const RecipeCard: React.FC<RecipeCardProps> = ({
   // Favorite status (only applies to local recipes)
   const isFavorite = !isExternal && (recipe as Recipe).isFavorite;
   
-  // Improved dietary tags mapping for all recipes
+  // Enhanced dietary tags mapping for all recipes
   let dietaryTags = [];
   
   if (isExternal) {
@@ -71,9 +138,14 @@ const RecipeCard: React.FC<RecipeCardProps> = ({
       .filter(diet => diet && typeof diet === 'string')
       .map(diet => {
         const dietLower = diet.toLowerCase();
+        // Map Spoonacular diet names to our standard format
         if (dietLower.includes('vegetarian') && !dietLower.includes('lacto') && !dietLower.includes('ovo')) return 'vegetarian';
         if (dietLower.includes('vegan')) return 'vegan'; 
         if (dietLower.includes('gluten') && dietLower.includes('free')) return 'gluten-free';
+        if (dietLower.includes('dairy') && dietLower.includes('free')) return 'dairy-free';
+        if (dietLower.includes('ketogenic') || dietLower.includes('keto')) return 'keto';
+        if (dietLower.includes('paleo') || dietLower.includes('paleolithic')) return 'paleo';
+        if (dietLower.includes('carnivore')) return 'carnivore';
         return null;
       })
       .filter(diet => diet !== null);
@@ -92,22 +164,75 @@ const RecipeCard: React.FC<RecipeCardProps> = ({
     setImageSrc('/placeholder.svg');
   };
 
-  // Fixed the link path logic - external vs manual vs local recipes
-  let cardLink = '';
-  if (isExternal) {
-    cardLink = `/external-recipe/${recipeId}`;
-  } else {
-    // Check if it's a manual recipe by looking at the recipe structure
-    const isManualRecipe = (recipe as any).cooking_instructions !== undefined || 
-                          (recipe as any).description !== undefined ||
-                          (recipe as any).ready_in_minutes !== undefined;
+  const navigate = useNavigate();
+
+  const handleClick = () => {
+    console.log('🔍 RecipeCard click - Recipe data:', { recipe, recipeId, recipeType: (recipe as any).type });
     
-    if (isManualRecipe) {
+    let cardLink;
+    
+    // Get the recipe type from the recipe object itself or context
+    const recipeType = (recipe as any).type;
+    
+    // Check if this is explicitly marked as a specific type
+    if (recipeType === 'manual') {
       cardLink = `/manual-recipe/${recipeId}`;
-    } else {
+    } else if (recipeType === 'local' || recipeType === 'saved') {
       cardLink = `/recipe/${recipeId}`;
+    } else if (recipeType === 'external') {
+      cardLink = `/external-recipe/${recipeId}`;
+    } else {
+      // Auto-detect based on recipe structure and ID format
+      // Recipes from /recipes endpoint (fallback recipes) have Spoonacular-like structure
+      const hasSpoonacularStructure = (
+        (recipe as any).title && 
+        (recipe as any).cuisines && 
+        (recipe as any).extendedIngredients &&
+        (recipe as any).readyInMinutes !== undefined
+      );
+      
+      // Manual recipes have specific properties
+      const isManualRecipe = (
+        (recipe as any).ready_in_minutes !== undefined ||
+        (recipe as any).description !== undefined ||
+        (recipe as any).created_at !== undefined ||
+        (recipe as any).updated_at !== undefined ||
+        (typeof recipeId === 'string' && (
+          recipeId.includes('sample_') ||
+          recipeId.includes('manual_') ||
+          recipeId.includes('_')
+        ))
+      );
+      
+      // Local recipes from storage have specific Recipe interface properties
+      const isLocalRecipe = (
+        (recipe as any).ratings !== undefined ||
+        (recipe as any).comments !== undefined ||
+        (recipe as any).folderId !== undefined ||
+        (recipe as any).isFavorite !== undefined
+      );
+      
+      // Route based on detected type
+      if (isLocalRecipe) {
+        cardLink = `/recipe/${recipeId}`;
+      } else if (isManualRecipe && !hasSpoonacularStructure) {
+        cardLink = `/manual-recipe/${recipeId}`;
+      } else if (hasSpoonacularStructure || recipeType === 'spoonacular') {
+        // Backend fallback recipes and Spoonacular recipes → external route
+        cardLink = `/external-recipe/${recipeId}`;
+      } else {
+        // Fallback: numeric ID → external, others → manual
+        if (typeof recipeId === 'number' || /^\d+$/.test(String(recipeId))) {
+          cardLink = `/external-recipe/${recipeId}`;
+        } else {
+          cardLink = `/manual-recipe/${recipeId}`;
+        }
+      }
     }
-  }
+
+    console.log('🚀 RecipeCard navigating to:', cardLink);
+    navigate(cardLink);
+  };
 
   // Handle favorite toggle
   const handleToggleFavorite = (e: React.MouseEvent) => {
@@ -120,13 +245,8 @@ const RecipeCard: React.FC<RecipeCardProps> = ({
 
   return (
     <div className="recipe-card animate-scale-in bg-white rounded-lg shadow-md overflow-hidden transition-transform hover:shadow-lg">
-      {/* Temporary debug info */}
-      <div className="p-2 bg-yellow-100 text-xs">
-        Debug: ID={recipeId}, Name={recipeName}, External={isExternal ? 'Yes' : 'No'}
-      </div>
-      
       <div className="relative">
-        <Link to={cardLink} className="block">
+        <div onClick={handleClick} className="block cursor-pointer">
           <div className="relative h-48 w-full overflow-hidden">
             <img 
               src={imageSrc} 
@@ -142,7 +262,7 @@ const RecipeCard: React.FC<RecipeCardProps> = ({
               <span>{readyInMinutes} min</span>
             </div>
           </div>
-        </Link>
+        </div>
         
         {/* Favorite button */}
         {!isExternal && onToggleFavorite && (
@@ -160,9 +280,9 @@ const RecipeCard: React.FC<RecipeCardProps> = ({
       
       <div className="p-5">
         <h2 className="text-xl font-semibold text-gray-800 mb-2 line-clamp-1">
-          <Link to={cardLink} className="hover:text-recipe-primary transition-colors">
+          <span onClick={handleClick} className="hover:text-recipe-primary transition-colors cursor-pointer">
             {recipeName || "Untitled Recipe"}
-          </Link>
+          </span>
         </h2>
         <p className="text-sm text-gray-600 mb-2">Cuisine: {recipeCuisine || "Other"}</p>
         

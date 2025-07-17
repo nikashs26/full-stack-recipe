@@ -1,5 +1,5 @@
 
-export type DietaryRestriction = 'vegetarian' | 'vegan' | 'gluten-free' | 'carnivore' | 'non-vegetarian';
+export type DietaryRestriction = 'vegetarian' | 'vegan' | 'gluten-free' | 'dairy-free' | 'keto' | 'paleo' | 'carnivore' | 'non-vegetarian';
 export type DifficultyLevel = 'easy' | 'medium' | 'hard';
 export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'dessert' | 'any'; // New MealType definition
 

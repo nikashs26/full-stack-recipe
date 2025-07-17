@@ -1,17 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import Header from '../components/Header';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
 import { Form, FormField, FormItem, FormLabel } from '@/components/ui/form';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Settings, Save, Loader2, Lock, ChefHat, Utensils } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Info, DollarSign, Users } from 'lucide-react';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface UserPreferences {
   dietaryRestrictions: string[];
@@ -30,14 +35,26 @@ const dietaryOptions = [
 ];
 
 const cuisineOptions = [
-  { id: 'italian', label: 'Italian', description: 'Pasta, pizza, Mediterranean' },
-  { id: 'mexican', label: 'Mexican', description: 'Spicy, flavorful, corn-based' },
-  { id: 'chinese', label: 'Chinese', description: 'Stir-fry, rice, soy-based' },
-  { id: 'indian', label: 'Indian', description: 'Curry, spices, rice dishes' },
-  { id: 'japanese', label: 'Japanese', description: 'Sushi, clean flavors' },
-  { id: 'mediterranean', label: 'Mediterranean', description: 'Olive oil, fresh vegetables' },
-  { id: 'american', label: 'American', description: 'Comfort food, grilled items' },
-  { id: 'thai', label: 'Thai', description: 'Sweet, sour, spicy balance' }
+  { id: 'american', label: 'American', description: 'Burgers, BBQ, comfort food' },
+  { id: 'italian', label: 'Italian', description: 'Pasta, pizza, Mediterranean flavors' },
+  { id: 'mexican', label: 'Mexican', description: 'Spicy, flavorful, corn-based dishes' },
+  { id: 'chinese', label: 'Chinese', description: 'Stir-fry, rice, soy-based flavors' },
+  { id: 'indian', label: 'Indian', description: 'Curry, spices, aromatic rice dishes' },
+  { id: 'japanese', label: 'Japanese', description: 'Sushi, clean flavors, umami' },
+  { id: 'thai', label: 'Thai', description: 'Sweet, sour, spicy balance' },
+  { id: 'french', label: 'French', description: 'Classic techniques, rich sauces' },
+  { id: 'mediterranean', label: 'Mediterranean', description: 'Olive oil, fresh vegetables, herbs' },
+  { id: 'korean', label: 'Korean', description: 'Fermented flavors, spicy dishes' },
+  { id: 'spanish', label: 'Spanish', description: 'Paella, tapas, bold flavors' },
+  { id: 'german', label: 'German', description: 'Hearty, meat-based dishes' },
+  { id: 'vietnamese', label: 'Vietnamese', description: 'Fresh herbs, pho, light broths' },
+  { id: 'middle eastern', label: 'Middle Eastern', description: 'Spices, grains, aromatic dishes' },
+  { id: 'british', label: 'British', description: 'Traditional, comfort foods' },
+  { id: 'caribbean', label: 'Caribbean', description: 'Tropical, jerk spices, plantains' },
+  { id: 'greek', label: 'Greek', description: 'Feta, olives, Mediterranean style' },
+  { id: 'african', label: 'African', description: 'Diverse regional specialties' },
+  { id: 'asian', label: 'Asian', description: 'Pan-Asian fusion flavors' },
+  { id: 'european', label: 'European', description: 'Continental cooking styles' }
 ];
 
 const allergenOptions = [
@@ -58,10 +75,19 @@ const formSchema = z.object({
 });
 
 const UserPreferencesPage: React.FC = () => {
+  const { isAuthenticated, isLoading: authLoading, user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const [preferences, setPreferences] = useState({
+    dietaryRestrictions: [] as string[],
+    favoriteCuisines: [] as string[],
+    allergens: [] as string[],
+    cookingSkillLevel: 'beginner' as string,
+    healthGoals: [] as string[],
+    maxCookingTime: '30 minutes' as string
+  });
   const [isLoading, setIsLoading] = useState(false);
-  const [currentPreferences, setCurrentPreferences] = useState<UserPreferences | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
   
   // Initialize form with current preferences
@@ -75,17 +101,83 @@ const UserPreferencesPage: React.FC = () => {
     }
   });
 
-  // Load current preferences on mount
+  // Redirect if not authenticated
   useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      navigate('/signin');
+      toast({
+        title: "Authentication Required",
+        description: "Please sign in to access your preferences.",
+        variant: "destructive"
+      });
+    }
+  }, [isAuthenticated, authLoading, navigate, toast]);
+
+  // Show loading state while checking authentication
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+          <p className="text-gray-600">Checking authentication...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show login prompt if not authenticated
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Header />
+        <div className="pt-24 md:pt-28">
+          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+            <Card className="text-center">
+              <CardHeader>
+                <div className="flex justify-center mb-4">
+                  <Lock className="h-12 w-12 text-orange-500" />
+                </div>
+                <CardTitle className="text-2xl">Authentication Required</CardTitle>
+                <CardDescription>
+                  Sign in to access and customize your meal preferences
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                  <Link to="/signin">
+                    <Button size="lg">Sign In</Button>
+                  </Link>
+                  <Link to="/signup">
+                    <Button variant="outline" size="lg">Sign Up</Button>
+                  </Link>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Load user preferences from authenticated backend
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
     const loadPreferences = async () => {
+      setIsLoading(true);
       try {
-        const response = await fetch('http://localhost:5003/api/temp-preferences', {
-          credentials: 'include' // Include cookies for session
+        const token = localStorage.getItem('auth_token');
+        const response = await fetch('http://localhost:5003/api/preferences', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
         });
+
         if (response.ok) {
           const data = await response.json();
           if (data.preferences) {
-            setCurrentPreferences(data.preferences);
+            setPreferences(data.preferences);
             // Update form with loaded preferences
             form.reset({
               dietaryRestrictions: data.preferences.dietaryRestrictions || [],
@@ -94,14 +186,26 @@ const UserPreferencesPage: React.FC = () => {
               cookingSkillLevel: data.preferences.cookingSkillLevel || 'beginner'
             });
           }
+        } else if (response.status === 404) {
+          // No preferences set yet, use defaults
+          console.log('No preferences found, using defaults');
+        } else {
+          throw new Error('Failed to load preferences');
         }
       } catch (error) {
         console.error('Error loading preferences:', error);
+        toast({
+          title: "Error Loading Preferences",
+          description: "Could not load your preferences. Using defaults.",
+          variant: "destructive"
+        });
+      } finally {
+        setIsLoading(false);
       }
     };
 
     loadPreferences();
-  }, [form]);
+  }, [isAuthenticated, toast, form]);
 
   // Auto-save preferences when form changes
   useEffect(() => {
@@ -116,11 +220,17 @@ const UserPreferencesPage: React.FC = () => {
   }, [form.watch(), hasChanges]);
 
   // Create a convenience variable for the current form values
-  const preferences = form.watch();
+  const currentPreferences = form.watch();
 
   const savePreferences = async (values: z.infer<typeof formSchema>, showToast: boolean = true) => {
     console.log('🔥 FRONTEND: Starting to save preferences...');
     console.log('🔥 FRONTEND: Values to save:', values);
+    console.log('🔥 FRONTEND: Is authenticated:', isAuthenticated);
+    console.log('🔥 FRONTEND: User:', user);
+    
+    const token = localStorage.getItem('auth_token');
+    console.log('🔥 FRONTEND: Auth token exists:', !!token);
+    console.log('🔥 FRONTEND: Auth token length:', token?.length || 0);
     
     const preferencesPayload = {
       preferences: {
@@ -134,41 +244,59 @@ const UserPreferencesPage: React.FC = () => {
     console.log('🔥 FRONTEND: Payload being sent:', JSON.stringify(preferencesPayload, null, 2));
     
     try {
-      const response = await fetch('http://localhost:5003/api/temp-preferences', {
+      console.log('🔥 FRONTEND: Making request to:', 'http://localhost:5003/api/preferences');
+      const response = await fetch('http://localhost:5003/api/preferences', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
-        credentials: 'include', // Include cookies for session
         body: JSON.stringify(preferencesPayload),
       });
 
       console.log('🔥 FRONTEND: Response status:', response.status);
-      console.log('🔥 FRONTEND: Response headers:', response.headers);
+      console.log('🔥 FRONTEND: Response ok:', response.ok);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.log('🔥 FRONTEND: Error response text:', errorText);
+        try {
+          const errorData = JSON.parse(errorText);
+          console.log('🔥 FRONTEND: Error response data:', errorData);
+          if (response.status === 401) {
+            console.log('🔥 FRONTEND: Authentication failed - redirecting to signin');
+            navigate('/signin');
+            toast({
+              title: "Session Expired",
+              description: "Please sign in again to save your preferences.",
+              variant: "destructive"
+            });
+            return false;
+          }
+        } catch (parseError) {
+          console.log('🔥 FRONTEND: Could not parse error response as JSON');
+        }
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
       
       const responseData = await response.json();
       console.log('🔥 FRONTEND: Response data:', responseData);
       
-      if (response.ok) {
-        console.log('🔥 FRONTEND: Preferences saved successfully!');
-        setHasChanges(false);
-        if (showToast) {
-          toast({
-            title: "Preferences saved!",
-            description: `Your recipe recommendations will now include ${values.favoriteCuisines.length} cuisine types and respect ${values.dietaryRestrictions.length} dietary restrictions.`,
-          });
-        }
-        return true;
-      } else {
-        console.log('🔥 FRONTEND: Failed to save preferences - response not ok');
-        throw new Error('Failed to save preferences');
+      console.log('🔥 FRONTEND: Preferences saved successfully!');
+      setHasChanges(false);
+      if (showToast) {
+        toast({
+          title: "Preferences saved!",
+          description: `Your recipe recommendations will now include ${values.favoriteCuisines.length} cuisine types and respect ${values.dietaryRestrictions.length} dietary restrictions.`,
+        });
       }
+      return true;
     } catch (error) {
       console.error('🔥 FRONTEND: Error saving preferences:', error);
       if (showToast) {
         toast({
           title: "Failed to save preferences",
-          description: "Please try again.",
+          description: error instanceof Error ? error.message : "Please try again.",
           variant: "destructive"
         });
       }
@@ -247,7 +375,7 @@ const UserPreferencesPage: React.FC = () => {
                     <div key={option.id} className="flex items-start space-x-3 p-3 border rounded-lg hover:bg-gray-50">
                       <Checkbox 
                         id={`dietary-${option.id}`}
-                        checked={preferences.dietaryRestrictions.includes(option.id)}
+                        checked={currentPreferences.dietaryRestrictions.includes(option.id)}
                         onCheckedChange={() => handleDietaryChange(option.id)}
                       />
                       <div className="flex-1">
@@ -272,7 +400,7 @@ const UserPreferencesPage: React.FC = () => {
                     <div key={option.id} className="flex items-start space-x-3 p-3 border rounded-lg hover:bg-gray-50">
                       <Checkbox 
                         id={`cuisine-${option.id}`}
-                        checked={preferences.favoriteCuisines.includes(option.id)}
+                        checked={currentPreferences.favoriteCuisines.includes(option.id)}
                         onCheckedChange={() => handleCuisineChange(option.id)}
                       />
                       <div className="flex-1">
@@ -297,7 +425,7 @@ const UserPreferencesPage: React.FC = () => {
                     <div key={option.id} className="flex items-start space-x-3 p-3 border rounded-lg hover:bg-gray-50">
                       <Checkbox 
                         id={`allergen-${option.id}`}
-                        checked={preferences.allergens.includes(option.id)}
+                        checked={currentPreferences.allergens.includes(option.id)}
                         onCheckedChange={() => handleAllergenChange(option.id)}
                       />
                       <div className="flex-1">
@@ -318,7 +446,7 @@ const UserPreferencesPage: React.FC = () => {
                 <h2 className="text-xl font-medium mb-4">Cooking Skill Level</h2>
                 <p className="text-sm text-gray-600 mb-4">This helps us recommend recipes appropriate for your experience</p>
                 <Select 
-                  value={preferences.cookingSkillLevel} 
+                  value={currentPreferences.cookingSkillLevel} 
                   onValueChange={handleSkillLevelChange}
                 >
                   <SelectTrigger className="w-full md:w-72">
@@ -336,10 +464,10 @@ const UserPreferencesPage: React.FC = () => {
                 <div className="mb-4">
                   <h3 className="font-medium text-gray-900">Your Selection Summary:</h3>
                   <ul className="text-sm text-gray-600 mt-2 space-y-1">
-                    <li>• {preferences.favoriteCuisines.length} favorite cuisines selected</li>
-                    <li>• {preferences.dietaryRestrictions.length} dietary restrictions</li>
-                    <li>• {preferences.allergens.length} allergens to avoid</li>
-                    <li>• Skill level: {preferences.cookingSkillLevel}</li>
+                    <li>• {currentPreferences.favoriteCuisines.length} favorite cuisines selected</li>
+                    <li>• {currentPreferences.dietaryRestrictions.length} dietary restrictions</li>
+                    <li>• {currentPreferences.allergens.length} allergens to avoid</li>
+                    <li>• Skill level: {currentPreferences.cookingSkillLevel}</li>
                   </ul>
                 </div>
                 

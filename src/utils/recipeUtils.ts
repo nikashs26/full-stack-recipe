@@ -19,6 +19,12 @@ export const getDietaryTags = (dietaryRestrictions: DietaryRestriction[]): { tex
         return { text: 'Vegan', class: 'vegan-tag' };
       case 'gluten-free':
         return { text: 'Gluten-Free', class: 'gluten-free-tag' };
+      case 'dairy-free':
+        return { text: 'Dairy-Free', class: 'dairy-free-tag' };
+      case 'keto':
+        return { text: 'Keto', class: 'keto-tag' };
+      case 'paleo':
+        return { text: 'Paleo', class: 'paleo-tag' };
       case 'carnivore':
         return { text: 'Carnivore', class: 'carnivore-tag' };
       default:

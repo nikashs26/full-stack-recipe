@@ -1,15 +1,18 @@
 
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { useToast } from '@/hooks/use-toast';
 import Header from '../components/Header';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { ShoppingCart, Plus, Trash2, Check, X, Loader2, Lock, DollarSign } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
 import { ShoppingListItem, Recipe } from '../types/recipe'; // Keep Recipe for now if needed elsewhere
 import { useQuery, useQueryClient } from '@tanstack/react-query'; // Keep if you still need other queries
 import { loadRecipes } from '../utils/storage'; // Keep if you still need to load recipes
-import { Check, ShoppingCart, Trash2, RefreshCw, DollarSign } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid'; // Keep for unique item IDs if necessary
-import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
-import { useToast } from '@/hooks/use-toast';
 
 // Define the structure of the agent-generated shopping list
 interface AgentShoppingList {
@@ -32,14 +35,76 @@ interface DisplayShoppingListItem {
 }
 
 const ShoppingListPage: React.FC = () => {
+  const { isAuthenticated, isLoading: authLoading, user } = useAuth();
+  const navigate = useNavigate();
+  const { toast } = useToast();
   const [agentShoppingList, setAgentShoppingList] = useState<AgentShoppingList | null>(null);
   const [displayList, setDisplayList] = useState<DisplayShoppingListItem[]>([]);
   const [estimatedCost, setEstimatedCost] = useState<string>('');
   const [servingAmount, setServingAmount] = useState<string>('');
   const [weeklyBudget, setWeeklyBudget] = useState<string>('');
-  const { toast } = useToast();
+
+  // Redirect if not authenticated
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      navigate('/signin');
+      toast({
+        title: "Authentication Required",
+        description: "Please sign in to access your shopping list.",
+        variant: "destructive"
+      });
+    }
+  }, [isAuthenticated, authLoading, navigate, toast]);
+
+  // Show loading state while checking authentication
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+          <p className="text-gray-600">Checking authentication...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show login prompt if not authenticated
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Header />
+        <div className="pt-24 md:pt-28">
+          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+            <Card className="text-center">
+              <CardHeader>
+                <div className="flex justify-center mb-4">
+                  <Lock className="h-12 w-12 text-orange-500" />
+                </div>
+                <CardTitle className="text-2xl">Authentication Required</CardTitle>
+                <CardDescription>
+                  Sign in to access your shopping list and meal planning features
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                  <Link to="/signin">
+                    <Button size="lg">Sign In</Button>
+                  </Link>
+                  <Link to="/signup">
+                    <Button variant="outline" size="lg">Sign Up</Button>
+                  </Link>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   useEffect(() => {
+    if (!isAuthenticated) return; // Don't load if not authenticated
+
     const loadAgentShoppingList = () => {
       try {
         const storedList = localStorage.getItem('agent-shopping-list');
@@ -47,25 +112,6 @@ const ShoppingListPage: React.FC = () => {
           const parsedList = JSON.parse(storedList);
           setAgentShoppingList(parsedList);
           setEstimatedCost(parsedList.estimated_cost || '');
-          
-          // Load budget and serving info from preferences
-          const loadPreferences = async () => {
-            try {
-              const response = await fetch('http://localhost:5003/api/temp-preferences', {
-                credentials: 'include' // Include cookies for session
-              });
-              if (response.ok) {
-                const data = await response.json();
-                if (data.preferences) {
-                  setWeeklyBudget(data.preferences.weeklyBudget || '');
-                  setServingAmount(data.preferences.servingAmount || '');
-                }
-              }
-            } catch (error) {
-              console.error('Error loading preferences:', error);
-            }
-          };
-          loadPreferences();
           
           // Convert to display format
           const flattenedList: DisplayShoppingListItem[] = parsedList.items.map(item => ({
@@ -100,7 +146,7 @@ const ShoppingListPage: React.FC = () => {
     };
     
     loadAgentShoppingList();
-  }, []);
+  }, [isAuthenticated, toast]);
 
   // Save display list to localStorage (not strictly necessary if only reading from agent-list)
   // But good for persistence of checked state

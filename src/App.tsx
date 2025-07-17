@@ -18,6 +18,7 @@ import FavoritesPage from "./pages/FavoritesPage";
 import ShoppingListPage from "./pages/ShoppingListPage";
 import SignInPage from "./pages/SignInPage";
 import SignUpPage from "./pages/SignUpPage";
+import VerifyEmailPage from "./pages/VerifyEmailPage";
 import UserPreferencesPage from "./pages/UserPreferencesPage";
 import { Link } from "react-router-dom";
 import { Database } from "lucide-react";
@@ -50,25 +51,27 @@ const App = () => (
             <Routes>
               <Route path="/" element={<HomePage />} />
               <Route path="/recipes" element={<RecipesPage />} />
-              <Route path="/folders" element={<FoldersPage />} />
-              <Route path="/favorites" element={<FavoritesPage />} />
-              <Route path="/shopping-list" element={<ShoppingListPage />} />
-              <Route path="/recipe/:id" element={<RecipeDetailPage />} />
-              <Route path="/manual-recipe/:id" element={<ManualRecipeDetailPage />} />
+              <Route path="/recipes/:id" element={<RecipeDetailPage />} />
               <Route path="/external-recipe/:id" element={<ExternalRecipeDetailPage />} />
+              <Route path="/manual-recipe/:id" element={<ManualRecipeDetailPage />} />
               <Route path="/add-recipe" element={<AddRecipePage />} />
               <Route path="/edit-recipe/:id" element={<EditRecipePage />} />
-              <Route path="/mongodb-test" element={<MongoDBTestPage />} />
+              <Route path="/folders" element={<FoldersPage />} />
+              <Route path="/folders/:folderId" element={<FolderDetail />} />
+              <Route path="/favorites" element={<FavoritesPage />} />
+              <Route path="/shopping-list" element={<ShoppingListPage />} />
               <Route path="/signin" element={<SignInPage />} />
               <Route path="/signup" element={<SignUpPage />} />
+              <Route path="/verify-email" element={<VerifyEmailPage />} />
               <Route path="/preferences" element={<UserPreferencesPage />} />
-              <Route path="/meal-planner" element={<MealPlannerPage />} /> {/* Add the new route */}
+              <Route path="/meal-planner" element={<MealPlannerPage />} />
+              <Route path="/mongodb-test" element={<MongoDBTestPage />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
             <Footer />
-            <Toaster />
-            <Sonner />
           </div>
+          <Toaster />
+          <Sonner />
         </AuthProvider>
       </TooltipProvider>
     </QueryClientProvider>

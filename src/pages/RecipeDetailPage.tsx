@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Heart, Folder, ShoppingCart, Star } from 'lucide-react';
+import { Heart, Folder, ShoppingCart, Star, ArrowLeft } from 'lucide-react';
 import Header from '../components/Header';
 import { Button } from '@/components/ui/button';
 import { getRecipeById, updateRecipe, loadRecipes } from '../utils/storage';
@@ -10,13 +10,15 @@ import FolderAssignmentModal from '../components/FolderAssignmentModal';
 import { Folder as FolderType, ShoppingListItem } from '../types/recipe';
 import { v4 as uuidv4 } from 'uuid';
 import RecipeReviews, { Review } from '../components/RecipeReviews';
-import { getReviewsByRecipeId, addReview } from '../utils/reviewUtils';
+import { getReviewsByRecipeId, addReview } from '../utils/chromaReviewUtils';
+import { useAuth } from '../context/AuthContext';
 
 const RecipeDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { isAuthenticated } = useAuth();
   const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);
   const [folders, setFolders] = useState<FolderType[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
@@ -24,7 +26,7 @@ const RecipeDetailPage: React.FC = () => {
   // Load the recipe
   const recipe = getRecipeById(id || '');
 
-  // Load reviews from Supabase
+  // Load reviews from ChromaDB
   useEffect(() => {
     const loadReviews = async () => {
       if (id) {
@@ -67,6 +69,16 @@ const RecipeDetailPage: React.FC = () => {
       <div className="min-h-screen bg-gray-50">
         <Header />
         <main className="pt-24 md:pt-28 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="mb-6">
+            <Button 
+              variant="outline" 
+              onClick={() => navigate('/recipes')}
+              className="mb-4"
+            >
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to Recipes
+            </Button>
+          </div>
           <div className="text-center">
             <h1 className="text-2xl font-bold mb-4">Recipe not found</h1>
             <Button onClick={() => navigate('/recipes')}>Back to Recipes</Button>
@@ -75,6 +87,15 @@ const RecipeDetailPage: React.FC = () => {
       </div>
     );
   }
+
+  // Calculate average rating
+  const getAverageRating = () => {
+    if (reviews.length === 0) return 0;
+    const sum = reviews.reduce((total, review) => total + review.rating, 0);
+    return (sum / reviews.length).toFixed(1);
+  };
+
+  const avgRating = Number(getAverageRating());
 
   const toggleFavorite = () => {
     const updatedRecipe = {
@@ -111,20 +132,21 @@ const RecipeDetailPage: React.FC = () => {
     try {
       console.log('Submitting review:', { text, rating, author, recipeId: id });
       
-      const newReviewData = {
+      const savedReview = await addReview({
+        recipeId: id,
+        recipeType: 'local',
         author: author || "Anonymous",
         text,
-        date: new Date().toISOString(),
-        rating,
-        recipeId: id,
-        recipeType: 'local' as const
-      };
-
-      const savedReview = await addReview(newReviewData);
+        rating
+      });
       
       if (savedReview) {
         console.log('Review saved successfully:', savedReview);
         setReviews(prevReviews => [savedReview, ...prevReviews]);
+        toast({
+          title: 'Review submitted',
+          description: 'Your review has been added successfully.',
+        });
       } else {
         console.error('Failed to save review - no data returned');
       }
@@ -132,7 +154,7 @@ const RecipeDetailPage: React.FC = () => {
       console.error('Error in handleReviewSubmit:', error);
       toast({
         title: 'Error',
-        description: 'An unexpected error occurred while saving your review.',
+        description: error instanceof Error ? error.message : 'An unexpected error occurred while saving your review.',
         variant: 'destructive'
       });
     }
@@ -140,54 +162,52 @@ const RecipeDetailPage: React.FC = () => {
 
   const currentFolder = folders.find(folder => folder.id === recipe.folderId);
 
+  // Add to shopping list functionality
   const addToShoppingList = () => {
     try {
-      // Get existing shopping list
-      const existingList = localStorage.getItem('recipe-shopping-list');
-      const shoppingList: ShoppingListItem[] = existingList ? JSON.parse(existingList) : [];
+      const existingItems = JSON.parse(localStorage.getItem('shopping-list') || '[]');
       
-      // Add recipe ingredients to shopping list
       const newItems: ShoppingListItem[] = recipe.ingredients.map(ingredient => ({
         id: uuidv4(),
-        ingredient,
+        name: ingredient,
+        completed: false,
         recipeId: recipe.id,
-        recipeName: recipe.name,
-        checked: false
+        recipeName: recipe.name
       }));
       
-      const updatedList = [...shoppingList, ...newItems];
-      localStorage.setItem('recipe-shopping-list', JSON.stringify(updatedList));
+      const updatedItems = [...existingItems, ...newItems];
+      localStorage.setItem('shopping-list', JSON.stringify(updatedItems));
       
       toast({
         title: "Added to shopping list",
-        description: `Ingredients from "${recipe.name}" have been added to your shopping list.`
+        description: `${recipe.ingredients.length} ingredients from "${recipe.name}" have been added to your shopping list.`,
       });
-      
     } catch (error) {
-      console.error('Failed to update shopping list:', error);
+      console.error('Error adding to shopping list:', error);
       toast({
-        title: "Error",
-        description: "Failed to update shopping list",
-        variant: "destructive"
+        title: 'Error',
+        description: 'Failed to add ingredients to shopping list.',
+        variant: 'destructive'
       });
     }
   };
-
-  // Calculate average rating
-  const getAverageRating = () => {
-    if (reviews.length === 0) return 0;
-    const sum = reviews.reduce((total, review) => total + review.rating, 0);
-    return (sum / reviews.length).toFixed(1);
-  };
-
-  // Convert the result to a number to ensure proper comparison
-  const avgRating = Number(getAverageRating());
 
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
       <main className="pt-24 md:pt-28">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="mb-6">
+            <Button 
+              variant="outline" 
+              onClick={() => navigate('/recipes')}
+              className="mb-4"
+            >
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to Recipes
+            </Button>
+          </div>
+
           {/* Recipe header */}
           <div className="bg-white shadow-sm rounded-lg overflow-hidden">
             <div className="relative h-64 md:h-96 w-full">
@@ -249,16 +269,16 @@ const RecipeDetailPage: React.FC = () => {
             {/* Recipe content */}
             <div className="p-6">
               <h2 className="text-2xl font-semibold mb-4">Ingredients</h2>
-              <ul className="list-disc list-inside mb-6">
+              <ul className="list-disc list-inside mb-6 space-y-1">
                 {recipe.ingredients.map((ingredient, index) => (
-                  <li key={index}>{ingredient}</li>
+                  <li key={index} className="text-gray-700">{ingredient}</li>
                 ))}
               </ul>
 
               <h2 className="text-2xl font-semibold mb-4">Instructions</h2>
-              <ol className="list-decimal list-inside">
+              <ol className="list-decimal list-inside space-y-3 mb-6">
                 {recipe.instructions.map((instruction, index) => (
-                  <li key={index} className="mb-2">{instruction}</li>
+                  <li key={index} className="text-gray-700 leading-relaxed">{instruction}</li>
                 ))}
               </ol>
               

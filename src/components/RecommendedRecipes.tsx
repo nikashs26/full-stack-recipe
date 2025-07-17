@@ -188,11 +188,22 @@ const RecommendedRecipes: React.FC = () => {
       if (preferences?.dietaryRestrictions?.length > 0) {
         filteredExternal = filteredExternal.filter((recipe: SpoonacularRecipe) => {
           const recipeDiets = recipe.diets || [];
-          return preferences.dietaryRestrictions.some(prefDiet => 
-            recipeDiets.some(diet => 
-              diet?.toLowerCase().includes(prefDiet.toLowerCase())
-            )
-          );
+          
+          // Check if recipe meets at least one dietary preference
+          return preferences.dietaryRestrictions.some(prefDiet => {
+            const prefDietLower = prefDiet.toLowerCase();
+            return recipeDiets.some(diet => {
+              const dietLower = diet?.toLowerCase() || '';
+              // Enhanced matching for dietary restrictions
+              if (prefDietLower === 'vegetarian' && dietLower.includes('vegetarian')) return true;
+              if (prefDietLower === 'vegan' && dietLower.includes('vegan')) return true;
+              if (prefDietLower === 'gluten-free' && (dietLower.includes('gluten') && dietLower.includes('free'))) return true;
+              if (prefDietLower === 'dairy-free' && (dietLower.includes('dairy') && dietLower.includes('free'))) return true;
+              if (prefDietLower === 'keto' && (dietLower.includes('ketogenic') || dietLower.includes('keto'))) return true;
+              if (prefDietLower === 'paleo' && (dietLower.includes('paleo') || dietLower.includes('paleolithic'))) return true;
+              return false;
+            });
+          });
         });
       }
 
