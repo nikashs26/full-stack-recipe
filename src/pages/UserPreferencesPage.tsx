@@ -17,13 +17,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Info, DollarSign, Users } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-
-interface UserPreferences {
-  dietaryRestrictions: string[];
-  favoriteCuisines: string[];
-  allergens: string[];
-  cookingSkillLevel: 'beginner' | 'intermediate' | 'advanced';
-}
+import { loadUserPreferences, saveUserPreferences, UserPreferences } from '../services/preferencesService';
 
 const dietaryOptions = [
   { id: 'vegetarian', label: 'Vegetarian', description: 'No meat or fish' },
@@ -154,32 +148,15 @@ const UserPreferencesPage: React.FC = () => {
     const loadPreferences = async () => {
       setIsLoading(true);
       try {
-        const token = localStorage.getItem('auth_token');
-        const response = await fetch('http://localhost:5003/api/preferences', {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
+        const loadedPreferences = await loadUserPreferences();
+        setPreferences(loadedPreferences);
+        // Update form with loaded preferences
+        form.reset({
+          dietaryRestrictions: loadedPreferences.dietaryRestrictions || [],
+          favoriteCuisines: loadedPreferences.favoriteCuisines || [],
+          allergens: loadedPreferences.allergens || [],
+          cookingSkillLevel: loadedPreferences.cookingSkillLevel || 'beginner'
         });
-
-        if (response.ok) {
-          const data = await response.json();
-          if (data.preferences) {
-            setPreferences(data.preferences);
-            // Update form with loaded preferences
-            form.reset({
-              dietaryRestrictions: data.preferences.dietaryRestrictions || [],
-              favoriteCuisines: data.preferences.favoriteCuisines || [],
-              allergens: data.preferences.allergens || [],
-              cookingSkillLevel: data.preferences.cookingSkillLevel || 'beginner'
-            });
-          }
-        } else if (response.status === 404) {
-          // No preferences set yet, use defaults
-          console.log('No preferences found, using defaults');
-        } else {
-          throw new Error('Failed to load preferences');
-        }
       } catch (error) {
         console.error('Error loading preferences:', error);
         toast({
@@ -211,84 +188,33 @@ const UserPreferencesPage: React.FC = () => {
   const currentPreferences = form.watch();
 
   const savePreferences = async (values: z.infer<typeof formSchema>, showToast: boolean = true) => {
-    console.log('🔥 FRONTEND: Starting to save preferences...');
-    console.log('🔥 FRONTEND: Values to save:', values);
-    console.log('🔥 FRONTEND: Is authenticated:', isAuthenticated);
-    console.log('🔥 FRONTEND: User:', user);
+    console.log('Saving preferences:', values);
+    setIsSaving(true);
     
-    const token = localStorage.getItem('auth_token');
-    console.log('🔥 FRONTEND: Auth token exists:', !!token);
-    console.log('🔥 FRONTEND: Auth token length:', token?.length || 0);
-    
-    const preferencesPayload = {
-      preferences: {
+    try {
+      await saveUserPreferences({
         dietaryRestrictions: values.dietaryRestrictions,
         favoriteCuisines: values.favoriteCuisines,
         allergens: values.allergens,
         cookingSkillLevel: values.cookingSkillLevel
-      }
-    };
-    
-    console.log('🔥 FRONTEND: Payload being sent:', JSON.stringify(preferencesPayload, null, 2));
-    
-    try {
-      console.log('🔥 FRONTEND: Making request to:', 'http://localhost:5003/api/preferences');
-      const response = await fetch('http://localhost:5003/api/preferences', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(preferencesPayload),
       });
 
-      console.log('🔥 FRONTEND: Response status:', response.status);
-      console.log('🔥 FRONTEND: Response ok:', response.ok);
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.log('🔥 FRONTEND: Error response text:', errorText);
-        try {
-          const errorData = JSON.parse(errorText);
-          console.log('🔥 FRONTEND: Error response data:', errorData);
-          if (response.status === 401) {
-            console.log('🔥 FRONTEND: Authentication failed - redirecting to signin');
-            navigate('/signin');
-            toast({
-              title: "Session Expired",
-              description: "Please sign in again to save your preferences.",
-              variant: "destructive"
-            });
-            return false;
-          }
-        } catch (parseError) {
-          console.log('🔥 FRONTEND: Could not parse error response as JSON');
-        }
-        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      if (showToast) {
+        toast({
+          title: "Preferences Saved",
+          description: "Your preferences have been updated successfully.",
+        });
       }
-      
-      const responseData = await response.json();
-      console.log('🔥 FRONTEND: Response data:', responseData);
-      
-      console.log('🔥 FRONTEND: Preferences saved successfully!');
       setHasChanges(false);
-      if (showToast) {
-        toast({
-          title: "Preferences saved!",
-          description: `Your recipe recommendations will now include ${values.favoriteCuisines.length} cuisine types and respect ${values.dietaryRestrictions.length} dietary restrictions.`,
-        });
-      }
-      return true;
     } catch (error) {
-      console.error('🔥 FRONTEND: Error saving preferences:', error);
-      if (showToast) {
-        toast({
-          title: "Failed to save preferences",
-          description: error instanceof Error ? error.message : "Please try again.",
-          variant: "destructive"
-        });
-      }
-      return false;
+      console.error('Error saving preferences:', error);
+      toast({
+        title: "Error Saving Preferences",
+        description: "Failed to save your preferences. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsSaving(false);
     }
   };
 

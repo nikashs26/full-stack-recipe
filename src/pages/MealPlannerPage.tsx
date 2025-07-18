@@ -6,12 +6,13 @@ import Header from '../components/Header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ChefHat, Loader2, RefreshCw, Settings, Lock } from 'lucide-react';
+import { generateMealPlan, regenerateMeal, MealPlan } from '../services/mealPlannerService';
 
 const MealPlannerPage: React.FC = () => {
   const { isAuthenticated, isLoading: authLoading, user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [mealPlan, setMealPlan] = useState<any>(null);
+  const [mealPlan, setMealPlan] = useState<MealPlan | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -73,66 +74,55 @@ const MealPlannerPage: React.FC = () => {
     );
   }
 
-  const generateMealPlan = async () => {
+  const handleGenerateMealPlan = async () => {
     setIsGenerating(true);
     setError(null);
     
     try {
-      const token = localStorage.getItem('auth_token');
-      
-      const response = await fetch('http://localhost:5003/api/meal-plan/generate', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
+      const newMealPlan = await generateMealPlan();
+      setMealPlan(newMealPlan);
+      toast({
+        title: "Meal Plan Generated!",
+        description: "Your personalized weekly meal plan is ready.",
       });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        setMealPlan(data);
-        toast({
-          title: "Meal Plan Generated!",
-          description: "Your personalized weekly meal plan is ready.",
-        });
-      } else {
-        if (response.status === 400 && data.redirect_to) {
-          // User needs to set preferences first
-          setError(data.error);
-          toast({
-            title: "Preferences Required",
-            description: data.error,
-            variant: "destructive"
-          });
-        } else {
-          throw new Error(data.error || 'Failed to generate meal plan');
-        }
-      }
     } catch (error: any) {
       console.error('Error generating meal plan:', error);
-      setError(error.message || 'Failed to generate meal plan');
-      toast({
-        title: "Generation Failed",
-        description: error.message || 'Failed to generate meal plan',
-        variant: "destructive"
-      });
+      setError(error.message);
+      
+      if (error.message.includes('preferences')) {
+        toast({
+          title: "Preferences Required",
+          description: error.message,
+          variant: "destructive"
+        });
+      } else {
+        toast({
+          title: "Generation Failed",
+          description: error.message || 'Failed to generate meal plan',
+          variant: "destructive"
+        });
+      }
     } finally {
       setIsGenerating(false);
     }
   };
 
-  const regenerateMeal = async (day: string, mealType: string) => {
-    if (!mealPlan?.plan) return;
+  const handleRegenerateMeal = async (day: string, mealType: string) => {
+    if (!mealPlan?.days) return;
     
     try {
-      // For now, just show a placeholder
+      await regenerateMeal(day, mealType);
       toast({
         title: "Coming Soon",
         description: "Individual meal regeneration will be available soon!",
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error regenerating meal:', error);
+      toast({
+        title: "Regeneration Failed",
+        description: error.message || 'Failed to regenerate meal',
+        variant: "destructive"
+      });
     }
   };
 
@@ -156,7 +146,7 @@ const MealPlannerPage: React.FC = () => {
           {/* Action Buttons */}
           <div className="flex flex-col sm:flex-row gap-4 justify-center mb-8">
             <Button 
-              onClick={generateMealPlan} 
+              onClick={handleGenerateMealPlan} 
               disabled={isGenerating}
               size="lg"
               className="flex items-center gap-2"
@@ -216,7 +206,7 @@ const MealPlannerPage: React.FC = () => {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => regenerateMeal(dayPlan.day, mealType)}
+                                onClick={() => handleRegenerateMeal(dayPlan.day, mealType)}
                                 className="p-1 h-8 w-8"
                               >
                                 <RefreshCw className="h-4 w-4" />
@@ -256,7 +246,7 @@ const MealPlannerPage: React.FC = () => {
               {/* Action Buttons for Generated Plan */}
               <div className="flex flex-col sm:flex-row gap-4 justify-center pt-8">
                 <Button 
-                  onClick={generateMealPlan} 
+                  onClick={handleGenerateMealPlan} 
                   disabled={isGenerating}
                   variant="outline"
                   className="flex items-center gap-2"
@@ -283,7 +273,7 @@ const MealPlannerPage: React.FC = () => {
                 <p className="text-gray-600 mb-6">
                   Click "Generate New Meal Plan" to create a personalized weekly meal plan based on your preferences.
                 </p>
-                <Button onClick={generateMealPlan} size="lg">
+                <Button onClick={handleGenerateMealPlan} size="lg">
                   <ChefHat className="mr-2 h-4 w-4" />
                   Get Started
                 </Button>

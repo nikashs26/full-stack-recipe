@@ -24,10 +24,10 @@ class RecipeCacheService:
         search_params = f"query:{query.lower().strip()}_ingredient:{ingredient.lower().strip()}"
         return hashlib.md5(search_params.encode()).hexdigest()
 
-    def get_cached_recipes(self, query: str = "", ingredient: str = "") -> Optional[List[Dict[Any, Any]]]:
+    def get_cached_recipes(self, query: str = "", ingredient: str = "") -> List[Dict[Any, Any]]:
         """Retrieve cached recipes for the given search parameters"""
         if not self.collection:
-            return None
+            return []
         
         try:
             cache_key = self._generate_cache_key(query, ingredient)
@@ -44,11 +44,36 @@ class RecipeCacheService:
                 logger.info(f"Found {len(cached_data)} cached recipes for query: '{query}', ingredient: '{ingredient}'")
                 return cached_data
             
-            return None
+            # Try a semantic search if exact match not found
+            if query or ingredient:
+                search_text = f"{query} {ingredient}".strip()
+                if search_text:
+                    search_results = self.collection.query(
+                        query_texts=[search_text],
+                        n_results=5,
+                        include=["documents", "metadatas"]
+                    )
+                    
+                    if search_results['documents']:
+                        all_recipes = []
+                        seen_ids = set()
+                        for doc in search_results['documents'][0]:
+                            recipes = json.loads(doc)
+                            for recipe in recipes:
+                                if recipe['id'] not in seen_ids:
+                                    all_recipes.append(recipe)
+                                    seen_ids.add(recipe['id'])
+                        
+                        if all_recipes:
+                            logger.info(f"Found {len(all_recipes)} recipes through semantic search for: '{search_text}'")
+                            return all_recipes
+            
+            logger.info(f"No cached recipes found for query: '{query}', ingredient: '{ingredient}'")
+            return []
             
         except Exception as e:
             logger.error(f"Error retrieving cached recipes: {e}")
-            return None
+            return []
 
     def cache_recipes(self, recipes: List[Dict[Any, Any]], query: str = "", ingredient: str = "") -> bool:
         """Cache recipes in ChromaDB for future use"""

@@ -1,90 +1,51 @@
-from flask import Flask, request, jsonify, Blueprint
+from flask import Flask, request
 from flask_cors import CORS
-from pymongo import MongoClient
-from pymongo.errors import ConnectionFailure
-from bson.objectid import ObjectId
-import json
 import os
-import requests
-import time
-
-# Import authentication and services
+from dotenv import load_dotenv
+from services.recipe_cache_service import RecipeCacheService
+from routes.recipe_routes import register_recipe_routes
 from routes.auth_routes import auth_bp
-from services.email_service import EmailService
-from routes.favorites import favorites_bp
 from routes.preferences import preferences_bp
 from routes.meal_planner import meal_planner_bp
-from routes.shopping_list import shopping_list_bp
-from routes.recipe_routes import register_recipe_routes
-from routes.review_routes import review_bp
-from services.recipe_service import RecipeService
 
-# Import the new bulk import routes
+# Load environment variables
+load_dotenv()
 
-
-# Initialize Flask App
+# Initialize Flask app
 app = Flask(__name__)
 
-# Configure CORS to support credentials (for sessions)
-CORS(app, supports_credentials=True, origins=['http://localhost:8080', 'http://localhost:8081', 'http://localhost:8082'])
-
-# Configure session and security
-app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'your-secret-key-for-sessions-change-in-production')
-app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
-app.config['SESSION_COOKIE_SECURE'] = False  # Set to True in production with HTTPS
-
-# Initialize email service
-email_service = EmailService(app)
+# Configure CORS
+CORS(app, resources={
+    r"/*": {
+        "origins": ["http://localhost:8081", "http://localhost:8080"],
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"],
+        "expose_headers": ["Content-Type", "Authorization"],
+        "supports_credentials": True,
+        "max_age": 3600
+    }
+})
 
 # Initialize services
-recipe_service = RecipeService()
+recipe_cache = RecipeCacheService()
 
-# Initialize MongoDB connection (simplified for demo)
-mongo_client = None
-recipes_collection = None
-mongo_available = False
-in_memory_recipes = []
+# Register routes
+app = register_recipe_routes(app, recipe_cache)
+app.register_blueprint(auth_bp, url_prefix='/api/auth')
+app.register_blueprint(preferences_bp, url_prefix='/api')
+app.register_blueprint(meal_planner_bp, url_prefix='/api')
 
-# Register recipe routes
-register_recipe_routes(app, recipes_collection, mongo_available, in_memory_recipes)
+# Add CORS preflight routes for protected endpoints
+@app.route('/api/preferences', methods=['OPTIONS'])
+@app.route('/api/meal-plan/generate', methods=['OPTIONS'])
+def handle_protected_preflight():
+    response = app.make_default_options_response()
+    response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With')
+    response.headers.add('Access-Control-Allow-Origin', request.headers.get('Origin', '*'))
+    response.headers.add('Access-Control-Allow-Credentials', 'true')
+    return response
 
-# Register blueprints
-app.register_blueprint(auth_bp, url_prefix='/api/auth')  # New authentication routes
-app.register_blueprint(favorites_bp, url_prefix='/api')
-app.register_blueprint(preferences_bp, url_prefix='/api')  # Now requires authentication
-app.register_blueprint(meal_planner_bp, url_prefix='/api')  # Now requires authentication
-app.register_blueprint(shopping_list_bp, url_prefix='/api')  # Now requires authentication
-app.register_blueprint(review_bp, url_prefix='/api')  # New ChromaDB review routes
-
-# Register bulk import routes
-
-
-# Fix the untitled recipe issue in existing routes
-@app.before_request
-def improve_recipe_data_quality():
-    """Middleware to improve recipe data quality on the fly"""
-    pass  # This will be a placeholder for now
-
-# Health check endpoint
-@app.route('/api/health', methods=['GET'])
-def health_check():
-    """Health check endpoint"""
-    return jsonify({
-        "status": "healthy",
-        "message": "Recipe App Backend with ChromaDB Authentication",
-        "features": {
-            "authentication": "ChromaDB + JWT",
-            "email_verification": "Enabled",
-            "protected_routes": [
-                "/api/preferences",
-                "/api/meal-plan/generate", 
-                "/api/shopping-list/generate"
-            ]
-        }
-    }), 200
-
-# Remove temporary preferences - no longer needed
-# temp_preferences_bp is removed since we now require authentication
-
-if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5003) 
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5003))
+    app.run(host="0.0.0.0", port=port, debug=True) 

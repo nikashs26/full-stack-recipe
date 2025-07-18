@@ -8,7 +8,7 @@ const FALLBACK_RECIPES = [
   {
     id: 101,
     title: "Beef Tacos",
-    image: "https://spoonacular.com/recipeImages/beef-tacos-642539.jpg",
+    image: "https://images.unsplash.com/photo-1599974579688-8dbdd335c77f?auto=format&fit=crop&w=400&h=300",
     cuisines: ["Mexican"],
     diets: ["carnivore"],
     readyInMinutes: 30
@@ -16,7 +16,7 @@ const FALLBACK_RECIPES = [
   {
     id: 102,
     title: "Vegetable Curry",
-    image: "https://spoonacular.com/recipeImages/vegetable-curry-642129.jpg",
+    image: "https://images.unsplash.com/photo-1455619452474-d2be8b1e70cd?auto=format&fit=crop&w=400&h=300",
     cuisines: ["Indian"],
     diets: ["Vegetarian"],
     readyInMinutes: 45
@@ -24,7 +24,7 @@ const FALLBACK_RECIPES = [
   {
     id: 103,
     title: "Chicken Alfredo",
-    image: "https://www.billyparisi.com/wp-content/uploads/2025/03/chicken-alfredo-5.jpg",
+    image: "https://images.unsplash.com/photo-1645112411341-6c4fd023714a?auto=format&fit=crop&w=400&h=300",
     cuisines: ["Italian"],
     diets: ["Non-Vegetarian"],
     readyInMinutes: 25
@@ -32,7 +32,7 @@ const FALLBACK_RECIPES = [
   {
     id: 104,
     title: "Super Cheesy Burger",
-    image: "https://thescranline.com/wp-content/uploads/2023/12/CHEESEBURGERS-WEB-07.jpg",
+    image: "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=400&h=300",
     cuisines: ["American"],
     diets: ["Non-Vegetarian"],
     readyInMinutes: 40
@@ -40,7 +40,7 @@ const FALLBACK_RECIPES = [
   {
     id: 105,
     title: "Chicken 65",
-    image: "https://popmenucloud.com/cdn-cgi/image/width%3D3840%2Cheight%3D3840%2Cfit%3Dscale-down%2Cformat%3Dauto%2Cquality%3D60/zvmbjaxg/1f1b9169-865a-47f1-b9b0-092c8f7549d4.png",
+    image: "https://images.unsplash.com/photo-1610057099443-fde8c4d50f91?auto=format&fit=crop&w=400&h=300",
     cuisines: ["Indian"],
     diets: ["Non-Vegetarian"],
     readyInMinutes: 35
@@ -48,7 +48,7 @@ const FALLBACK_RECIPES = [
   {
     id: 106,
     title: "Caesar Salad",
-    image: "https://natashaskitchen.com/wp-content/uploads/2019/01/Caesar-Salad-Recipe-3.jpg",
+    image: "https://images.unsplash.com/photo-1546793665-c74683f339c1?auto=format&fit=crop&w=400&h=300",
     cuisines: ["American"],
     diets: ["Vegetarian"],
     readyInMinutes: 15
@@ -56,7 +56,7 @@ const FALLBACK_RECIPES = [
   {
     id: 107,
     title: "Spaghetti Carbonara",
-    image: "https://www.recipetineats.com/wp-content/uploads/2019/05/Spaghetti-Carbonara_9.jpg",
+    image: "https://images.unsplash.com/photo-1612874742237-6526221588e3?auto=format&fit=crop&w=400&h=300",
     cuisines: ["Italian"],
     diets: ["Non-Vegetarian"],
     readyInMinutes: 20
@@ -64,7 +64,7 @@ const FALLBACK_RECIPES = [
   {
     id: 108,
     title: "Thai Green Curry",
-    image: "https://www.recipetineats.com/wp-content/uploads/2014/12/Thai-Green-Curry_1.jpg",
+    image: "https://images.unsplash.com/photo-1455619452474-d2be8b1e70cd?auto=format&fit=crop&w=400&h=300",
     cuisines: ["Thai"],
     diets: ["Vegetarian"],
     readyInMinutes: 30
@@ -72,7 +72,7 @@ const FALLBACK_RECIPES = [
   {
     id: 109,
     title: "BBQ Pulled Pork",
-    image: "https://www.recipetineats.com/wp-content/uploads/2017/05/Slow-Cooker-Pulled-Pork_9.jpg",
+    image: "https://images.unsplash.com/photo-1529694157872-4e0c0f3b238b?auto=format&fit=crop&w=400&h=300",
     cuisines: ["American"],
     diets: ["Non-Vegetarian"],
     readyInMinutes: 480
@@ -80,7 +80,7 @@ const FALLBACK_RECIPES = [
   {
     id: 110,
     title: "Margherita Pizza",
-    image: "https://www.recipetineats.com/wp-content/uploads/2020/05/Margherita-Pizza_9.jpg",
+    image: "https://images.unsplash.com/photo-1604382355076-af4b0eb60143?auto=format&fit=crop&w=400&h=300",
     cuisines: ["Italian"],
     diets: ["Vegetarian"],
     readyInMinutes: 25
@@ -88,7 +88,7 @@ const FALLBACK_RECIPES = [
   {
     id: 111,
     title: "Chicken Tikka Masala",
-    image: "https://www.recipetineats.com/wp-content/uploads/2019/01/Chicken-Tikka-Masala_9.jpg",
+    image: "https://images.unsplash.com/photo-1588166524941-3bf61a9c41db?auto=format&fit=crop&w=400&h=300",
     cuisines: ["Indian"],
     diets: ["Non-Vegetarian"],
     readyInMinutes: 45
@@ -96,7 +96,7 @@ const FALLBACK_RECIPES = [
   {
     id: 112,
     title: "Greek Salad",
-    image: "https://www.recipetineats.com/wp-content/uploads/2016/04/Greek-Salad_7.jpg",
+    image: "https://images.unsplash.com/photo-1540420773420-3366772f4999?auto=format&fit=crop&w=400&h=300",
     cuisines: ["Mediterranean"],
     diets: ["Vegetarian"],
     readyInMinutes: 15
@@ -104,7 +104,7 @@ const FALLBACK_RECIPES = [
   {
     id: 113,
     title: "Classic Mac and Cheese",
-    image: "https://www.recipetineats.com/wp-content/uploads/2014/04/Baked-Mac-and-Cheese_1.jpg",
+    image: "https://images.unsplash.com/photo-1543339494-b4cd4f7ba686?auto=format&fit=crop&w=400&h=300",
     cuisines: ["American"],
     diets: ["Vegetarian"],
     readyInMinutes: 35
@@ -112,7 +112,7 @@ const FALLBACK_RECIPES = [
   {
     id: 114,
     title: "Buffalo Wings",
-    image: "https://www.recipetineats.com/wp-content/uploads/2019/07/Buffalo-Wings_8.jpg",
+    image: "https://images.unsplash.com/photo-1608039858788-667850f129d3?auto=format&fit=crop&w=400&h=300",
     cuisines: ["American"],
     diets: ["Non-Vegetarian"],
     readyInMinutes: 45
@@ -120,7 +120,7 @@ const FALLBACK_RECIPES = [
   {
     id: 115,
     title: "Grilled Cheese Sandwich",
-    image: "https://www.recipetineats.com/wp-content/uploads/2016/02/Grilled-Cheese_7.jpg",
+    image: "https://images.unsplash.com/photo-1528735602780-2552fd46c7af?auto=format&fit=crop&w=400&h=300",
     cuisines: ["American"],
     diets: ["Vegetarian"],
     readyInMinutes: 10
@@ -128,7 +128,7 @@ const FALLBACK_RECIPES = [
   {
     id: 116,
     title: "Pancakes",
-    image: "https://www.recipetineats.com/wp-content/uploads/2018/05/Pancakes_9.jpg",
+    image: "https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?auto=format&fit=crop&w=400&h=300",
     cuisines: ["American"],
     diets: ["Vegetarian"],
     readyInMinutes: 20
@@ -136,7 +136,7 @@ const FALLBACK_RECIPES = [
   {
     id: 117,
     title: "Meatloaf",
-    image: "https://www.recipetineats.com/wp-content/uploads/2018/03/Meatloaf_8.jpg",
+    image: "https://images.unsplash.com/photo-1544378375-12d18e9da4c7?auto=format&fit=crop&w=400&h=300",
     cuisines: ["American"],
     diets: ["Non-Vegetarian"],
     readyInMinutes: 90
@@ -144,7 +144,7 @@ const FALLBACK_RECIPES = [
   {
     id: 118,
     title: "Coleslaw",
-    image: "https://www.recipetineats.com/wp-content/uploads/2019/06/Coleslaw_8.jpg",
+    image: "https://images.unsplash.com/photo-1592417817098-8fd3d9eb14a5?auto=format&fit=crop&w=400&h=300",
     cuisines: ["American"],
     diets: ["Vegetarian"],
     readyInMinutes: 15
@@ -195,21 +195,14 @@ export const fetchRecipes = async (query: string = "", ingredient: string = "") 
                 data.results = [];
             }
 
-            // If we have valid results from API, return them
-            if (data.results.length > 0) {
-                console.log(`Found ${data.results.length} recipes from MongoDB/API`);
-                return data;
-            }
+            // Log the actual results for debugging
+            console.log("Actual API results:", data.results);
 
-            // If no results from API, use fallback data
-            console.log("No results from API, using fallback data");
-            return { 
-                results: filterFallbackRecipes(query, ingredient),
-                status: "fallback",
-                message: "Using fallback data as no API results found" 
-            };
+            // Return the API results even if empty - don't fall back to local data
+            // This ensures we're actually using the API results
+            return data;
+
         } catch (fetchError) {
-            // API fetch failed, use fallback data
             console.log("API fetch failed, using fallback data", fetchError);
             
             return { 
