@@ -10,17 +10,12 @@ interface ManualRecipeCardProps {
 }
 
 const ManualRecipeCard: React.FC<ManualRecipeCardProps> = ({ recipe }) => {
-  // Enhanced title handling - ONLY apply fallbacks for truly missing titles
+  // Enhanced title handling to ensure no untitled recipes
   const displayTitle = (() => {
     let title = recipe.title || "";
     
-    // ONLY fix truly empty or "untitled" recipes - be more specific
-    if (!title || 
-        title.trim() === "" || 
-        title.toLowerCase() === "untitled" || 
-        title.toLowerCase() === "untitled recipe" ||
-        title.toLowerCase() === "recipe") {
-      
+    // Fix untitled recipes with enhanced logic
+    if (!title || title.toLowerCase().includes("untitled") || title.trim() === "") {
       // Strategy 1: Use cuisine
       if (recipe.cuisine && recipe.cuisine.length > 0) {
         const mainCuisine = recipe.cuisine[0];

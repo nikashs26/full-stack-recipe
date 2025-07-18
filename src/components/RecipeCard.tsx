@@ -41,19 +41,14 @@ const RecipeCard: React.FC<RecipeCardProps> = ({
     ? String((recipe as SpoonacularRecipe).id || "unknown") 
     : (recipe as Recipe).id || "unknown";
   
-  // Enhanced recipe name handling - ONLY apply fallbacks for truly missing titles
+  // Enhanced recipe name handling to fix "untitled recipe" issue
   const recipeName = (() => {
     if (isExternal) {
       const spoonacularRecipe = recipe as SpoonacularRecipe;
       let title = spoonacularRecipe.title || "";
       
-      // ONLY fix truly empty or "untitled" recipes - be more specific
-      if (!title || 
-          title.trim() === "" || 
-          title.toLowerCase() === "untitled" || 
-          title.toLowerCase() === "untitled recipe" ||
-          title.toLowerCase() === "recipe") {
-        
+      // Fix untitled recipes with enhanced logic
+      if (!title || title.toLowerCase().includes("untitled") || title.trim() === "") {
         // Strategy 1: Use cuisines + dish types
         if (spoonacularRecipe.cuisines && spoonacularRecipe.cuisines.length > 0) {
           const cuisine = spoonacularRecipe.cuisines[0];
@@ -83,13 +78,8 @@ const RecipeCard: React.FC<RecipeCardProps> = ({
       const localRecipe = recipe as Recipe;
       let name = localRecipe.name || "";
       
-      // ONLY fix truly empty or "untitled" recipes - be more specific
-      if (!name || 
-          name.trim() === "" || 
-          name.toLowerCase() === "untitled" || 
-          name.toLowerCase() === "untitled recipe" ||
-          name.toLowerCase() === "recipe") {
-        
+      // Fix untitled local recipes with enhanced logic
+      if (!name || name.toLowerCase().includes("untitled") || name.trim() === "") {
         // Strategy 1: Use cuisine
         if (localRecipe.cuisine && localRecipe.cuisine !== "Other") {
           name = `Classic ${localRecipe.cuisine} Recipe`;

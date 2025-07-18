@@ -1,3 +1,4 @@
+
 import json
 import requests
 from flask import request, jsonify
@@ -6,34 +7,22 @@ from bson import ObjectId
 from datetime import datetime
 from services.recipe_cache_service import RecipeCacheService
 
-# Import the enhanced recipe database service at the top
-from services.recipe_database_service import RecipeDatabaseService
-
-# Initialize enhanced recipe database service
-try:
-    enhanced_recipe_service = RecipeDatabaseService()
-    print("✅ Enhanced Recipe Database Service initialized with AI support")
-except ImportError:
-    enhanced_recipe_service = None
-    print("⚠️ Enhanced Recipe Database Service not available - falling back to basic mode")
-
 # Initialize recipe cache service
 recipe_cache = RecipeCacheService()
 
 # Large fallback recipe collection for when MongoDB is unavailable
 FALLBACK_RECIPES = [
-    # Italian Cuisine (Enhanced)
+    # Italian Cuisine
     {
         "id": 10001,
         "title": "Classic Spaghetti Carbonara",
         "image": "https://images.unsplash.com/photo-1551892589-865f69869476?w=400",
         "cuisines": ["Italian"],
-        "diets": [],
+        "diets": ["dairy", "eggs"],
         "readyInMinutes": 25,
         "servings": 4,
         "summary": "Authentic Italian carbonara with eggs, cheese, and pancetta",
         "instructions": "Cook pasta, mix with eggs and cheese, add pancetta",
-        "tags": ["Italian"],
         "extendedIngredients": [
             {"name": "spaghetti", "amount": 400, "unit": "g"},
             {"name": "eggs", "amount": 4, "unit": "large"},
@@ -42,361 +31,655 @@ FALLBACK_RECIPES = [
         ]
     },
     {
-        "id": 10041,
-        "title": "Penne Arrabbiata",
-        "image": "https://images.unsplash.com/photo-1563379091339-03246963d719?w=400",
-        "cuisines": ["Italian"],
-        "diets": ["Vegetarian"],
-        "readyInMinutes": 20,
-        "servings": 4,
-        "summary": "Spicy tomato pasta with garlic and red pepper flakes",
-        "tags": ["Italian", "Vegetarian"],
-        "extendedIngredients": [
-            {"name": "penne pasta", "amount": 400, "unit": "g"},
-            {"name": "tomatoes", "amount": 400, "unit": "g"},
-            {"name": "garlic", "amount": 4, "unit": "cloves"},
-            {"name": "red pepper flakes", "amount": 1, "unit": "tsp"}
-        ]
-    },
-    {
-        "id": 10042,
-        "title": "Osso Buco Milanese",
+        "id": 10002,
+        "title": "Margherita Pizza",
         "image": "https://images.unsplash.com/photo-1574071318508-1cdbab80d002?w=400",
         "cuisines": ["Italian"],
-        "diets": [],
-        "readyInMinutes": 180,
-        "servings": 6,
-        "summary": "Braised veal shanks with vegetables and saffron risotto",
-        "tags": ["Italian"],
+        "diets": ["vegetarian", "dairy", "gluten"],
+        "readyInMinutes": 30,
+        "servings": 4,
+        "summary": "Traditional Neapolitan pizza with tomato, mozzarella, and basil",
         "extendedIngredients": [
-            {"name": "veal shanks", "amount": 1500, "unit": "g"},
-            {"name": "white wine", "amount": 300, "unit": "ml"},
-            {"name": "carrots", "amount": 200, "unit": "g"},
-            {"name": "celery", "amount": 150, "unit": "g"}
+            {"name": "pizza dough", "amount": 1, "unit": "ball"},
+            {"name": "tomato sauce", "amount": 200, "unit": "ml"},
+            {"name": "mozzarella", "amount": 200, "unit": "g"},
+            {"name": "fresh basil", "amount": 10, "unit": "leaves"}
         ]
     },
-
-    # Mexican Cuisine (Enhanced)
     {
-        "id": 10043,
-        "title": "Carnitas Tacos",
+        "id": 10003,
+        "title": "Chicken Risotto",
+        "image": "https://images.unsplash.com/photo-1476124369491-e7addf5db371?w=400",
+        "cuisines": ["Italian"],
+        "diets": ["gluten-free", "dairy"],
+        "readyInMinutes": 45,
+        "servings": 6,
+        "summary": "Creamy arborio rice with tender chicken and parmesan",
+        "extendedIngredients": [
+            {"name": "arborio rice", "amount": 300, "unit": "g"},
+            {"name": "chicken breast", "amount": 500, "unit": "g"},
+            {"name": "chicken stock", "amount": 1200, "unit": "ml"},
+            {"name": "parmesan cheese", "amount": 100, "unit": "g"}
+        ]
+    },
+    {
+        "id": 10004,
+        "title": "Lasagna Bolognese",
+        "image": "https://images.unsplash.com/photo-1574894709920-11b28e7367e3?w=400",
+        "cuisines": ["Italian"],
+        "diets": ["dairy", "gluten"],
+        "readyInMinutes": 90,
+        "servings": 8,
+        "summary": "Layered pasta with meat sauce, bechamel, and cheese",
+        "extendedIngredients": [
+            {"name": "lasagna sheets", "amount": 12, "unit": "pieces"},
+            {"name": "ground beef", "amount": 500, "unit": "g"},
+            {"name": "bechamel sauce", "amount": 500, "unit": "ml"},
+            {"name": "mozzarella cheese", "amount": 300, "unit": "g"}
+        ]
+    },
+    
+    # Mexican Cuisine
+    {
+        "id": 10005,
+        "title": "Beef Tacos with Guacamole",
         "image": "https://images.unsplash.com/photo-1565299624946-b28f40a0ca4b?w=400",
         "cuisines": ["Mexican"],
-        "diets": [],
-        "readyInMinutes": 240,
-        "servings": 8,
-        "summary": "Slow-cooked pork shoulder with traditional Mexican spices",
-        "tags": ["Mexican"],
-        "extendedIngredients": [
-            {"name": "pork shoulder", "amount": 2000, "unit": "g"},
-            {"name": "cumin", "amount": 2, "unit": "tsp"},
-            {"name": "oregano", "amount": 1, "unit": "tsp"},
-            {"name": "corn tortillas", "amount": 16, "unit": "pieces"}
-        ]
-    },
-    {
-        "id": 10044,
-        "title": "Mole Poblano",
-        "image": "https://images.unsplash.com/photo-1599974579688-8dbdd335c77f?w=400",
-        "cuisines": ["Mexican"],
-        "diets": [],
-        "readyInMinutes": 300,
-        "servings": 8,
-        "summary": "Complex sauce with chocolate and chilies served over chicken",
-        "tags": ["Mexican"],
-        "extendedIngredients": [
-            {"name": "chicken", "amount": 1500, "unit": "g"},
-            {"name": "dried chilies", "amount": 8, "unit": "pieces"},
-            {"name": "dark chocolate", "amount": 50, "unit": "g"},
-            {"name": "sesame seeds", "amount": 30, "unit": "g"}
-        ]
-    },
-
-    # Indian Cuisine (Enhanced)
-    {
-        "id": 10045,
-        "title": "Lamb Rogan Josh",
-        "image": "https://images.unsplash.com/photo-1565557623262-b51c2513a641?w=400",
-        "cuisines": ["Indian"],
-        "diets": [],
-        "readyInMinutes": 120,
-        "servings": 6,
-        "summary": "Aromatic Kashmiri lamb curry with yogurt and spices",
-        "tags": ["Indian"],
-        "extendedIngredients": [
-            {"name": "lamb shoulder", "amount": 1000, "unit": "g"},
-            {"name": "yogurt", "amount": 200, "unit": "ml"},
-            {"name": "kashmiri chili", "amount": 2, "unit": "tsp"},
-            {"name": "fennel powder", "amount": 1, "unit": "tsp"}
-        ]
-    },
-    {
-        "id": 10046,
-        "title": "Palak Paneer",
-        "image": "https://images.unsplash.com/photo-1563379091339-03246963d719?w=400",
-        "cuisines": ["Indian"],
-        "diets": ["Vegetarian"],
-        "readyInMinutes": 30,
-        "servings": 4,
-        "summary": "Creamy spinach curry with cottage cheese cubes",
-        "tags": ["Indian", "Vegetarian"],
-        "extendedIngredients": [
-            {"name": "spinach", "amount": 500, "unit": "g"},
-            {"name": "paneer", "amount": 300, "unit": "g"},
-            {"name": "heavy cream", "amount": 100, "unit": "ml"},
-            {"name": "garam masala", "amount": 1, "unit": "tsp"}
-        ]
-    },
-
-    # Chinese Cuisine (Enhanced)
-    {
-        "id": 10047,
-        "title": "Peking Duck",
-        "image": "https://images.unsplash.com/photo-1562059390-a761a084768e?w=400",
-        "cuisines": ["Chinese"],
-        "diets": [],
-        "readyInMinutes": 720,
-        "servings": 6,
-        "summary": "Traditional roasted duck with pancakes and hoisin sauce",
-        "tags": ["Chinese"],
-        "extendedIngredients": [
-            {"name": "whole duck", "amount": 2500, "unit": "g"},
-            {"name": "five spice", "amount": 2, "unit": "tsp"},
-            {"name": "hoisin sauce", "amount": 100, "unit": "ml"},
-            {"name": "pancakes", "amount": 12, "unit": "pieces"}
-        ]
-    },
-    {
-        "id": 10048,
-        "title": "Dan Dan Noodles",
-        "image": "https://images.unsplash.com/photo-1586190848861-99aa4a171e90?w=400",
-        "cuisines": ["Chinese"],
-        "diets": [],
+        "diets": ["gluten-free", "dairy-free"],
         "readyInMinutes": 20,
         "servings": 4,
-        "summary": "Spicy Sichuan noodles with ground pork and peanuts",
-        "tags": ["Chinese"],
+        "summary": "Spiced ground beef in corn tortillas with fresh guacamole",
         "extendedIngredients": [
-            {"name": "wheat noodles", "amount": 400, "unit": "g"},
-            {"name": "ground pork", "amount": 200, "unit": "g"},
-            {"name": "sichuan peppercorns", "amount": 1, "unit": "tsp"},
-            {"name": "peanuts", "amount": 50, "unit": "g"}
-        ]
-    },
-
-    # Thai Cuisine (Enhanced)
-    {
-        "id": 10049,
-        "title": "Massaman Curry",
-        "image": "https://images.unsplash.com/photo-1455619452474-d2be8b1e70cd?w=400",
-        "cuisines": ["Thai"],
-        "diets": [],
-        "readyInMinutes": 45,
-        "servings": 4,
-        "summary": "Rich and mild Thai curry with beef and potatoes",
-        "tags": ["Thai"],
-        "extendedIngredients": [
-            {"name": "beef chuck", "amount": 600, "unit": "g"},
-            {"name": "massaman paste", "amount": 3, "unit": "tbsp"},
-            {"name": "coconut milk", "amount": 400, "unit": "ml"},
-            {"name": "potatoes", "amount": 300, "unit": "g"}
+            {"name": "ground beef", "amount": 500, "unit": "g"},
+            {"name": "corn tortillas", "amount": 8, "unit": "pieces"},
+            {"name": "avocados", "amount": 3, "unit": "large"},
+            {"name": "lime", "amount": 2, "unit": "pieces"}
         ]
     },
     {
-        "id": 10050,
-        "title": "Som Tam (Papaya Salad)",
-        "image": "https://images.unsplash.com/photo-1569562211093-4ed0d0758f12?w=400",
-        "cuisines": ["Thai"],
-        "diets": ["Vegan"],
+        "id": 10006,
+        "title": "Chicken Enchiladas",
+        "image": "https://images.unsplash.com/photo-1599974579688-8dbdd335c77f?w=400",
+        "cuisines": ["Mexican"],
+        "diets": ["dairy", "gluten"],
+        "readyInMinutes": 35,
+        "servings": 6,
+        "summary": "Rolled tortillas filled with chicken and topped with spicy sauce",
+        "extendedIngredients": [
+            {"name": "chicken breast", "amount": 600, "unit": "g"},
+            {"name": "flour tortillas", "amount": 8, "unit": "pieces"},
+            {"name": "enchilada sauce", "amount": 400, "unit": "ml"},
+            {"name": "cheddar cheese", "amount": 200, "unit": "g"}
+        ]
+    },
+    {
+        "id": 10007,
+        "title": "Veggie Quesadillas",
+        "image": "https://images.unsplash.com/photo-1618040996337-56904b7850b9?w=400",
+        "cuisines": ["Mexican"],
+        "diets": ["vegetarian", "dairy", "gluten"],
         "readyInMinutes": 15,
         "servings": 4,
-        "summary": "Fresh and spicy green papaya salad with lime dressing",
-        "tags": ["Thai", "Vegan"],
+        "summary": "Crispy tortillas filled with cheese and roasted vegetables",
         "extendedIngredients": [
-            {"name": "green papaya", "amount": 500, "unit": "g"},
-            {"name": "thai chilies", "amount": 3, "unit": "pieces"},
-            {"name": "fish sauce", "amount": 2, "unit": "tbsp"},
-            {"name": "lime juice", "amount": 3, "unit": "tbsp"}
+            {"name": "flour tortillas", "amount": 4, "unit": "large"},
+            {"name": "bell peppers", "amount": 2, "unit": "pieces"},
+            {"name": "monterey jack cheese", "amount": 200, "unit": "g"},
+            {"name": "red onion", "amount": 1, "unit": "medium"}
         ]
     },
-
-    # Japanese Cuisine (Enhanced)
+    
+    # Indian Cuisine
     {
-        "id": 10051,
-        "title": "Ramen with Chashu",
+        "id": 10008,
+        "title": "Butter Chicken",
+        "image": "https://images.unsplash.com/photo-1565557623262-b51c2513a641?w=400",
+        "cuisines": ["Indian"],
+        "diets": ["gluten-free", "dairy"],
+        "readyInMinutes": 40,
+        "servings": 4,
+        "summary": "Creamy tomato-based curry with tender chicken pieces",
+        "extendedIngredients": [
+            {"name": "chicken thighs", "amount": 800, "unit": "g"},
+            {"name": "tomato puree", "amount": 400, "unit": "ml"},
+            {"name": "heavy cream", "amount": 200, "unit": "ml"},
+            {"name": "garam masala", "amount": 2, "unit": "tsp"}
+        ]
+    },
+    {
+        "id": 10009,
+        "title": "Vegetable Biryani",
+        "image": "https://images.unsplash.com/photo-1563379091339-03246963d719?w=400",
+        "cuisines": ["Indian"],
+        "diets": ["vegetarian", "vegan", "gluten-free", "dairy-free"],
+        "readyInMinutes": 60,
+        "servings": 6,
+        "summary": "Fragrant basmati rice with mixed vegetables and aromatic spices",
+        "extendedIngredients": [
+            {"name": "basmati rice", "amount": 400, "unit": "g"},
+            {"name": "mixed vegetables", "amount": 500, "unit": "g"},
+            {"name": "saffron", "amount": 1, "unit": "pinch"},
+            {"name": "biryani spice mix", "amount": 3, "unit": "tbsp"}
+        ]
+    },
+    {
+        "id": 10010,
+        "title": "Chicken Tikka Masala",
+        "image": "https://images.unsplash.com/photo-1585937421612-70a008356fbe?w=400",
+        "cuisines": ["Indian"],
+        "diets": ["gluten-free", "dairy"],
+        "readyInMinutes": 50,
+        "servings": 4,
+        "summary": "Marinated chicken in a rich, creamy tomato curry sauce",
+        "extendedIngredients": [
+            {"name": "chicken breast", "amount": 700, "unit": "g"},
+            {"name": "yogurt", "amount": 200, "unit": "ml"},
+            {"name": "coconut milk", "amount": 400, "unit": "ml"},
+            {"name": "tikka masala paste", "amount": 3, "unit": "tbsp"}
+        ]
+    },
+    
+    # Chinese Cuisine
+    {
+        "id": 10011,
+        "title": "Sweet and Sour Pork",
+        "image": "https://images.unsplash.com/photo-1562059390-a761a084768e?w=400",
+        "cuisines": ["Chinese"],
+        "diets": ["dairy-free"],
+        "readyInMinutes": 25,
+        "servings": 4,
+        "summary": "Crispy pork pieces in a tangy sweet and sour sauce",
+        "extendedIngredients": [
+            {"name": "pork tenderloin", "amount": 600, "unit": "g"},
+            {"name": "pineapple chunks", "amount": 200, "unit": "g"},
+            {"name": "bell peppers", "amount": 2, "unit": "pieces"},
+            {"name": "sweet and sour sauce", "amount": 250, "unit": "ml"}
+        ]
+    },
+    {
+        "id": 10012,
+        "title": "Ma Po Tofu",
+        "image": "https://images.unsplash.com/photo-1586190848861-99aa4a171e90?w=400",
+        "cuisines": ["Chinese"],
+        "diets": ["vegetarian", "gluten-free", "dairy-free"],
+        "readyInMinutes": 20,
+        "servings": 4,
+        "summary": "Silky tofu in spicy Sichuan sauce with ground pork",
+        "extendedIngredients": [
+            {"name": "soft tofu", "amount": 400, "unit": "g"},
+            {"name": "ground pork", "amount": 200, "unit": "g"},
+            {"name": "fermented black beans", "amount": 2, "unit": "tbsp"},
+            {"name": "sichuan peppercorns", "amount": 1, "unit": "tsp"}
+        ]
+    },
+    {
+        "id": 10013,
+        "title": "Kung Pao Chicken",
+        "image": "https://images.unsplash.com/photo-1583394838336-acd977736f90?w=400",
+        "cuisines": ["Chinese"],
+        "diets": ["gluten-free", "dairy-free", "nut-allergy"],
+        "readyInMinutes": 15,
+        "servings": 4,
+        "summary": "Diced chicken with peanuts and vegetables in spicy sauce",
+        "extendedIngredients": [
+            {"name": "chicken breast", "amount": 500, "unit": "g"},
+            {"name": "roasted peanuts", "amount": 100, "unit": "g"},
+            {"name": "dried chilies", "amount": 6, "unit": "pieces"},
+            {"name": "soy sauce", "amount": 3, "unit": "tbsp"}
+        ]
+    },
+    
+    # American Cuisine
+    {
+        "id": 10014,
+        "title": "Classic Burger with Fries",
+        "image": "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=400",
+        "cuisines": ["American"],
+        "diets": ["dairy", "gluten"],
+        "readyInMinutes": 25,
+        "servings": 4,
+        "summary": "Juicy beef patty with cheese, lettuce, tomato, and crispy fries",
+        "extendedIngredients": [
+            {"name": "ground beef", "amount": 600, "unit": "g"},
+            {"name": "burger buns", "amount": 4, "unit": "pieces"},
+            {"name": "cheddar cheese", "amount": 4, "unit": "slices"},
+            {"name": "potatoes", "amount": 500, "unit": "g"}
+        ]
+    },
+    {
+        "id": 10015,
+        "title": "BBQ Ribs",
+        "image": "https://images.unsplash.com/photo-1544025162-d76694265947?w=400",
+        "cuisines": ["American"],
+        "diets": ["gluten-free", "dairy-free"],
+        "readyInMinutes": 180,
+        "servings": 6,
+        "summary": "Slow-cooked pork ribs with smoky BBQ sauce",
+        "extendedIngredients": [
+            {"name": "pork ribs", "amount": 1500, "unit": "g"},
+            {"name": "bbq sauce", "amount": 300, "unit": "ml"},
+            {"name": "brown sugar", "amount": 50, "unit": "g"},
+            {"name": "smoked paprika", "amount": 2, "unit": "tsp"}
+        ]
+    },
+    {
+        "id": 10016,
+        "title": "Caesar Salad",
+        "image": "https://images.unsplash.com/photo-1546793665-c74683f339c1?w=400",
+        "cuisines": ["American"],
+        "diets": ["vegetarian", "dairy", "gluten"],
+        "readyInMinutes": 10,
+        "servings": 4,
+        "summary": "Crisp romaine lettuce with caesar dressing and croutons",
+        "extendedIngredients": [
+            {"name": "romaine lettuce", "amount": 2, "unit": "heads"},
+            {"name": "parmesan cheese", "amount": 100, "unit": "g"},
+            {"name": "croutons", "amount": 100, "unit": "g"},
+            {"name": "caesar dressing", "amount": 150, "unit": "ml"}
+        ]
+    },
+    
+    # Japanese Cuisine
+    {
+        "id": 10017,
+        "title": "Chicken Teriyaki Bowl",
         "image": "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400",
         "cuisines": ["Japanese"],
-        "diets": [],
-        "readyInMinutes": 60,
+        "diets": ["gluten-free", "dairy-free"],
+        "readyInMinutes": 20,
         "servings": 4,
-        "summary": "Rich pork bone broth with tender pork belly and noodles",
-        "tags": ["Japanese"],
+        "summary": "Grilled chicken with teriyaki glaze over steamed rice",
         "extendedIngredients": [
-            {"name": "ramen noodles", "amount": 400, "unit": "g"},
-            {"name": "pork belly", "amount": 500, "unit": "g"},
-            {"name": "miso paste", "amount": 3, "unit": "tbsp"},
-            {"name": "soft boiled eggs", "amount": 4, "unit": "pieces"}
+            {"name": "chicken thighs", "amount": 600, "unit": "g"},
+            {"name": "teriyaki sauce", "amount": 150, "unit": "ml"},
+            {"name": "jasmine rice", "amount": 300, "unit": "g"},
+            {"name": "broccoli", "amount": 200, "unit": "g"}
         ]
     },
     {
-        "id": 10052,
-        "title": "Katsu Curry",
+        "id": 10018,
+        "title": "Vegetable Sushi Rolls",
         "image": "https://images.unsplash.com/photo-1579584425555-c3ce17fd4351?w=400",
         "cuisines": ["Japanese"],
-        "diets": [],
-        "readyInMinutes": 45,
-        "servings": 4,
-        "summary": "Breaded pork cutlet with Japanese curry sauce",
-        "tags": ["Japanese"],
-        "extendedIngredients": [
-            {"name": "pork loin", "amount": 600, "unit": "g"},
-            {"name": "curry roux", "amount": 100, "unit": "g"},
-            {"name": "panko breadcrumbs", "amount": 150, "unit": "g"},
-            {"name": "Japanese rice", "amount": 300, "unit": "g"}
-        ]
-    },
-
-    # Korean Cuisine (Enhanced)
-    {
-        "id": 10053,
-        "title": "Korean BBQ Galbi",
-        "image": "https://images.unsplash.com/photo-1626082927389-6cd097cdc6ec?w=400",
-        "cuisines": ["Korean"],
-        "diets": [],
+        "diets": ["vegetarian", "vegan", "gluten-free", "dairy-free"],
         "readyInMinutes": 30,
         "servings": 4,
-        "summary": "Marinated short ribs grilled to perfection",
-        "tags": ["Korean"],
+        "summary": "Fresh cucumber, avocado, and carrot sushi rolls",
         "extendedIngredients": [
-            {"name": "beef short ribs", "amount": 1200, "unit": "g"},
-            {"name": "soy sauce", "amount": 100, "unit": "ml"},
-            {"name": "pear", "amount": 1, "unit": "large"},
-            {"name": "sesame oil", "amount": 2, "unit": "tbsp"}
+            {"name": "sushi rice", "amount": 300, "unit": "g"},
+            {"name": "nori sheets", "amount": 6, "unit": "pieces"},
+            {"name": "cucumber", "amount": 1, "unit": "large"},
+            {"name": "avocado", "amount": 2, "unit": "pieces"}
         ]
     },
     {
-        "id": 10054,
-        "title": "Kimchi Jjigae",
-        "image": "https://images.unsplash.com/photo-1553056061-7b7b07b44d8a?w=400",
-        "cuisines": ["Korean"],
-        "diets": [],
-        "readyInMinutes": 25,
+        "id": 10019,
+        "title": "Miso Soup",
+        "image": "https://images.unsplash.com/photo-1607301405390-d831c6df3f0f?w=400",
+        "cuisines": ["Japanese"],
+        "diets": ["vegetarian", "vegan", "gluten-free", "dairy-free"],
+        "readyInMinutes": 10,
         "servings": 4,
-        "summary": "Spicy kimchi stew with pork and tofu",
-        "tags": ["Korean"],
+        "summary": "Traditional Japanese soup with tofu and seaweed",
         "extendedIngredients": [
-            {"name": "aged kimchi", "amount": 300, "unit": "g"},
-            {"name": "pork belly", "amount": 200, "unit": "g"},
-            {"name": "soft tofu", "amount": 200, "unit": "g"},
-            {"name": "gochugaru", "amount": 1, "unit": "tbsp"}
+            {"name": "miso paste", "amount": 3, "unit": "tbsp"},
+            {"name": "silken tofu", "amount": 200, "unit": "g"},
+            {"name": "wakame seaweed", "amount": 15, "unit": "g"},
+            {"name": "green onions", "amount": 2, "unit": "stalks"}
         ]
     },
-
-    # Spanish Cuisine (Enhanced)
+    
+    # Thai Cuisine
     {
-        "id": 10055,
-        "title": "Seafood Paella",
-        "image": "https://images.unsplash.com/photo-1534080564583-6be75777b70a?w=400",
-        "cuisines": ["Spanish"],
-        "diets": [],
-        "readyInMinutes": 45,
-        "servings": 8,
-        "summary": "Traditional Spanish rice with seafood and saffron",
-        "tags": ["Spanish"],
-        "extendedIngredients": [
-            {"name": "bomba rice", "amount": 400, "unit": "g"},
-            {"name": "mixed seafood", "amount": 800, "unit": "g"},
-            {"name": "saffron", "amount": 1, "unit": "pinch"},
-            {"name": "fish stock", "amount": 1000, "unit": "ml"}
-        ]
-    },
-    {
-        "id": 10056,
-        "title": "Patatas Bravas",
-        "image": "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=400",
-        "cuisines": ["Spanish"],
-        "diets": ["Vegetarian"],
-        "readyInMinutes": 30,
-        "servings": 6,
-        "summary": "Crispy potatoes with spicy tomato sauce and aioli",
-        "tags": ["Spanish", "Vegetarian"],
-        "extendedIngredients": [
-            {"name": "potatoes", "amount": 800, "unit": "g"},
-            {"name": "tomato sauce", "amount": 200, "unit": "ml"},
-            {"name": "smoked paprika", "amount": 1, "unit": "tsp"},
-            {"name": "garlic aioli", "amount": 100, "unit": "ml"}
-        ]
-    },
-
-    # German Cuisine (Enhanced)
-    {
-        "id": 10057,
-        "title": "Sauerbraten",
-        "image": "https://images.unsplash.com/photo-1529692236671-f1f6cf9683ba?w=400",
-        "cuisines": ["German"],
-        "diets": [],
-        "readyInMinutes": 300,
-        "servings": 8,
-        "summary": "Traditional pot roast marinated in vinegar and spices",
-        "tags": ["German"],
-        "extendedIngredients": [
-            {"name": "beef roast", "amount": 2000, "unit": "g"},
-            {"name": "red wine vinegar", "amount": 500, "unit": "ml"},
-            {"name": "juniper berries", "amount": 8, "unit": "pieces"},
-            {"name": "gingersnap cookies", "amount": 100, "unit": "g"}
-        ]
-    },
-    {
-        "id": 10058,
-        "title": "Currywurst",
-        "image": "https://images.unsplash.com/photo-1544943910-4c1d10e74134?w=400",
-        "cuisines": ["German"],
-        "diets": [],
+        "id": 10020,
+        "title": "Pad Thai",
+        "image": "https://images.unsplash.com/photo-1559314809-0f31657def5e?w=400",
+        "cuisines": ["Thai"],
+        "diets": ["gluten-free", "dairy-free"],
         "readyInMinutes": 15,
         "servings": 4,
-        "summary": "German street food with curry ketchup and bratwurst",
-        "tags": ["German"],
+        "summary": "Stir-fried rice noodles with shrimp, tofu, and peanuts",
         "extendedIngredients": [
-            {"name": "bratwurst", "amount": 4, "unit": "pieces"},
-            {"name": "ketchup", "amount": 150, "unit": "ml"},
-            {"name": "curry powder", "amount": 2, "unit": "tsp"},
-            {"name": "french fries", "amount": 400, "unit": "g"}
+            {"name": "rice noodles", "amount": 300, "unit": "g"},
+            {"name": "shrimp", "amount": 300, "unit": "g"},
+            {"name": "firm tofu", "amount": 200, "unit": "g"},
+            {"name": "bean sprouts", "amount": 150, "unit": "g"}
         ]
     },
-
-    # Mediterranean Cuisine (Enhanced)  
     {
-        "id": 10059,
-        "title": "Lamb Souvlaki",
+        "id": 10021,
+        "title": "Green Curry with Chicken",
+        "image": "https://images.unsplash.com/photo-1455619452474-d2be8b1e70cd?w=400",
+        "cuisines": ["Thai"],
+        "diets": ["gluten-free", "dairy-free"],
+        "readyInMinutes": 25,
+        "servings": 4,
+        "summary": "Spicy green curry with chicken and vegetables",
+        "extendedIngredients": [
+            {"name": "chicken breast", "amount": 500, "unit": "g"},
+            {"name": "green curry paste", "amount": 3, "unit": "tbsp"},
+            {"name": "coconut milk", "amount": 400, "unit": "ml"},
+            {"name": "thai basil", "amount": 20, "unit": "leaves"}
+        ]
+    },
+    {
+        "id": 10022,
+        "title": "Tom Yum Soup",
+        "image": "https://images.unsplash.com/photo-1569562211093-4ed0d0758f12?w=400",
+        "cuisines": ["Thai"],
+        "diets": ["gluten-free", "dairy-free"],
+        "readyInMinutes": 20,
+        "servings": 4,
+        "summary": "Spicy and sour Thai soup with shrimp and mushrooms",
+        "extendedIngredients": [
+            {"name": "shrimp", "amount": 400, "unit": "g"},
+            {"name": "mushrooms", "amount": 200, "unit": "g"},
+            {"name": "lemongrass", "amount": 2, "unit": "stalks"},
+            {"name": "lime leaves", "amount": 4, "unit": "pieces"}
+        ]
+    },
+    
+    # Mediterranean Cuisine
+    {
+        "id": 10023,
+        "title": "Greek Moussaka",
         "image": "https://images.unsplash.com/photo-1563379091339-03246963d719?w=400",
         "cuisines": ["Mediterranean", "Greek"],
-        "diets": [],
-        "readyInMinutes": 25,
-        "servings": 4,
-        "summary": "Grilled lamb skewers with herbs and lemon",
-        "tags": ["Mediterranean", "Greek"],
+        "diets": ["dairy", "gluten"],
+        "readyInMinutes": 90,
+        "servings": 8,
+        "summary": "Layered eggplant casserole with meat sauce and bechamel",
         "extendedIngredients": [
-            {"name": "lamb leg", "amount": 600, "unit": "g"},
-            {"name": "oregano", "amount": 2, "unit": "tsp"},
-            {"name": "lemon juice", "amount": 50, "unit": "ml"},
-            {"name": "pita bread", "amount": 4, "unit": "pieces"}
+            {"name": "eggplant", "amount": 2, "unit": "large"},
+            {"name": "ground lamb", "amount": 500, "unit": "g"},
+            {"name": "bechamel sauce", "amount": 500, "unit": "ml"},
+            {"name": "feta cheese", "amount": 200, "unit": "g"}
         ]
     },
     {
-        "id": 10060,
-        "title": "Shakshuka",
+        "id": 10024,
+        "title": "Hummus with Vegetables",
         "image": "https://images.unsplash.com/photo-1571197119282-621c2694b15c?w=400",
         "cuisines": ["Mediterranean"],
-        "diets": ["Vegetarian"],
+        "diets": ["vegetarian", "vegan", "gluten-free", "dairy-free"],
+        "readyInMinutes": 10,
+        "servings": 6,
+        "summary": "Creamy chickpea dip with fresh vegetables and pita",
+        "extendedIngredients": [
+            {"name": "chickpeas", "amount": 400, "unit": "g"},
+            {"name": "tahini", "amount": 3, "unit": "tbsp"},
+            {"name": "olive oil", "amount": 4, "unit": "tbsp"},
+            {"name": "fresh vegetables", "amount": 500, "unit": "g"}
+        ]
+    },
+    {
+        "id": 10025,
+        "title": "Mediterranean Fish",
+        "image": "https://images.unsplash.com/photo-1544943910-4c1d10e74134?w=400",
+        "cuisines": ["Mediterranean"],
+        "diets": ["gluten-free", "dairy-free"],
+        "readyInMinutes": 30,
+        "servings": 4,
+        "summary": "Grilled fish with herbs, olive oil, and lemon",
+        "extendedIngredients": [
+            {"name": "white fish fillets", "amount": 600, "unit": "g"},
+            {"name": "olive oil", "amount": 4, "unit": "tbsp"},
+            {"name": "fresh herbs", "amount": 30, "unit": "g"},
+            {"name": "lemon", "amount": 2, "unit": "pieces"}
+        ]
+    },
+    
+    # French Cuisine
+    {
+        "id": 10026,
+        "title": "Beef Bourguignon",
+        "image": "https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=400",
+        "cuisines": ["French"],
+        "diets": ["dairy-free"],
+        "readyInMinutes": 150,
+        "servings": 6,
+        "summary": "Slow-braised beef in red wine with vegetables",
+        "extendedIngredients": [
+            {"name": "beef chuck", "amount": 1000, "unit": "g"},
+            {"name": "red wine", "amount": 500, "unit": "ml"},
+            {"name": "pearl onions", "amount": 300, "unit": "g"},
+            {"name": "mushrooms", "amount": 250, "unit": "g"}
+        ]
+    },
+    {
+        "id": 10027,
+        "title": "Ratatouille",
+        "image": "https://images.unsplash.com/photo-1572441402740-96ba86b57c66?w=400",
+        "cuisines": ["French"],
+        "diets": ["vegetarian", "vegan", "gluten-free", "dairy-free"],
+        "readyInMinutes": 45,
+        "servings": 6,
+        "summary": "Traditional French vegetable stew with herbs",
+        "extendedIngredients": [
+            {"name": "eggplant", "amount": 1, "unit": "large"},
+            {"name": "zucchini", "amount": 2, "unit": "medium"},
+            {"name": "bell peppers", "amount": 2, "unit": "pieces"},
+            {"name": "tomatoes", "amount": 4, "unit": "large"}
+        ]
+    },
+    {
+        "id": 10028,
+        "title": "Coq au Vin",
+        "image": "https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=400",
+        "cuisines": ["French"],
+        "diets": [],
+        "readyInMinutes": 120,
+        "servings": 4,
+        "summary": "Chicken braised in white wine with vegetables",
+        "extendedIngredients": [
+            {"name": "chicken pieces", "amount": 1200, "unit": "g"},
+            {"name": "white wine", "amount": 400, "unit": "ml"},
+            {"name": "bacon", "amount": 150, "unit": "g"},
+            {"name": "mushrooms", "amount": 200, "unit": "g"}
+        ]
+    },
+    
+    # Korean Cuisine
+    {
+        "id": 10029,
+        "title": "Bibimbap",
+        "image": "https://images.unsplash.com/photo-1553056061-7b7b07b44d8a?w=400",
+        "cuisines": ["Korean"],
+        "diets": ["vegetarian", "gluten-free", "dairy-free"],
+        "readyInMinutes": 30,
+        "servings": 4,
+        "summary": "Mixed rice bowl with vegetables, egg, and gochujang",
+        "extendedIngredients": [
+            {"name": "short grain rice", "amount": 300, "unit": "g"},
+            {"name": "mixed vegetables", "amount": 400, "unit": "g"},
+            {"name": "eggs", "amount": 4, "unit": "large"},
+            {"name": "gochujang", "amount": 3, "unit": "tbsp"}
+        ]
+    },
+    {
+        "id": 10030,
+        "title": "Korean Fried Chicken",
+        "image": "https://images.unsplash.com/photo-1626082927389-6cd097cdc6ec?w=400",
+        "cuisines": ["Korean"],
+        "diets": ["dairy-free"],
+        "readyInMinutes": 45,
+        "servings": 4,
+        "summary": "Crispy fried chicken with sweet and spicy glaze",
+        "extendedIngredients": [
+            {"name": "chicken wings", "amount": 1000, "unit": "g"},
+            {"name": "potato starch", "amount": 100, "unit": "g"},
+            {"name": "gochujang", "amount": 3, "unit": "tbsp"},
+            {"name": "rice vinegar", "amount": 2, "unit": "tbsp"}
+        ]
+    },
+    
+    # Healthy/Vegetarian Options
+    {
+        "id": 10031,
+        "title": "Quinoa Buddha Bowl",
+        "image": "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=400",
+        "cuisines": ["Healthy"],
+        "diets": ["vegetarian", "vegan", "gluten-free", "dairy-free"],
         "readyInMinutes": 25,
         "servings": 4,
-        "summary": "Eggs poached in spicy tomato sauce with peppers",
-        "tags": ["Mediterranean", "Vegetarian"],
+        "summary": "Nutritious bowl with quinoa, roasted vegetables, and tahini dressing",
         "extendedIngredients": [
-            {"name": "tomatoes", "amount": 800, "unit": "g"},
-            {"name": "eggs", "amount": 6, "unit": "large"},
-            {"name": "bell peppers", "amount": 2, "unit": "pieces"},
-            {"name": "harissa", "amount": 1, "unit": "tbsp"}
+            {"name": "quinoa", "amount": 200, "unit": "g"},
+            {"name": "sweet potato", "amount": 300, "unit": "g"},
+            {"name": "kale", "amount": 150, "unit": "g"},
+            {"name": "tahini", "amount": 3, "unit": "tbsp"}
+        ]
+    },
+    {
+        "id": 10032,
+        "title": "Lentil Curry",
+        "image": "https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=400",
+        "cuisines": ["Indian", "Healthy"],
+        "diets": ["vegetarian", "vegan", "gluten-free", "dairy-free"],
+        "readyInMinutes": 35,
+        "servings": 6,
+        "summary": "Protein-rich red lentils in aromatic curry sauce",
+        "extendedIngredients": [
+            {"name": "red lentils", "amount": 300, "unit": "g"},
+            {"name": "coconut milk", "amount": 400, "unit": "ml"},
+            {"name": "curry powder", "amount": 2, "unit": "tbsp"},
+            {"name": "spinach", "amount": 200, "unit": "g"}
+        ]
+    },
+    {
+        "id": 10033,
+        "title": "Avocado Toast",
+        "image": "https://images.unsplash.com/photo-1541519227354-08fa5d50c44d?w=400",
+        "cuisines": ["Healthy"],
+        "diets": ["vegetarian", "vegan", "dairy-free"],
+        "readyInMinutes": 5,
+        "servings": 2,
+        "summary": "Smashed avocado on whole grain toast with toppings",
+        "extendedIngredients": [
+            {"name": "whole grain bread", "amount": 4, "unit": "slices"},
+            {"name": "avocados", "amount": 2, "unit": "large"},
+            {"name": "cherry tomatoes", "amount": 150, "unit": "g"},
+            {"name": "lemon juice", "amount": 2, "unit": "tbsp"}
+        ]
+    },
+    
+    # Vegan Options
+    {
+        "id": 10034,
+        "title": "Vegan Mac and Cheese",
+        "image": "https://images.unsplash.com/photo-1547558840-2891b5aa4e3b?w=400",
+        "cuisines": ["American"],
+        "diets": ["vegetarian", "vegan", "dairy-free"],
+        "readyInMinutes": 20,
+        "servings": 4,
+        "summary": "Creamy pasta with cashew-based cheese sauce",
+        "extendedIngredients": [
+            {"name": "macaroni pasta", "amount": 300, "unit": "g"},
+            {"name": "cashews", "amount": 150, "unit": "g"},
+            {"name": "nutritional yeast", "amount": 4, "unit": "tbsp"},
+            {"name": "unsweetened almond milk", "amount": 300, "unit": "ml"}
+        ]
+    },
+    {
+        "id": 10035,
+        "title": "Chickpea Tikka Masala",
+        "image": "https://images.unsplash.com/photo-1565557623262-b51c2513a641?w=400",
+        "cuisines": ["Indian"],
+        "diets": ["vegetarian", "vegan", "gluten-free", "dairy-free"],
+        "readyInMinutes": 30,
+        "servings": 4,
+        "summary": "Creamy tomato curry with protein-rich chickpeas",
+        "extendedIngredients": [
+            {"name": "chickpeas", "amount": 400, "unit": "g"},
+            {"name": "coconut milk", "amount": 400, "unit": "ml"},
+            {"name": "tomato paste", "amount": 3, "unit": "tbsp"},
+            {"name": "garam masala", "amount": 2, "unit": "tsp"}
+        ]
+    },
+    
+    # Gluten-Free Options
+    {
+        "id": 10036,
+        "title": "Grilled Salmon with Quinoa",
+        "image": "https://images.unsplash.com/photo-1467003909585-2f8a72700288?w=400",
+        "cuisines": ["Healthy"],
+        "diets": ["gluten-free", "dairy-free"],
+        "readyInMinutes": 25,
+        "servings": 4,
+        "summary": "Herb-crusted salmon with fluffy quinoa and vegetables",
+        "extendedIngredients": [
+            {"name": "salmon fillets", "amount": 600, "unit": "g"},
+            {"name": "quinoa", "amount": 200, "unit": "g"},
+            {"name": "asparagus", "amount": 300, "unit": "g"},
+            {"name": "olive oil", "amount": 3, "unit": "tbsp"}
+        ]
+    },
+    {
+        "id": 10037,
+        "title": "Stuffed Bell Peppers",
+        "image": "https://images.unsplash.com/photo-1563379091339-03246963d719?w=400",
+        "cuisines": ["Mediterranean"],
+        "diets": ["gluten-free", "dairy"],
+        "readyInMinutes": 45,
+        "servings": 4,
+        "summary": "Bell peppers stuffed with rice, vegetables, and cheese",
+        "extendedIngredients": [
+            {"name": "bell peppers", "amount": 4, "unit": "large"},
+            {"name": "brown rice", "amount": 200, "unit": "g"},
+            {"name": "ground turkey", "amount": 300, "unit": "g"},
+            {"name": "mozzarella cheese", "amount": 150, "unit": "g"}
+        ]
+    },
+    
+    # Nut-Free Options
+    {
+        "id": 10038,
+        "title": "Turkey Meatballs",
+        "image": "https://images.unsplash.com/photo-1529692236671-f1f6cf9683ba?w=400",
+        "cuisines": ["Italian"],
+        "diets": ["gluten-free", "dairy", "nut-free"],
+        "readyInMinutes": 30,
+        "servings": 4,
+        "summary": "Lean turkey meatballs in marinara sauce",
+        "extendedIngredients": [
+            {"name": "ground turkey", "amount": 500, "unit": "g"},
+            {"name": "marinara sauce", "amount": 400, "unit": "ml"},
+            {"name": "parmesan cheese", "amount": 100, "unit": "g"},
+            {"name": "fresh basil", "amount": 20, "unit": "g"}
+        ]
+    },
+    {
+        "id": 10039,
+        "title": "Vegetable Stir Fry",
+        "image": "https://images.unsplash.com/photo-1512058454905-6b841e7ad132?w=400",
+        "cuisines": ["Asian"],
+        "diets": ["vegetarian", "vegan", "gluten-free", "dairy-free", "nut-free"],
+        "readyInMinutes": 15,
+        "servings": 4,
+        "summary": "Quick stir-fried vegetables with ginger and garlic",
+        "extendedIngredients": [
+            {"name": "mixed vegetables", "amount": 500, "unit": "g"},
+            {"name": "brown rice", "amount": 300, "unit": "g"},
+            {"name": "soy sauce", "amount": 3, "unit": "tbsp"},
+            {"name": "fresh ginger", "amount": 15, "unit": "g"}
+        ]
+    },
+    
+    # Quick & Easy Options
+    {
+        "id": 10040,
+        "title": "Caprese Salad",
+        "image": "https://images.unsplash.com/photo-1608897013039-887f21d8c804?w=400",
+        "cuisines": ["Italian"],
+        "diets": ["vegetarian", "gluten-free", "dairy", "nut-free"],
+        "readyInMinutes": 10,
+        "servings": 4,
+        "summary": "Fresh mozzarella, tomatoes, and basil with balsamic",
+        "extendedIngredients": [
+            {"name": "fresh mozzarella", "amount": 250, "unit": "g"},
+            {"name": "tomatoes", "amount": 3, "unit": "large"},
+            {"name": "fresh basil", "amount": 20, "unit": "leaves"},
+            {"name": "balsamic glaze", "amount": 3, "unit": "tbsp"}
         ]
     }
 ]
@@ -411,15 +694,6 @@ def register_recipe_routes(app, recipes_collection, mongo_available, in_memory_r
     SPOONACULAR_API_KEY = "01f12ed117584307b5cba262f43a8d49"
     SPOONACULAR_URL = "https://api.spoonacular.com/recipes/complexSearch"
     
-    # Initialize enhanced recipe database service
-    try:
-        from services.recipe_database_service import RecipeDatabaseService
-        enhanced_recipe_service = RecipeDatabaseService()
-        print("✅ Enhanced Recipe Database Service initialized with AI support")
-    except ImportError:
-        enhanced_recipe_service = None
-        print("⚠️ Enhanced Recipe Database Service not available - falling back to basic mode")
-    
     # Initialize in-memory recipes with fallback data if empty and MongoDB not available
     if not mongo_available and len(in_memory_recipes) == 0:
         in_memory_recipes.extend(FALLBACK_RECIPES)
@@ -430,21 +704,6 @@ def register_recipe_routes(app, recipes_collection, mongo_available, in_memory_r
         start_time = time.time()
         query = request.args.get("query", "").strip()
         ingredient = request.args.get("ingredient", "").strip()
-        cuisine = request.args.get("cuisine", "").strip()
-        diet = request.args.get("diet", "").strip()
-        
-        # Get user preferences if available (for personalization)
-        user_preferences = None
-        try:
-            from middleware.auth_middleware import get_current_user_id
-            from services.user_preferences_service import UserPreferencesService
-            
-            user_id = get_current_user_id()
-            if user_id:
-                user_prefs_service = UserPreferencesService()
-                user_preferences = user_prefs_service.get_preferences(user_id)
-        except:
-            pass  # No authentication or preferences available
         
         # Check ChromaDB cache first
         cached_recipes = recipe_cache.get_cached_recipes(query, ingredient)
@@ -452,114 +711,12 @@ def register_recipe_routes(app, recipes_collection, mongo_available, in_memory_r
             print(f"Returning {len(cached_recipes)} cached recipes for query: '{query}', ingredient: '{ingredient}'")
             return jsonify({"results": cached_recipes})
         
-        # Use enhanced recipe service for MASSIVE recipe variety
-        if enhanced_recipe_service:
-            try:
-                # Use the enhanced service to search across multiple APIs
-                search_limit = 50 if query or ingredient or cuisine or diet else 24
-                
-                # Combine query and ingredient for better search
-                combined_query = query
-                if ingredient and not query:
-                    combined_query = ingredient
-                elif ingredient and query:
-                    combined_query = f"{query} {ingredient}"
-                
-                results = enhanced_recipe_service.search_massive_recipe_database(
-                    query=combined_query,
-                    cuisine=cuisine,
-                    diet=diet,
-                    max_time=60,
-                    difficulty="",
-                    limit=search_limit,
-                    user_preferences=user_preferences
-                )
-                
-                if results and len(results) > 0:
-                    print(f"✨ Enhanced service returned {len(results)} high-quality recipes from multiple sources")
-                    # Cache the enhanced results
-                    recipe_cache.cache_recipes(results, query, ingredient)
-                    return jsonify({"results": results})
-                else:
-                    print("⚠️ Enhanced service returned no results, falling back to direct API calls")
-            except Exception as e:
-                print(f"⚠️ Enhanced recipe service failed: {e}, falling back to traditional methods")
-        
-        # Enhanced fallback: Try direct Spoonacular API call with better parameters
-        print("Using direct Spoonacular API fallback")
-        try:
-            # Build search parameters for Spoonacular
-            spoon_params = {
-                "apiKey": SPOONACULAR_API_KEY,
-                "number": 20,
-                "addRecipeInformation": "true",
-                "fillIngredients": "true",
-                "instructionsRequired": "true",
-                "sort": "popularity"
-            }
-            
-            # Handle different search types
-            if query and ingredient:
-                spoon_params["query"] = f"{query} {ingredient}"
-            elif query:
-                spoon_params["query"] = query
-            elif ingredient:
-                spoon_params["includeIngredients"] = ingredient
-                spoon_params["query"] = ingredient  # Also search in title/description
-            
-            if cuisine:
-                spoon_params["cuisine"] = cuisine
-            if diet:
-                spoon_params["diet"] = diet
-            
-            print(f"Direct Spoonacular API call with params: {spoon_params}")
-            response = requests.get(SPOONACULAR_URL, params=spoon_params, timeout=10)
-            
-            if response.ok:
-                data = response.json()
-                results = data.get("results", [])
-                
-                if results:
-                    print(f"✅ Direct Spoonacular returned {len(results)} recipes")
-                    
-                    # Process and improve the results
-                    for recipe in results:
-                        # Ensure proper image URLs
-                        if not recipe.get('image') or recipe.get('image') == '/placeholder.svg':
-                            recipe['image'] = f"https://img.spoonacular.com/recipes/{recipe['id']}-636x393.jpg"
-                        elif 'spoonacular.com' in recipe.get('image', '') and '556x370' in recipe.get('image', ''):
-                            # Upgrade existing Spoonacular images to higher resolution
-                            recipe['image'] = recipe['image'].replace('556x370', '636x393')
-                        
-                        # Ensure we have cuisines
-                        if not recipe.get('cuisines'):
-                            recipe['cuisines'] = ['American']
-                        elif isinstance(recipe.get('cuisines'), str):
-                            recipe['cuisines'] = [recipe['cuisines']]
-                        
-                        # Ensure we have diets
-                        if not recipe.get('diets'):
-                            recipe['diets'] = []
-                    
-                    # Cache and return results
-                    recipe_cache.cache_recipes(results, query, ingredient)
-                    print(f"Direct Spoonacular API request completed in {time.time() - start_time:.2f}s")
-                    return jsonify({"results": results})
-                else:
-                    print("Direct Spoonacular returned no results")
-            else:
-                print(f"Direct Spoonacular API error: {response.status_code} - {response.text[:200]}")
-                
-        except Exception as e:
-            print(f"Direct Spoonacular API failed: {e}")
-        
-        # Fallback to traditional methods if enhanced service fails
-        # If no search parameters, try to get popular recipes
-        if not query and not ingredient and not cuisine and not diet:
+        # If no search parameters, return some default popular recipes
+        if not query and not ingredient:
             # First try MongoDB if available
             if mongo_available:
                 try:
-                    popular_recipes = list(recipes_collection.find().limit(24))
+                    popular_recipes = list(recipes_collection.find().limit(12))
                     if popular_recipes:
                         print(f"Found {len(popular_recipes)} popular recipes from MongoDB")
                         recipe_cache.cache_recipes(popular_recipes, query, ingredient)
@@ -569,16 +726,16 @@ def register_recipe_routes(app, recipes_collection, mongo_available, in_memory_r
             
             # Fallback to in-memory recipes
             if in_memory_recipes:
-                popular_fallback = in_memory_recipes[:24]  # Return first 24 as popular
+                popular_fallback = in_memory_recipes[:12]  # Return first 12 as popular
                 print(f"Found {len(popular_fallback)} popular recipes from fallback")
                 recipe_cache.cache_recipes(popular_fallback, query, ingredient)
                 return jsonify({"results": popular_fallback})
             
-            # Last resort: try Spoonacular API for popular recipes
+            # Last resort: try Spoonacular API
             try:
                 params = {
                     "apiKey": SPOONACULAR_API_KEY,
-                    "number": 24,
+                    "number": 12,
                     "addRecipeInformation": "true",
                     "sort": "popularity"
                 }
@@ -596,7 +753,7 @@ def register_recipe_routes(app, recipes_collection, mongo_available, in_memory_r
             # If all fails, return empty results
             return jsonify({"results": []}), 200
 
-        # Search with parameters using traditional methods as fallback
+        # Search with parameters
         results = []
         
         # First check MongoDB if available
@@ -612,7 +769,7 @@ def register_recipe_routes(app, recipes_collection, mongo_available, in_memory_r
                     ]
                 
                 print(f"Searching MongoDB with query: {search_query}")
-                db_results = list(recipes_collection.find(search_query).limit(20))
+                db_results = list(recipes_collection.find(search_query).limit(10))
                 print(f"MongoDB search returned {len(db_results)} results")
                 
                 if db_results:
@@ -646,7 +803,7 @@ def register_recipe_routes(app, recipes_collection, mongo_available, in_memory_r
                     
             if results:
                 # Limit results and cache them
-                results = results[:20]
+                results = results[:10]
                 print(f"Found {len(results)} recipes in in-memory storage")
                 recipe_cache.cache_recipes(results, query, ingredient)
                 return jsonify({"results": results})
@@ -657,7 +814,7 @@ def register_recipe_routes(app, recipes_collection, mongo_available, in_memory_r
         print("No results found locally, calling Spoonacular API")
         params = {
             "apiKey": SPOONACULAR_API_KEY,
-            "number": 20,  # Limit to 20 results
+            "number": 10,  # Limit to 10 results
             "addRecipeInformation": "true",
         }
         
@@ -665,10 +822,6 @@ def register_recipe_routes(app, recipes_collection, mongo_available, in_memory_r
             params["query"] = query
         if ingredient:
             params["includeIngredients"] = ingredient
-        if cuisine:
-            params["cuisine"] = cuisine
-        if diet:
-            params["diet"] = diet
 
         try:
             # Use a short timeout to avoid hanging
@@ -712,6 +865,88 @@ def register_recipe_routes(app, recipes_collection, mongo_available, in_memory_r
                         # Keep the original diet as well
                         normalized_diets.append(diet)
                     recipe["diets"] = normalized_diets
+
+                # Enhanced title validation and fixing with better logic
+                title = recipe.get("title", "").strip()
+                if not title or title.lower() in ["untitled", "untitled recipe", "", "recipe"] or "untitled" in title.lower():
+                    # Generate a better title with multiple fallback strategies
+                    new_title = None
+                    
+                    # Strategy 1: Use cuisines + dish types for more specific titles
+                    if "cuisines" in recipe and recipe["cuisines"] and len(recipe["cuisines"]) > 0:
+                        cuisine = recipe["cuisines"][0]
+                        
+                        # Check if we have dish types to make it more specific
+                        if "dishTypes" in recipe and recipe["dishTypes"] and len(recipe["dishTypes"]) > 0:
+                            dish_type = recipe["dishTypes"][0]
+                            # Create more specific titles like "Italian Pasta" or "Mexican Main Course"
+                            if dish_type.lower() not in cuisine.lower():
+                                new_title = f"{cuisine} {dish_type.title()}"
+                            else:
+                                new_title = f"Classic {cuisine} {dish_type.title()}"
+                        else:
+                            # Use diet + cuisine if no dish types
+                            if "diets" in recipe and recipe["diets"] and len(recipe["diets"]) > 0:
+                                diet = recipe["diets"][0]
+                                # Only use diet if it's descriptive (not technical)
+                                if diet.lower() not in ["gluten free", "dairy free", "ketogenic"]:
+                                    new_title = f"{diet.title()} {cuisine} Recipe"
+                                else:
+                                    new_title = f"Authentic {cuisine} Dish"
+                            else:
+                                new_title = f"Traditional {cuisine} Recipe"
+                    
+                    # Strategy 2: Use main ingredient from extendedIngredients
+                    elif "extendedIngredients" in recipe and recipe["extendedIngredients"] and len(recipe["extendedIngredients"]) > 0:
+                        main_ingredient = recipe["extendedIngredients"][0].get("name", "").strip()
+                        if main_ingredient and len(main_ingredient) > 2:
+                            # Clean up ingredient name and capitalize
+                            clean_ingredient = main_ingredient.split(',')[0].split('(')[0].strip()
+                            words = clean_ingredient.split()
+                            if len(words) <= 3:  # Only use if it's not too long
+                                formatted_ingredient = ' '.join(word.capitalize() for word in words)
+                                
+                                # Add cooking method if available in dishTypes
+                                if "dishTypes" in recipe and recipe["dishTypes"]:
+                                    cooking_style = recipe["dishTypes"][0]
+                                    if any(method in cooking_style.lower() for method in ["grilled", "roasted", "baked", "fried", "steamed"]):
+                                        new_title = f"{cooking_style.title()} {formatted_ingredient}"
+                                    else:
+                                        new_title = f"{formatted_ingredient} {cooking_style.title()}"
+                                else:
+                                    new_title = f"Homestyle {formatted_ingredient}"
+                    
+                    # Strategy 3: Use dishTypes with descriptive prefixes
+                    elif "dishTypes" in recipe and recipe["dishTypes"] and len(recipe["dishTypes"]) > 0:
+                        dish_type = recipe["dishTypes"][0]
+                        new_title = f"Signature {dish_type.title()}"
+                    
+                    # Strategy 4: Generate appealing names based on recipe ID and available data
+                    if not new_title:
+                        recipe_id = recipe.get("id", "0")
+                        
+                        # Use diets to create appealing titles
+                        if "diets" in recipe and recipe["diets"]:
+                            diet = recipe["diets"][0]
+                            if diet.lower() == "vegetarian":
+                                new_title = f"Garden Fresh Recipe #{recipe_id}"
+                            elif diet.lower() == "vegan":
+                                new_title = f"Plant-Based Delight #{recipe_id}"
+                            elif "mediterranean" in diet.lower():
+                                new_title = f"Mediterranean Specialty #{recipe_id}"
+                            else:
+                                new_title = f"{diet.title()} Creation #{recipe_id}"
+                        else:
+                            # Generic but appealing fallbacks
+                            appealing_prefixes = [
+                                "Chef's Special", "Home Kitchen Favorite", "Comfort Food Classic",
+                                "Family Recipe", "Restaurant Style", "Gourmet Creation"
+                            ]
+                            prefix = appealing_prefixes[int(str(recipe_id)[-1]) % len(appealing_prefixes)]
+                            new_title = f"{prefix} #{recipe_id}"
+                    
+                    recipe["title"] = new_title
+                    print(f"✨ Fixed recipe title: '{title}' → '{new_title}'")
                 
                 # Ensure consistent and organized cuisine data
                 if "cuisines" not in recipe or not recipe["cuisines"]:
@@ -719,95 +954,63 @@ def register_recipe_routes(app, recipes_collection, mongo_available, in_memory_r
                     inferred_cuisine = None
                     recipe_title = recipe.get("title", "").lower()
                     
-                    # Map common cuisine indicators in titles using standard cuisines
+                    # Map common cuisine indicators in titles
                     cuisine_indicators = {
-                        "Italian": ["pasta", "pizza", "risotto", "italian", "parmesan", "mozzarella", "marinara", "pesto"],
-                        "Mexican": ["taco", "burrito", "mexican", "salsa", "guacamole", "enchilada", "quesadilla", "chipotle"],
-                        "Asian": ["stir fry", "teriyaki", "soy sauce", "ginger", "asian"],
-                        "Chinese": ["kung pao", "sweet and sour", "chow mein", "chinese", "szechuan", "wonton"],
-                        "Indian": ["curry", "tikka", "masala", "indian", "turmeric", "cumin", "tandoori", "biryani"],
-                        "Thai": ["pad thai", "thai", "coconut milk", "lemongrass", "tom yum", "green curry"],
-                        "Japanese": ["sushi", "miso", "teriyaki", "japanese", "ramen", "tempura", "katsu"],
-                        "Mediterranean": ["olive oil", "feta", "mediterranean", "greek", "hummus", "tzatziki"],
-                        "American": ["burger", "bbq", "american", "classic", "fries", "meatloaf", "pancake"],
-                        "French": ["french", "coq au vin", "bouillabaisse", "ratatouille", "quiche", "cassoulet"],
-                        "Korean": ["korean", "kimchi", "bulgogi", "bibimbap", "gochujang"],
-                        "Spanish": ["spanish", "paella", "tapas", "gazpacho", "churros"],
-                        "German": ["german", "sauerkraut", "bratwurst", "schnitzel", "pretzel"],
-                        "Vietnamese": ["vietnamese", "pho", "banh mi", "spring roll"],
-                        "Middle Eastern": ["middle eastern", "lebanese", "shawarma", "kebab", "tahini", "harissa"],
-                        "British": ["british", "english", "fish and chips", "shepherd's pie"],
-                        "Caribbean": ["caribbean", "jerk", "plantain", "coconut rice"]
+                        "italian": ["pasta", "pizza", "risotto", "italian", "parmesan", "mozzarella"],
+                        "mexican": ["taco", "burrito", "mexican", "salsa", "guacamole", "enchilada"],
+                        "asian": ["stir fry", "teriyaki", "soy sauce", "ginger", "asian"],
+                        "chinese": ["kung pao", "sweet and sour", "chow mein", "chinese"],
+                        "indian": ["curry", "tikka", "masala", "indian", "turmeric", "cumin"],
+                        "thai": ["pad thai", "thai", "coconut milk", "lemongrass"],
+                        "japanese": ["sushi", "miso", "teriyaki", "japanese"],
+                        "mediterranean": ["olive oil", "feta", "mediterranean", "greek"],
+                        "american": ["burger", "bbq", "american", "classic"],
+                        "french": ["french", "coq au vin", "bouillabaisse", "ratatouille"]
                     }
                     
                     for cuisine, indicators in cuisine_indicators.items():
                         if any(indicator in recipe_title for indicator in indicators):
-                            inferred_cuisine = cuisine
+                            inferred_cuisine = cuisine.title()
                             break
                     
-                    # Set the inferred cuisine or conservative fallback
-                    recipe["cuisines"] = [inferred_cuisine or "European"]
+                    # Set the inferred cuisine or default
+                    recipe["cuisines"] = [inferred_cuisine or "International"]
                     print(f"🌍 Set cuisine for '{recipe.get('title')}': {recipe['cuisines']}")
                 
-                # Normalize cuisine names for consistency using standard list
-                standard_cuisines = [
-                    'American', 'British', 'Chinese', 'French', 'German', 'Greek', 
-                    'Indian', 'Italian', 'Japanese', 'Korean', 'Mexican', 'Spanish', 
-                    'Thai', 'Vietnamese', 'Mediterranean', 'Middle Eastern', 'Caribbean',
-                    'African', 'European', 'Asian'
-                ]
-                
+                # Normalize cuisine names for consistency
                 normalized_cuisines = []
                 for cuisine in recipe.get("cuisines", []):
                     if cuisine:
                         # Standardize cuisine names
                         cuisine_lower = cuisine.lower().strip()
-                        cuisine_mapping = {
-                            "italian": "Italian", "italy": "Italian",
-                            "mexican": "Mexican", "mexico": "Mexican",
-                            "chinese": "Chinese", "china": "Chinese",
-                            "indian": "Indian", "india": "Indian",
-                            "thai": "Thai", "thailand": "Thai",
-                            "japanese": "Japanese", "japan": "Japanese",
-                            "american": "American", "usa": "American", "united states": "American",
-                            "french": "French", "france": "French",
-                            "mediterranean": "Mediterranean", "greek": "Greek", "greece": "Greek",
-                            "asian": "Asian",
-                            "korean": "Korean", "korea": "Korean",
-                            "spanish": "Spanish", "spain": "Spanish",
-                            "german": "German", "germany": "German",
-                            "vietnamese": "Vietnamese", "vietnam": "Vietnamese",
-                            "middle eastern": "Middle Eastern", "lebanese": "Middle Eastern", "moroccan": "Middle Eastern",
-                            "british": "British", "english": "British", "uk": "British",
-                            "caribbean": "Caribbean", "jamaican": "Caribbean",
-                            "african": "African",
-                            "european": "European"
-                        }
-                        
-                        if cuisine_lower in cuisine_mapping:
-                            normalized_cuisines.append(cuisine_mapping[cuisine_lower])
+                        if cuisine_lower in ["italian", "italy"]:
+                            normalized_cuisines.append("Italian")
+                        elif cuisine_lower in ["mexican", "mexico"]:
+                            normalized_cuisines.append("Mexican")
+                        elif cuisine_lower in ["chinese", "china"]:
+                            normalized_cuisines.append("Chinese")
+                        elif cuisine_lower in ["indian", "india"]:
+                            normalized_cuisines.append("Indian")
+                        elif cuisine_lower in ["thai", "thailand"]:
+                            normalized_cuisines.append("Thai")
+                        elif cuisine_lower in ["japanese", "japan"]:
+                            normalized_cuisines.append("Japanese")
+                        elif cuisine_lower in ["american", "usa", "united states"]:
+                            normalized_cuisines.append("American")
+                        elif cuisine_lower in ["french", "france"]:
+                            normalized_cuisines.append("French")
+                        elif cuisine_lower in ["mediterranean", "greek", "greece"]:
+                            normalized_cuisines.append("Mediterranean")
+                        elif cuisine_lower in ["asian"]:
+                            normalized_cuisines.append("Asian")
                         else:
-                            # Try to find partial matches
-                            found_match = False
-                            for key, value in cuisine_mapping.items():
-                                if key in cuisine_lower or cuisine_lower in key:
-                                    normalized_cuisines.append(value)
-                                    found_match = True
-                                    break
-                            
-                            if not found_match:
-                                # Capitalize and check if it's in our standard list
-                                cuisine_title = cuisine.title()
-                                if cuisine_title in standard_cuisines:
-                                    normalized_cuisines.append(cuisine_title)
-                                else:
-                                    # Fallback to European for unknown cuisines
-                                    normalized_cuisines.append("European")
+                            # Capitalize the first letter for other cuisines
+                            normalized_cuisines.append(cuisine.title())
                 
                 if normalized_cuisines:
-                    recipe["cuisines"] = list(set(normalized_cuisines))  # Remove duplicates
+                    recipe["cuisines"] = normalized_cuisines
                 else:
-                    recipe["cuisines"] = ["European"]
+                    recipe["cuisines"] = ["International"]
 
             # Cache the API results in ChromaDB
             recipe_cache.cache_recipes(data["results"], query, ingredient)
@@ -1136,85 +1339,3 @@ def register_recipe_routes(app, recipes_collection, mongo_available, in_memory_r
             return jsonify({"message": "Recipe deleted"})
         except Exception as e:
             return jsonify({"error": str(e)}), 500
-
-    @app.route("/load-1200-recipes", methods=["POST"])
-    def load_1200_recipes():
-        """DISABLED - Load recipes on-demand through search for better quality"""
-        return jsonify({
-            "success": True,
-            "message": "Bulk loading disabled - recipes are loaded on-demand through search for better quality",
-            "action": "disabled"
-        })
-
-    @app.route("/bulk-load-recipes", methods=["POST"])
-    def bulk_load_recipes():
-        """DISABLED - Load recipes on-demand through search for better quality"""
-        return jsonify({
-            "success": True,
-            "message": "Bulk loading disabled - recipes are loaded on-demand through search for better quality",
-            "action": "disabled"
-        })
-
-    @app.route("/recipe-stats", methods=["GET"])
-    def get_recipe_stats():
-        """Get statistics about available recipes"""
-        try:
-            stats = {
-                "mongo_available": mongo_available,
-                "in_memory_count": len(in_memory_recipes),
-                "enhanced_service_available": enhanced_recipe_service is not None
-            }
-            
-            # Get MongoDB count
-            if mongo_available:
-                try:
-                    mongo_count = recipes_collection.count_documents({})
-                    stats["mongo_count"] = mongo_count
-                except:
-                    stats["mongo_count"] = 0
-            else:
-                stats["mongo_count"] = 0
-            
-            # Get enhanced service stats
-            if enhanced_recipe_service:
-                try:
-                    enhanced_stats = enhanced_recipe_service.get_recipe_stats()
-                    stats["enhanced_service"] = enhanced_stats
-                except:
-                    stats["enhanced_service"] = {"error": "Failed to get enhanced stats"}
-            
-            stats["total_available"] = stats["mongo_count"] + stats["in_memory_count"]
-            
-            return jsonify(stats)
-            
-        except Exception as e:
-            return jsonify({"error": f"Failed to get stats: {str(e)}"}), 500
-
-    @app.route("/recipe-distribution", methods=["GET"])
-    def get_recipe_distribution():
-        """Get current distribution of recipes by cuisine"""
-        try:
-            if not mongo_available:
-                return jsonify({"error": "MongoDB not available"}), 503
-            
-            # Aggregate recipes by cuisine
-            pipeline = [
-                {"$unwind": "$cuisines"},
-                {"$group": {
-                    "_id": "$cuisines",
-                    "count": {"$sum": 1}
-                }},
-                {"$sort": {"count": -1}}
-            ]
-            
-            distribution = list(recipes_collection.aggregate(pipeline))
-            total_recipes = recipes_collection.count_documents({})
-            
-            return jsonify({
-                "total_recipes": total_recipes,
-                "distribution": distribution,
-                "target": 1200
-            })
-            
-        except Exception as e:
-            return jsonify({"error": f"Failed to get distribution: {str(e)}"}), 500

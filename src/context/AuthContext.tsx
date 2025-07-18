@@ -60,10 +60,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   };
 
+  // Load token from localStorage on app start
+  useEffect(() => {
+    const savedToken = localStorage.getItem('auth_token');
+    if (savedToken) {
+      setToken(savedToken);
+      // Verify token and load user - pass the token directly
+      verifyTokenAndLoadUser(savedToken).finally(() => setIsLoading(false));
+    } else {
+      setIsLoading(false);
+    }
+  }, []);
+
   const verifyTokenAndLoadUser = async (tokenToCheck: string): Promise<boolean> => {
     try {
-      console.log('🔐 Verifying token:', tokenToCheck ? 'token present' : 'no token');
-      
       const response = await fetch(`${API_BASE_URL}/auth/me`, {
         headers: {
           'Content-Type': 'application/json',
@@ -71,94 +81,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       });
       
-      console.log('🔐 Auth verification response status:', response.status);
-      
       if (response.ok) {
         const data = await response.json();
-        console.log('🔐 Auth verification successful:', data.user?.email);
         setUser(data.user);
         return true;
       } else {
-        // Log the specific error for debugging
-        const errorText = await response.text();
-        console.log('🔐 Auth verification failed:', response.status, errorText);
-        
-        // Token is invalid - clear it
+        // Token is invalid
         localStorage.removeItem('auth_token');
         setToken(null);
         setUser(null);
-        
-        // Only show error toast for 401 (other errors might be expected during startup)
-        if (response.status === 401) {
-          console.log('🔐 Session expired - user needs to log in again');
-        }
-        
         return false;
       }
     } catch (error) {
-      console.error('🔐 Auth check failed with error:', error);
-      
-      // On network error, don't clear token immediately - might be temporary
-      // Only clear if it's a parsing error or similar
-      if (error instanceof TypeError || error instanceof SyntaxError) {
-        localStorage.removeItem('auth_token');
-        setToken(null);
-        setUser(null);
-      }
-      
+      console.error('Auth check failed:', error);
+      localStorage.removeItem('auth_token');
+      setToken(null);
+      setUser(null);
       return false;
     }
   };
-
-  // Load token from localStorage on app start
-  useEffect(() => {
-    const loadAuthState = async () => {
-      const savedToken = localStorage.getItem('auth_token');
-      console.log('🔐 Loading auth state - token found:', !!savedToken);
-      
-      if (savedToken) {
-        setToken(savedToken);
-        
-        // Verify token and load user with retry logic
-        let attempts = 0;
-        const maxAttempts = 3;
-        let success = false;
-        
-        while (attempts < maxAttempts && !success) {
-          attempts++;
-          console.log(`🔐 Verification attempt ${attempts}/${maxAttempts}`);
-          
-          try {
-            success = await verifyTokenAndLoadUser(savedToken);
-            if (success) {
-              console.log('🔐 Token verification successful');
-              break;
-            }
-          } catch (error) {
-            console.log(`🔐 Verification attempt ${attempts} failed:`, error);
-          }
-          
-          // Wait before retry (except on last attempt)
-          if (attempts < maxAttempts) {
-            await new Promise(resolve => setTimeout(resolve, 1000));
-          }
-        }
-        
-        if (!success) {
-          console.log('🔐 All verification attempts failed - clearing token');
-          localStorage.removeItem('auth_token');
-          setToken(null);
-          setUser(null);
-        }
-      } else {
-        console.log('🔐 No saved token found');
-      }
-      
-      setIsLoading(false);
-    };
-
-    loadAuthState();
-  }, []);
 
   const signUp = useCallback(async (email: string, password: string, fullName?: string) => {
     try {
@@ -305,54 +246,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [toast]);
 
   const checkAuth = useCallback(async (): Promise<boolean> => {
-    const currentToken = token || localStorage.getItem('auth_token');
-    
-    if (!currentToken) {
+    if (!token) {
       setUser(null);
-      setToken(null);
       return false;
     }
 
-    try {
-      const isValid = await verifyTokenAndLoadUser(currentToken);
-      
-      // If verification failed but we had a token, it might be expired
-      if (!isValid && currentToken) {
-        console.log('🔐 Token validation failed - clearing auth state');
-        localStorage.removeItem('auth_token');
-        setToken(null);
-        setUser(null);
-      }
-      
-      return isValid;
-    } catch (error) {
-      console.error('🔐 Auth check failed:', error);
-      return false;
-    }
+    return verifyTokenAndLoadUser(token);
   }, [token]);
-
-  // Add automatic auth check on visibility change (when user comes back to tab)
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && user && token) {
-        checkAuth();
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [user, token, checkAuth]);
-
-  // Add periodic auth check (every 5 minutes)
-  useEffect(() => {
-    if (!user || !token) return;
-
-    const interval = setInterval(() => {
-      checkAuth();
-    }, 5 * 60 * 1000); // 5 minutes
-
-    return () => clearInterval(interval);
-  }, [user, token, checkAuth]);
 
   const value = useMemo(() => ({
     user,

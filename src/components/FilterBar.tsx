@@ -60,63 +60,30 @@ const FilterBar: React.FC<FilterBarProps> = ({
         </div>
         
         <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-3">
-          {/* Dietary Restrictions Filter */}
-          <div className="flex-grow">
-            <select 
-              className="block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-recipe-primary focus:border-recipe-primary sm:text-sm"
-              value={dietaryFilter}
-              onChange={onDietaryFilterChange}
-            >
-              <option value="">All Dietary Preferences</option>
-              <option value="vegetarian">Vegetarian</option>
-              <option value="vegan">Vegan</option>
-              <option value="gluten-free">Gluten-Free</option>
-              <option value="dairy-free">Dairy-Free</option>
-              <option value="keto">Keto</option>
-              <option value="paleo">Paleo</option>
-              <option value="low-carb">Low Carb</option>
-              <option value="whole30">Whole30</option>
-              <option value="pescetarian">Pescetarian</option>
-            </select>
-          </div>
+          <select 
+            className="block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-recipe-primary focus:border-recipe-primary sm:text-sm"
+            value={dietaryFilter}
+            onChange={onDietaryFilterChange}
+            aria-label="Filter by dietary restriction"
+          >
+            <option value="">All Diets</option>
+            <option value="vegetarian">Vegetarian</option>
+            <option value="vegan">Vegan</option>
+            <option value="gluten-free">Gluten-Free</option>
+            <option value="carnivore">Carnivore (don't blame us for your bathroom situation)</option>
+          </select>
           
-          {/* Cuisine Filter */}
-          <div className="flex-grow">
-            <select 
-              className="block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-recipe-primary focus:border-recipe-primary sm:text-sm"
-              value={cuisineFilter}
-              onChange={onCuisineFilterChange}
-            >
-              <option value="">All Cuisines</option>
-              <option value="american">American</option>
-              <option value="italian">Italian</option>
-              <option value="mexican">Mexican</option>
-              <option value="chinese">Chinese</option>
-              <option value="indian">Indian</option>
-              <option value="japanese">Japanese</option>
-              <option value="thai">Thai</option>
-              <option value="french">French</option>
-              <option value="mediterranean">Mediterranean</option>
-              <option value="korean">Korean</option>
-              <option value="spanish">Spanish</option>
-              <option value="german">German</option>
-              <option value="vietnamese">Vietnamese</option>
-              <option value="middle eastern">Middle Eastern</option>
-              <option value="british">British</option>
-              <option value="caribbean">Caribbean</option>
-              <option value="greek">Greek</option>
-              <option value="african">African</option>
-              <option value="asian">Asian</option>
-              <option value="european">European</option>
-              {cuisines.map((cuisine) => (
-                !['american', 'italian', 'mexican', 'chinese', 'indian', 'japanese', 'thai', 'french', 'mediterranean', 'korean', 'spanish', 'german', 'vietnamese', 'middle eastern', 'british', 'caribbean', 'greek', 'african', 'asian', 'european'].includes(cuisine.toLowerCase()) && (
-                  <option key={cuisine} value={cuisine.toLowerCase()}>
-                    {cuisine}
-                  </option>
-                )
-              ))}
-            </select>
-          </div>
+          <select 
+            className="block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-recipe-primary focus:border-recipe-primary sm:text-sm"
+            value={cuisineFilter}
+            onChange={onCuisineFilterChange}
+            aria-label="Filter by cuisine"
+          >
+            <option value="">All Cuisines</option>
+            {cuisines.map(cuisine => (
+              <option key={cuisine} value={cuisine}>{cuisine}</option>
+            ))}
+          </select>
           
           {(searchTerm || ingredientTerm || dietaryFilter || cuisineFilter) && (
             <button

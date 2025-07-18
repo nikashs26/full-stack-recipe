@@ -35,26 +35,14 @@ const dietaryOptions = [
 ];
 
 const cuisineOptions = [
-  { id: 'american', label: 'American', description: 'Burgers, BBQ, comfort food' },
-  { id: 'italian', label: 'Italian', description: 'Pasta, pizza, Mediterranean flavors' },
-  { id: 'mexican', label: 'Mexican', description: 'Spicy, flavorful, corn-based dishes' },
-  { id: 'chinese', label: 'Chinese', description: 'Stir-fry, rice, soy-based flavors' },
-  { id: 'indian', label: 'Indian', description: 'Curry, spices, aromatic rice dishes' },
-  { id: 'japanese', label: 'Japanese', description: 'Sushi, clean flavors, umami' },
-  { id: 'thai', label: 'Thai', description: 'Sweet, sour, spicy balance' },
-  { id: 'french', label: 'French', description: 'Classic techniques, rich sauces' },
-  { id: 'mediterranean', label: 'Mediterranean', description: 'Olive oil, fresh vegetables, herbs' },
-  { id: 'korean', label: 'Korean', description: 'Fermented flavors, spicy dishes' },
-  { id: 'spanish', label: 'Spanish', description: 'Paella, tapas, bold flavors' },
-  { id: 'german', label: 'German', description: 'Hearty, meat-based dishes' },
-  { id: 'vietnamese', label: 'Vietnamese', description: 'Fresh herbs, pho, light broths' },
-  { id: 'middle eastern', label: 'Middle Eastern', description: 'Spices, grains, aromatic dishes' },
-  { id: 'british', label: 'British', description: 'Traditional, comfort foods' },
-  { id: 'caribbean', label: 'Caribbean', description: 'Tropical, jerk spices, plantains' },
-  { id: 'greek', label: 'Greek', description: 'Feta, olives, Mediterranean style' },
-  { id: 'african', label: 'African', description: 'Diverse regional specialties' },
-  { id: 'asian', label: 'Asian', description: 'Pan-Asian fusion flavors' },
-  { id: 'european', label: 'European', description: 'Continental cooking styles' }
+  { id: 'italian', label: 'Italian', description: 'Pasta, pizza, Mediterranean' },
+  { id: 'mexican', label: 'Mexican', description: 'Spicy, flavorful, corn-based' },
+  { id: 'chinese', label: 'Chinese', description: 'Stir-fry, rice, soy-based' },
+  { id: 'indian', label: 'Indian', description: 'Curry, spices, rice dishes' },
+  { id: 'japanese', label: 'Japanese', description: 'Sushi, clean flavors' },
+  { id: 'mediterranean', label: 'Mediterranean', description: 'Olive oil, fresh vegetables' },
+  { id: 'american', label: 'American', description: 'Comfort food, grilled items' },
+  { id: 'thai', label: 'Thai', description: 'Sweet, sour, spicy balance' }
 ];
 
 const allergenOptions = [

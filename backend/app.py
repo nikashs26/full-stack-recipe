@@ -20,10 +20,7 @@ from routes.review_routes import review_bp
 from services.recipe_service import RecipeService
 
 # Import the new bulk import routes
-from routes.bulk_import_routes import create_bulk_import_routes
 
-# Import AI recipe routes
-from routes.ai_recipes import ai_recipes_bp
 
 # Initialize Flask App
 app = Flask(__name__)
@@ -60,11 +57,7 @@ app.register_blueprint(shopping_list_bp, url_prefix='/api')  # Now requires auth
 app.register_blueprint(review_bp, url_prefix='/api')  # New ChromaDB review routes
 
 # Register bulk import routes
-bulk_import_bp = create_bulk_import_routes(recipes_collection, mongo_available)
-app.register_blueprint(bulk_import_bp, url_prefix='/api')
 
-# Register AI recipe routes
-app.register_blueprint(ai_recipes_bp, url_prefix='/api')
 
 # Fix the untitled recipe issue in existing routes
 @app.before_request

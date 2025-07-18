@@ -1,196 +1,45 @@
 import React, { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import Header from '../components/Header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
-import { Loader2, ChefHat, Users, DollarSign, Clock, ShoppingCart, RefreshCw } from 'lucide-react';
-import { Link } from 'react-router-dom';
-
-interface MealPlanDay {
-  day: string;
-  date: string;
-  breakfast: {
-    name: string;
-    ingredients: string[];
-    cuisine?: string;
-    cookingTime?: string;
-    difficulty?: string;
-  };
-  lunch: {
-    name: string;
-    ingredients: string[];
-    cuisine?: string;
-    cookingTime?: string;
-    difficulty?: string;
-  };
-  dinner: {
-    name: string;
-    ingredients: string[];
-    cuisine?: string;
-    cookingTime?: string;
-    difficulty?: string;
-  };
-}
-
-interface MealPlan {
-  days: MealPlanDay[];
-  shopping_list: string[];
-  estimated_cost: string;
-  generated_at: string;
-  preferences_used?: any;
-}
-
-interface UserPreferences {
-  dietaryRestrictions: string[];
-  favoriteCuisines: string[];
-  cookingSkillLevel: string;
-  allergens: string[];
-  healthGoals: string[];
-  maxCookingTime: string;
-}
+import { ChefHat, Loader2, RefreshCw, Settings, Lock } from 'lucide-react';
 
 const MealPlannerPage: React.FC = () => {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, isLoading: authLoading, user } = useAuth();
+  const navigate = useNavigate();
   const { toast } = useToast();
-  
-  // Form states
-  const [weeklyBudget, setWeeklyBudget] = useState<string>('');
-  const [servingAmount, setServingAmount] = useState<string>('');
-  const [additionalRequirements, setAdditionalRequirements] = useState<string>('');
-  
-  // Meal plan states
-  const [mealPlan, setMealPlan] = useState<MealPlan | null>(null);
+  const [mealPlan, setMealPlan] = useState<any>(null);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [preferences, setPreferences] = useState<UserPreferences | null>(null);
-  
-  // Load user preferences
-  useEffect(() => {
-    const loadPreferences = async () => {
-      try {
-        const response = await fetch('/api/preferences', {
-          credentials: 'include'
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          if (data.success) {
-            setPreferences(data.preferences);
-          }
-        }
-      } catch (error) {
-        console.error('Error loading preferences:', error);
-      }
-    };
-    
-    if (isAuthenticated) {
-      loadPreferences();
-    }
-  }, [isAuthenticated]);
+  const [error, setError] = useState<string | null>(null);
 
-  const generateMealPlan = async () => {
-    if (!isAuthenticated) {
+  // Redirect if not authenticated
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      navigate('/signin');
       toast({
         title: "Authentication Required",
-        description: "Please sign in to generate meal plans.",
+        description: "Please sign in to access the AI Meal Planner.",
         variant: "destructive"
       });
-      return;
     }
+  }, [isAuthenticated, authLoading, navigate, toast]);
 
-    if (!preferences) {
-      toast({
-        title: "Preferences Required",
-        description: "Please set your dietary preferences first.",
-        variant: "destructive"
-      });
-      return;
-    }
+  // Show loading state while checking authentication
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+          <p className="text-gray-600">Checking authentication...</p>
+        </div>
+      </div>
+    );
+  }
 
-    if (!weeklyBudget || !servingAmount) {
-      toast({
-        title: "Missing Information",
-        description: "Please provide both weekly budget and serving amount.",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    setIsGenerating(true);
-
-    try {
-      // Enhanced preferences with budget and serving info
-      const enhancedPreferences = {
-        ...preferences,
-        weeklyBudget: parseFloat(weeklyBudget),
-        servingAmount: parseInt(servingAmount),
-        additionalRequirements: additionalRequirements.trim() || undefined,
-        planType: 'comprehensive'
-      };
-
-      const response = await fetch('/api/meal-plan/generate', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          preferences: enhancedPreferences
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to generate meal plan: ${response.status}`);
-      }
-
-      const data = await response.json();
-      
-      if (data.success || data.plan) {
-        const generatedPlan = data.plan || data;
-        setMealPlan(generatedPlan);
-        
-        // Store in localStorage for shopping list access
-        localStorage.setItem('current-meal-plan', JSON.stringify(generatedPlan));
-        localStorage.setItem('agent-shopping-list', JSON.stringify({
-          items: generatedPlan.shopping_list?.map((item: string) => ({
-            name: item,
-            category: 'Groceries',
-            completed: false
-          })) || [],
-          estimated_cost: generatedPlan.estimated_cost || `$${weeklyBudget}`,
-          generated_at: new Date().toISOString(),
-          meal_plan_id: 'current'
-        }));
-        
-        toast({
-          title: "Meal Plan Generated!",
-          description: `Your personalized weekly meal plan is ready! Estimated cost: ${generatedPlan.estimated_cost || `$${weeklyBudget}`}`,
-        });
-      } else {
-        throw new Error(data.error || 'Unknown error generating meal plan');
-      }
-    } catch (error) {
-      console.error('Error generating meal plan:', error);
-      toast({
-        title: "Generation Failed",
-        description: error instanceof Error ? error.message : "Failed to generate meal plan. Please try again.",
-        variant: "destructive"
-      });
-    } finally {
-      setIsGenerating(false);
-    }
-  };
-
-  const regenerateMealPlan = () => {
-    setMealPlan(null);
-    generateMealPlan();
-  };
-
+  // Show login prompt if not authenticated
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -200,11 +49,11 @@ const MealPlannerPage: React.FC = () => {
             <Card className="text-center">
               <CardHeader>
                 <div className="flex justify-center mb-4">
-                  <ChefHat className="h-12 w-12 text-orange-500" />
+                  <Lock className="h-12 w-12 text-orange-500" />
                 </div>
-                <CardTitle className="text-2xl">AI Meal Planner</CardTitle>
+                <CardTitle className="text-2xl">Authentication Required</CardTitle>
                 <CardDescription>
-                  Sign in to generate personalized weekly meal plans with budget optimization
+                  Sign in to access the AI Meal Planner and create personalized weekly meal plans
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -224,249 +73,222 @@ const MealPlannerPage: React.FC = () => {
     );
   }
 
+  const generateMealPlan = async () => {
+    setIsGenerating(true);
+    setError(null);
+    
+    try {
+      const token = localStorage.getItem('auth_token');
+      
+      const response = await fetch('http://localhost:5003/api/meal-plan/generate', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setMealPlan(data);
+        toast({
+          title: "Meal Plan Generated!",
+          description: "Your personalized weekly meal plan is ready.",
+        });
+      } else {
+        if (response.status === 400 && data.redirect_to) {
+          // User needs to set preferences first
+          setError(data.error);
+          toast({
+            title: "Preferences Required",
+            description: data.error,
+            variant: "destructive"
+          });
+        } else {
+          throw new Error(data.error || 'Failed to generate meal plan');
+        }
+      }
+    } catch (error: any) {
+      console.error('Error generating meal plan:', error);
+      setError(error.message || 'Failed to generate meal plan');
+      toast({
+        title: "Generation Failed",
+        description: error.message || 'Failed to generate meal plan',
+        variant: "destructive"
+      });
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const regenerateMeal = async (day: string, mealType: string) => {
+    if (!mealPlan?.plan) return;
+    
+    try {
+      // For now, just show a placeholder
+      toast({
+        title: "Coming Soon",
+        description: "Individual meal regeneration will be available soon!",
+      });
+    } catch (error) {
+      console.error('Error regenerating meal:', error);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
+      
       <div className="pt-24 md:pt-28">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">
-              🤖 AI Meal Planner
-            </h1>
-            <p className="text-gray-600">
-              Generate personalized weekly meal plans with budget optimization and shopping lists
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          {/* Header Section */}
+          <div className="text-center mb-8">
+            <div className="flex items-center justify-center gap-2 mb-4">
+              <ChefHat className="h-8 w-8 text-orange-500" />
+              <h1 className="text-3xl font-bold text-gray-900">🤖 AI Meal Planner</h1>
+            </div>
+            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+              Welcome back, {user?.full_name || user?.email}! Generate personalized weekly meal plans based on your preferences.
             </p>
           </div>
 
-          {!mealPlan ? (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <ChefHat className="h-5 w-5" />
-                  Meal Plan Preferences
-                </CardTitle>
-                <CardDescription>
-                  Tell us about your budget and household size for a personalized meal plan
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <Label htmlFor="budget" className="flex items-center gap-2">
-                      <DollarSign className="h-4 w-4" />
-                      Weekly Budget (USD)
-                    </Label>
-                    <Input
-                      id="budget"
-                      type="number"
-                      placeholder="50"
-                      value={weeklyBudget}
-                      onChange={(e) => setWeeklyBudget(e.target.value)}
-                      min="10"
-                      max="500"
-                    />
-                    <p className="text-sm text-gray-500">How much do you want to spend on groceries per week?</p>
-                  </div>
+          {/* Action Buttons */}
+          <div className="flex flex-col sm:flex-row gap-4 justify-center mb-8">
+            <Button 
+              onClick={generateMealPlan} 
+              disabled={isGenerating}
+              size="lg"
+              className="flex items-center gap-2"
+            >
+              {isGenerating ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <ChefHat className="h-4 w-4" />
+              )}
+              {isGenerating ? 'Generating...' : 'Generate New Meal Plan'}
+            </Button>
+            
+            <Link to="/preferences">
+              <Button variant="outline" size="lg" className="flex items-center gap-2">
+                <Settings className="h-4 w-4" />
+                Update Preferences
+              </Button>
+            </Link>
+          </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="serving" className="flex items-center gap-2">
-                      <Users className="h-4 w-4" />
-                      Serving Amount (People)
-                    </Label>
-                    <Select value={servingAmount} onValueChange={setServingAmount}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select serving size" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="1">1 person</SelectItem>
-                        <SelectItem value="2">2 people</SelectItem>
-                        <SelectItem value="3">3 people</SelectItem>
-                        <SelectItem value="4">4 people</SelectItem>
-                        <SelectItem value="5">5 people</SelectItem>
-                        <SelectItem value="6">6 people</SelectItem>
-                        <SelectItem value="8">8+ people</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <p className="text-sm text-gray-500">How many people will you be cooking for?</p>
-                  </div>
-                </div>
-
-                {preferences && (
-                  <div className="space-y-4">
-                    <h3 className="text-lg font-semibold">Your Current Preferences</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {preferences.dietaryRestrictions && preferences.dietaryRestrictions.length > 0 && (
-                        <div>
-                          <Label className="text-sm font-medium">Dietary Restrictions</Label>
-                          <div className="flex flex-wrap gap-2 mt-1">
-                            {preferences.dietaryRestrictions.map((diet, index) => (
-                              <Badge key={index} variant="secondary">{diet}</Badge>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      
-                      {preferences.favoriteCuisines && preferences.favoriteCuisines.length > 0 && (
-                        <div>
-                          <Label className="text-sm font-medium">Favorite Cuisines</Label>
-                          <div className="flex flex-wrap gap-2 mt-1">
-                            {preferences.favoriteCuisines.map((cuisine, index) => (
-                              <Badge key={index} variant="outline">{cuisine}</Badge>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      
-                      <div>
-                        <Label className="text-sm font-medium">Cooking Skill</Label>
-                        <p className="text-sm text-gray-600 mt-1 capitalize">{preferences.cookingSkillLevel}</p>
-                      </div>
-                      
-                      <div>
-                        <Label className="text-sm font-medium">Max Cooking Time</Label>
-                        <p className="text-sm text-gray-600 mt-1">{preferences.maxCookingTime}</p>
-                      </div>
-                    </div>
-                    
+          {/* Error State */}
+          {error && (
+            <Card className="mb-8 border-red-200 bg-red-50">
+              <CardContent className="p-6">
+                <div className="text-center">
+                  <p className="text-red-600 mb-4">{error}</p>
+                  {error.includes('preferences') && (
                     <Link to="/preferences">
-                      <Button variant="outline" size="sm">Update Preferences</Button>
+                      <Button variant="outline">Set Your Preferences</Button>
                     </Link>
-                  </div>
-                )}
-
-                <div className="space-y-2">
-                  <Label htmlFor="additional">Additional Requirements (Optional)</Label>
-                  <Textarea
-                    id="additional"
-                    placeholder="e.g., low sodium, high protein, meal prep friendly, specific ingredients to avoid..."
-                    value={additionalRequirements}
-                    onChange={(e) => setAdditionalRequirements(e.target.value)}
-                    rows={3}
-                  />
-                </div>
-
-                <Button 
-                  onClick={generateMealPlan} 
-                  disabled={isGenerating || !weeklyBudget || !servingAmount}
-                  size="lg"
-                  className="w-full"
-                >
-                  {isGenerating ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Generating Your Meal Plan...
-                    </>
-                  ) : (
-                    <>
-                      <ChefHat className="mr-2 h-4 w-4" />
-                      Generate AI Meal Plan
-                    </>
                   )}
-                </Button>
+                </div>
               </CardContent>
             </Card>
-          ) : (
+          )}
+
+          {/* Meal Plan Display */}
+          {mealPlan && mealPlan.days && (
             <div className="space-y-6">
-              {/* Meal Plan Header */}
-              <Card>
-                <CardHeader>
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <CardTitle className="text-2xl">Your Weekly Meal Plan</CardTitle>
-                      <CardDescription>
-                        Generated for {servingAmount} people with a ${weeklyBudget} budget
-                      </CardDescription>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button onClick={regenerateMealPlan} variant="outline" size="sm">
-                        <RefreshCw className="h-4 w-4 mr-2" />
-                        Regenerate
-                      </Button>
-                      <Link to="/shopping-list">
-                        <Button size="sm">
-                          <ShoppingCart className="h-4 w-4 mr-2" />
-                          Shopping List
-                        </Button>
-                      </Link>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="flex items-center gap-2">
-                      <DollarSign className="h-5 w-5 text-green-600" />
-                      <span className="font-medium">Estimated Cost: {mealPlan.estimated_cost}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Users className="h-5 w-5 text-blue-600" />
-                      <span className="font-medium">Serves: {servingAmount} people</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <ShoppingCart className="h-5 w-5 text-orange-600" />
-                      <span className="font-medium">{mealPlan.shopping_list?.length || 0} ingredients</span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+              <div className="text-center">
+                <h2 className="text-2xl font-bold text-gray-900 mb-2">Your Weekly Meal Plan</h2>
+                <p className="text-gray-600">Generated using {mealPlan.plan_type === 'llm_generated' ? 'AI' : 'Rule-based system'}</p>
+              </div>
 
-              {/* Weekly Meal Plan */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-                {mealPlan.days?.map((day, index) => (
-                  <Card key={day.day} className="h-fit">
+              <div className="grid gap-6">
+                {mealPlan.days.map((dayPlan: any, index: number) => (
+                  <Card key={dayPlan.day || index}>
                     <CardHeader>
-                      <CardTitle className="text-lg">{day.day}</CardTitle>
-                      {day.date && <CardDescription>{day.date}</CardDescription>}
+                      <CardTitle className="capitalize text-xl">{dayPlan.day}</CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-4">
-                      {/* Breakfast */}
-                      <div className="border-l-4 border-yellow-400 pl-3">
-                        <h4 className="font-semibold text-yellow-700">Breakfast</h4>
-                        <p className="font-medium">{day.breakfast.name}</p>
-                        {day.breakfast.cuisine && (
-                          <Badge variant="outline" className="text-xs mt-1">{day.breakfast.cuisine}</Badge>
-                        )}
-                        {day.breakfast.cookingTime && (
-                          <p className="text-xs text-gray-500 flex items-center gap-1 mt-1">
-                            <Clock className="h-3 w-3" />
-                            {day.breakfast.cookingTime}
-                          </p>
-                        )}
-                      </div>
+                    <CardContent>
+                      <div className="grid md:grid-cols-3 gap-4">
+                        {Object.entries(dayPlan.meals || {}).map(([mealType, meal]: [string, any]) => (
+                          <div key={mealType} className="border rounded-lg p-4">
+                            <div className="flex justify-between items-start mb-2">
+                              <h4 className="font-semibold capitalize text-lg">{mealType}</h4>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => regenerateMeal(dayPlan.day, mealType)}
+                                className="p-1 h-8 w-8"
+                              >
+                                <RefreshCw className="h-4 w-4" />
+                              </Button>
+                            </div>
+                            
+                            <h5 className="font-medium text-gray-900 mb-1">{meal.name}</h5>
+                            <p className="text-sm text-gray-600 mb-2">{meal.description}</p>
+                            
+                            <div className="text-xs space-y-1">
+                              <p><span className="font-medium">Cuisine:</span> {meal.cuisine}</p>
+                              <p><span className="font-medium">Time:</span> {meal.cookingTime || meal.cook_time || meal.prep_time}</p>
+                              <p><span className="font-medium">Difficulty:</span> {meal.difficulty}</p>
+                            </div>
 
-                      {/* Lunch */}
-                      <div className="border-l-4 border-blue-400 pl-3">
-                        <h4 className="font-semibold text-blue-700">Lunch</h4>
-                        <p className="font-medium">{day.lunch.name}</p>
-                        {day.lunch.cuisine && (
-                          <Badge variant="outline" className="text-xs mt-1">{day.lunch.cuisine}</Badge>
-                        )}
-                        {day.lunch.cookingTime && (
-                          <p className="text-xs text-gray-500 flex items-center gap-1 mt-1">
-                            <Clock className="h-3 w-3" />
-                            {day.lunch.cookingTime}
-                          </p>
-                        )}
-                      </div>
-
-                      {/* Dinner */}
-                      <div className="border-l-4 border-green-400 pl-3">
-                        <h4 className="font-semibold text-green-700">Dinner</h4>
-                        <p className="font-medium">{day.dinner.name}</p>
-                        {day.dinner.cuisine && (
-                          <Badge variant="outline" className="text-xs mt-1">{day.dinner.cuisine}</Badge>
-                        )}
-                        {day.dinner.cookingTime && (
-                          <p className="text-xs text-gray-500 flex items-center gap-1 mt-1">
-                            <Clock className="h-3 w-3" />
-                            {day.dinner.cookingTime}
-                          </p>
-                        )}
+                            {meal.ingredients && (
+                              <div className="mt-3">
+                                <p className="text-xs font-medium mb-1">Ingredients:</p>
+                                <ul className="text-xs text-gray-600 space-y-0.5">
+                                  {meal.ingredients.slice(0, 3).map((ingredient: string, idx: number) => (
+                                    <li key={idx}>• {ingredient}</li>
+                                  ))}
+                                  {meal.ingredients.length > 3 && (
+                                    <li>• ... and {meal.ingredients.length - 3} more</li>
+                                  )}
+                                </ul>
+                              </div>
+                            )}
+                          </div>
+                        ))}
                       </div>
                     </CardContent>
                   </Card>
                 ))}
               </div>
+
+              {/* Action Buttons for Generated Plan */}
+              <div className="flex flex-col sm:flex-row gap-4 justify-center pt-8">
+                <Button 
+                  onClick={generateMealPlan} 
+                  disabled={isGenerating}
+                  variant="outline"
+                  className="flex items-center gap-2"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  Generate Another Plan
+                </Button>
+                
+                <Link to="/shopping-list">
+                  <Button className="flex items-center gap-2">
+                    🛒 Generate Shopping List
+                  </Button>
+                </Link>
+              </div>
             </div>
+          )}
+
+          {/* Initial State */}
+          {!mealPlan && !error && !isGenerating && (
+            <Card>
+              <CardContent className="p-12 text-center">
+                <ChefHat className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">Ready to Plan Your Week?</h3>
+                <p className="text-gray-600 mb-6">
+                  Click "Generate New Meal Plan" to create a personalized weekly meal plan based on your preferences.
+                </p>
+                <Button onClick={generateMealPlan} size="lg">
+                  <ChefHat className="mr-2 h-4 w-4" />
+                  Get Started
+                </Button>
+              </CardContent>
+            </Card>
           )}
         </div>
       </div>

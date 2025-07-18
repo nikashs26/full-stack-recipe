@@ -16,7 +16,70 @@ class JSONEncoder(json.JSONEncoder):
             return str(o)
         return json.JSONEncoder.default(self, o)
 
-def register_recipe_routes(app, recipes_collection, mongo_available, in_memory_recipes):
+def register_recipe_routes(app, recipe_cache):
+    from services.user_preferences_service import UserPreferencesService
+    user_preferences_service = UserPreferencesService()
+
+    @app.route('/recommend_recipes', methods=['GET'])
+    def recommend_recipes():
+        # Accept user_id (email) or temp_user_id as query param
+        user_id = request.args.get('user_id')
+        temp_user_id = request.args.get('temp_user_id')
+        preferences = None
+        if user_id:
+            preferences = user_preferences_service.get_preferences(user_id)
+        elif temp_user_id:
+            preferences = user_preferences_service.get_preferences(temp_user_id)
+        if not preferences:
+            return jsonify({'results': [], 'message': 'No preferences found for user'}), 200
+
+        # Load all recipes
+        all_results = recipe_cache.collection.get()
+        recipes = []
+        if all_results and all_results["documents"]:
+            for doc in all_results["documents"]:
+                try:
+                    rec = json.loads(doc)
+                    if isinstance(rec, list):
+                        recipes.extend(rec)
+                    else:
+                        recipes.append(rec)
+                except Exception:
+                    pass
+
+        # Scoring: prioritize favoriteFoods, then cuisines, then dietaryRestrictions, then allergens (penalty)
+        fav_foods = [f.lower() for f in preferences.get('favoriteFoods', []) if f]
+        fav_cuisines = [c.lower() for c in preferences.get('favoriteCuisines', [])]
+        dietary = [d.lower() for d in preferences.get('dietaryRestrictions', [])]
+        allergens = [a.lower() for a in preferences.get('allergens', [])]
+
+        def score(recipe):
+            score = 0
+            title = recipe.get('title', '').lower()
+            ingredients = ' '.join(recipe.get('ingredients', [])).lower() if recipe.get('ingredients') else ''
+            cuisine = ' '.join(recipe.get('cuisines', [])).lower() if recipe.get('cuisines') else ''
+            diets = ' '.join(recipe.get('diets', [])).lower() if recipe.get('diets') else ''
+            # Favorite foods: +10 for each match in title or ingredients
+            for food in fav_foods:
+                if food and (food in title or food in ingredients):
+                    score += 10
+            # Cuisine: +3 for each match
+            for c in fav_cuisines:
+                if c and c in cuisine:
+                    score += 3
+            # Dietary: +2 for each match
+            for d in dietary:
+                if d and d in diets:
+                    score += 2
+            # Allergen penalty: -10 for each match in ingredients
+            for a in allergens:
+                if a and a in ingredients:
+                    score -= 10
+            return score
+        
+        ranked = sorted(recipes, key=score, reverse=True)
+        return jsonify({'results': ranked[:20]})
+
     SPOONACULAR_API_KEY = "01f12ed117584307b5cba262f43a8d49"
     SPOONACULAR_URL = "https://api.spoonacular.com/recipes/complexSearch"
     
@@ -31,6 +94,28 @@ def register_recipe_routes(app, recipes_collection, mongo_available, in_memory_r
         if cached_recipes:
             print(f"Returning {len(cached_recipes)} cached recipes for query: '{query}', ingredient: '{ingredient}'")
             return jsonify({"results": cached_recipes})
+        
+        # If no search parameters and no cache, return ALL recipes from Chroma
+        if not query and not ingredient:
+            try:
+                all_results = recipe_cache.collection.get()
+                recipes = []
+                if all_results and all_results["documents"]:
+                    for doc in all_results["documents"]:
+                        try:
+                            # Each doc may be a list or a single recipe
+                            rec = json.loads(doc)
+                            if isinstance(rec, list):
+                                recipes.extend(rec)
+                            else:
+                                recipes.append(rec)
+                        except Exception:
+                            pass
+                print(f"Returning {len(recipes)} total recipes from Chroma (no search params)")
+                return jsonify({"results": recipes})
+            except Exception as e:
+                print(f"Error fetching all recipes: {e}")
+                return jsonify({"results": [], "error": str(e)})
         
         # If no search parameters, return some default popular recipes
         if not query and not ingredient:
@@ -56,50 +141,10 @@ def register_recipe_routes(app, recipes_collection, mongo_available, in_memory_r
             # If API fails, return empty results
             return jsonify({"results": []}), 200
 
-        # First check if we have recipes in MongoDB that match the query
-        db_results = []
-        if mongo_available:
-            try:
-                search_query = {}
-                if query:
-                    search_query["title"] = {"$regex": query, "$options": "i"}
-                if ingredient:
-                    search_query["$or"] = [
-                        {"extendedIngredients.name": {"$regex": ingredient, "$options": "i"}},
-                        {"ingredients": {"$regex": ingredient, "$options": "i"}}
-                    ]
-                
-                print(f"Searching MongoDB with query: {search_query}")
-                db_results = list(recipes_collection.find(search_query).limit(10))
-                print(f"MongoDB search returned {len(db_results)} results")
-                
-                if db_results:
-                    print(f"Found {len(db_results)} recipes in database in {time.time() - start_time:.2f}s")
-                    # Cache the MongoDB results
-                    recipe_cache.cache_recipes(db_results, query, ingredient)
-                    return JSONEncoder().encode({"results": db_results})
-                else:
-                    print("No results found in MongoDB, falling back to Spoonacular API")
-            except Exception as e:
-                print(f"Error querying MongoDB: {e}")
-                # Continue to in-memory or API if MongoDB query fails
-        else:
-            print("MongoDB not available, checking in-memory storage")
-        
-        # If MongoDB is not available or no results, check in-memory storage
-        if not mongo_available:
-            results = []
-            for recipe in in_memory_recipes:
-                if (query and query.lower() in recipe.get("title", "").lower()) or \
-                (ingredient and ingredient.lower() in json.dumps(recipe).lower()):
-                    results.append(recipe)
-            if results:
-                print(f"Found {len(results)} recipes in in-memory storage")
-                # Cache the in-memory results
-                recipe_cache.cache_recipes(results, query, ingredient)
-                return jsonify({"results": results})
+        # Only use Chroma for storage/search
+        # If not found in cache, fall back to Spoonacular API (already handled above)
 
-        # If no results in DB or in-memory, call the Spoonacular API
+        # If not found in Chroma, call the Spoonacular API
         print("No results found locally, calling Spoonacular API")
         params = {
             "apiKey": SPOONACULAR_API_KEY,
@@ -151,39 +196,7 @@ def register_recipe_routes(app, recipes_collection, mongo_available, in_memory_r
 
             # Cache the API results in ChromaDB
             recipe_cache.cache_recipes(data["results"], query, ingredient)
-
-            # Store results in MongoDB for future queries
-            api_store_count = 0
-            try:
-                if mongo_available:
-                    for recipe in data["results"]:
-                        # Ensure recipe has all necessary fields
-                        if "title" not in recipe:
-                            recipe["title"] = "Untitled Recipe"
-                        if "cuisines" not in recipe or not recipe["cuisines"]:
-                            recipe["cuisines"] = ["Misc"]
-                            
-                        # Check if recipe already exists in the database
-                        try:
-                            # Try with recipe ID as integer
-                            existing = recipes_collection.find_one({"id": recipe["id"]})
-                        except:
-                            # If not an integer, try as string
-                            existing = recipes_collection.find_one({"id": str(recipe["id"])})
-                            
-                        if not existing:
-                            # Insert to MongoDB and ensure proper indexing
-                            recipes_collection.insert_one(recipe)
-                            api_store_count += 1
-                    print(f"Stored {api_store_count} new recipes in MongoDB Atlas")
-                else:
-                    # Store in in-memory cache if MongoDB not available
-                    for recipe in data["results"]:
-                        if not any(r.get("id") == recipe["id"] for r in in_memory_recipes):
-                            in_memory_recipes.append(recipe)
-                    print(f"Stored {len(data['results'])} recipes in in-memory storage")
-            except Exception as e:
-                print(f"Error storing recipes: {e}")
+            # All MongoDB and in-memory cache logic removed; ChromaDB is now the sole storage for recipes.
 
             print(f"API request completed in {time.time() - start_time:.2f}s")
             return jsonify(data)  # Send results to frontend
@@ -321,16 +334,20 @@ def register_recipe_routes(app, recipes_collection, mongo_available, in_memory_r
     # Endpoints for direct MongoDB CRUD operations
     @app.route("/recipes", methods=["GET"])
     def get_all_recipes():
-        if not mongo_available:
-            # Return fallback data when MongoDB is not available
-            return jsonify({"results": in_memory_recipes}), 200
-        
         try:
-            recipes = list(recipes_collection.find())
-            return JSONEncoder().encode({"results": recipes})
+            # Get all recipes from Chroma
+            all_results = recipe_cache.collection.get()
+            recipes = []
+            if all_results and all_results["documents"]:
+                for doc in all_results["documents"]:
+                    try:
+                        recipes.append(json.loads(doc))
+                    except Exception:
+                        pass
+            return jsonify({"results": recipes}), 200
         except Exception as e:
-            # If MongoDB query fails, return fallback data
-            return jsonify({"results": in_memory_recipes}), 200
+            return jsonify({"results": [], "error": str(e)}), 200
+
 
     @app.route("/recipes/<recipe_id>", methods=["GET"])
     def get_recipe_from_db(recipe_id):
@@ -358,88 +375,39 @@ def register_recipe_routes(app, recipes_collection, mongo_available, in_memory_r
 
     @app.route("/recipes", methods=["POST"])
     def add_recipe_to_db():
-        if not mongo_available:
-            return jsonify({"error": "MongoDB not available"}), 503
-        
         try:
             recipe = request.json
             if not recipe:
                 return jsonify({"error": "Recipe data is required"}), 400
-            
-            # Ensure recipe has all necessary fields
             if "title" not in recipe:
                 recipe["title"] = "Untitled Recipe"
-                
-            # If no ID is provided, generate one
             if "id" not in recipe:
-                recipe["id"] = str(ObjectId())
-                
-            # Check if recipe already exists
-            existing = None
-            if "id" in recipe:
-                try:
-                    existing = recipes_collection.find_one({"id": recipe["id"]})
-                except:
-                    # Try as integer if string fails
-                    try:
-                        existing = recipes_collection.find_one({"id": int(recipe["id"])})
-                    except ValueError:
-                        pass
-            
-            if existing:
-                recipes_collection.update_one({"id": recipe["id"]}, {"$set": recipe})
-                return jsonify({"message": "Recipe updated", "id": recipe["id"]})
-            else:
-                result = recipes_collection.insert_one(recipe)
-                return jsonify({"message": "Recipe added", "id": recipe["id"] if "id" in recipe else str(result.inserted_id)})
+                recipe["id"] = str(int(time.time() * 1000))  # simple unique ID
+            # Store in Chroma
+            recipe_cache.cache_recipes([recipe], query=recipe.get("title", ""), ingredient="")
+            return jsonify({"message": "Recipe added", "id": recipe["id"]})
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
     @app.route("/recipes/<recipe_id>", methods=["PUT"])
     def update_recipe_in_db(recipe_id):
-        if not mongo_available:
-            return jsonify({"error": "MongoDB not available"}), 503
-        
         try:
             recipe = request.json
             if not recipe:
                 return jsonify({"error": "Recipe data is required"}), 400
-            
-            # Try to update by ObjectId first
-            try:
-                result = recipes_collection.update_one({"_id": ObjectId(recipe_id)}, {"$set": recipe})
-            except:
-                # Then try by regular id
-                result = recipes_collection.update_one({"id": recipe_id}, {"$set": recipe})
-                
-            if result.matched_count == 0:
-                return jsonify({"error": "Recipe not found"}), 404
-            
+            # For Chroma, simply cache the updated recipe (replace by ID)
+            recipe["id"] = recipe_id
+            recipe_cache.cache_recipes([recipe], query=recipe.get("title", ""), ingredient="")
             return jsonify({"message": "Recipe updated"})
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
     @app.route("/recipes/<recipe_id>", methods=["DELETE"])
     def delete_recipe_from_db(recipe_id):
-        if not mongo_available:
-            return jsonify({"error": "MongoDB not available"}), 503
-        
         try:
-            # Try to delete by ObjectId first
-            try:
-                result = recipes_collection.delete_one({"_id": ObjectId(recipe_id)})
-            except:
-                # Then try by regular id
-                result = recipes_collection.delete_one({"id": recipe_id})
-                if result.deleted_count == 0:
-                    try:
-                        result = recipes_collection.delete_one({"id": int(recipe_id)})
-                    except ValueError:
-                        pass
-                    
-            if result.deleted_count == 0:
-                return jsonify({"error": "Recipe not found"}), 404
-            
+            # Chroma: delete by cache key (ID)
+            # This assumes you use recipe ID as a cache key, or you can extend RecipeCacheService
+            recipe_cache.collection.delete(ids=[recipe_id])
             return jsonify({"message": "Recipe deleted"})
         except Exception as e:
             return jsonify({"error": str(e)}), 500

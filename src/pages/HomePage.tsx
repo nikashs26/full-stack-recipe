@@ -1,12 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Search, ChefHat, ThumbsUp, Award, TrendingUp, Clock, Sparkles } from 'lucide-react';
+import { Search, ChefHat, ThumbsUp, Award, TrendingUp, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Header from '../components/Header';
 import RecipeCard from '../components/RecipeCard';
 import ManualRecipeCard from '../components/ManualRecipeCard';
-import AIRecipeGenerator from '../components/AIRecipeGenerator';
 import { Recipe } from '../types/recipe';
 import { SpoonacularRecipe } from '../types/spoonacular';
 import { loadRecipes } from '../utils/storage';
@@ -145,35 +144,41 @@ const HomePage: React.FC = () => {
       
       console.log('🎯 Applying user preferences:', { favoriteCuisines, dietaryRestrictions });
       
-      // Apply STRICT preference-based filtering
-      const recommendedRecipes = allCombined.filter(recipe => {
-        // Get recipe cuisines and title for matching
+      // Filter based on user preferences (STRICT matching, organized by preference strength)
+      recommendedRecipes = allCombined.filter(recipe => {
+        console.log(`🔍 Checking recipe "${recipe.title || recipe.name}":`, {
+          cuisines: recipe.cuisines,
+          diets: recipe.diets,
+          type: recipe.type
+        });
+        
+        // STRICT cuisine preferences matching
+        let matchesCuisine = false;
         const recipeCuisines = recipe.cuisines || [];
         const recipeTitle = (recipe.title || recipe.name || '').toLowerCase();
         
-        // STRICT cuisine matching - must match exactly
-        let matchesCuisine = favoriteCuisines.length === 0; // If no preferences, allow all
-        if (favoriteCuisines.length > 0) {
-          matchesCuisine = favoriteCuisines.some(prefCuisine => {
-            const prefLower = prefCuisine.toLowerCase();
-            
-            // Direct cuisine match only (no partial matches)
-            const exactCuisineMatch = recipeCuisines.some(cuisine => {
-              const cuisineLower = cuisine?.toLowerCase() || '';
-              return cuisineLower === prefLower || 
-                     (prefLower === 'middle eastern' && (cuisineLower === 'middle eastern' || cuisineLower === 'lebanese' || cuisineLower === 'moroccan')) ||
-                     (prefLower === 'asian' && (cuisineLower === 'chinese' || cuisineLower === 'japanese' || cuisineLower === 'korean' || cuisineLower === 'thai' || cuisineLower === 'vietnamese'));
-            });
-            
-            console.log(`    🥘 Checking cuisine "${prefCuisine}":`, {
-              exactCuisineMatch,
-              recipeCuisines,
-              recipeTitle: recipeTitle.substring(0, 50)
-            });
-            
-            return exactCuisineMatch;
+        // Only match if recipe's cuisine EXACTLY matches user's favorite cuisines
+        matchesCuisine = favoriteCuisines.some(prefCuisine => {
+          const prefLower = prefCuisine.toLowerCase();
+          
+          // STRICT matching: Direct cuisine match only (no partial matches)
+          const exactCuisineMatch = recipeCuisines.some(cuisine => 
+            cuisine?.toLowerCase() === prefLower
+          );
+          
+          // Only allow title match for very specific cuisine terms
+          const strictTitleMatch = recipeTitle.includes(prefLower) && 
+            prefLower.length > 4; // Only match longer cuisine names in titles
+          
+          console.log(`    🥘 Checking cuisine "${prefCuisine}":`, {
+            exactCuisineMatch,
+            strictTitleMatch,
+            recipeCuisines,
+            recipeTitle: recipeTitle.substring(0, 50)
           });
-        }
+          
+          return exactCuisineMatch || strictTitleMatch;
+        });
         
         // STRICT dietary restrictions matching
         let matchesDiet = dietaryRestrictions.length === 0; // If no restrictions, allow all
@@ -196,7 +201,7 @@ const HomePage: React.FC = () => {
         }
         
         const matches = matchesCuisine && (dietaryRestrictions.length === 0 || matchesDiet);
-        console.log(`    ✅ Recipe "${recipe.title || recipe.name}":`, {
+        console.log(`    ✅ Recipe "${recipe.title || recipe.name}" result:`, {
           matchesCuisine,
           matchesDiet,
           finalMatch: matches
@@ -213,9 +218,7 @@ const HomePage: React.FC = () => {
         // Calculate preference match score
         const aScore = (
           (a.cuisines?.filter(c => favoriteCuisines.some(pref => 
-            c?.toLowerCase() === pref.toLowerCase() || // Exact match
-            (pref.toLowerCase() === 'middle eastern' && ['middle eastern', 'lebanese', 'moroccan'].includes(c?.toLowerCase())) ||
-            (pref.toLowerCase() === 'asian' && ['chinese', 'japanese', 'korean', 'thai', 'vietnamese'].includes(c?.toLowerCase()))
+            c?.toLowerCase() === pref.toLowerCase() // EXACT match only
           )).length || 0) * 10 + // Weight cuisine matches heavily
           (a.diets?.filter(d => dietaryRestrictions.some(pref => 
             d?.toLowerCase() === pref.toLowerCase() // EXACT match only
@@ -223,9 +226,7 @@ const HomePage: React.FC = () => {
         );
         const bScore = (
           (b.cuisines?.filter(c => favoriteCuisines.some(pref => 
-            c?.toLowerCase() === pref.toLowerCase() ||
-            (pref.toLowerCase() === 'middle eastern' && ['middle eastern', 'lebanese', 'moroccan'].includes(c?.toLowerCase())) ||
-            (pref.toLowerCase() === 'asian' && ['chinese', 'japanese', 'korean', 'thai', 'vietnamese'].includes(c?.toLowerCase()))
+            c?.toLowerCase() === pref.toLowerCase()
           )).length || 0) * 10 +
           (b.diets?.filter(d => dietaryRestrictions.some(pref => 
             d?.toLowerCase() === pref.toLowerCase()
@@ -243,7 +244,7 @@ const HomePage: React.FC = () => {
           return bQuality - aQuality;
         }
         
-        return bScore - aScore;
+        return bScore - aScore; // Higher score first
       });
       
       // If we have very few strict matches, add some broader matches but keep them separate
@@ -583,22 +584,6 @@ const HomePage: React.FC = () => {
               )}
             </div>
 
-          </div>
-        </section>
-
-        {/* AI Recipe Generator Section */}
-        <section className="py-16 bg-gray-100">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-12">
-              <h2 className="text-3xl font-bold text-gray-900 mb-4">
-                <Sparkles className="mr-2 h-6 w-6 text-recipe-primary" />
-                AI Recipe Generator
-              </h2>
-              <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-                Let our AI generate a recipe based on your dietary preferences and ingredients.
-              </p>
-            </div>
-            <AIRecipeGenerator />
           </div>
         </section>
 

@@ -84,10 +84,11 @@ class RecipeSearchService:
                 # This would need custom logic for time comparison
                 pass
         
-        # Perform semantic search
+        # Perform semantic search and retrieve ALL matching results
+        # Use a very high n_results value to simulate 'unlimited' (ChromaDB may have a hard cap, e.g. 1000)
         results = self.recipe_collection.query(
             query_texts=[query],
-            n_results=limit,
+            n_results=1000,
             where=where_clause if where_clause else None,
             include=['documents', 'metadatas', 'distances']
         )
@@ -180,7 +181,21 @@ class RecipeSearchService:
         if "gluten-free" in user_preferences.get("dietaryRestrictions", []):
             filters["is_gluten_free"] = True
         
-        return self.semantic_search(query, filters, limit)
+        # Perform semantic search
+        results = self.semantic_search(query, filters, limit * 2)  # Overfetch to allow post-filtering
+
+        # Post-filter: Only include recipes whose cuisine matches the user's favorite cuisines
+        favorite_cuisines = set([c.lower() for c in user_preferences.get('favoriteCuisines', [])])
+        if favorite_cuisines:
+            filtered_results = [
+                recipe for recipe in results
+                if recipe.get('cuisine', '').lower() in favorite_cuisines
+            ]
+            # Limit to requested number
+            return filtered_results[:limit]
+        else:
+            return results[:limit]
+
     
     def _create_searchable_text(self, recipe: Dict[str, Any]) -> str:
         """

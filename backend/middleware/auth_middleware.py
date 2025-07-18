@@ -2,9 +2,7 @@ from functools import wraps
 from flask import request, jsonify, g
 from services.user_service import UserService
 from typing import Optional, Dict, Any
-import logging
 
-logger = logging.getLogger(__name__)
 
 class AuthMiddleware:
     """
@@ -25,43 +23,30 @@ class AuthMiddleware:
             auth_header = request.headers.get('Authorization')
             
             if not auth_header:
-                logger.warning("No authorization header provided")
                 return jsonify({'error': 'No authorization header provided'}), 401
             
             try:
                 # Extract token from "Bearer <token>"
                 if not auth_header.startswith('Bearer '):
-                    logger.warning(f"Invalid authorization header format: {auth_header[:20]}...")
                     return jsonify({'error': 'Invalid authorization header format'}), 401
                 
                 token = auth_header.split(' ')[1]
                 
                 if not token or token in ['null', 'undefined']:
-                    logger.warning(f"Invalid token provided: {token}")
                     return jsonify({'error': 'Invalid token'}), 401
                 
                 # Decode and verify JWT token
-                logger.debug(f"Attempting to decode JWT token: {token[:20]}...")
                 payload = self.user_service.decode_jwt_token(token)
                 if not payload:
-                    logger.warning("JWT token decode failed - invalid or expired")
                     return jsonify({'error': 'Invalid or expired token'}), 401
                 
-                user_id = payload.get('user_id')
-                if not user_id:
-                    logger.warning("No user_id found in JWT payload")
-                    return jsonify({'error': 'Invalid token payload'}), 401
-                
                 # Get user from database
-                logger.debug(f"Looking up user with ID: {user_id}")
-                user = self.user_service.get_user_by_id(user_id)
+                user = self.user_service.get_user_by_id(payload['user_id'])
                 if not user:
-                    logger.warning(f"User not found in database: {user_id}")
                     return jsonify({'error': 'User not found'}), 401
                 
                 # Check if user is verified
                 if not user.get('is_verified', False):
-                    logger.warning(f"User email not verified: {user_id}")
                     return jsonify({'error': 'Email not verified'}), 401
                 
                 # Store user info in Flask's g object for use in the route
@@ -69,10 +54,7 @@ class AuthMiddleware:
                 g.user_id = user['user_id']
                 g.user_email = user['email']
                 
-                logger.debug(f"Authentication successful for user: {user_id}")
-                
             except Exception as e:
-                logger.error(f"Authentication failed with exception: {str(e)}")
                 return jsonify({'error': 'Authentication failed'}), 401
             
             return f(*args, **kwargs)

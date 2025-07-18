@@ -51,21 +51,11 @@ class UserService:
     def decode_jwt_token(self, token: str) -> Optional[Dict[str, Any]]:
         """Decode and verify a JWT token"""
         try:
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.debug(f"Decoding JWT token with secret length: {len(self.jwt_secret)}")
-            
             payload = jwt.decode(token, self.jwt_secret, algorithms=['HS256'])
-            logger.debug(f"JWT payload decoded successfully: {payload.keys()}")
             return payload
-        except jwt.ExpiredSignatureError as e:
-            logger.warning(f"JWT token expired: {str(e)}")
+        except jwt.ExpiredSignatureError:
             return None
-        except jwt.InvalidTokenError as e:
-            logger.warning(f"JWT token invalid: {str(e)}")
-            return None
-        except Exception as e:
-            logger.error(f"Unexpected error decoding JWT: {str(e)}")
+        except jwt.InvalidTokenError:
             return None
     
     def generate_verification_token(self) -> str:
@@ -250,30 +240,20 @@ class UserService:
     def get_user_by_id(self, user_id: str) -> Optional[Dict[str, Any]]:
         """Get user by user ID"""
         try:
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.debug(f"Looking up user by ID: {user_id}")
-            
             results = self.users_collection.get(
                 ids=[user_id],
                 include=['documents']
             )
             
-            logger.debug(f"ChromaDB query returned {len(results['documents'])} documents")
-            
             if results['documents']:
                 user_data = json.loads(results['documents'][0])
-                logger.debug(f"Found user: {user_data.get('email', 'unknown')}")
                 # Remove password hash from response
                 user_data.pop('password_hash', None)
                 return user_data
-            else:
-                logger.warning(f"No user found with ID: {user_id}")
             
             return None
             
-        except Exception as e:
-            logger.error(f"Error getting user by ID {user_id}: {str(e)}")
+        except Exception:
             return None
     
     def get_user_by_email(self, email: str) -> Optional[Dict[str, Any]]:

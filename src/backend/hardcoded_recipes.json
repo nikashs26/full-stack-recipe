@@ -1,0 +1,26 @@
+[
+  {
+    "id": "hardcoded-001",
+    "title": "Vegetarian Pasta Primavera",
+    "cuisine": "Italian",
+    "dietaryRestrictions": ["vegetarian"],
+    "ingredients": ["pasta", "zucchini", "bell pepper", "olive oil"],
+    "instructions": "Boil pasta, sauté veggies, combine."
+  },
+  {
+    "id": "hardcoded-002",
+    "title": "Vegan Buddha Bowl",
+    "cuisine": "American",
+    "dietaryRestrictions": ["vegan", "glutenFree"],
+    "ingredients": ["quinoa", "chickpeas", "avocado", "spinach"],
+    "instructions": "Cook quinoa, roast chickpeas, assemble bowl."
+  },
+  {
+    "id": "hardcoded-003",
+    "title": "Chicken Tikka Masala",
+    "cuisine": "Indian",
+    "dietaryRestrictions": [],
+    "ingredients": ["chicken", "tomato", "cream", "spices"],
+    "instructions": "Marinate chicken, cook in sauce, serve with rice."
+  }
+]

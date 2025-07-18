@@ -73,6 +73,7 @@ class RecipeCacheService:
                 metadatas=[metadata]
             )
             
+            print(f"🔥 SAVED TO CHROMA: {len(recipes)} recipes for query='{query}', ingredient='{ingredient}'")
             logger.info(f"Cached {len(recipes)} recipes for query: '{query}', ingredient: '{ingredient}'")
             return True
             

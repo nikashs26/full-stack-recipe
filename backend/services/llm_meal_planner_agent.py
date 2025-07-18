@@ -222,90 +222,62 @@ class LLMMealPlannerAgent:
         allergies = preferences.get('allergies', preferences.get('allergens', []))
         weekly_budget = preferences.get('weekly_budget', preferences.get('weeklyBudget', ''))
         serving_amount = preferences.get('serving_amount', preferences.get('servingAmount', ''))
-        cooking_skill = preferences.get('cooking_skill_level', preferences.get('cookingSkillLevel', 'beginner'))
-        max_time = preferences.get('max_cooking_time', preferences.get('maxCookingTime', '30 minutes'))
-        additional_requirements = preferences.get('additional_requirements', preferences.get('additionalRequirements', ''))
         
         print(f'🔥 PROMPT_BUILDER: Extracted dietary_restrictions: {dietary_restrictions}')
         print(f'🔥 PROMPT_BUILDER: Extracted favorite_cuisines: {favorite_cuisines}')
+        print(f'🔥 PROMPT_BUILDER: Extracted allergies: {allergies}')
         print(f'🔥 PROMPT_BUILDER: Extracted weekly_budget: {weekly_budget}')
         print(f'🔥 PROMPT_BUILDER: Extracted serving_amount: {serving_amount}')
         
         # Build dietary info
         dietary_info = []
         if dietary_restrictions:
-            dietary_info.append(f"Dietary restrictions: {', '.join(dietary_restrictions)}")
+            dietary_info.append(f"Diet: {', '.join(dietary_restrictions)}")
         if favorite_cuisines:
             dietary_info.append(f"Preferred cuisines: {', '.join(favorite_cuisines)}")
         if allergies:
-            dietary_info.append(f"Allergies to avoid: {', '.join(allergies)}")
-        if cooking_skill:
-            dietary_info.append(f"Cooking skill level: {cooking_skill}")
-        if max_time:
-            dietary_info.append(f"Maximum cooking time per meal: {max_time}")
-        if additional_requirements:
-            dietary_info.append(f"Additional requirements: {additional_requirements}")
+            dietary_info.append(f"Allergies: {', '.join(allergies)}")
+        if weekly_budget:
+            dietary_info.append(f"Weekly budget: ${weekly_budget}")
+        if serving_amount:
+            dietary_info.append(f"Serving {serving_amount} people")
         
-        dietary_text = '. '.join(dietary_info) if dietary_info else "No specific restrictions"
+        dietary_text = '. '.join(dietary_info) if dietary_info else "No specific dietary restrictions"
         
         # Build budget and serving context
         budget_context = ""
         if weekly_budget:
-            budget_context = f"Keep the total estimated cost under ${weekly_budget} for the week. Focus on affordable, nutritious ingredients that provide good value for money. "
+            budget_context = f"Keep the total estimated cost under ${weekly_budget} for the week. "
         
         serving_context = ""
         if serving_amount:
-            serving_context = f"Scale all recipes and ingredients to serve {serving_amount} people appropriately. "
+            serving_context = f"Scale all recipes to serve {serving_amount} people. "
         
-        # Enhanced prompt for better variety and balance
-        prompt = f"""Create a balanced, varied, and nutritious 7-day meal plan. Requirements: {dietary_text}.
+        prompt = f"""Create a 7-day meal plan. {dietary_text}.
 
-{budget_context}{serving_context}
+{budget_context}{serving_context}Focus on affordable, nutritious ingredients that provide good value.
 
-IMPORTANT REQUIREMENTS:
-1. Create 21 DIFFERENT meals (no repetition across the week)
-2. Ensure nutritional balance - include proteins, vegetables, grains, and healthy fats
-3. Vary cooking methods (grilling, baking, stir-frying, roasting, steaming)
-4. Include different protein sources throughout the week
-5. Mix quick meals (15-20 min) with more elaborate ones
-6. Consider meal prep opportunities (make extra for leftovers)
-7. Balance comfort foods with healthy options
-8. Include seasonal and fresh ingredients when possible
-
-Return ONLY valid JSON in this exact format:
+Return ONLY valid JSON in this format:
 {{
   "days": [
     {{
       "day": "Monday",
-      "date": "2024-01-15",
-      "breakfast": {{
-        "name": "Overnight Oats with Berries",
-        "ingredients": ["rolled oats", "greek yogurt", "mixed berries", "honey", "chia seeds"],
-        "cuisine": "American",
-        "cookingTime": "5 minutes prep",
-        "difficulty": "beginner"
-      }},
-      "lunch": {{
-        "name": "Mediterranean Quinoa Bowl",
-        "ingredients": ["quinoa", "cucumber", "tomatoes", "feta cheese", "olive oil", "lemon"],
-        "cuisine": "Mediterranean",
-        "cookingTime": "20 minutes",
-        "difficulty": "beginner"
-      }},
-      "dinner": {{
-        "name": "Herb-Crusted Salmon with Roasted Vegetables",
-        "ingredients": ["salmon fillets", "broccoli", "carrots", "herbs", "olive oil"],
-        "cuisine": "American",
-        "cookingTime": "30 minutes",
-        "difficulty": "intermediate"
-      }}
+      "breakfast": {{"name": "Oatmeal with Berries", "ingredients": ["oats", "berries", "milk"]}},
+      "lunch": {{"name": "Quinoa Salad", "ingredients": ["quinoa", "vegetables", "olive oil"]}},
+      "dinner": {{"name": "Pasta Primavera", "ingredients": ["pasta", "vegetables", "herbs"]}}
+    }},
+    {{
+      "day": "Tuesday",
+      "breakfast": {{"name": "Avocado Toast", "ingredients": ["bread", "avocado", "tomato"]}},
+      "lunch": {{"name": "Vegetable Soup", "ingredients": ["vegetables", "broth", "herbs"]}},
+      "dinner": {{"name": "Stir Fry", "ingredients": ["vegetables", "rice", "sauce"]}}
     }}
   ],
-  "shopping_list": ["rolled oats", "greek yogurt", "mixed berries", "honey", "chia seeds", "quinoa", "cucumber", "tomatoes", "feta cheese", "olive oil", "lemon", "salmon fillets", "broccoli", "carrots", "herbs"],
-  "estimated_cost": "$65"
+  "shopping_list": ["oats", "berries", "milk", "quinoa", "vegetables", "olive oil", "pasta", "herbs", "bread", "avocado", "tomato", "broth", "rice", "sauce"],
+  "estimated_cost": "$45"
 }}
 
-Generate all 7 days (Monday through Sunday) with breakfast, lunch, and dinner for each day. Make sure meals are diverse, balanced, and follow all dietary requirements."""
+Generate all 7 days (Monday through Sunday) with breakfast, lunch, and dinner for each day. Make sure all meals follow the dietary requirements and budget constraints."""
         
         return prompt
     

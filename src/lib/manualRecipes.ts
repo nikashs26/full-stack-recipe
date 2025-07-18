@@ -152,13 +152,8 @@ export const fetchManualRecipes = async (): Promise<ManualRecipe[]> => {
         id: recipe.id || recipe._id,
         title: (() => {
           let title = recipe.title || '';
-          // ONLY fix truly empty or "untitled" recipes - be more specific
-          if (!title || 
-              title.trim() === '' || 
-              title.toLowerCase() === 'untitled' || 
-              title.toLowerCase() === 'untitled recipe' ||
-              title.toLowerCase() === 'recipe') {
-            
+          // Enhanced title generation logic to fix untitled recipes
+          if (!title || title.toLowerCase().includes('untitled') || title.trim() === '') {
             // Strategy 1: Use cuisines + dish types
             if (recipe.cuisines && recipe.cuisines.length > 0) {
               const cuisine = recipe.cuisines[0];
@@ -233,13 +228,8 @@ export const fetchManualRecipeById = async (id: number | string): Promise<Manual
       id: recipe.id || recipe._id,
       title: (() => {
         let title = recipe.title || '';
-        // ONLY fix truly empty or "untitled" recipes - be more specific
-        if (!title || 
-            title.trim() === '' || 
-            title.toLowerCase() === 'untitled' || 
-            title.toLowerCase() === 'untitled recipe' ||
-            title.toLowerCase() === 'recipe') {
-          
+        // Enhanced title generation logic to fix untitled recipes
+        if (!title || title.toLowerCase().includes('untitled') || title.trim() === '') {
           // Strategy 1: Use cuisines + dish types
           if (recipe.cuisines && recipe.cuisines.length > 0) {
             const cuisine = recipe.cuisines[0];
