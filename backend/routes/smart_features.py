@@ -3,6 +3,9 @@ from services.recipe_search_service import RecipeSearchService
 from services.meal_history_service import MealHistoryService
 from services.smart_shopping_service import SmartShoppingService
 from services.user_preferences_service import UserPreferencesService
+import logging
+
+logger = logging.getLogger(__name__)
 
 smart_features_bp = Blueprint('smart_features', __name__)
 
@@ -23,25 +26,77 @@ def semantic_recipe_search():
     - "comfort food for cold weather"
     """
     try:
+        # Validate request
+        if not request.is_json:
+            return jsonify({
+                "error": "Request must be JSON",
+                "success": False
+            }), 400
+            
         data = request.get_json()
-        query = data.get('query', '')
-        filters = data.get('filters', {})
-        limit = data.get('limit', 10)
+        if not isinstance(data, dict):
+            return jsonify({
+                "error": "Invalid request format",
+                "success": False
+            }), 400
         
+        # Get and validate parameters
+        query = data.get('query', '').strip()
         if not query:
-            return jsonify({"error": "Query is required"}), 400
+            return jsonify({
+                "error": "Query is required",
+                "success": False
+            }), 400
+            
+        # Validate filters
+        filters = data.get('filters', {})
+        if not isinstance(filters, dict):
+            return jsonify({
+                "error": "Filters must be an object",
+                "success": False
+            }), 400
+            
+        # Validate and bound limit
+        try:
+            limit = int(data.get('limit', 10))
+            limit = max(1, min(limit, 50))  # Bound between 1 and 50
+        except (ValueError, TypeError):
+            limit = 10
         
-        results = recipe_search_service.semantic_search(query, filters, limit)
-        
-        return jsonify({
-            "success": True,
-            "query": query,
-            "results": results,
-            "total": len(results)
-        }), 200
-        
+        # Perform semantic search with error handling
+        try:
+            results = recipe_search_service.semantic_search(query, filters, limit)
+            
+            if not isinstance(results, list):
+                return jsonify({
+                    "error": "Invalid search results format",
+                    "success": False
+                }), 500
+            
+            return jsonify({
+                "success": True,
+                "query": query,
+                "results": results,
+                "total": len(results),
+                "filters_applied": filters,
+                "limit_used": limit
+            }), 200
+            
+        except Exception as search_error:
+            logger.error(f"Semantic search error: {search_error}")
+            return jsonify({
+                "error": "Failed to perform semantic search",
+                "details": str(search_error),
+                "success": False
+            }), 500
+            
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        logger.error(f"Semantic search endpoint error: {e}")
+        return jsonify({
+            "error": "Internal server error",
+            "details": str(e),
+            "success": False
+        }), 500
 
 @smart_features_bp.route('/search/similar/<recipe_id>', methods=['GET'])
 def find_similar_recipes(recipe_id):

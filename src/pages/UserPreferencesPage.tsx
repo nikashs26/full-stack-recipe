@@ -29,14 +29,23 @@ const dietaryOptions = [
 ];
 
 const cuisineOptions = [
-  { id: 'italian', label: 'Italian', description: 'Pasta, pizza, Mediterranean' },
-  { id: 'mexican', label: 'Mexican', description: 'Spicy, flavorful, corn-based' },
-  { id: 'chinese', label: 'Chinese', description: 'Stir-fry, rice, soy-based' },
-  { id: 'indian', label: 'Indian', description: 'Curry, spices, rice dishes' },
-  { id: 'japanese', label: 'Japanese', description: 'Sushi, clean flavors' },
-  { id: 'mediterranean', label: 'Mediterranean', description: 'Olive oil, fresh vegetables' },
-  { id: 'american', label: 'American', description: 'Comfort food, grilled items' },
-  { id: 'thai', label: 'Thai', description: 'Sweet, sour, spicy balance' }
+  { id: 'italian', label: 'Italian', description: 'Pasta, pizza, regional flavors' },
+  { id: 'mexican', label: 'Mexican', description: 'Spicy, flavorful, corn and flour-based dishes' },
+  { id: 'indian', label: 'Indian', description: 'Curry, aromatic spices, diverse flavors' },
+  { id: 'chinese', label: 'Chinese', description: 'Stir-fry, rice, diverse regional cuisines' },
+  { id: 'japanese', label: 'Japanese', description: 'Sushi, ramen, delicate flavors' },
+  { id: 'thai', label: 'Thai', description: 'Sweet, sour, spicy balance' },
+  { id: 'mediterranean', label: 'Mediterranean', description: 'Olive oil, fresh vegetables, seafood' },
+  { id: 'french', label: 'French', description: 'Classic techniques, rich sauces' },
+  { id: 'greek', label: 'Greek', description: 'Olive oil, feta, fresh herbs' },
+  { id: 'spanish', label: 'Spanish', description: 'Paella, tapas, olive oil' },
+  { id: 'korean', label: 'Korean', description: 'Kimchi, barbecue, fermented foods' },
+  { id: 'vietnamese', label: 'Vietnamese', description: 'Fresh herbs, fish sauce, balance' },
+  { id: 'american', label: 'American', description: 'Comfort food, grilled dishes, fusion' },
+  { id: 'british', label: 'British', description: 'Hearty dishes, pies, roasts' },
+  { id: 'irish', label: 'Irish', description: 'Stews, potato dishes, breads' },
+  { id: 'caribbean', label: 'Caribbean', description: 'Spicy, tropical flavors, seafood' },
+  { id: 'moroccan', label: 'Moroccan', description: 'Tagines, couscous, aromatic spices' }
 ];
 
 const allergenOptions = [

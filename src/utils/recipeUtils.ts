@@ -46,26 +46,37 @@ export const filterRecipes = (
   }
   
   return recipes.filter(recipe => {
-    // Add null checks for all properties to avoid "toLowerCase of undefined" errors
-    const recipeName = recipe?.name || "";
+    // Handle both name and title fields for different recipe sources
+    const recipeName = (recipe?.name || recipe?.title || "").toLowerCase();
     const searchTermLower = searchTerm ? searchTerm.toLowerCase() : "";
     
-    // Updated search logic: searchTerm ONLY applies to recipe names, not ingredients
-    const matchesSearchTerm = searchTerm ? recipeName.toLowerCase().includes(searchTermLower) : true;
+    // Match search term against name/title
+    const matchesSearchTerm = searchTerm ? recipeName.includes(searchTermLower) : true;
     
-    const dietaryRestrictions = recipe?.dietaryRestrictions || [];
-    const matchesDietary = dietaryFilter ? dietaryRestrictions.includes(dietaryFilter as DietaryRestriction) : true;
+    // Handle dietary restrictions from both formats
+    const dietaryRestrictions = recipe?.dietaryRestrictions || recipe?.diets || [];
+    const matchesDietary = dietaryFilter ? 
+      dietaryRestrictions.some(diet => 
+        (typeof diet === 'string' && diet.toLowerCase() === dietaryFilter.toLowerCase())
+      ) : true;
     
-    const recipeCuisine = recipe?.cuisine || "";
+    // Handle cuisine from both formats
+    const recipeCuisines = Array.isArray(recipe?.cuisines) ? recipe.cuisines : [recipe?.cuisine].filter(Boolean);
     const cuisineFilterLower = cuisineFilter ? cuisineFilter.toLowerCase() : "";
-    const matchesCuisine = cuisineFilter ? recipeCuisine.toLowerCase() === cuisineFilterLower : true;
+    const matchesCuisine = cuisineFilter ? 
+      recipeCuisines.some(cuisine => 
+        (typeof cuisine === 'string' && cuisine.toLowerCase() === cuisineFilterLower)
+      ) : true;
     
+    // Handle ingredients from both formats
     const ingredients = recipe?.ingredients || [];
     const ingredientTermLower = ingredientTerm ? ingredientTerm.toLowerCase() : "";
     const matchesIngredient = ingredientTerm
       ? ingredients.some(ingredient => {
           if (!ingredient) return false;
-          return ingredient.toLowerCase().includes(ingredientTermLower);
+          // Handle both string and object formats
+          const ingredientName = typeof ingredient === 'string' ? ingredient : ingredient.name;
+          return ingredientName.toLowerCase().includes(ingredientTermLower);
         })
       : true;
 

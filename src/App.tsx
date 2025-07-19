@@ -9,7 +9,7 @@ import RecipeDetailPage from "./pages/RecipeDetailPage";
 import ExternalRecipeDetailPage from "./pages/ExternalRecipeDetailPage";
 import AddRecipePage from "./pages/AddRecipePage";
 import EditRecipePage from "./pages/EditRecipePage";
-import MongoDBTestPage from "./pages/MongoDBTestPage";
+
 import NotFound from "./pages/NotFound";
 import Footer from "./components/Footer";
 import HomePage from "./pages/HomePage";
@@ -65,7 +65,7 @@ const App = () => (
               <Route path="/verify-email" element={<VerifyEmailPage />} />
               <Route path="/preferences" element={<UserPreferencesPage />} />
               <Route path="/meal-planner" element={<MealPlannerPage />} />
-              <Route path="/mongodb-test" element={<MongoDBTestPage />} />
+
               <Route path="*" element={<NotFound />} />
             </Routes>
             <Footer />

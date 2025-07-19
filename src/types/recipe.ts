@@ -1,5 +1,5 @@
 
-export type DietaryRestriction = 'vegetarian' | 'vegan' | 'gluten-free' | 'dairy-free' | 'keto' | 'paleo' | 'carnivore' | 'non-vegetarian';
+export type DietaryRestriction = 'vegetarian' | 'vegan' | 'gluten-free' | 'dairy-free' | 'keto' | 'paleo';
 export type DifficultyLevel = 'easy' | 'medium' | 'hard';
 export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'dessert' | 'any'; // New MealType definition
 
@@ -13,20 +13,30 @@ export interface Folder {
 
 export interface Recipe {
   id: string;
-  name: string;
-  cuisine: string;
-  dietaryRestrictions: DietaryRestriction[];
-  ingredients: string[];
+  // Support both name and title
+  name?: string;
+  title?: string;
+  // Support both cuisine and cuisines array
+  cuisine?: string;
+  cuisines?: string[];
+  // Support both dietaryRestrictions and diets
+  dietaryRestrictions?: DietaryRestriction[];
+  diets?: string[];
+  // Support both image formats
+  image?: string;
+  imageUrl?: string;
+  // Support both ingredient formats
+  ingredients: Array<string | { name: string; amount?: string }>;
   instructions: string[];
-  image: string;
-  ratings: number[];
-  comments: Comment[];
-  folderId?: string; // Reference to the folder this recipe belongs to
-  createdAt?: string; // Added this property
-  updatedAt?: string; // Added this property for consistency
-  isFavorite?: boolean; // New property to mark recipes as favorites
-  difficulty?: DifficultyLevel; // Added difficulty property
-  mealType: MealType; // New mealType property
+  // Optional fields
+  description?: string;
+  cookingTime?: string;
+  servings?: number;
+  difficulty?: string;
+  ratings?: number[];
+  comments?: string[];
+  // Support relevance score from search
+  relevance_score?: number;
 }
 
 export interface Comment {

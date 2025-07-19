@@ -85,132 +85,76 @@ def register_recipe_routes(app, recipe_cache):
     
     @app.route("/get_recipes", methods=["GET"])
     def get_recipes():
-        start_time = time.time()
-        query = request.args.get("query", "").strip()
-        ingredient = request.args.get("ingredient", "").strip()
-        
-        # Check ChromaDB cache first
-        cached_recipes = recipe_cache.get_cached_recipes(query, ingredient)
-        if cached_recipes:
-            print(f"Returning {len(cached_recipes)} cached recipes for query: '{query}', ingredient: '{ingredient}'")
-            return jsonify({"results": cached_recipes})
-        
-        # If no search parameters and no cache, return ALL recipes from Chroma
-        if not query and not ingredient:
-            try:
-                all_results = recipe_cache.collection.get()
-                recipes = []
-                if all_results and all_results["documents"]:
-                    for doc in all_results["documents"]:
-                        try:
-                            # Each doc may be a list or a single recipe
-                            rec = json.loads(doc)
-                            if isinstance(rec, list):
-                                recipes.extend(rec)
-                            else:
-                                recipes.append(rec)
-                        except Exception:
-                            pass
-                print(f"Returning {len(recipes)} total recipes from Chroma (no search params)")
-                return jsonify({"results": recipes})
-            except Exception as e:
-                print(f"Error fetching all recipes: {e}")
-                return jsonify({"results": [], "error": str(e)})
-        
-        # If no search parameters, return some default popular recipes
-        if not query and not ingredient:
-            # Try to get some popular recipes from Spoonacular API
-            try:
-                params = {
-                    "apiKey": SPOONACULAR_API_KEY,
-                    "number": 12,
-                    "addRecipeInformation": "true",
-                    "sort": "popularity"
-                }
-                
-                response = requests.get(SPOONACULAR_URL, params=params, timeout=5)
-                if response.ok and 'application/json' in response.headers.get('Content-Type', ''):
-                    data = response.json()
-                    if "results" in data:
-                        # Cache the results
-                        recipe_cache.cache_recipes(data["results"], query, ingredient)
-                        return jsonify(data)
-            except Exception as e:
-                print(f"Error fetching popular recipes: {e}")
-            
-            # If API fails, return empty results
-            return jsonify({"results": []}), 200
-
-        # Only use Chroma for storage/search
-        # If not found in cache, fall back to Spoonacular API (already handled above)
-
-        # If not found in Chroma, call the Spoonacular API
-        print("No results found locally, calling Spoonacular API")
-        params = {
-            "apiKey": SPOONACULAR_API_KEY,
-            "number": 10,  # Limit to 10 results
-            "addRecipeInformation": "true",
-        }
-        
-        if query:
-            params["query"] = query
-        if ingredient:
-            params["includeIngredients"] = ingredient
-
         try:
-            # Use a short timeout to avoid hanging
-            print(f"Calling Spoonacular API with params: {params}")
-            response = requests.get(SPOONACULAR_URL, params=params, timeout=5)
+            # Get all recipes from ChromaDB
+            results = recipe_cache.recipe_collection.get()
             
-            # Check if content type is JSON
-            if 'application/json' not in response.headers.get('Content-Type', ''):
-                return jsonify({
-                    "error": f"API returned non-JSON response. Status: {response.status_code}",
-                    "message": response.text[:100] + "..." # Show part of the response for debugging
-                }), 500
+            if not results or 'documents' not in results:
+                return jsonify({'results': [], 'message': 'No recipes found in ChromaDB'})
+            
+            # Parse the JSON strings in documents
+            recipes = []
+            for doc in results['documents']:
+                try:
+                    recipe = json.loads(doc)
+                    # Ensure the recipe has required fields
+                    if not recipe.get('id'):
+                        recipe['id'] = str(hash(doc))  # Generate a unique ID if missing
+                    if not recipe.get('cuisines') and recipe.get('cuisine'):
+                        recipe['cuisines'] = [recipe['cuisine']]
+                    if not recipe.get('diets'):
+                        recipe['diets'] = []
+                    if not recipe.get('image'):
+                        recipe['image'] = ''  # Add default image if missing
+                    recipes.append(recipe)
+                except json.JSONDecodeError:
+                    continue
+            
+            return jsonify({'results': recipes})
+        except Exception as e:
+            print(f"Error fetching from ChromaDB: {e}")
+        
+        # 2. Get hardcoded/fallback recipes
+        try:
+            from lib.spoonacular import FALLBACK_RECIPES
+            
+            # Filter fallback recipes based on search terms
+            filtered_fallback = []
+            for recipe in FALLBACK_RECIPES:
+                matches = True
                 
-            response.raise_for_status()  # Raise an error for HTTP failures
-            data = response.json()
-
-            if "results" not in data:
-                return jsonify({"error": "Invalid response from Spoonacular"}), 500
-
-            # Process the diets for filtering consistency
-            for recipe in data["results"]:
-                # Normalize diet names for consistent filtering
-                if "diets" in recipe:
-                    normalized_diets = []
-                    for diet in recipe["diets"]:
-                        diet_lower = diet.lower()
-                        if "vegetarian" in diet_lower:
-                            normalized_diets.append("vegetarian")
-                        if "vegan" in diet_lower:
-                            normalized_diets.append("vegan")
-                        if "gluten" in diet_lower and "free" in diet_lower:
-                            normalized_diets.append("gluten-free")
-                        if "carnivore" in diet_lower or "meat" in diet_lower:
-                            normalized_diets.append("carnivore")
-                        # Keep the original diet as well
-                        normalized_diets.append(diet)
-                    recipe["diets"] = normalized_diets
-
-            # Cache the API results in ChromaDB
-            recipe_cache.cache_recipes(data["results"], query, ingredient)
-            # All MongoDB and in-memory cache logic removed; ChromaDB is now the sole storage for recipes.
-
-            print(f"API request completed in {time.time() - start_time:.2f}s")
-            return jsonify(data)  # Send results to frontend
-
-        except requests.exceptions.Timeout:
-            return jsonify({"error": "Request to Spoonacular API timed out", "results": []}), 504
-        except ValueError as e:  # JSON parsing error
-            return jsonify({
-                "error": "Failed to parse API response as JSON",
-                "message": str(e),
-                "results": []
-            }), 500
-        except requests.exceptions.RequestException as e:
-            return jsonify({"error": str(e), "results": []}), 500
+                # Match query against title and cuisine
+                if query:
+                    query_lower = query.lower()
+                    title_match = recipe['title'].lower().find(query_lower) != -1
+                    cuisine_match = any(c.lower().find(query_lower) != -1 for c in recipe.get('cuisines', []))
+                    if not (title_match or cuisine_match):
+                        matches = False
+                
+                # Match ingredient in title (since fallback recipes don't have detailed ingredients)
+                if ingredient and matches:
+                    if recipe['title'].lower().find(ingredient.lower()) == -1:
+                        matches = False
+                
+                if matches:
+                    filtered_fallback.append(recipe)
+            
+            print(f"Found {len(filtered_fallback)} matching fallback recipes")
+            all_recipes.extend(filtered_fallback)
+        except Exception as e:
+            print(f"Error processing fallback recipes: {e}")
+        
+        # Remove duplicates based on recipe ID
+        seen_ids = set()
+        unique_recipes = []
+        for recipe in all_recipes:
+            recipe_id = str(recipe.get('id'))
+            if recipe_id not in seen_ids:
+                seen_ids.add(recipe_id)
+                unique_recipes.append(recipe)
+        
+        print(f"Returning {len(unique_recipes)} total unique recipes")
+        return jsonify({"results": unique_recipes})
 
     # Add a route to test specific queries and show cache usage
     @app.route("/test/query", methods=["GET"])
@@ -336,12 +280,15 @@ def register_recipe_routes(app, recipe_cache):
     def get_all_recipes():
         try:
             # Get all recipes from Chroma
-            all_results = recipe_cache.collection.get()
+            all_results = recipe_cache.recipe_collection.get(
+                include=["documents", "metadatas"]
+            )
             recipes = []
             if all_results and all_results["documents"]:
                 for doc in all_results["documents"]:
                     try:
-                        recipes.append(json.loads(doc))
+                        recipe = json.loads(doc)
+                        recipes.append(recipe)
                     except Exception:
                         pass
             return jsonify({"results": recipes}), 200

@@ -34,16 +34,18 @@ user_preferences = UserPreferencesService()
 CORS(app,
      supports_credentials=True,
      origins=[
+         'http://localhost:5173',  # Vite default port
          'http://localhost:8080',
          'http://localhost:8081',
-         'http://localhost:8082',
+         'http://127.0.0.1:5173',
          'http://127.0.0.1:8080',
          'http://127.0.0.1:8081',
-         'http://127.0.0.1:8082'
+         'http://127.0.0.1:3000'
      ],
-     allow_headers=["Content-Type", "Authorization"],
-     expose_headers=["Content-Type", "Authorization"],
-     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+     allow_headers=["Content-Type", "Authorization", "X-Requested-With", "Accept"],
+     expose_headers=["Content-Type", "Authorization", "X-Requested-With", "Accept"],
+     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+     max_age=3600
 )
 
 # Configure session for temp preferences
@@ -66,5 +68,5 @@ print("Auth routes registered successfully")
 
 if __name__ == "__main__":
     print("Starting Flask application...")
-    # Run the Flask app on 0.0.0.0 to make it accessible from other devices on the network
-    app.run(host='0.0.0.0', debug=True, port=5003) 
+    # Run the Flask app on 127.0.0.1 to make it accessible only locally
+    app.run(host='127.0.0.1', debug=True, port=8000) 

@@ -355,3 +355,27 @@ def check_auth():
             "authenticated": False,
             "error": str(e)
         }), 401 
+
+
+@auth_bp.route('/refresh', methods=['POST'])
+@require_auth
+def refresh_token():
+    """Refresh JWT token"""
+    try:
+        user_id = get_current_user_id()
+        user = user_service.get_user_by_id(user_id)
+        
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+        
+        # Generate new token
+        new_token = user_service.generate_jwt_token(user['user_id'], user['email'])
+        
+        return jsonify({
+            "success": True,
+            "token": new_token,
+            "message": "Token refreshed successfully"
+        }), 200
+        
+    except Exception as e:
+        return jsonify({"error": f"Token refresh failed: {str(e)}"}), 500 

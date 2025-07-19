@@ -65,19 +65,112 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Load token from localStorage on app start
   useEffect(() => {
-    const savedToken = localStorage.getItem('auth_token');
-    if (savedToken) {
-      setToken(savedToken);
-      // Verify token and load user - pass the token directly
-      verifyTokenAndLoadUser(savedToken).finally(() => setIsLoading(false));
-    } else {
+    const loadAuthState = async () => {
+      setIsLoading(true);
+      const savedToken = localStorage.getItem('auth_token');
+      
+      if (savedToken) {
+        setToken(savedToken);
+        try {
+          const response = await fetch(`${API_BASE_URL}/auth/me`, {
+            headers: {
+              'Authorization': `Bearer ${savedToken}`,
+              'Content-Type': 'application/json',
+              'Accept': 'application/json'
+            },
+            credentials: 'include'
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            setUser(data.user);
+            
+            // Check if token needs refresh (if less than 1 day remaining)
+            const tokenData = JSON.parse(atob(savedToken.split('.')[1]));
+            const expiresIn = tokenData.exp * 1000 - Date.now(); // Convert to milliseconds
+            
+            if (expiresIn < 24 * 60 * 60 * 1000) { // Less than 1 day remaining
+              // Refresh token
+              const refreshResponse = await fetch(`${API_BASE_URL}/auth/refresh`, {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${savedToken}`,
+                  'Content-Type': 'application/json'
+                },
+                credentials: 'include'
+              });
+              
+              if (refreshResponse.ok) {
+                const refreshData = await refreshResponse.json();
+                localStorage.setItem('auth_token', refreshData.token);
+                setToken(refreshData.token);
+              }
+            }
+          } else {
+            // Token is invalid
+            localStorage.removeItem('auth_token');
+            setToken(null);
+            setUser(null);
+          }
+        } catch (error) {
+          console.error('Auth check failed:', error);
+          localStorage.removeItem('auth_token');
+          setToken(null);
+          setUser(null);
+        }
+      }
+      
       setIsLoading(false);
-    }
+    };
+
+    loadAuthState();
   }, []);
+
+  // Set up periodic token refresh
+  useEffect(() => {
+    if (!token) return;
+
+    const checkTokenExpiry = async () => {
+      try {
+        const tokenData = JSON.parse(atob(token.split('.')[1]));
+        const expiresIn = tokenData.exp * 1000 - Date.now(); // Convert to milliseconds
+        
+        if (expiresIn < 24 * 60 * 60 * 1000) { // Less than 1 day remaining
+          const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            credentials: 'include'
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            localStorage.setItem('auth_token', data.token);
+            setToken(data.token);
+          }
+        }
+      } catch (error) {
+        console.error('Token refresh failed:', error);
+      }
+    };
+
+    // Check token expiry every hour
+    const interval = setInterval(checkTokenExpiry, 60 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [token]);
 
   const verifyTokenAndLoadUser = async (tokenToCheck: string): Promise<boolean> => {
     try {
-      const response = await apiCall('/auth/me');
+      const response = await fetch(`${API_BASE_URL}/auth/me`, {
+        headers: {
+          'Authorization': `Bearer ${tokenToCheck}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        credentials: 'include'
+      });
       
       if (response.ok) {
         const data = await response.json();

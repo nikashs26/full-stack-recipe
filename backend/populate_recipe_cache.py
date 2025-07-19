@@ -1,165 +1,220 @@
+import asyncio
+import aiohttp
+import os
+from dotenv import load_dotenv
+from services.recipe_service import RecipeService
 from services.recipe_cache_service import RecipeCacheService
+import logging
+import ssl
+import certifi
 import json
+from datetime import datetime
 
-# Sample recipes with high-quality data
-SAMPLE_RECIPES = [
-    {
-        "id": 1001,
-        "title": "Classic Spaghetti Carbonara",
-        "image": "https://images.unsplash.com/photo-1612874742237-6526221588e3?auto=format&fit=crop&w=800",
-        "summary": "A traditional Italian pasta dish made with eggs, cheese, pancetta and black pepper.",
-        "readyInMinutes": 30,
-        "servings": 4,
-        "cuisines": ["Italian"],
-        "diets": ["pescatarian"],
-        "dishTypes": ["main course", "dinner"],
-        "instructions": "1. Cook spaghetti in salted water.\n2. Fry pancetta until crispy.\n3. Mix eggs, cheese, and pepper.\n4. Combine pasta with egg mixture and pancetta.",
-        "extendedIngredients": [
-            {"id": 11420, "name": "spaghetti", "amount": 400, "unit": "grams"},
-            {"id": 10410123, "name": "pancetta", "amount": 150, "unit": "grams"},
-            {"id": 1123, "name": "eggs", "amount": 3, "unit": "large"},
-            {"id": 1033, "name": "parmesan cheese", "amount": 100, "unit": "grams"}
-        ]
-    },
-    {
-        "id": 1002,
-        "title": "Vegetarian Buddha Bowl",
-        "image": "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&w=800",
-        "summary": "A healthy and colorful bowl packed with quinoa, roasted vegetables, and tahini dressing.",
-        "readyInMinutes": 45,
-        "servings": 2,
-        "cuisines": ["American", "Healthy"],
-        "diets": ["vegetarian", "vegan", "gluten-free"],
-        "dishTypes": ["lunch", "main course"],
-        "instructions": "1. Cook quinoa.\n2. Roast vegetables.\n3. Prepare tahini dressing.\n4. Assemble bowls.",
-        "extendedIngredients": [
-            {"id": 20137, "name": "quinoa", "amount": 200, "unit": "grams"},
-            {"id": 11507, "name": "sweet potato", "amount": 1, "unit": "large"},
-            {"id": 11098, "name": "kale", "amount": 200, "unit": "grams"},
-            {"id": 12698, "name": "tahini", "amount": 30, "unit": "ml"}
-        ]
-    },
-    {
-        "id": 1003,
-        "title": "Spicy Bean Burrito",
-        "image": "https://images.unsplash.com/photo-1584031036380-3fb6f2d51903?auto=format&fit=crop&w=800",
-        "summary": "A hearty Mexican-style burrito filled with spiced beans, rice, and fresh vegetables.",
-        "readyInMinutes": 25,
-        "servings": 4,
-        "cuisines": ["Mexican"],
-        "diets": ["vegetarian"],
-        "dishTypes": ["lunch", "dinner"],
-        "instructions": "1. Cook rice.\n2. Heat and season beans.\n3. Warm tortillas.\n4. Assemble burritos with toppings.",
-        "extendedIngredients": [
-            {"id": 16034, "name": "black beans", "amount": 400, "unit": "grams"},
-            {"id": 20444, "name": "rice", "amount": 200, "unit": "grams"},
-            {"id": 11252, "name": "lettuce", "amount": 1, "unit": "head"},
-            {"id": 11529, "name": "tomato", "amount": 2, "unit": "medium"}
-        ]
-    },
-    {
-        "id": 1004,
-        "title": "Thai Green Curry",
-        "image": "https://images.unsplash.com/photo-1455619452474-d2be8b1e70cd?auto=format&fit=crop&w=800",
-        "summary": "A fragrant and creamy Thai curry with vegetables and your choice of protein.",
-        "readyInMinutes": 35,
-        "servings": 4,
-        "cuisines": ["Thai", "Asian"],
-        "diets": ["gluten-free"],
-        "dishTypes": ["main course"],
-        "instructions": "1. Sauté curry paste.\n2. Add coconut milk.\n3. Cook vegetables.\n4. Serve with rice.",
-        "extendedIngredients": [
-            {"id": 93605, "name": "green curry paste", "amount": 50, "unit": "grams"},
-            {"id": 12118, "name": "coconut milk", "amount": 400, "unit": "ml"},
-            {"id": 11450, "name": "bamboo shoots", "amount": 200, "unit": "grams"},
-            {"id": 11819, "name": "thai basil", "amount": 30, "unit": "grams"}
-        ]
-    },
-    {
-        "id": 1005,
-        "title": "Mediterranean Chickpea Salad",
-        "image": "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&w=800",
-        "summary": "A refreshing salad with chickpeas, cucumber, tomatoes, and feta cheese.",
-        "readyInMinutes": 15,
-        "servings": 4,
-        "cuisines": ["Mediterranean", "Greek"],
-        "diets": ["vegetarian", "gluten-free"],
-        "dishTypes": ["salad", "side dish", "lunch"],
-        "instructions": "1. Drain chickpeas.\n2. Chop vegetables.\n3. Make dressing.\n4. Combine and toss.",
-        "extendedIngredients": [
-            {"id": 16057, "name": "chickpeas", "amount": 400, "unit": "grams"},
-            {"id": 11206, "name": "cucumber", "amount": 1, "unit": "large"},
-            {"id": 1019, "name": "feta cheese", "amount": 100, "unit": "grams"},
-            {"id": 4053, "name": "olive oil", "amount": 60, "unit": "ml"}
-        ]
-    }
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+# List of cuisines to fetch - MUST match frontend options
+CUISINES = [
+    "Italian", "Mexican", "Indian", "Chinese", "Japanese",
+    "Thai", "Mediterranean", "French", "Greek", "Spanish",
+    "Korean", "Vietnamese", "American", "British", "Irish",
+    "Caribbean", "Moroccan"
 ]
 
-def main():
-    print("Initializing recipe cache service...")
+async def fetch_mealdb_by_cuisine(session, cuisine: str) -> list:
+    """Fetch recipes from TheMealDB for a specific cuisine"""
+    url = "https://www.themealdb.com/api/json/v1/1/filter.php"
+    params = {"a": cuisine}
+    
+    try:
+        async with session.get(url, params=params) as response:
+            if response.status == 200:
+                data = await response.json()
+                meals = data.get('meals', [])
+                logger.info(f"Found {len(meals)} {cuisine} recipes from TheMealDB")
+                
+                # Take only up to 25 recipes (since we'll get 25 from Spoonacular too)
+                meals = meals[:25]
+                
+                # Fetch full details for each recipe
+                detailed_meals = []
+                for meal in meals:
+                    try:
+                        async with session.get(
+                            "https://www.themealdb.com/api/json/v1/1/lookup.php",
+                            params={"i": meal['idMeal']}
+                        ) as detail_response:
+                            if detail_response.status == 200:
+                                detail_data = await detail_response.json()
+                                if detail_data.get('meals'):
+                                    detailed_meals.extend(detail_data['meals'])
+                                    logger.info(f"Fetched details for {meal['strMeal']}")
+                    except Exception as e:
+                        logger.error(f"Error fetching recipe details from TheMealDB: {e}")
+                
+                return detailed_meals
+            else:
+                logger.error(f"TheMealDB API error for {cuisine}: {response.status}")
+                return []
+    except Exception as e:
+        logger.error(f"Error fetching {cuisine} recipes from TheMealDB: {e}")
+        return []
+
+async def fetch_spoonacular_by_cuisine(session, cuisine: str, api_key: str) -> list:
+    """Fetch recipes from Spoonacular for a specific cuisine"""
+    url = "https://api.spoonacular.com/recipes/complexSearch"
+    params = {
+        "apiKey": api_key,
+        "cuisine": cuisine,
+        "number": 25,  # Get 25 from each API to total 50
+        "addRecipeInformation": "true",
+        "fillIngredients": "true",
+        "instructionsRequired": "true"
+    }
+    
+    try:
+        async with session.get(url, params=params) as response:
+            if response.status == 200:
+                data = await response.json()
+                recipes = data.get('results', [])
+                logger.info(f"Found {len(recipes)} {cuisine} recipes from Spoonacular")
+                return recipes
+            else:
+                logger.error(f"Spoonacular API error for {cuisine}: {response.status}")
+                return []
+    except Exception as e:
+        logger.error(f"Error fetching {cuisine} recipes from Spoonacular: {e}")
+        return []
+
+async def populate_recipe_cache():
+    """Populate ChromaDB with recipes from both APIs"""
+    # Load environment variables
+    load_dotenv()
+    
+    # Initialize services
     recipe_cache = RecipeCacheService()
+    recipe_service = RecipeService(recipe_cache)
     
-    print("\nClearing existing cache...")
-    recipe_cache.clear_cache()
+    # Create SSL context
+    ssl_context = ssl.create_default_context(cafile=certifi.where())
     
-    print("\nPopulating cache with sample recipes...")
-    for recipe in SAMPLE_RECIPES:
-        # Add common search terms to help with matching
-        search_terms = [
-            recipe["title"].lower(),
-            *recipe["cuisines"],
-            *recipe["diets"],
-            *recipe["dishTypes"],
-            *[ing["name"] for ing in recipe["extendedIngredients"]]
-        ]
-        
-        # Cache the recipe with its search terms
-        recipe_cache.cache_recipes([recipe], " ".join(search_terms), "")
-        print(f"Cached recipe: {recipe['title']}")
-        
-        # Also cache by cuisine
-        for cuisine in recipe["cuisines"]:
-            recipe_cache.cache_recipes([recipe], cuisine.lower(), "")
-            print(f"  - Cached under cuisine: {cuisine}")
+    # Track statistics
+    stats = {
+        "total_recipes": 0,
+        "recipes_by_cuisine": {},
+        "start_time": datetime.now()
+    }
+    
+    # Create aiohttp session with SSL context
+    connector = aiohttp.TCPConnector(ssl=ssl_context)
+    async with aiohttp.ClientSession(connector=connector) as session:
+        for cuisine in CUISINES:
+            logger.info(f"\nFetching recipes for {cuisine} cuisine...")
+            stats["recipes_by_cuisine"][cuisine] = {"mealdb": 0, "spoonacular": 0}
             
-        # Cache by diet
-        for diet in recipe["diets"]:
-            recipe_cache.cache_recipes([recipe], diet.lower(), "")
-            print(f"  - Cached under diet: {diet}")
+            # Fetch from TheMealDB
+            mealdb_recipes = await fetch_mealdb_by_cuisine(session, cuisine)
+            if mealdb_recipes:
+                normalized_mealdb = []
+                for recipe in mealdb_recipes:
+                    normalized = recipe_service._normalize_mealdb_recipe(recipe)
+                    if normalized:
+                        # Add cuisine to recipe data
+                        normalized['cuisines'] = [cuisine]
+                        normalized_mealdb.append(normalized)
+                
+                if normalized_mealdb:
+                    try:
+                        # Cache with cuisine as a search term
+                        await asyncio.to_thread(
+                            recipe_cache.cache_recipes,
+                            normalized_mealdb,
+                            cuisine,  # Use cuisine as search term
+                            "",      # No ingredient filter
+                            {"cuisine": cuisine}  # Add cuisine metadata
+                            print("stored recipes in chroma");
+                        )
+                        stats["total_recipes"] += len(normalized_mealdb)
+                        stats["recipes_by_cuisine"][cuisine]["mealdb"] = len(normalized_mealdb)
+                        logger.info(f"Cached {len(normalized_mealdb)} {cuisine} recipes from TheMealDB")
+                    except Exception as e:
+                        logger.error(f"Failed to cache {cuisine} recipes from TheMealDB: {e}")
             
-        # Cache by main ingredients
-        for ingredient in recipe["extendedIngredients"]:
-            recipe_cache.cache_recipes([recipe], "", ingredient["name"].lower())
-            print(f"  - Cached with ingredient: {ingredient['name']}")
+            # Fetch from Spoonacular if API key is available
+            if recipe_service.spoonacular_key:
+                spoonacular_recipes = await fetch_spoonacular_by_cuisine(
+                    session,
+                    cuisine,
+                    recipe_service.spoonacular_key
+                )
+                if spoonacular_recipes:
+                    normalized_spoonacular = []
+                    for recipe in spoonacular_recipes:
+                        normalized = recipe_service._normalize_spoonacular_recipe(recipe)
+                        if normalized:
+                            # Ensure cuisine is in recipe data
+                            if cuisine not in normalized.get('cuisines', []):
+                                normalized['cuisines'] = [cuisine]
+                            normalized_spoonacular.append(normalized)
+                    
+                    if normalized_spoonacular:
+                        try:
+                            # Cache with cuisine as a search term
+                            await asyncio.to_thread(
+                                recipe_cache.cache_recipes,
+                                normalized_spoonacular,
+                                cuisine,  # Use cuisine as search term
+                                "",      # No ingredient filter
+                                {"cuisine": cuisine}  # Add cuisine metadata
+                            )
+                            stats["total_recipes"] += len(normalized_spoonacular)
+                            stats["recipes_by_cuisine"][cuisine]["spoonacular"] = len(normalized_spoonacular)
+                            logger.info(f"Cached {len(normalized_spoonacular)} {cuisine} recipes from Spoonacular")
+                        except Exception as e:
+                            logger.error(f"Failed to cache {cuisine} recipes from Spoonacular: {e}")
+            
+            # Add a small delay between cuisines to avoid rate limits
+            await asyncio.sleep(1)
     
-    print("\nVerifying cache contents...")
-    # Test some common searches
-    test_queries = [
-        ("pasta", ""),
-        ("vegetarian", ""),
-        ("thai", ""),
-        ("", "beans"),
-        ("mediterranean", ""),
-        ("quick", ""),
-        ("healthy", "")
+    # Calculate execution time
+    execution_time = datetime.now() - stats["start_time"]
+    stats["execution_time"] = str(execution_time)
+    stats["start_time"] = stats["start_time"].isoformat()  # Convert to string
+
+    # Print final statistics
+    logger.info("\nPopulation Summary:")
+    logger.info(f"Total Recipes Cached: {stats['total_recipes']}")
+    logger.info(f"Execution Time: {execution_time}")
+    logger.info("\nRecipes by Cuisine:")
+    for cuisine, counts in stats["recipes_by_cuisine"].items():
+        total = counts["mealdb"] + counts["spoonacular"]
+        logger.info(f"{cuisine}: {total} total ({counts['mealdb']} MealDB, {counts['spoonacular']} Spoonacular)")
+
+    # Save statistics to file
+    with open('recipe_population_stats.json', 'w') as f:
+        json.dump(stats, f, indent=2)
+
+    # Print cache statistics
+    cache_stats = recipe_cache.get_cache_stats()
+    logger.info("\nCache Statistics:")
+    logger.info(f"Total Recipes: {cache_stats['total_recipes']}")
+    logger.info(f"Valid Recipes: {cache_stats['valid_recipes']}")
+    logger.info(f"Cache TTL: {cache_stats['cache_ttl_days']} days")
+
+    # Print missing cuisines
+    missing_cuisines = [
+        cuisine for cuisine, counts in stats["recipes_by_cuisine"].items()
+        if counts["mealdb"] + counts["spoonacular"] == 0
     ]
-    
-    for query, ingredient in test_queries:
-        results = recipe_cache.get_cached_recipes(query, ingredient)
-        print(f"\nSearch for '{query}' with ingredient '{ingredient}':")
-        print(f"Found {len(results)} results")
-        if results:
-            print("Matching recipes:")
-            for recipe in results:
-                print(f"- {recipe['title']}")
-        else:
-            print("No matching recipes found")
-    
-    # Get cache statistics
-    stats = recipe_cache.get_cache_stats()
-    print("\nCache Statistics:")
-    print(f"Total cache entries: {stats['total_cache_entries']}")
-    print(f"Total cached recipes: {stats['total_cached_recipes']}")
+    if missing_cuisines:
+        logger.warning("\nMissing cuisines (no recipes found):")
+        for cuisine in missing_cuisines:
+            logger.warning(f"- {cuisine}")
+        logger.warning("\nConsider adding sample recipes for these cuisines manually.")
 
 if __name__ == "__main__":
-    main() 
+    asyncio.run(populate_recipe_cache()) 

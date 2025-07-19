@@ -1,0 +1,75 @@
+{
+  "total_recipes": 166,
+  "recipes_by_cuisine": {
+    "Italian": {
+      "mealdb": 21,
+      "spoonacular": 0
+    },
+    "Mexican": {
+      "mealdb": 6,
+      "spoonacular": 0
+    },
+    "Indian": {
+      "mealdb": 12,
+      "spoonacular": 0
+    },
+    "Chinese": {
+      "mealdb": 12,
+      "spoonacular": 0
+    },
+    "Japanese": {
+      "mealdb": 9,
+      "spoonacular": 0
+    },
+    "Thai": {
+      "mealdb": 3,
+      "spoonacular": 0
+    },
+    "Mediterranean": {
+      "mealdb": 0,
+      "spoonacular": 0
+    },
+    "French": {
+      "mealdb": 25,
+      "spoonacular": 0
+    },
+    "Greek": {
+      "mealdb": 8,
+      "spoonacular": 0
+    },
+    "Spanish": {
+      "mealdb": 4,
+      "spoonacular": 0
+    },
+    "Korean": {
+      "mealdb": 0,
+      "spoonacular": 0
+    },
+    "Vietnamese": {
+      "mealdb": 2,
+      "spoonacular": 0
+    },
+    "American": {
+      "mealdb": 25,
+      "spoonacular": 0
+    },
+    "British": {
+      "mealdb": 25,
+      "spoonacular": 0
+    },
+    "Irish": {
+      "mealdb": 8,
+      "spoonacular": 0
+    },
+    "Caribbean": {
+      "mealdb": 0,
+      "spoonacular": 0
+    },
+    "Moroccan": {
+      "mealdb": 6,
+      "spoonacular": 0
+    }
+  },
+  "start_time": "2025-07-18T14:24:36.795662",
+  "execution_time": "0:01:37.324147"
+}

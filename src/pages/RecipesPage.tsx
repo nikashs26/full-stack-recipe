@@ -52,15 +52,16 @@ const RecipesPage: React.FC = () => {
   });
 
   // Query for external recipes - load by default and filter based on search
-  const { data: externalRecipes = [], isLoading: externalLoading } = useQuery({
+  const { data: externalData = { results: [] }, isLoading: externalLoading } = useQuery({
     queryKey: ['externalRecipes', searchTerm, ingredientTerm],
     queryFn: async () => {
       console.log(`Fetching recipes with query: "${searchTerm}" and ingredient: "${ingredientTerm}"`);
       
       try {
         const response = await fetchRecipes(searchTerm, ingredientTerm);
+        console.log('API Response:', response);
         
-        if (response?.results && Array.isArray(response.results)) {
+        if (response && Array.isArray(response.results)) {
           const validRecipes = response.results.filter(recipe => 
             recipe && 
             recipe.id && 
@@ -68,17 +69,19 @@ const RecipesPage: React.FC = () => {
           );
           
           console.log(`Fetched ${validRecipes.length} valid external recipes`);
-          return validRecipes;
+          return { results: validRecipes };
         }
         
-        return [];
+        return { results: [] };
       } catch (error) {
         console.error('Error fetching external recipes:', error);
-        return [];
+        return { results: [] };
       }
     },
     staleTime: 300000,
   });
+  
+  const externalRecipes = externalData.results || [];
 
   const filteredLocalRecipes = useMemo(() => {
     return filterRecipes(localRecipes, searchTerm, dietaryFilter, cuisineFilter, ingredientTerm);
