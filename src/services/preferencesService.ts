@@ -3,6 +3,7 @@ import { apiCall } from '../utils/apiUtils';
 export interface UserPreferences {
   dietaryRestrictions: string[];
   favoriteCuisines: string[];
+  favoriteFoods: string[]; // New field for favorite foods
   allergens: string[];
   cookingSkillLevel: 'beginner' | 'intermediate' | 'advanced';
   healthGoals?: string[];
@@ -22,6 +23,7 @@ export const loadUserPreferences = async (): Promise<UserPreferences> => {
   return data.preferences || {
     dietaryRestrictions: [],
     favoriteCuisines: [],
+    favoriteFoods: [],
     allergens: [],
     cookingSkillLevel: 'beginner',
     healthGoals: [],

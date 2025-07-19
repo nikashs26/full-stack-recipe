@@ -85,76 +85,143 @@ def register_recipe_routes(app, recipe_cache):
     
     @app.route("/get_recipes", methods=["GET"])
     def get_recipes():
+        print("\n=== /get_recipes endpoint called ===")
+        print(f"Query params: {request.args}")
+        
         try:
-            # Get all recipes from ChromaDB
-            results = recipe_cache.recipe_collection.get()
+            # Get query parameters
+            query = request.args.get('query', '').strip()
+            ingredient = request.args.get('ingredient', '').strip()
+            print(f"Search query: '{query}', Ingredient: '{ingredient}'")
             
-            if not results or 'documents' not in results:
-                return jsonify({'results': [], 'message': 'No recipes found in ChromaDB'})
+            # Get all recipes from ChromaDB
+            print("Fetching recipes from ChromaDB...")
+            try:
+                results = recipe_cache.recipe_collection.get()
+                print(f"ChromaDB response received. Keys: {list(results.keys()) if results else 'No results'}")
+            except Exception as e:
+                print(f"Error fetching from ChromaDB: {str(e)}")
+                return jsonify({
+                    'results': [],
+                    'message': 'Error fetching recipes from database',
+                    'success': False,
+                    'error': str(e)
+                }), 500
+            
+            if not results or 'documents' not in results or not results['documents']:
+                print("No documents found in ChromaDB response")
+                return jsonify({
+                    'results': [],
+                    'message': 'No recipes found in database',
+                    'success': True,
+                    'total': 0
+                })
+            
+            print(f"Found {len(results['documents'])} documents in ChromaDB")
             
             # Parse the JSON strings in documents
             recipes = []
-            for doc in results['documents']:
+            for i, doc in enumerate(results['documents']):
                 try:
-                    recipe = json.loads(doc)
-                    # Ensure the recipe has required fields
-                    if not recipe.get('id'):
-                        recipe['id'] = str(hash(doc))  # Generate a unique ID if missing
-                    if not recipe.get('cuisines') and recipe.get('cuisine'):
-                        recipe['cuisines'] = [recipe['cuisine']]
-                    if not recipe.get('diets'):
-                        recipe['diets'] = []
-                    if not recipe.get('image'):
-                        recipe['image'] = ''  # Add default image if missing
+                    print(f"\n--- Processing document {i+1}/{len(results['documents'])} ---")
+                    print(f"Document type: {type(doc)}")
+                    
+                    # Handle case where doc might already be a dict
+                    if isinstance(doc, dict):
+                        print("Document is already a dictionary")
+                        recipe = doc
+                    elif isinstance(doc, str):
+                        # Try to parse as JSON
+                        try:
+                            recipe = json.loads(doc)
+                            print("Successfully parsed document as JSON")
+                        except json.JSONDecodeError as e:
+                            print(f"Error parsing document as JSON: {e}")
+                            # Handle as raw string
+                            print("Handling as raw string")
+                            recipe = {
+                                'id': f'raw_{i}',
+                                'title': 'Untitled Recipe',
+                                'ingredients': [],
+                                'instructions': doc,
+                                'source': 'chromadb'
+                            }
+                    else:
+                        print(f"Skipping document of type {type(doc)}")
+                        continue
+                    
+                    # Ensure recipe is a dictionary
+                    if not isinstance(recipe, dict):
+                        print(f"Skipping non-dict recipe: {recipe}")
+                        continue
+                    
+                    # Normalize recipe fields
+                    recipe.setdefault('id', str(hash(str(doc))))
+                    recipe.setdefault('title', 'Untitled Recipe')
+                    recipe.setdefault('ingredients', [])
+                    recipe.setdefault('instructions', [])
+                    recipe.setdefault('cuisines', [])
+                    recipe.setdefault('diets', [])
+                    recipe.setdefault('image', '')
+                    recipe.setdefault('source', 'chromadb')
+                    
+                    # Handle different field naming conventions
+                    if 'cuisine' in recipe and not recipe['cuisines']:
+                        recipe['cuisines'] = [recipe.pop('cuisine')]
+                    
+                    print(f"Processed recipe: {recipe.get('id')} - {recipe.get('title')}")
                     recipes.append(recipe)
-                except json.JSONDecodeError:
+                    
+                except Exception as e:
+                    print(f"Error processing document {i+1}: {str(e)}")
+                    import traceback
+                    traceback.print_exc()
                     continue
             
-            return jsonify({'results': recipes})
-        except Exception as e:
-            print(f"Error fetching from ChromaDB: {e}")
-        
-        # 2. Get hardcoded/fallback recipes
-        try:
-            from lib.spoonacular import FALLBACK_RECIPES
+            # Apply search filters if provided
+            if query or ingredient:
+                query_lower = query.lower()
+                ingredient_lower = ingredient.lower()
+                
+                def matches_search(r):
+                    # Match query in title or ingredients
+                    matches_query = not query or \
+                        (isinstance(r.get('title'), str) and query_lower in r['title'].lower()) or \
+                        (isinstance(r.get('ingredients'), list) and 
+                         any(ing.get('name', '').lower().find(query_lower) != -1 for ing in r['ingredients'] 
+                             if isinstance(ing, dict) and 'name' in ing))
+                    
+                    # Match ingredient filter
+                    matches_ingredient = not ingredient or \
+                        (isinstance(r.get('ingredients'), list) and 
+                         any(ing.get('name', '').lower().find(ingredient_lower) != -1 for ing in r['ingredients'] 
+                             if isinstance(ing, dict) and 'name' in ing))
+                    
+                    return matches_query and matches_ingredient
+                
+                filtered_recipes = [r for r in recipes if matches_search(r)]
+                print(f"Filtered {len(recipes)} recipes to {len(filtered_recipes)} matching search criteria")
+                recipes = filtered_recipes
             
-            # Filter fallback recipes based on search terms
-            filtered_fallback = []
-            for recipe in FALLBACK_RECIPES:
-                matches = True
-                
-                # Match query against title and cuisine
-                if query:
-                    query_lower = query.lower()
-                    title_match = recipe['title'].lower().find(query_lower) != -1
-                    cuisine_match = any(c.lower().find(query_lower) != -1 for c in recipe.get('cuisines', []))
-                    if not (title_match or cuisine_match):
-                        matches = False
-                
-                # Match ingredient in title (since fallback recipes don't have detailed ingredients)
-                if ingredient and matches:
-                    if recipe['title'].lower().find(ingredient.lower()) == -1:
-                        matches = False
-                
-                if matches:
-                    filtered_fallback.append(recipe)
+            print(f"\nSuccessfully processed {len(recipes)} recipes")
+            return jsonify({
+                'results': recipes,
+                'total': len(recipes),
+                'success': True,
+                'message': f'Found {len(recipes)} recipes'
+            })
             
-            print(f"Found {len(filtered_fallback)} matching fallback recipes")
-            all_recipes.extend(filtered_fallback)
         except Exception as e:
-            print(f"Error processing fallback recipes: {e}")
-        
-        # Remove duplicates based on recipe ID
-        seen_ids = set()
-        unique_recipes = []
-        for recipe in all_recipes:
-            recipe_id = str(recipe.get('id'))
-            if recipe_id not in seen_ids:
-                seen_ids.add(recipe_id)
-                unique_recipes.append(recipe)
-        
-        print(f"Returning {len(unique_recipes)} total unique recipes")
-        return jsonify({"results": unique_recipes})
+            error_msg = f"Error in /get_recipes: {str(e)}"
+            print(error_msg)
+            import traceback
+            traceback.print_exc()
+            return jsonify({
+                'results': [],
+                'message': 'An error occurred while fetching recipes',
+                'error': str(e),
+                'success': False
+            }), 500
 
     # Add a route to test specific queries and show cache usage
     @app.route("/test/query", methods=["GET"])

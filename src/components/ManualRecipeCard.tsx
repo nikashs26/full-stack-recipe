@@ -47,10 +47,15 @@ const ManualRecipeCard: React.FC<ManualRecipeCardProps> = ({ recipe }) => {
   
   const dietaryTags = getDietaryTags(mappedDiets as any);
 
-  // Enhanced cuisine display
-  const displayCuisines = recipe.cuisine && recipe.cuisine.length > 0 
-    ? recipe.cuisine.slice(0, 2) // Show max 2 cuisines
-    : ["International"];
+  // Enhanced cuisine display with proper type checking
+  const displayCuisines = (() => {
+    if (!recipe.cuisine) return ["International"];
+    // Handle case where cuisine might be a single string
+    if (typeof recipe.cuisine === 'string') return [recipe.cuisine];
+    // Ensure it's an array
+    const cuisines = Array.isArray(recipe.cuisine) ? recipe.cuisine : [];
+    return cuisines.length > 0 ? cuisines.slice(0, 2) : ["International"];
+  })();
 
   return (
     <Link 

@@ -61,6 +61,7 @@ const allergenOptions = [
 const formSchema = z.object({
   dietaryRestrictions: z.array(z.string()),
   favoriteCuisines: z.array(z.string()),
+  favoriteFoods: z.array(z.string().min(1, "Food name cannot be empty")).max(3, "Maximum 3 favorite foods allowed"),
   allergens: z.array(z.string()),
   cookingSkillLevel: z.enum(['beginner', 'intermediate', 'advanced'])
 });
@@ -69,13 +70,14 @@ const UserPreferencesPage: React.FC = () => {
   const { isAuthenticated, isLoading: authLoading, user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [preferences, setPreferences] = useState({
-    dietaryRestrictions: [] as string[],
-    favoriteCuisines: [] as string[],
-    allergens: [] as string[],
-    cookingSkillLevel: 'beginner' as string,
-    healthGoals: [] as string[],
-    maxCookingTime: '30 minutes' as string
+  const [preferences, setPreferences] = useState<UserPreferences>({
+    dietaryRestrictions: [],
+    favoriteCuisines: [],
+    favoriteFoods: [],
+    allergens: [],
+    cookingSkillLevel: 'beginner',
+    healthGoals: [],
+    maxCookingTime: '30 minutes'
   });
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -87,6 +89,7 @@ const UserPreferencesPage: React.FC = () => {
     defaultValues: {
       dietaryRestrictions: [],
       favoriteCuisines: [],
+      favoriteFoods: [],
       allergens: [],
       cookingSkillLevel: 'beginner'
     }
@@ -196,7 +199,7 @@ const UserPreferencesPage: React.FC = () => {
   // Create a convenience variable for the current form values
   const currentPreferences = form.watch();
 
-  const savePreferences = async (values: z.infer<typeof formSchema>, showToast: boolean = true) => {
+  const savePreferences = async (values: z.infer<typeof formSchema>, showToast: boolean = true): Promise<boolean> => {
     console.log('Saving preferences:', values);
     setIsSaving(true);
     
@@ -204,9 +207,14 @@ const UserPreferencesPage: React.FC = () => {
       await saveUserPreferences({
         dietaryRestrictions: values.dietaryRestrictions,
         favoriteCuisines: values.favoriteCuisines,
+        favoriteFoods: values.favoriteFoods.filter(Boolean), // Remove any empty strings
         allergens: values.allergens,
-        cookingSkillLevel: values.cookingSkillLevel
+        cookingSkillLevel: values.cookingSkillLevel,
+        healthGoals: preferences.healthGoals,
+        maxCookingTime: preferences.maxCookingTime
       });
+      
+      return true;
 
       if (showToast) {
         toast({
@@ -264,11 +272,20 @@ const UserPreferencesPage: React.FC = () => {
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     setIsLoading(true);
-    const success = await savePreferences(values, true);
-    setIsLoading(false);
-
-    if (success) {
-      navigate('/');
+    try {
+      const success = await savePreferences(values, true);
+      if (success) {
+        navigate('/');
+      }
+    } catch (error) {
+      console.error('Error saving preferences:', error);
+      toast({
+        title: "Error",
+        description: "Failed to save preferences. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -290,6 +307,43 @@ const UserPreferencesPage: React.FC = () => {
 
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+              {/* Favorite Foods Section */}
+              <div>
+                <h2 className="text-xl font-medium mb-4">Favorite Foods</h2>
+                <p className="text-sm text-gray-600 mb-4">Enter up to 3 of your favorite foods</p>
+                <div className="space-y-3">
+                  {[...Array(3)].map((_, index) => (
+                    <div key={index} className="flex items-center space-x-2">
+                      <Input
+                        placeholder={`Favorite food #${index + 1}`}
+                        value={form.watch('favoriteFoods')[index] || ''}
+                        onChange={(e) => {
+                          const newFoods = [...form.getValues('favoriteFoods')];
+                          newFoods[index] = e.target.value;
+                          form.setValue('favoriteFoods', newFoods);
+                          setHasChanges(true);
+                        }}
+                        className="flex-1"
+                      />
+                      {index > 0 && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => {
+                            const newFoods = form.getValues('favoriteFoods').filter((_, i) => i !== index);
+                            form.setValue('favoriteFoods', newFoods);
+                            setHasChanges(true);
+                          }}
+                        >
+                          ×
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
               <div>
                 <h2 className="text-xl font-medium mb-4">Dietary Restrictions</h2>
                 <p className="text-sm text-gray-600 mb-4">Select any dietary restrictions you follow</p>

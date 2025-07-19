@@ -1,5 +1,6 @@
 // URLs for API endpoints - fallback to mock data when not available
-const API_BASE_URL = "http://localhost:8000";
+// Using 127.0.0.1 instead of localhost to avoid potential DNS resolution issues
+const API_BASE_URL = "http://127.0.0.1:8000";
 const API_URL = `${API_BASE_URL}/get_recipes`;
 const API_URL_RECIPE_BY_ID = `${API_BASE_URL}/get_recipe_by_id`;
 const API_URL_DB = `${API_BASE_URL}/recipes`;  // For direct DB operations
@@ -153,97 +154,111 @@ const FALLBACK_RECIPES = [
 ];
 
 export const fetchRecipes = async (query: string = "", ingredient: string = "") => {
-    console.log(`Fetching recipes with query: "${query}" and ingredient: "${ingredient}"`);
+    console.log(`[DEBUG] Fetching recipes with query: "${query}", ingredient: "${ingredient}"`);
     
     try {
         // Build the URL with appropriate parameters
-        let url = `${API_URL}?`;
-        if (query) url += `query=${encodeURIComponent(query)}&`;
-        if (ingredient) url += `ingredient=${encodeURIComponent(ingredient)}&`;
+        const params = new URLSearchParams();
+        if (query) params.append('query', query);
+        if (ingredient) params.append('ingredient', ingredient);
         
-        console.log("Calling recipe API URL:", url);
+        const url = `${API_URL}?${params.toString()}`;
+        console.log('[DEBUG] API Request URL:', url);
         
-        // Short timeout to prevent UI hanging
+        // Add a timeout to the fetch request
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
         
         try {
-            const response = await fetch(
-                url.slice(0, -1), // Remove trailing & or ?
-                { 
-                    signal: controller.signal,
-                    headers: {
-                        'Accept': 'application/json',
-                        'Content-Type': 'application/json'
-                    },
-                    credentials: 'include' // Include cookies for session
-                }
-            );
-
+            const response = await fetch(url, {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'include',
+                signal: controller.signal
+            });
+            
             clearTimeout(timeoutId);
             
-            console.log(`API response status: ${response.status}`);
-
+            console.log('[DEBUG] API Response status:', response.status);
+            
             if (!response.ok) {
                 const errorText = await response.text();
-                console.error(`API error ${response.status}:`, errorText);
-                throw new Error(`Failed to fetch recipes (Status: ${response.status})`);
+                console.error('[DEBUG] API Error Response:', {
+                    status: response.status,
+                    statusText: response.statusText,
+                    url: response.url,
+                    error: errorText
+                });
+                throw new Error(`API Error: ${response.status} ${response.statusText}`);
             }
             
-            // Try to parse the JSON response safely
             const data = await response.json();
-            console.log("API response data received:", data);
-        
-            if (!data || typeof data !== 'object') {
-                console.error("Invalid API response format", data);
-                throw new Error("Invalid API response format");
-            }
-
-            // Handle both the new format with 'results' and direct array
-            const recipes = data.results || data;
+            console.log('[DEBUG] API Response data:', JSON.stringify(data, null, 2));
             
-            if (!Array.isArray(recipes)) {
-                console.error('Invalid recipes format:', data);
+            // Check if we have a valid response structure
+            if (!data) {
+                console.error('[DEBUG] Empty response from API');
                 return { results: [], totalResults: 0 };
             }
-
-            // Map recipes to expected format
-            const formattedRecipes = recipes.map((recipe: any) => ({
-                id: recipe.id,
-                title: recipe.title || 'Untitled Recipe',
-                image: recipe.image || '',
-                cuisines: Array.isArray(recipe.cuisines) ? recipe.cuisines : 
-                         (recipe.cuisine ? [recipe.cuisine] : []),
-                diets: Array.isArray(recipe.diets) ? recipe.diets : [],
-                readyInMinutes: recipe.readyInMinutes || 30,
-                instructions: recipe.instructions || [],
-                ingredients: recipe.ingredients || [],
-                // Include any other fields that might be needed
-                ...recipe
-            }));
-
-            console.log(`Successfully formatted ${formattedRecipes.length} recipes`);
+            
+            // Handle both array and object with results property
+            const results = Array.isArray(data) ? data : (data.results || []);
+            
+            if (!Array.isArray(results)) {
+                console.error('[DEBUG] Invalid results format:', results);
+                return { results: [], totalResults: 0 };
+            }
+            
+            // Format recipes to match expected frontend format
+            const formattedResults = results.map((recipe: any) => {
+                try {
+                    // If recipe is a string, try to parse it as JSON
+                    const recipeData = typeof recipe === 'string' ? JSON.parse(recipe) : recipe;
+                    
+                    return {
+                        id: recipeData.id || `recipe-${Math.random().toString(36).substr(2, 9)}`,
+                        title: recipeData.title || recipeData.strMeal || 'Untitled Recipe',
+                        image: recipeData.image || recipeData.strMealThumb || '',
+                        cuisines: Array.isArray(recipeData.cuisines) ? recipeData.cuisines : 
+                                 (recipeData.cuisine ? [recipeData.cuisine] : 
+                                 (recipeData.strArea ? [recipeData.strArea] : [])),
+                        diets: Array.isArray(recipeData.diets) ? recipeData.diets : [],
+                        readyInMinutes: recipeData.readyInMinutes || 30,
+                        instructions: Array.isArray(recipeData.instructions) ? recipeData.instructions : 
+                                     (recipeData.strInstructions ? [recipeData.strInstructions] : []),
+                        ingredients: Array.isArray(recipeData.ingredients) ? recipeData.ingredients : [],
+                        source: 'external',
+                        // Include any other fields that might be needed
+                        ...recipeData
+                    };
+                } catch (e) {
+                    console.error('[DEBUG] Error formatting recipe:', e, 'Raw recipe:', recipe);
+                    return null;
+                }
+            }).filter(Boolean); // Remove any null entries from failed parsing
+            
+            console.log(`[DEBUG] Successfully formatted ${formattedResults.length} recipes`);
             
             return { 
-                results: formattedRecipes,
-                totalResults: formattedRecipes.length
+                results: formattedResults,
+                totalResults: formattedResults.length
             };
-
+            
         } catch (error) {
-            console.error("API fetch failed, using fallback data", error);
-            // Use fallback data filtered by query/ingredient
-            return { 
-                results: filterFallbackRecipes(query, ingredient),
-                totalResults: 0
-            };
-        } finally {
             clearTimeout(timeoutId);
+            throw error; // Re-throw to be caught by the outer catch
         }
+        
     } catch (error) {
-        console.error("Recipe fetch error:", error);
+        console.error('[DEBUG] Error in fetchRecipes:', error);
         return { 
-            results: filterFallbackRecipes(query, ingredient),
-            totalResults: 0
+            results: [],
+            totalResults: 0,
+            error: error instanceof Error ? error.message : 'Unknown error occurred',
+            details: error instanceof Error ? error.stack : undefined
         };
     }
 };
