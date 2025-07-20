@@ -70,6 +70,8 @@ const UserPreferencesPage: React.FC = () => {
   const { isAuthenticated, isLoading: authLoading, user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+  
+  // Initialize all state at the top level
   const [preferences, setPreferences] = useState<UserPreferences>({
     dietaryRestrictions: [],
     favoriteCuisines: [],
@@ -95,9 +97,11 @@ const UserPreferencesPage: React.FC = () => {
     }
   });
 
-  // Redirect if not authenticated
+  // Handle authentication and redirects
   useEffect(() => {
-    if (!authLoading && !isAuthenticated) {
+    if (authLoading) return; // Still checking auth status
+    
+    if (!isAuthenticated) {
       navigate('/signin');
       toast({
         title: "Authentication Required",
@@ -106,7 +110,7 @@ const UserPreferencesPage: React.FC = () => {
       });
     }
   }, [isAuthenticated, authLoading, navigate, toast]);
-
+  
   // Show loading state while checking authentication
   if (authLoading) {
     return (
@@ -118,7 +122,7 @@ const UserPreferencesPage: React.FC = () => {
       </div>
     );
   }
-
+  
   // Show login prompt if not authenticated
   if (!isAuthenticated) {
     return (
@@ -166,6 +170,7 @@ const UserPreferencesPage: React.FC = () => {
         form.reset({
           dietaryRestrictions: loadedPreferences.dietaryRestrictions || [],
           favoriteCuisines: loadedPreferences.favoriteCuisines || [],
+          favoriteFoods: loadedPreferences.favoriteFoods || [],
           allergens: loadedPreferences.allergens || [],
           cookingSkillLevel: loadedPreferences.cookingSkillLevel || 'beginner'
         });
@@ -186,15 +191,29 @@ const UserPreferencesPage: React.FC = () => {
 
   // Auto-save preferences when form changes
   useEffect(() => {
-    if (!hasChanges) return;
+    if (!hasChanges || !isAuthenticated) return;
 
+    const subscription = form.watch((value, { name }) => {
+      // Only auto-save if we have changes and the field is not currently being edited
+      if (name && !name.startsWith('favoriteFoods')) {
+        setHasChanges(true);
+      }
+    });
+    
     const timeoutId = setTimeout(async () => {
       const values = form.getValues();
-      await savePreferences(values, false); // Save without showing success message
-    }, 1000); // Auto-save after 1 second of no changes
+      // Ensure we have a valid form state before saving
+      const isValid = await form.trigger();
+      if (isValid) {
+        await savePreferences(values, false);
+      }
+    }, 1000);
 
-    return () => clearTimeout(timeoutId);
-  }, [form.watch(), hasChanges]);
+    return () => {
+      subscription.unsubscribe();
+      clearTimeout(timeoutId);
+    };
+  }, [form.watch(), hasChanges, isAuthenticated]);
 
   // Create a convenience variable for the current form values
   const currentPreferences = form.watch();
@@ -204,18 +223,28 @@ const UserPreferencesPage: React.FC = () => {
     setIsSaving(true);
     
     try {
-      await saveUserPreferences({
-        dietaryRestrictions: values.dietaryRestrictions,
-        favoriteCuisines: values.favoriteCuisines,
-        favoriteFoods: values.favoriteFoods.filter(Boolean), // Remove any empty strings
-        allergens: values.allergens,
-        cookingSkillLevel: values.cookingSkillLevel,
-        healthGoals: preferences.healthGoals,
-        maxCookingTime: preferences.maxCookingTime
-      });
+      // Ensure favoriteFoods is always an array of 3 items
+      const favoriteFoods = [...(values.favoriteFoods || [])];
+      while (favoriteFoods.length < 3) {
+        favoriteFoods.push('');
+      }
       
-      return true;
-
+      const preferencesToSave = {
+        dietaryRestrictions: values.dietaryRestrictions || [],
+        favoriteCuisines: values.favoriteCuisines || [],
+        favoriteFoods: favoriteFoods.filter(Boolean), // Remove any empty strings
+        allergens: values.allergens || [],
+        cookingSkillLevel: values.cookingSkillLevel || 'beginner',
+        healthGoals: preferences.healthGoals || [],
+        maxCookingTime: preferences.maxCookingTime || '30 minutes'
+      };
+      
+      console.log('Saving preferences to backend:', preferencesToSave);
+      await saveUserPreferences(preferencesToSave);
+      
+      // Update local state with the saved preferences
+      setPreferences(preferencesToSave);
+      
       if (showToast) {
         toast({
           title: "Preferences Saved",
@@ -223,6 +252,7 @@ const UserPreferencesPage: React.FC = () => {
         });
       }
       setHasChanges(false);
+      return true;
     } catch (error) {
       console.error('Error saving preferences:', error);
       toast({
@@ -230,6 +260,7 @@ const UserPreferencesPage: React.FC = () => {
         description: "Failed to save your preferences. Please try again.",
         variant: "destructive"
       });
+      return false;
     } finally {
       setIsSaving(false);
     }
@@ -273,8 +304,17 @@ const UserPreferencesPage: React.FC = () => {
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     setIsLoading(true);
     try {
-      const success = await savePreferences(values, true);
+      // Process favorite foods to remove empty strings but keep the array structure
+      const processedValues = {
+        ...values,
+        favoriteFoods: (values.favoriteFoods || []).filter(Boolean)
+      };
+      
+      const success = await savePreferences(processedValues, true);
       if (success) {
+        // Reset form state to match saved state
+        form.reset(processedValues);
+        setHasChanges(false);
         navigate('/');
       }
     } catch (error) {
@@ -312,35 +352,55 @@ const UserPreferencesPage: React.FC = () => {
                 <h2 className="text-xl font-medium mb-4">Favorite Foods</h2>
                 <p className="text-sm text-gray-600 mb-4">Enter up to 3 of your favorite foods</p>
                 <div className="space-y-3">
-                  {[...Array(3)].map((_, index) => (
-                    <div key={index} className="flex items-center space-x-2">
-                      <Input
-                        placeholder={`Favorite food #${index + 1}`}
-                        value={form.watch('favoriteFoods')[index] || ''}
-                        onChange={(e) => {
-                          const newFoods = [...form.getValues('favoriteFoods')];
-                          newFoods[index] = e.target.value;
-                          form.setValue('favoriteFoods', newFoods);
-                          setHasChanges(true);
-                        }}
-                        className="flex-1"
-                      />
-                      {index > 0 && (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => {
-                            const newFoods = form.getValues('favoriteFoods').filter((_, i) => i !== index);
-                            form.setValue('favoriteFoods', newFoods);
+                  {[0, 1, 2].map((index) => {
+                    const favoriteFoods = form.watch('favoriteFoods') || [];
+                    const currentValue = favoriteFoods[index] || '';
+                    
+                    return (
+                      <div key={index} className="flex items-center space-x-2">
+                        <Input
+                          placeholder={`Favorite food #${index + 1}`}
+                          value={currentValue}
+                          onChange={(e) => {
+                            const newValue = e.target.value;
+                            const currentFoods = form.getValues('favoriteFoods') || [];
+                            const newFoods = [...currentFoods];
+                            
+                            // Ensure the array is long enough
+                            while (newFoods.length <= index) newFoods.push('');
+                            newFoods[index] = newValue;
+                            
+                            // Update form state
+                            form.setValue('favoriteFoods', newFoods, { shouldDirty: true });
                             setHasChanges(true);
                           }}
-                        >
-                          ×
-                        </Button>
-                      )}
-                    </div>
-                  ))}
+                          onBlur={() => {
+                            // Trigger form validation on blur
+                            form.trigger('favoriteFoods');
+                          }}
+                          className="flex-1"
+                        />
+                        {index > 0 && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => {
+                              const currentFoods = form.getValues('favoriteFoods') || [];
+                              const newFoods = [...currentFoods];
+                              newFoods.splice(index, 1); // Remove the item
+                              newFoods.push(''); // Add empty string to maintain array length
+                              
+                              form.setValue('favoriteFoods', newFoods, { shouldDirty: true });
+                              setHasChanges(true);
+                            }}
+                          >
+                            ×
+                          </Button>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 

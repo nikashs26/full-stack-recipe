@@ -152,76 +152,157 @@ const HomePage: React.FC = () => {
         favoriteFoods 
       });
       
-      // Filter and score recipes based on user preferences
-      recommendedRecipes = allCombined.map(recipe => {
+      // First, filter out recipes that don't match dietary restrictions
+      const filteredRecipes = allCombined.filter(recipe => {
+        if (dietaryRestrictions.length === 0) return true;
+        
+        const recipeDiets = recipe.diets || [];
+        return dietaryRestrictions.every(prefDiet => {
+          const prefLower = prefDiet.toLowerCase();
+          return recipeDiets.some(diet => {
+            const dietLower = (diet || '').toLowerCase();
+            if (prefLower === 'vegetarian' && dietLower === 'vegetarian') return true;
+            if (prefLower === 'vegan' && dietLower === 'vegan') return true;
+            if (prefLower === 'gluten-free' && (dietLower === 'gluten-free' || dietLower === 'gluten free')) return true;
+            if (prefLower === 'dairy-free' && (dietLower === 'dairy-free' || dietLower === 'dairy free')) return true;
+            if (prefLower === 'keto' && (dietLower === 'ketogenic' || dietLower === 'keto')) return true;
+            if (prefLower === 'paleo' && (dietLower === 'paleo' || dietLower === 'paleolithic')) return true;
+            return false;
+          });
+        });
+      });
+
+      console.log(`✅ Filtered ${filteredRecipes.length} recipes that match dietary restrictions`);
+
+      // Then score the remaining recipes
+      recommendedRecipes = filteredRecipes.map(recipe => {
         const recipeCuisines = recipe.cuisines || [];
         const recipeTitle = (recipe.title || recipe.name || '').toLowerCase();
-        const recipeIngredients = (recipe.ingredients || []).map(i => i.name?.toLowerCase() || '');
+        const recipeIngredients = (recipe.ingredients || []).map(i => (i.name || '').toLowerCase());
         
-        // 1. Check dietary restrictions (MUST PASS)
-        let matchesDiet = dietaryRestrictions.length === 0; // If no restrictions, allow all
-        if (dietaryRestrictions.length > 0) {
-          const recipeDiets = recipe.diets || [];
-          matchesDiet = dietaryRestrictions.every(prefDiet => {
-            const prefLower = prefDiet.toLowerCase();
-            return recipeDiets.some(diet => {
-              const dietLower = diet?.toLowerCase() || '';
-              // EXACT matching for dietary restrictions
-              if (prefLower === 'vegetarian' && dietLower === 'vegetarian') return true;
-              if (prefLower === 'vegan' && dietLower === 'vegan') return true;
-              if (prefLower === 'gluten-free' && (dietLower === 'gluten-free' || dietLower === 'gluten free')) return true;
-              if (prefLower === 'dairy-free' && (dietLower === 'dairy-free' || dietLower === 'dairy free')) return true;
-              if (prefLower === 'keto' && (dietLower === 'ketogenic' || dietLower === 'keto')) return true;
-              if (prefLower === 'paleo' && (dietLower === 'paleo' || dietLower === 'paleolithic')) return true;
+        // 1. Calculate match score based on favorite foods (HIGHEST PRIORITY)
+        let foodMatchScore = 0;
+        const foodMatches: string[] = [];
+        
+        if (favoriteFoods && favoriteFoods.length > 0) {
+          favoriteFoods.forEach(food => {
+            if (!food) return;
+            const foodLower = food.trim().toLowerCase();
+            if (!foodLower) return;
+            
+            // Check if food is in title (highest score)
+            if (recipeTitle.includes(foodLower)) {
+              foodMatchScore += 15; // Higher score for title matches
+              foodMatches.push(`Title: ${food}`);
+              return;
+            }
+            
+            // Check if food is in ingredients (medium score)
+            const ingredientMatch = recipeIngredients.some(ing => {
+              // Check for whole word match first (higher score)
+              if (new RegExp(`\\b${foodLower}\\b`, 'i').test(ing)) {
+                foodMatchScore += 10;
+                foodMatches.push(`Ingredient: ${food}`);
+                return true;
+              }
+              
+              // Check for partial match (lower score)
+              if (ing.includes(foodLower)) {
+                foodMatchScore += 5;
+                foodMatches.push(`Ingredient (partial): ${food}`);
+                return true;
+              }
               return false;
             });
+            
+            // If no direct match, check for partial matches in title (lowest score)
+            if (!ingredientMatch && foodLower.length > 3) {
+              const words = recipeTitle.split(/\s+/);
+              if (words.some(word => word.includes(foodLower))) {
+                foodMatchScore += 3;
+                foodMatches.push(`Title (partial): ${food}`);
+              }
+            }
           });
         }
         
-        // Skip if it doesn't match dietary restrictions
-        if (!matchesDiet && dietaryRestrictions.length > 0) {
-          return { ...recipe, _matchScore: -1 };
-        }
-        
-        // 2. Calculate match score based on favorite foods (HIGH PRIORITY)
-        let foodMatchScore = 0;
-        if (favoriteFoods && favoriteFoods.length > 0) {
-          foodMatchScore = favoriteFoods.reduce((score, food) => {
-            const foodLower = food.toLowerCase();
-            // Check if food is in title or ingredients
-            if (recipeTitle.includes(foodLower)) return score + 10; // High score for title match
-            if (recipeIngredients.some(ing => ing.includes(foodLower))) return score + 5; // Medium score for ingredient match
-            return score;
-          }, 0);
-        }
-        
-        // 3. Calculate match score based on cuisine (MEDIUM PRIORITY)
+        // 2. Calculate match score based on cuisine (MEDIUM PRIORITY)
         let cuisineMatchScore = 0;
+        const cuisineMatches: string[] = [];
+        
         if (favoriteCuisines && favoriteCuisines.length > 0) {
-          cuisineMatchScore = favoriteCuisines.reduce((score, cuisine) => {
-            const cuisineLower = cuisine.toLowerCase();
-            // Check for exact cuisine match
-            if (recipeCuisines.some(c => c?.toLowerCase() === cuisineLower)) {
-              return score + 5; // High score for exact match
+          favoriteCuisines.forEach(cuisine => {
+            if (!cuisine) return;
+            const cuisineLower = cuisine.trim().toLowerCase();
+            if (!cuisineLower) return;
+            
+            // Check for exact cuisine match (higher score)
+            const exactMatch = recipeCuisines.some(c => c?.toLowerCase() === cuisineLower);
+            if (exactMatch) {
+              cuisineMatchScore += 8;
+              cuisineMatches.push(`Cuisine: ${cuisine}`);
+              return;
             }
-            // Check for partial match in title
-            if (recipeTitle.includes(cuisineLower) && cuisineLower.length > 4) {
-              return score + 2; // Lower score for title match
+            
+            // Check for partial match in title (medium score)
+            if (cuisineLower.length > 3 && recipeTitle.includes(cuisineLower)) {
+              cuisineMatchScore += 4;
+              cuisineMatches.push(`Title contains: ${cuisine}`);
+              return;
             }
-            return score;
-          }, 0);
+            
+            // Check for partial match in cuisine names
+            const partialMatch = recipeCuisines.some(c => 
+              c && c.toLowerCase().includes(cuisineLower)
+            );
+            if (partialMatch) {
+              cuisineMatchScore += 2;
+              cuisineMatches.push(`Cuisine (partial): ${cuisine}`);
+            }
+          });
         }
         
-        // 4. Bonus for recipes with images and good metadata
-        const qualityBonus = (recipe.image && recipe.image !== '/placeholder.svg' ? 1 : 0) +
-                           (recipe.readyInMinutes ? 1 : 0) +
-                           (recipeTitle.length > 10 ? 1 : 0);
+        // 3. Calculate quality bonus (LOW PRIORITY)
+        let qualityBonus = 0;
+        const qualityDetails: string[] = [];
         
-        // Calculate total score with weights
-        const totalScore = 
-          (foodMatchScore * 3) +      // Highest weight to favorite foods
-          (cuisineMatchScore * 2) +   // Medium weight to cuisines
-          (qualityBonus * 0.5);       // Small bonus for quality
+        if (recipe.image && recipe.image !== '/placeholder.svg') {
+          qualityBonus += 2;
+          qualityDetails.push('Has image');
+        }
+        
+        if (recipe.readyInMinutes && recipe.readyInMinutes <= 30) {
+          qualityBonus += 3;
+          qualityDetails.push('Quick meal');
+        } else if (recipe.readyInMinutes) {
+          qualityBonus += 1;
+          qualityDetails.push('Ready in minutes');
+        }
+        
+        if (recipe.healthScore && recipe.healthScore > 7) {
+          qualityBonus += 2;
+          qualityDetails.push('Healthy');
+        }
+        
+        // Calculate total score with weights and normalization
+        const totalScore = (
+          (foodMatchScore * 0.5) +      // 50% weight to favorite foods
+          (cuisineMatchScore * 0.3) +   // 30% weight to cuisines
+          (qualityBonus * 0.2)          // 20% weight to quality
+        );
+        
+        // Add debug information to the recipe
+        recipe._matchDetails = {
+          foodMatches,
+          cuisineMatches,
+          qualityDetails,
+          scores: {
+            food: foodMatchScore,
+            cuisine: cuisineMatchScore,
+            quality: qualityBonus,
+            total: totalScore
+          }
+        };
         
         console.log(`🔍 Recipe "${recipeTitle}" scores:`, {
           foodMatchScore,
@@ -232,8 +313,6 @@ const HomePage: React.FC = () => {
         
         return { ...recipe, _matchScore: totalScore };
       })
-      // Filter out recipes that don't match dietary restrictions
-      .filter(recipe => recipe._matchScore >= 0)
       // Sort by total score (descending)
       .sort((a, b) => b._matchScore - a._matchScore)
       // Remove the temporary score property
