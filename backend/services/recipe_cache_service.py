@@ -59,26 +59,132 @@ class RecipeCacheService:
 
     def _is_cache_valid(self, cached_at: str) -> bool:
         """Check if a cache entry is still valid based on TTL"""
+        if not cached_at or not isinstance(cached_at, str):
+            return False
+            
         try:
             cached_time = datetime.fromisoformat(cached_at)
             return datetime.now() - cached_time < self.cache_ttl
-        except (ValueError, TypeError):
+        except (ValueError, TypeError) as e:
+            logger.warning(f"Invalid cache timestamp '{cached_at}': {str(e)}")
+            return False
+            
+    async def add_recipe(self, recipe: Dict[str, Any]) -> bool:
+        """
+        Add or update a recipe in the cache
+        
+        Args:
+            recipe: The recipe data to cache
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        if not recipe or not isinstance(recipe, dict):
+            logger.error("Invalid recipe: must be a non-empty dictionary")
+            return False
+            
+        try:
+            # Extract metadata for search
+            metadata = self._extract_recipe_metadata(recipe)
+            if not metadata or 'id' not in metadata:
+                logger.error("Failed to extract required metadata from recipe")
+                return False
+                
+            # Generate embeddings for the recipe
+            recipe_text = f"{metadata.get('title', '')} {metadata.get('ingredients', '')}"
+            
+            # Add to recipe collection
+            self.recipe_collection.upsert(
+                ids=[metadata['id']],
+                documents=[recipe_text],
+                metadatas=[metadata]
+            )
+            
+            logger.debug(f"Successfully cached recipe: {metadata.get('title')} (ID: {metadata['id']})")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error adding recipe to cache: {str(e)}")
             return False
 
     def _extract_recipe_metadata(self, recipe: Dict[Any, Any]) -> Dict[str, Any]:
         """Extract searchable metadata from a recipe"""
-        return {
-            "id": str(recipe.get('id', '')),
-            "title": recipe.get('title', ''),
-            "cuisines": ','.join(recipe.get('cuisines', [])),
-            "diets": ','.join(recipe.get('diets', [])),
-            "dish_types": ','.join(recipe.get('dishTypes', [])),
-            "ingredients": ','.join([ing.get('name', '') for ing in recipe.get('extendedIngredients', [])]),
-            "cached_at": datetime.now().isoformat(),
-            "source": recipe.get('source', 'unknown'),
-            "calories": recipe.get('nutrition', {}).get('calories', 0),
-            "cooking_time": recipe.get('readyInMinutes', 0)
-        }
+        if not recipe or not isinstance(recipe, dict):
+            logger.warning("Invalid recipe format: recipe must be a non-empty dictionary")
+            return {}
+            
+        try:
+            # Handle different recipe formats (TheMealDB vs Spoonacular)
+            cuisines = []
+            if 'cuisine' in recipe:  # TheMealDB format
+                cuisines = [recipe['cuisine']] if recipe.get('cuisine') else []
+            else:  # Spoonacular format
+                cuisines = recipe.get('cuisines', [])
+                if isinstance(cuisines, str):
+                    cuisines = [c.strip() for c in cuisines.split(',') if c.strip()]
+                
+            # Handle dietary restrictions
+            dietary_restrictions = recipe.get('dietary_restrictions', recipe.get('diets', []))
+            if isinstance(dietary_restrictions, str):
+                dietary_restrictions = [d.strip() for d in dietary_restrictions.split(',') if d.strip()]
+                
+            # Handle ingredients
+            ingredients = []
+            if 'strIngredient1' in recipe:  # TheMealDB format
+                ingredients = [
+                    recipe[f'strIngredient{i}'] 
+                    for i in range(1, 21) 
+                    if recipe.get(f'strIngredient{i}') and str(recipe[f'strIngredient{i}']).strip()
+                ]
+            else:  # Spoonacular format
+                ingredients = [
+                    str(ing.get('name', '')) 
+                    for ing in recipe.get('extendedIngredients', []) 
+                    if ing and isinstance(ing, dict)
+                ]
+            
+            # Get recipe ID and title with proper fallbacks
+            recipe_id = str(recipe.get('idMeal', recipe.get('id', ''))).strip()
+            if not recipe_id:
+                logger.warning("Recipe is missing an ID, generating a random one")
+                import uuid
+                recipe_id = str(uuid.uuid4())
+                
+            title = str(recipe.get('strMeal', recipe.get('title', 'Untitled Recipe'))).strip()
+            
+            # Create base metadata dictionary
+            metadata = {
+                "id": recipe_id,
+                "title": title,
+                "cuisine": cuisines[0] if cuisines else 'Other',
+                "cuisines": ','.join(cuisines) if cuisines else '',
+                "diets": ','.join(dietary_restrictions) if dietary_restrictions else '',
+                "tags": ','.join(recipe.get('tags', [])) if recipe.get('tags') else '',
+                "dish_types": ','.join(recipe.get('dishTypes', [])) if recipe.get('dishTypes') else '',
+                "ingredients": ','.join(ingredients) if ingredients else '',
+                "cached_at": datetime.now().isoformat(),
+                "source": recipe.get('source', 'themealdb' if 'idMeal' in recipe else 'spoonacular'),
+            }
+            
+            # Add optional fields if they exist
+            if 'nutrition' in recipe and recipe['nutrition']:
+                metadata["calories"] = recipe['nutrition'].get('calories', 0)
+                
+            if 'readyInMinutes' in recipe:
+                metadata["cooking_time"] = recipe['readyInMinutes']
+                
+            if 'strArea' in recipe:
+                metadata["area"] = recipe['strArea']
+                
+            # Add category if it exists
+            if 'strCategory' in recipe:
+                metadata["category"] = recipe['strCategory']
+                
+            return metadata
+            
+        except Exception as e:
+            logger.error(f"Error extracting recipe metadata: {str(e)}")
+            return {}
 
     def _extract_search_terms(self, recipe: Dict[Any, Any]) -> str:
         """Extract searchable terms from a recipe"""
@@ -164,11 +270,11 @@ class RecipeCacheService:
             # If we have a search query, use semantic search
             if search_text:
                 try:
-                    # Search in search collection with error handling
+                    # Search in search collection with error handling - return up to 1000 results
                     search_results = self.search_collection.query(
                         query_texts=[search_text],
                         where=where if where else None,
-                        n_results=50,  # Get more results for better filtering
+                        n_results=1000,  # Increased to return up to 1000 results
                         include=["metadatas", "distances"]
                     )
                 except Exception as e:

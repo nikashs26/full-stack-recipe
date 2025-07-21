@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Clock, ChefHat, Star } from 'lucide-react';
+import { ArrowLeft, Clock, ChefHat, Star, Utensils, Globe } from 'lucide-react';
 import Header from '../components/Header';
 import { fetchRecipeById } from '../lib/spoonacular';
 import { Button } from '@/components/ui/button';
@@ -9,15 +9,33 @@ import RecipeReviews, { Review } from '../components/RecipeReviews';
 import { getReviewsByRecipeId, addReview } from '../utils/chromaReviewUtils';
 import { useToast } from '@/hooks/use-toast';
 
+type RecipeSource = 'spoonacular' | 'themealdb';
+
+interface ExternalRecipeDetailLocationState {
+  source?: RecipeSource;
+}
+
 const ExternalRecipeDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
   const [reviews, setReviews] = useState<Review[]>([]);
   
+  // Determine the source from location state or default to spoonacular
+  const source = (location.state as ExternalRecipeDetailLocationState)?.source || 'spoonacular';
+  
   const { data: recipe, isLoading, error } = useQuery({
-    queryKey: ['external-recipe', id],
-    queryFn: () => fetchRecipeById(parseInt(id!)),
+    queryKey: ['external-recipe', source, id],
+    queryFn: async () => {
+      if (source === 'themealdb') {
+        const response = await fetch(`http://localhost:5003/api/mealdb/recipe/${id}`);
+        if (!response.ok) throw new Error('Failed to fetch recipe from TheMealDB');
+        return await response.json();
+      } else {
+        return await fetchRecipeById(parseInt(id!));
+      }
+    },
     enabled: !!id,
   });
 
@@ -126,18 +144,69 @@ const ExternalRecipeDetailPage: React.FC = () => {
 
   // Get the cuisine for display
   const cuisine = (() => {
+    if (source === 'themealdb') {
+      return recipe.strArea || 'International';
+    }
     if (recipe.cuisines && recipe.cuisines.length > 0) {
-      return recipe.cuisines[0];
+      return Array.isArray(recipe.cuisines) ? recipe.cuisines[0] : recipe.cuisines;
     }
     return 'International';
   })();
 
+  // Get the recipe name
+  const recipeName = (() => {
+    if (source === 'themealdb') return recipe.strMeal || 'Unnamed Recipe';
+    return recipe.title || recipe.name || 'Unnamed Recipe';
+  })();
+
+  // Get the recipe source URL
+  const getSourceUrl = () => {
+    if (source === 'themealdb') return recipe.strSource || `https://www.themealdb.com/meal/${id}`;
+    if (recipe.sourceUrl) return recipe.sourceUrl;
+    if (recipe.spoonacularSourceUrl) return recipe.spoonacularSourceUrl;
+    return '#';
+  };
+
   // Get the recipe image
   const getRecipeImage = () => {
+    if (source === 'themealdb') {
+      return recipe.strMealThumb || '/placeholder.svg';
+    }
     if (recipe.image && recipe.image.trim()) {
       return recipe.image;
     }
     return 'https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?auto=format&fit=crop&w=800&q=80';
+  };
+
+  // Extract ingredients and measurements from TheMealDB recipe
+  const extractMealDBIngredients = (meal: any): {name: string, measure: string}[] => {
+    const ingredients = [];
+    for (let i = 1; i <= 20; i++) {
+      const ingredient = meal[`strIngredient${i}`];
+      const measure = meal[`strMeasure${i}`];
+      if (ingredient && ingredient.trim() !== '') {
+        ingredients.push({
+          name: ingredient,
+          measure: measure || ''
+        });
+      }
+    }
+    return ingredients;
+  };
+
+  // Get the recipe ingredients
+  const getIngredients = () => {
+    if (source === 'themealdb') {
+      return extractMealDBIngredients(recipe);
+    }
+    if (recipe.extendedIngredients) {
+      return recipe.extendedIngredients.map((ing: any) => ({
+        name: ing.name,
+        amount: ing.amount,
+        unit: ing.unit
+      }));
+    }
+    return [];
   };
 
   // Helper function to generate fallback ingredients based on recipe title
@@ -161,6 +230,22 @@ const ExternalRecipeDetailPage: React.FC = () => {
     if (titleLower.includes('pizza')) additionalIngredients.push("Pizza dough", "Tomato sauce", "Mozzarella cheese");
     
     return [...baseIngredients, ...additionalIngredients];
+  };
+
+  // Get the recipe instructions
+  const getInstructions = () => {
+    if (source === 'themealdb') {
+      return recipe.strInstructions || 'No instructions available.';
+    }
+    if (recipe.instructions) {
+      return recipe.instructions;
+    }
+    if (recipe.analyzedInstructions && recipe.analyzedInstructions.length > 0) {
+      return recipe.analyzedInstructions[0].steps
+        .map((step: any) => step.step)
+        .join('\n\n');
+    }
+    return 'No instructions available. Please check the original source for preparation steps.';
   };
 
   // Helper function to generate fallback instructions
@@ -264,6 +349,20 @@ const ExternalRecipeDetailPage: React.FC = () => {
     return generateFallbackInstructions(recipe.title || '');
   })();
 
+  // Get the prep time
+  const getPrepTime = () => {
+    if (source === 'themealdb') return recipe.strPrepTime || 'N/A';
+    if (recipe.readyInMinutes) return `${recipe.readyInMinutes} minutes`;
+    return 'N/A';
+  };
+
+  // Get the servings
+  const getServings = () => {
+    if (source === 'themealdb') return recipe.servings || 1;
+    if (recipe.servings) return recipe.servings;
+    return 1;
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
@@ -285,27 +384,37 @@ const ExternalRecipeDetailPage: React.FC = () => {
             <div className="relative h-64 md:h-96 w-full">
               <img
                 src={getRecipeImage()}
-                alt={recipe.title}
+                alt={recipeName}
                 className="w-full h-full object-cover"
                 onError={(e) => {
                   (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?auto=format&fit=crop&w=800&q=80';
                 }}
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex flex-col justify-end p-6">
-                <h1 className="text-white text-3xl md:text-4xl font-bold">{recipe.title}</h1>
-                <div className="flex items-center text-white mt-2">
-                  <span className="text-sm">{cuisine}</span>
-                  {recipe.readyInMinutes && (
-                    <div className="ml-4 flex items-center">
-                      <Clock className="h-4 w-4" />
-                      <span className="ml-1">{recipe.readyInMinutes} minutes</span>
-                    </div>
-                  )}
-                  {avgRating > 0 && (
-                    <div className="ml-4 flex items-center">
-                      <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
-                      <span className="ml-1">{avgRating} ({reviews.length} {reviews.length === 1 ? 'review' : 'reviews'})</span>
-                    </div>
+                <h1 className="text-white text-3xl md:text-4xl font-bold">{recipeName}</h1>
+                <div className="flex flex-wrap items-center gap-2 text-sm text-gray-600 mb-2">
+                  <div className="flex items-center">
+                    <Clock className="mr-1 h-4 w-4" />
+                    <span>{getPrepTime()}</span>
+                  </div>
+                  <span>•</span>
+                  <div className="flex items-center">
+                    <ChefHat className="mr-1 h-4 w-4" />
+                    <span>{getServings()} {getServings() === 1 ? 'serving' : 'servings'}</span>
+                  </div>
+                  <span>•</span>
+                  <div className="flex items-center">
+                    <Globe className="mr-1 h-4 w-4" />
+                    <span>{cuisine}</span>
+                  </div>
+                  {source === 'themealdb' && (
+                    <>
+                      <span>•</span>
+                      <div className="flex items-center">
+                        <Utensils className="mr-1 h-4 w-4" />
+                        <span>Source: TheMealDB</span>
+                      </div>
+                    </>
                   )}
                 </div>
               </div>

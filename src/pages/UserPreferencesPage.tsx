@@ -1,25 +1,161 @@
-import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import Header from '../components/Header';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
-import { Form, FormField, FormItem, FormLabel } from '@/components/ui/form';
-import { Settings, Save, Loader2, Lock, ChefHat, Utensils } from 'lucide-react';
-import { useForm } from 'react-hook-form';
-import { z } from 'zod';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { Info, DollarSign, Users } from 'lucide-react';
-import { Input } from '@/components/ui/input';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { loadUserPreferences, saveUserPreferences, UserPreferences } from '../services/preferencesService';
+import { Input } from "@/components/ui/input";
+import { Loader2, Info, Lock } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
 
-const dietaryOptions = [
+// Define the shape of user preferences from the API
+type UserPreferences = {
+  dietaryRestrictions?: string[];
+  favoriteCuisines?: string[];
+  allergens?: string[];
+  cookingSkillLevel?: 'beginner' | 'intermediate' | 'advanced';
+  favoriteFoods?: string[];
+  healthGoals?: string[];
+  maxCookingTime?: string;
+  [key: string]: any; // Add index signature for additional properties
+};
+
+// Load user preferences from the backend
+const loadUserPreferences = async (): Promise<UserPreferences> => {
+  try {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      throw new Error('No authentication token found');
+    }
+
+    const response = await fetch('http://localhost:5003/api/preferences', {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      credentials: 'include'
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      console.error('Error response from server:', errorData);
+      throw new Error(errorData.error || 'Failed to load preferences');
+    }
+
+    const data = await response.json();
+    console.log('Received preferences data:', data);
+    
+    // The preferences are in the 'preferences' field of the response
+    const preferences = data.preferences || data;
+    
+    // Ensure favoriteFoods is an array of exactly 3 strings
+    const favoriteFoods = Array.isArray(preferences.favoriteFoods) 
+      ? [...preferences.favoriteFoods, '', '', ''].slice(0, 3)
+      : ['', '', ''];
+    
+    // Return with defaults for any missing fields
+    return {
+      dietaryRestrictions: [],
+      favoriteCuisines: [],
+      allergens: [],
+      cookingSkillLevel: 'beginner',
+      healthGoals: [],
+      maxCookingTime: '30 minutes',
+      ...preferences,
+      favoriteFoods
+    };
+  } catch (error) {
+    console.error('Error loading preferences:', error);
+    // Return default values if there's an error
+    return {
+      dietaryRestrictions: [],
+      favoriteCuisines: [],
+      allergens: [],
+      cookingSkillLevel: 'beginner',
+      favoriteFoods: ['', '', ''],
+      healthGoals: [],
+      maxCookingTime: '30 minutes'
+    };
+  }
+};
+
+// Save user preferences to the backend
+const saveUserPreferences = async (data: UserPreferences) => {
+  try {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      throw new Error('No authentication token found');
+    }
+
+    console.log('Saving preferences:', data);
+
+    // Ensure favoriteFoods is an array of exactly 3 strings
+    const favoriteFoods = Array.isArray(data.favoriteFoods) 
+      ? data.favoriteFoods.slice(0, 3).map(food => String(food || ''))
+      : ['', '', ''];
+
+    const response = await fetch('http://localhost:5003/api/preferences', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({
+        preferences: {
+          ...data,
+          favoriteFoods
+        }
+      }),
+      credentials: 'include'
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      console.error('Error response from server:', errorData);
+      throw new Error(errorData.error || 'Failed to save preferences');
+    }
+
+    const result = await response.json();
+    console.log('Save response:', result);
+    
+    return result;
+  } catch (error) {
+    console.error('Error saving preferences:', error);
+    throw error;
+  }
+};
+
+// Interface for form options
+interface FormOption {
+  id: string;
+  label: string;
+  description: string;
+}
+
+// Form schema for validation
+const formSchema = z.object({
+  dietaryRestrictions: z.array(z.string()),
+  favoriteCuisines: z.array(z.string()),
+  allergens: z.array(z.string()),
+  cookingSkillLevel: z.enum(['beginner', 'intermediate', 'advanced']),
+  favoriteFoods: z.array(z.string()).length(3),
+  healthGoals: z.array(z.string()).optional(),
+  maxCookingTime: z.string().optional()
+});
+
+type FormValues = z.infer<typeof formSchema>;
+
+// Form options
+const dietaryOptions: FormOption[] = [
   { id: 'vegetarian', label: 'Vegetarian', description: 'No meat or fish' },
   { id: 'vegan', label: 'Vegan', description: 'No animal products' },
   { id: 'gluten-free', label: 'Gluten Free', description: 'No wheat, barley, or rye' },
@@ -28,7 +164,7 @@ const dietaryOptions = [
   { id: 'paleo', label: 'Paleo', description: 'No processed foods' }
 ];
 
-const cuisineOptions = [
+const cuisineOptions: FormOption[] = [
   { id: 'italian', label: 'Italian', description: 'Pasta, pizza, regional flavors' },
   { id: 'mexican', label: 'Mexican', description: 'Spicy, flavorful, corn and flour-based dishes' },
   { id: 'indian', label: 'Indian', description: 'Curry, aromatic spices, diverse flavors' },
@@ -48,7 +184,7 @@ const cuisineOptions = [
   { id: 'moroccan', label: 'Moroccan', description: 'Tagines, couscous, aromatic spices' }
 ];
 
-const allergenOptions = [
+const allergenOptions: FormOption[] = [
   { id: 'nuts', label: 'Nuts', description: 'Tree nuts and peanuts' },
   { id: 'shellfish', label: 'Shellfish', description: 'Shrimp, crab, lobster' },
   { id: 'dairy', label: 'Dairy', description: 'Milk and milk products' },
@@ -57,286 +193,153 @@ const allergenOptions = [
   { id: 'wheat', label: 'Wheat', description: 'Wheat and wheat products' }
 ];
 
-// Define schema for form validation
-const formSchema = z.object({
-  dietaryRestrictions: z.array(z.string()),
-  favoriteCuisines: z.array(z.string()),
-  favoriteFoods: z.array(z.string().min(1, "Food name cannot be empty")).max(3, "Maximum 3 favorite foods allowed"),
-  allergens: z.array(z.string()),
-  cookingSkillLevel: z.enum(['beginner', 'intermediate', 'advanced'])
-});
-
 const UserPreferencesPage: React.FC = () => {
-  const { isAuthenticated, isLoading: authLoading, user } = useAuth();
-  const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
   const { toast } = useToast();
-  
-  // Initialize all state at the top level
-  const [preferences, setPreferences] = useState<UserPreferences>({
-    dietaryRestrictions: [],
-    favoriteCuisines: [],
-    favoriteFoods: [],
-    allergens: [],
-    cookingSkillLevel: 'beginner',
-    healthGoals: [],
-    maxCookingTime: '30 minutes'
-  });
-  const [isLoading, setIsLoading] = useState(false);
+  const navigate = useNavigate();
+  const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [hasChanges, setHasChanges] = useState(false);
-  
-  // Initialize form with current preferences
-  const form = useForm<z.infer<typeof formSchema>>({
+
+  const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       dietaryRestrictions: [],
       favoriteCuisines: [],
-      favoriteFoods: [],
       allergens: [],
-      cookingSkillLevel: 'beginner'
+      cookingSkillLevel: 'beginner',
+      favoriteFoods: ['', '', ''],
+      healthGoals: [],
+      maxCookingTime: '30 minutes'
     }
   });
 
-  // Handle authentication and redirects
+  // Load user preferences on mount
   useEffect(() => {
-    if (authLoading) return; // Still checking auth status
-    
-    if (!isAuthenticated) {
-      navigate('/signin');
-      toast({
-        title: "Authentication Required",
-        description: "Please sign in to access your preferences.",
-        variant: "destructive"
-      });
-    }
-  }, [isAuthenticated, authLoading, navigate, toast]);
-  
-  // Show loading state while checking authentication
-  if (authLoading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
-          <p className="text-gray-600">Checking authentication...</p>
-        </div>
-      </div>
-    );
-  }
-  
-  // Show login prompt if not authenticated
-  if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <Header />
-        <div className="pt-24 md:pt-28">
-          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-            <Card className="text-center">
-              <CardHeader>
-                <div className="flex justify-center mb-4">
-                  <Lock className="h-12 w-12 text-orange-500" />
-                </div>
-                <CardTitle className="text-2xl">Authentication Required</CardTitle>
-                <CardDescription>
-                  Sign in to access and customize your meal preferences
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                  <Link to="/signin">
-                    <Button size="lg">Sign In</Button>
-                  </Link>
-                  <Link to="/signup">
-                    <Button variant="outline" size="lg">Sign Up</Button>
-                  </Link>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Load user preferences from authenticated backend
-  useEffect(() => {
-    if (!isAuthenticated) return;
-
     const loadPreferences = async () => {
-      setIsLoading(true);
+      if (!isAuthenticated) {
+        setIsLoading(false);
+        return;
+      }
+
       try {
-        const loadedPreferences = await loadUserPreferences();
-        setPreferences(loadedPreferences);
-        // Update form with loaded preferences
+        const preferences = await loadUserPreferences();
+        // Ensure we have exactly 3 favorite foods
+        const favoriteFoods = [...preferences.favoriteFoods, '', '', ''].slice(0, 3) as [string, string, string];
+        
         form.reset({
-          dietaryRestrictions: loadedPreferences.dietaryRestrictions || [],
-          favoriteCuisines: loadedPreferences.favoriteCuisines || [],
-          favoriteFoods: loadedPreferences.favoriteFoods || [],
-          allergens: loadedPreferences.allergens || [],
-          cookingSkillLevel: loadedPreferences.cookingSkillLevel || 'beginner'
+          ...preferences,
+          favoriteFoods
         });
       } catch (error) {
-        console.error('Error loading preferences:', error);
+        console.error('Failed to load preferences:', error);
         toast({
-          title: "Error Loading Preferences",
-          description: "Could not load your preferences. Using defaults.",
-          variant: "destructive"
+          title: 'Error',
+          description: 'Failed to load your preferences. Please try again.',
+          variant: 'destructive',
         });
       } finally {
         setIsLoading(false);
       }
     };
 
-    loadPreferences();
-  }, [isAuthenticated, toast, form]);
+    if (isAuthenticated) {
+      loadPreferences();
+    }
+  }, [isAuthenticated, form, toast]);
 
-  // Auto-save preferences when form changes
-  useEffect(() => {
-    if (!hasChanges || !isAuthenticated) return;
+  // Handle form submission
+  const onSubmit = async (data: FormValues) => {
+    if (!isAuthenticated) {
+      navigate('/login');
+      return;
+    }
 
-    const subscription = form.watch((value, { name }) => {
-      // Only auto-save if we have changes and the field is not currently being edited
-      if (name && !name.startsWith('favoriteFoods')) {
-        setHasChanges(true);
-      }
-    });
-    
-    const timeoutId = setTimeout(async () => {
-      const values = form.getValues();
-      // Ensure we have a valid form state before saving
-      const isValid = await form.trigger();
-      if (isValid) {
-        await savePreferences(values, false);
-      }
-    }, 1000);
-
-    return () => {
-      subscription.unsubscribe();
-      clearTimeout(timeoutId);
-    };
-  }, [form.watch(), hasChanges, isAuthenticated]);
-
-  // Create a convenience variable for the current form values
-  const currentPreferences = form.watch();
-
-  const savePreferences = async (values: z.infer<typeof formSchema>, showToast: boolean = true): Promise<boolean> => {
-    console.log('Saving preferences:', values);
-    setIsSaving(true);
-    
     try {
-      // Ensure favoriteFoods is always an array of 3 items
-      const favoriteFoods = [...(values.favoriteFoods || [])];
-      while (favoriteFoods.length < 3) {
-        favoriteFoods.push('');
-      }
+      setIsSaving(true);
       
-      const preferencesToSave = {
-        dietaryRestrictions: values.dietaryRestrictions || [],
-        favoriteCuisines: values.favoriteCuisines || [],
-        favoriteFoods: favoriteFoods.filter(Boolean), // Remove any empty strings
-        allergens: values.allergens || [],
-        cookingSkillLevel: values.cookingSkillLevel || 'beginner',
-        healthGoals: preferences.healthGoals || [],
-        maxCookingTime: preferences.maxCookingTime || '30 minutes'
+      // Prepare the data to be saved
+      const preferencesData: UserPreferences = {
+        dietaryRestrictions: data.dietaryRestrictions || [],
+        favoriteCuisines: data.favoriteCuisines || [],
+        allergens: data.allergens || [],
+        cookingSkillLevel: data.cookingSkillLevel as 'beginner' | 'intermediate' | 'advanced',
+        favoriteFoods: data.favoriteFoods.filter(Boolean),
+        healthGoals: data.healthGoals || [],
+        maxCookingTime: data.maxCookingTime || '30 minutes'
       };
+
+      await saveUserPreferences(preferencesData);
       
-      console.log('Saving preferences to backend:', preferencesToSave);
-      await saveUserPreferences(preferencesToSave);
-      
-      // Update local state with the saved preferences
-      setPreferences(preferencesToSave);
-      
-      if (showToast) {
-        toast({
-          title: "Preferences Saved",
-          description: "Your preferences have been updated successfully.",
-        });
-      }
-      setHasChanges(false);
-      return true;
-    } catch (error) {
-      console.error('Error saving preferences:', error);
       toast({
-        title: "Error Saving Preferences",
-        description: "Failed to save your preferences. Please try again.",
-        variant: "destructive"
+        title: 'Success',
+        description: 'Your preferences have been saved.',
       });
-      return false;
+      
+      // Optional: Refresh the preferences after saving
+      const updatedPreferences = await loadUserPreferences();
+      form.reset({
+        ...updatedPreferences,
+        favoriteFoods: [...updatedPreferences.favoriteFoods || [], '', '', ''].slice(0, 3) as [string, string, string]
+      });
+      
+    } catch (error) {
+      console.error('Failed to save preferences:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to save your preferences. Please try again.',
+        variant: 'destructive',
+      });
     } finally {
       setIsSaving(false);
     }
   };
 
-  const handleDietaryChange = (id: string) => {
-    const currentValues = form.getValues('dietaryRestrictions');
-    const newValues = currentValues.includes(id)
-      ? currentValues.filter(item => item !== id)
-      : [...currentValues, id];
-    
-    form.setValue('dietaryRestrictions', newValues);
-    setHasChanges(true);
-  };
+  // Render loading state
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
 
-  const handleCuisineChange = (id: string) => {
-    const currentValues = form.getValues('favoriteCuisines');
-    const newValues = currentValues.includes(id)
-      ? currentValues.filter(item => item !== id)
-      : [...currentValues, id];
-    
-    form.setValue('favoriteCuisines', newValues);
-    setHasChanges(true);
-  };
-
-  const handleAllergenChange = (id: string) => {
-    const currentValues = form.getValues('allergens');
-    const newValues = currentValues.includes(id)
-      ? currentValues.filter(item => item !== id)
-      : [...currentValues, id];
-    
-    form.setValue('allergens', newValues);
-    setHasChanges(true);
-  };
-
-  const handleSkillLevelChange = (value: string) => {
-    form.setValue('cookingSkillLevel', value as 'beginner' | 'intermediate' | 'advanced');
-    setHasChanges(true);
-  };
-
-  const onSubmit = async (values: z.infer<typeof formSchema>) => {
-    setIsLoading(true);
-    try {
-      // Process favorite foods to remove empty strings but keep the array structure
-      const processedValues = {
-        ...values,
-        favoriteFoods: (values.favoriteFoods || []).filter(Boolean)
-      };
-      
-      const success = await savePreferences(processedValues, true);
-      if (success) {
-        // Reset form state to match saved state
-        form.reset(processedValues);
-        setHasChanges(false);
-        navigate('/');
-      }
-    } catch (error) {
-      console.error('Error saving preferences:', error);
-      toast({
-        title: "Error",
-        description: "Failed to save preferences. Please try again.",
-        variant: "destructive"
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  // Render sign-in prompt for unauthenticated users
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <Card className="w-full max-w-md">
+          <CardHeader>
+            <CardTitle>Sign In Required</CardTitle>
+            <CardDescription>
+              Please sign in to view and edit your preferences.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Button className="w-full" onClick={() => navigate('/login')}>
+              Sign In
+            </Button>
+            <div className="text-center text-sm text-gray-500">
+              Don't have an account?{' '}
+              <Button variant="link" className="p-0 h-auto" onClick={() => navigate('/signup')}>
+                Sign up
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
       <main className="pt-24 md:pt-28">
-        <div className="max-w-2xl mx-auto px-4 sm:px-6 py-12 bg-white shadow-sm rounded-lg mt-8">
+        <div className="max-w-2xl mx-auto px-4 sm:px-6 py-12">
           <div className="text-center mb-8">
             <h1 className="text-3xl font-bold">Your Recipe Preferences</h1>
-            <p className="text-gray-500 mt-2">Tell us what you like, and we'll personalize your recipe recommendations</p>
+            <p className="text-gray-500 mt-2">
+              Tell us what you like, and we'll personalize your recipe recommendations
+            </p>
             <div className="flex items-center justify-center mt-4 p-3 bg-blue-50 rounded-lg">
               <Info className="h-4 w-4 text-blue-600 mr-2" />
               <span className="text-sm text-blue-800">
@@ -347,173 +350,183 @@ const UserPreferencesPage: React.FC = () => {
 
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-              {/* Favorite Foods Section */}
+              {/* Favorite Foods */}
               <div>
                 <h2 className="text-xl font-medium mb-4">Favorite Foods</h2>
                 <p className="text-sm text-gray-600 mb-4">Enter up to 3 of your favorite foods</p>
                 <div className="space-y-3">
-                  {[0, 1, 2].map((index) => {
-                    const favoriteFoods = form.watch('favoriteFoods') || [];
-                    const currentValue = favoriteFoods[index] || '';
-                    
-                    return (
-                      <div key={index} className="flex items-center space-x-2">
-                        <Input
-                          placeholder={`Favorite food #${index + 1}`}
-                          value={currentValue}
-                          onChange={(e) => {
-                            const newValue = e.target.value;
-                            const currentFoods = form.getValues('favoriteFoods') || [];
-                            const newFoods = [...currentFoods];
-                            
-                            // Ensure the array is long enough
-                            while (newFoods.length <= index) newFoods.push('');
-                            newFoods[index] = newValue;
-                            
-                            // Update form state
-                            form.setValue('favoriteFoods', newFoods, { shouldDirty: true });
-                            setHasChanges(true);
-                          }}
-                          onBlur={() => {
-                            // Trigger form validation on blur
-                            form.trigger('favoriteFoods');
-                          }}
-                          className="flex-1"
-                        />
-                        {index > 0 && (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => {
-                              const currentFoods = form.getValues('favoriteFoods') || [];
-                              const newFoods = [...currentFoods];
-                              newFoods.splice(index, 1); // Remove the item
-                              newFoods.push(''); // Add empty string to maintain array length
-                              
-                              form.setValue('favoriteFoods', newFoods, { shouldDirty: true });
-                              setHasChanges(true);
-                            }}
-                          >
-                            ×
-                          </Button>
-                        )}
-                      </div>
-                    );
-                  })}
+                  {[0, 1, 2].map((index) => (
+                    <FormField
+                      key={index}
+                      control={form.control}
+                      name={`favoriteFoods.${index}`}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormControl>
+                            <Input
+                              placeholder={`Favorite food #${index + 1}`}
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  ))}
                 </div>
               </div>
 
+              {/* Dietary Restrictions */}
               <div>
                 <h2 className="text-xl font-medium mb-4">Dietary Restrictions</h2>
                 <p className="text-sm text-gray-600 mb-4">Select any dietary restrictions you follow</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {dietaryOptions.map((option) => (
-                    <div key={option.id} className="flex items-start space-x-3 p-3 border rounded-lg hover:bg-gray-50">
-                      <Checkbox 
-                        id={`dietary-${option.id}`}
-                        checked={currentPreferences.dietaryRestrictions.includes(option.id)}
-                        onCheckedChange={() => handleDietaryChange(option.id)}
-                      />
-                      <div className="flex-1">
-                        <label 
-                          htmlFor={`dietary-${option.id}`}
-                          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                        >
-                          {option.label}
-                        </label>
-                        <p className="text-xs text-gray-500 mt-1">{option.description}</p>
-                      </div>
-                    </div>
+                    <FormField
+                      key={option.id}
+                      control={form.control}
+                      name="dietaryRestrictions"
+                      render={({ field }) => (
+                        <FormItem className="flex items-center space-x-3 space-y-0">
+                          <FormControl>
+                            <Checkbox
+                              checked={field.value?.includes(option.id)}
+                              onCheckedChange={(checked) => {
+                                return checked
+                                  ? field.onChange([...field.value, option.id])
+                                  : field.onChange(
+                                      field.value?.filter((value: string) => value !== option.id)
+                                    );
+                              }}
+                            />
+                          </FormControl>
+                          <FormLabel className="font-normal">
+                            {option.label}
+                            <p className="text-xs text-gray-500">{option.description}</p>
+                          </FormLabel>
+                        </FormItem>
+                      )}
+                    />
                   ))}
                 </div>
               </div>
 
+              {/* Cuisines */}
               <div>
                 <h2 className="text-xl font-medium mb-4">Favorite Cuisines</h2>
-                <p className="text-sm text-gray-600 mb-4">Choose cuisines you enjoy - we'll recommend similar recipes</p>
+                <p className="text-sm text-gray-600 mb-4">Choose cuisines you enjoy</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {cuisineOptions.map((option) => (
-                    <div key={option.id} className="flex items-start space-x-3 p-3 border rounded-lg hover:bg-gray-50">
-                      <Checkbox 
-                        id={`cuisine-${option.id}`}
-                        checked={currentPreferences.favoriteCuisines.includes(option.id)}
-                        onCheckedChange={() => handleCuisineChange(option.id)}
-                      />
-                      <div className="flex-1">
-                        <label 
-                          htmlFor={`cuisine-${option.id}`}
-                          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                        >
-                          {option.label}
-                        </label>
-                        <p className="text-xs text-gray-500 mt-1">{option.description}</p>
-                      </div>
-                    </div>
+                    <FormField
+                      key={option.id}
+                      control={form.control}
+                      name="favoriteCuisines"
+                      render={({ field }) => (
+                        <FormItem className="flex items-center space-x-3 space-y-0">
+                          <FormControl>
+                            <Checkbox
+                              checked={field.value?.includes(option.id)}
+                              onCheckedChange={(checked) => {
+                                return checked
+                                  ? field.onChange([...field.value, option.id])
+                                  : field.onChange(
+                                      field.value?.filter((value: string) => value !== option.id)
+                                    );
+                              }}
+                            />
+                          </FormControl>
+                          <FormLabel className="font-normal">
+                            {option.label}
+                            <p className="text-xs text-gray-500">{option.description}</p>
+                          </FormLabel>
+                        </FormItem>
+                      )}
+                    />
                   ))}
                 </div>
               </div>
 
+              {/* Allergens */}
               <div>
                 <h2 className="text-xl font-medium mb-4">Allergens to Avoid</h2>
-                <p className="text-sm text-gray-600 mb-4">We'll exclude recipes containing these ingredients</p>
+                <p className="text-sm text-gray-600 mb-4">Select any food allergies</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {allergenOptions.map((option) => (
-                    <div key={option.id} className="flex items-start space-x-3 p-3 border rounded-lg hover:bg-gray-50">
-                      <Checkbox 
-                        id={`allergen-${option.id}`}
-                        checked={currentPreferences.allergens.includes(option.id)}
-                        onCheckedChange={() => handleAllergenChange(option.id)}
-                      />
-                      <div className="flex-1">
-                        <label 
-                          htmlFor={`allergen-${option.id}`}
-                          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                        >
-                          {option.label}
-                        </label>
-                        <p className="text-xs text-gray-500 mt-1">{option.description}</p>
-                      </div>
-                    </div>
+                    <FormField
+                      key={option.id}
+                      control={form.control}
+                      name="allergens"
+                      render={({ field }) => (
+                        <FormItem className="flex items-center space-x-3 space-y-0">
+                          <FormControl>
+                            <Checkbox
+                              checked={field.value?.includes(option.id)}
+                              onCheckedChange={(checked) => {
+                                return checked
+                                  ? field.onChange([...field.value, option.id])
+                                  : field.onChange(
+                                      field.value?.filter((value: string) => value !== option.id)
+                                    );
+                              }}
+                            />
+                          </FormControl>
+                          <FormLabel className="font-normal">
+                            {option.label}
+                            <p className="text-xs text-gray-500">{option.description}</p>
+                          </FormLabel>
+                        </FormItem>
+                      )}
+                    />
                   ))}
                 </div>
               </div>
 
+              {/* Cooking Skill Level */}
               <div>
                 <h2 className="text-xl font-medium mb-4">Cooking Skill Level</h2>
-                <p className="text-sm text-gray-600 mb-4">This helps us recommend recipes appropriate for your experience</p>
-                <Select 
-                  value={currentPreferences.cookingSkillLevel} 
-                  onValueChange={handleSkillLevelChange}
-                >
-                  <SelectTrigger className="w-full md:w-72">
-                    <SelectValue placeholder="Select your cooking skill level" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="beginner">Beginner - Simple recipes under 45 minutes</SelectItem>
-                    <SelectItem value="intermediate">Intermediate - Moderate complexity allowed</SelectItem>
-                    <SelectItem value="advanced">Advanced - All recipe types welcome</SelectItem>
-                  </SelectContent>
-                </Select>
+                <p className="text-sm text-gray-600 mb-4">Select your comfort level in the kitchen</p>
+                <FormField
+                  control={form.control}
+                  name="cookingSkillLevel"
+                  render={({ field }) => (
+                    <FormItem>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger className="w-full md:w-1/2">
+                            <SelectValue placeholder="Select your skill level" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="beginner">Beginner - Just getting started</SelectItem>
+                          <SelectItem value="intermediate">Intermediate - Comfortable with basics</SelectItem>
+                          <SelectItem value="advanced">Advanced - Experienced cook</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               </div>
 
-              <div className="pt-4 border-t">
-                <div className="mb-4">
-                  <h3 className="font-medium text-gray-900">Your Selection Summary:</h3>
-                  <ul className="text-sm text-gray-600 mt-2 space-y-1">
-                    <li>• {currentPreferences.favoriteCuisines.length} favorite cuisines selected</li>
-                    <li>• {currentPreferences.dietaryRestrictions.length} dietary restrictions</li>
-                    <li>• {currentPreferences.allergens.length} allergens to avoid</li>
-                    <li>• Skill level: {currentPreferences.cookingSkillLevel}</li>
-                  </ul>
-                </div>
-                
-                <Button 
-                  type="submit" 
-                  className="w-full md:w-auto"
-                  disabled={isLoading}
+              {/* Form Actions */}
+              <div className="flex justify-end space-x-4 pt-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => form.reset()}
+                  disabled={isSaving}
                 >
-                  {isLoading ? "Saving..." : "Save & Go to Home"}
+                  Reset
+                </Button>
+                <Button type="submit" disabled={isSaving}>
+                  {isSaving ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    'Save Preferences'
+                  )}
                 </Button>
               </div>
             </form>

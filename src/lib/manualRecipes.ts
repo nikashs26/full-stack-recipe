@@ -1,5 +1,5 @@
 
-// Update to use MongoDB backend instead of Supabase
+// Use the main backend API URL
 const API_BASE_URL = "http://localhost:5003";
 
 export interface ManualRecipe {
@@ -128,72 +128,153 @@ const SAMPLE_RECIPES: ManualRecipe[] = [
   }
 ];
 
-export const fetchManualRecipes = async (): Promise<ManualRecipe[]> => {
+export interface FetchRecipesOptions {
+  query?: string;
+  ingredient?: string;
+  page?: number;
+  pageSize?: number;
+  cuisines?: string[];
+  diets?: string[];
+}
+
+export const fetchManualRecipes = async (
+  query: any = '', 
+  ingredient: any = '',
+  options: FetchRecipesOptions = {}
+): Promise<ManualRecipe[]> => {
   try {
-    console.log('Fetching manual recipes from MongoDB backend...');
-    const response = await fetch(`${API_BASE_URL}/recipes`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch recipes: ${response.status}`);
-    }
-
-    const data = await response.json();
-    const recipes = data.results || [];
+    const params = new URLSearchParams();
     
-    // If we have recipes from the backend, use them
-    if (recipes && recipes.length > 0) {
-      // Transform MongoDB recipes to match the ManualRecipe interface
-      const transformedRecipes = recipes.map((recipe: any) => ({
-        id: recipe.id || recipe._id,
-        title: (() => {
-          let title = recipe.title || '';
-          // Enhanced title generation logic to fix untitled recipes
-          if (!title || title.toLowerCase().includes('untitled') || title.trim() === '') {
-            // Strategy 1: Use cuisines + dish types
-            if (recipe.cuisines && recipe.cuisines.length > 0) {
-              const cuisine = recipe.cuisines[0];
-              if (recipe.dishTypes && recipe.dishTypes.length > 0) {
-                const dishType = recipe.dishTypes[0];
-                title = `${cuisine} ${dishType}`;
-              } else {
-                title = `Traditional ${cuisine} Recipe`;
-              }
-            } 
-            // Strategy 2: Use main ingredient
-            else if (recipe.extendedIngredients && recipe.extendedIngredients.length > 0) {
-              const mainIngredient = recipe.extendedIngredients[0].name || 'Special';
-              const formatted = mainIngredient.split(' ').map((word: string) => 
-                word.charAt(0).toUpperCase() + word.slice(1)
-              ).join(' ');
-              title = `Homestyle ${formatted}`;
-            } 
-            // Strategy 3: ID-based appealing fallback
-            else {
-              const recipeId = recipe.id || recipe._id || Math.random().toString(36).substr(2, 9);
-              title = `Kitchen Creation #${recipeId}`;
-            }
-          }
-          return title;
-        })(),
-        description: recipe.summary || recipe.description || '',
-        ready_in_minutes: recipe.readyInMinutes || 30,
-        cuisine: recipe.cuisines || [],
-        diets: recipe.diets || [],
-        image: recipe.image || '/placeholder.svg',
-        created_at: recipe.added_at ? new Date(recipe.added_at * 1000).toISOString() : new Date().toISOString(),
-        updated_at: recipe.added_at ? new Date(recipe.added_at * 1000).toISOString() : new Date().toISOString()
-      }));
-
-      console.log('Successfully fetched manual recipes from backend:', transformedRecipes.length);
-      return transformedRecipes;
+    // Handle search query and ingredient
+    const queryStr = typeof query === 'string' ? query.trim() : '';
+    const ingredientStr = typeof ingredient === 'string' ? ingredient.trim() : '';
+    if (queryStr) params.append('query', queryStr);
+    if (ingredientStr) params.append('ingredient', ingredientStr);
+    
+    // Fetch all matching recipes by setting a high limit
+    // The backend handles pagination and will return all available results
+    const page = 1; // Always fetch first page
+    const pageSize = 1000; // Set a high limit to get all results
+    params.append('offset', '0'); // Start from the beginning
+    params.append('limit', String(pageSize));
+    
+    // Handle cuisines filter
+    if (options.cuisines?.length) {
+      params.append('cuisine', options.cuisines.join(','));
+    }
+    
+    // Handle diets filter - ensure consistent naming with backend
+    if (options.diets?.length) {
+      params.append('diet', options.diets.join(',')); // Changed from 'diets' to 'diet' to match backend
+    }
+    
+    const url = `${API_BASE_URL}/get_recipes${params.toString() ? `?${params.toString()}` : ''}`;
+    console.log('Fetching recipes from:', url);
+    
+    // Get the authentication token from localStorage
+    const token = localStorage.getItem('token');
+    
+    const headers: HeadersInit = {
+      'Accept': 'application/json',
+    };
+    
+    // Add Authorization header if token exists
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    
+    const response = await fetch(url, { headers });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Error response:', {
+        status: response.status,
+        statusText: response.statusText,
+        url: response.url,
+        error: errorText
+      });
+      
+      // Don't throw for 404, just return empty array
+      if (response.status === 404) {
+        console.log('No recipes found for query');
+        return [];
+      }
+      
+      throw new Error(`Error ${response.status}: ${response.statusText}`);
+    }
+    
+    const data = await response.json().catch(e => {
+      console.error('Error parsing JSON response:', e);
+      throw new Error('Invalid response from server');
+    });
+    
+    console.log('Received data from backend:', data);
+    
+    // Handle both array response and object with results key
+    let recipes: any[] = [];
+    if (Array.isArray(data)) {
+      recipes = data; // Direct array response
+    } else if (data && Array.isArray(data.results)) {
+      recipes = data.results; // Object with results array
+    } else if (data && data.recipes && Array.isArray(data.recipes)) {
+      recipes = data.recipes; // Some APIs use 'recipes' key
+    }
+    
+    if (recipes.length > 0) {
+      // Transform the response to match ManualRecipe format with enhanced dietary info
+      return recipes.map((recipe: any) => {
+        // Normalize dietary restrictions
+        let diets: string[] = [];
+        if (Array.isArray(recipe.diets)) {
+          // Ensure all diet values are strings and trim whitespace
+          diets = recipe.diets
+            .map((d: any) => (typeof d === 'string' ? d.trim().toLowerCase() : ''))
+            .filter(Boolean);
+        }
+        
+        // Normalize cuisines
+        const cuisines = Array.isArray(recipe.cuisines) 
+          ? recipe.cuisines.map((c: any) => typeof c === 'string' ? c.trim() : '').filter(Boolean)
+          : [];
+          
+        // Handle image URL - try multiple possible fields
+        let imageUrl = '';
+        if (recipe.image) {
+          imageUrl = recipe.image;
+        } else if (recipe.imageUrl) {
+          imageUrl = recipe.imageUrl;
+        } else if (recipe.source === 'themealdb' && recipe.id) {
+          // Special handling for TheMealDB images
+          const recipeName = recipe.title ? recipe.title.replace(/\s+/g, '%20') : '';
+          imageUrl = `https://www.themealdb.com/images/ingredients/${recipeName}.png`;
+        } else {
+          imageUrl = '/placeholder.svg';
+        }
+        
+        return {
+          id: recipe.id || `recipe-${Math.random().toString(36).substr(2, 9)}`,
+          title: recipe.title || 'Untitled Recipe',
+          description: recipe.summary || recipe.description || '',
+          ready_in_minutes: recipe.ready_in_minutes || recipe.readyInMinutes || 30,
+          cuisine: cuisines.length ? cuisines : ['International'],
+          diets: diets,
+          image: imageUrl,
+          ingredients: Array.isArray(recipe.ingredients) 
+            ? recipe.ingredients.map((ing: any) => ({
+                name: ing.name || '',
+                amount: ing.amount?.toString() || '',
+                unit: ing.unit || ''
+              }))
+            : [],
+          created_at: recipe.created_at || new Date().toISOString(),
+          updated_at: recipe.updated_at || new Date().toISOString(),
+          // Include source for debugging
+          source: recipe.source || 'unknown'
+        };
+      });
     } else {
-      // If backend is empty, return sample recipes
-      console.log('Backend returned empty recipes, using sample data');
+      // If no recipes found, return sample recipes
+      console.log('No recipes found, using sample data');
       return SAMPLE_RECIPES;
     }
   } catch (error) {
@@ -207,18 +288,28 @@ export const fetchManualRecipes = async (): Promise<ManualRecipe[]> => {
 export const fetchManualRecipeById = async (id: number | string): Promise<ManualRecipe | null> => {
   try {
     console.log('Fetching manual recipe by ID:', id);
-    const response = await fetch(`${API_BASE_URL}/recipes/${id}`, {
+    const url = `${API_BASE_URL}/api/recipes/${id}`;
+    console.log('API Request URL:', url);
+    
+    const response = await fetch(url, {
       method: 'GET',
       headers: {
-        'Content-Type': 'application/json',
+        'Accept': 'application/json',
       },
     });
 
     if (!response.ok) {
       if (response.status === 404) {
+        console.log('Recipe not found (404)');
         return null;
       }
-      throw new Error(`Failed to fetch recipe: ${response.status}`);
+      const errorText = await response.text();
+      console.error('Error response:', {
+        status: response.status,
+        statusText: response.statusText,
+        error: errorText
+      });
+      throw new Error(`Failed to fetch recipe: ${response.status} - ${response.statusText}`);
     }
 
     const recipe = await response.json();
@@ -276,10 +367,14 @@ export const fetchManualRecipeById = async (id: number | string): Promise<Manual
 export const createManualRecipe = async (recipe: Partial<ManualRecipe>): Promise<ManualRecipe | null> => {
   try {
     console.log('Creating manual recipe:', recipe.title);
-    const response = await fetch(`${API_BASE_URL}/recipes`, {
+    const url = `${API_BASE_URL}/api/recipes`;
+    console.log('API Request URL:', url);
+    
+    const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Accept': 'application/json',
       },
       body: JSON.stringify({
         title: recipe.title,
@@ -293,7 +388,13 @@ export const createManualRecipe = async (recipe: Partial<ManualRecipe>): Promise
     });
 
     if (!response.ok) {
-      throw new Error(`Failed to create recipe: ${response.status}`);
+      const errorText = await response.text();
+      console.error('Error response:', {
+        status: response.status,
+        statusText: response.statusText,
+        error: errorText
+      });
+      throw new Error(`Failed to create recipe: ${response.status} - ${response.statusText}`);
     }
 
     const data = await response.json();

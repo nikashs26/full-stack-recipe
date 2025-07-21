@@ -7,6 +7,7 @@ from routes.recipe_routes import register_recipe_routes
 from routes.auth_routes import auth_bp
 from routes.preferences import preferences_bp
 from routes.meal_planner import meal_planner_bp
+from routes.health import health_bp
 
 # Load environment variables
 load_dotenv()
@@ -37,6 +38,7 @@ app = register_recipe_routes(app, recipe_cache)
 app.register_blueprint(auth_bp, url_prefix='/api/auth')
 app.register_blueprint(preferences_bp, url_prefix='/api')
 app.register_blueprint(meal_planner_bp, url_prefix='/api')
+app.register_blueprint(health_bp)  # Health check routes
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5003))

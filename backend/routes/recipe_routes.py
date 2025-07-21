@@ -37,15 +37,22 @@ def register_recipe_routes(app, recipe_cache):
         query = request.args.get("query", "").strip()
         ingredient = request.args.get("ingredient", "").strip()
         offset = int(request.args.get("offset", "0"))
+        limit = int(request.args.get("limit", "1000"))  # Default to 1000 results
         
         print(f"\n=== Recipe Search Request ===")
         print(f"Query: '{query}'")
         print(f"Ingredient: '{ingredient}'")
         print(f"Offset: {offset}")
+        print(f"Limit: {limit}")
         
         try:
-            # Search recipes from all sources
-            recipes = await recipe_service.search_recipes(query, ingredient, offset)
+            # Search recipes from all sources with pagination
+            recipes = await recipe_service.search_recipes(
+                query=query,
+                ingredient=ingredient,
+                offset=offset,
+                limit=limit
+            )
             
             print(f"Found {len(recipes)} recipes in {time.time() - start_time:.2f}s")
             return jsonify({"results": recipes}), 200

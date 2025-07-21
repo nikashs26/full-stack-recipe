@@ -1,9 +1,8 @@
 // URLs for API endpoints - fallback to mock data when not available
-// Using 127.0.0.1 instead of localhost to avoid potential DNS resolution issues
-const API_BASE_URL = "http://127.0.0.1:8000";
-const API_URL = `${API_BASE_URL}/get_recipes`;
-const API_URL_RECIPE_BY_ID = `${API_BASE_URL}/get_recipe_by_id`;
-const API_URL_DB = `${API_BASE_URL}/recipes`;  // For direct DB operations
+// Using localhost for consistency with other API calls
+const API_BASE_URL = "http://localhost:5003";
+const API_URL = `${API_BASE_URL}/api/recipes`; // ChromaDB recipes endpoint
+const API_URL_RECIPE_BY_ID = `${API_BASE_URL}/api/recipes`;
 
 // Fallback data for when the API is unavailable
 const FALLBACK_RECIPES = [
@@ -457,83 +456,52 @@ const getDetailedFallbackRecipe = (recipe: any) => {
     };
 };
 
-// Function to fetch all recipes from MongoDB
-export const getAllRecipesFromDB = async () => {
+// ChromaDB API functions
+export const getAllRecipes = async () => {
     try {
-        const response = await fetch(API_URL_DB);
+        const response = await fetch(API_URL);
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
         const data = await response.json();
         return data;
     } catch (error) {
-        console.error("Error fetching recipes from DB:", error);
+        console.error("Error fetching recipes:", error);
         return [];
     }
 };
 
-export const getRecipeFromDB = async (recipeId: string) => {
+export const getRecipe = async (recipeId: string) => {
     try {
-        const response = await fetch(`${API_URL_DB}/${recipeId}`);
+        const response = await fetch(`${API_URL}/${recipeId}`);
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
         return await response.json();
     } catch (error) {
-        console.error(`Error fetching recipe ${recipeId} from DB:`, error);
+        console.error(`Error fetching recipe ${recipeId}:`, error);
         return null;
     }
 };
 
-export const saveRecipeToDB = async (recipe: any) => {
+export const saveRecipe = async (recipe: any) => {
     try {
-        const response = await fetch(API_URL_DB, {
+        const token = localStorage.getItem('token');
+        const response = await fetch(API_URL, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
             },
-            body: JSON.stringify(recipe)
+            body: JSON.stringify(recipe),
+            credentials: 'include'
         });
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
         return await response.json();
     } catch (error) {
-        console.error("Error saving recipe to DB:", error);
-        return null;
-    }
-};
-
-export const updateRecipeInDB = async (recipeId: string, recipe: any) => {
-    try {
-        const response = await fetch(`${API_URL_DB}/${recipeId}`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(recipe)
-        });
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        return await response.json();
-    } catch (error) {
-        console.error(`Error updating recipe ${recipeId} in DB:`, error);
-        return null;
-    }
-};
-
-export const deleteRecipeFromDB = async (recipeId: string) => {
-    try {
-        const response = await fetch(`${API_URL_DB}/${recipeId}`, {
-            method: 'DELETE'
-        });
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        return true;
-    } catch (error) {
-        console.error(`Error deleting recipe ${recipeId} from DB:`, error);
-        return false;
+        console.error('Error saving recipe:', error);
+        throw error;
     }
 };

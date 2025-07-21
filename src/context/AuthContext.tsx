@@ -9,6 +9,12 @@ interface User {
   full_name: string;
   created_at: string;
   is_verified: boolean;
+  preferences?: {
+    favoriteCuisines: string[];
+    dietaryRestrictions: string[];
+    allergens: string[];
+    cookingSkillLevel: 'beginner' | 'intermediate' | 'advanced';
+  };
 }
 
 interface AuthContextType {

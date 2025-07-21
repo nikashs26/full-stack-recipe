@@ -10,8 +10,8 @@ import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
 import { Loader2, Database, AlertCircle, Check, RefreshCcw, Wrench, Server } from 'lucide-react';
 import Header from '../components/Header';
-import { checkMongoDBConnection, getDatabaseStatus, testDirectConnection } from '../utils/mongoStatus';
-import { getAllRecipesFromDB, saveRecipeToDB } from '../lib/spoonacular';
+import { checkChromaDBConnection, getDatabaseStatus } from '../utils/dbStatus';
+import { getAllRecipes, saveRecipe } from '../lib/spoonacular';
 
 const MongoDBTestPage: React.FC = () => {
   const [isChecking, setIsChecking] = useState(false);
@@ -46,22 +46,22 @@ const MongoDBTestPage: React.FC = () => {
 
   const checkStatus = async () => {
     setIsChecking(true);
-    setStatusMessage('Checking MongoDB connection...');
+    setStatusMessage('Checking ChromaDB connection...');
     
     try {
-      const isConnected = await checkMongoDBConnection(2);
+      const isConnected = await checkChromaDBConnection();
       setDbStatus(isConnected ? 'connected' : 'disconnected');
       
       if (isConnected) {
         const status = await getDatabaseStatus();
         setRecipeCount(status.recipeCount || 0);
-        setStatusMessage(`Successfully connected to MongoDB. ${status.recipeCount || 0} recipes found.`);
+        setStatusMessage(`Successfully connected to ChromaDB. ${status.recipeCount || 0} recipes found.`);
       } else {
-        setStatusMessage('Failed to connect to MongoDB. Check your connection string and network.');
+        setStatusMessage('Failed to connect to ChromaDB. Check your connection string and network.');
       }
     } catch (error) {
       setDbStatus('disconnected');
-      setStatusMessage(`Error checking MongoDB status: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      setStatusMessage(`Error checking ChromaDB status: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsChecking(false);
     }
@@ -83,11 +83,11 @@ const MongoDBTestPage: React.FC = () => {
         ratings: [5]
       };
       
-      const result = await saveRecipeToDB(testRecipe);
-      setTestResult(`Successfully added test recipe to MongoDB: ${JSON.stringify(result)}`);
+      const result = await saveRecipe(testRecipe);
+      setTestResult(`Successfully added test recipe to ChromaDB: ${JSON.stringify(result)}`);
       toast({
         title: "Test recipe added",
-        description: "The test recipe was successfully saved to MongoDB",
+        description: "The test recipe was successfully saved to ChromaDB",
       });
       
       // Refresh recipe count

@@ -27,7 +27,7 @@ def build_llama_prompt(preferences):
 
     prompt = (
         f"You are an expert meal planner and chef. Build a detailed, delicious, and realistic weekly meal plan for a user with the following preferences. "
-        f"Be creative, but respect all restrictions. For each day, suggest breakfast, lunch, dinner, and a snack. "
+        f"Be creative, but respect all restrictions. For each day, suggest breakfast, lunch, dinner, and a snack. They should serve to make a proper full day of eating for most indiviuals "
         f"Use cuisines: {', '.join(cuisines) if cuisines else 'any'}. "
         f"Dietary restrictions: {', '.join(dietary) if dietary else 'none'}. "
         f"Allergens to avoid: {', '.join(allergens) if allergens else 'none'}. "

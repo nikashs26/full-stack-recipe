@@ -1,12 +1,8 @@
 
 import { Recipe } from '../types/recipe';
 import { initialRecipes } from '../data/recipes';
-import { 
-  saveRecipeToDB, 
-  getAllRecipesFromDB,
-  deleteRecipeFromDB
-} from '../lib/spoonacular';
-import { checkMongoDBConnection } from './mongoStatus';
+// Local storage based recipe management
+// This file handles recipe storage using browser's localStorage as a fallback
 
 const RECIPES_STORAGE_KEY = 'dietary-delight-recipes';
 
@@ -22,130 +18,22 @@ export const getLocalRecipes = (): Recipe[] => {
 };
 
 export const loadRecipes = async (): Promise<Recipe[]> => {
-  try {
-    // First try to load from localStorage for immediate UI display
-    const localRecipes = getLocalRecipes();
-    
-    // Try to check MongoDB connection and fetch the latest recipes
-    try {
-      console.log("Attempting to connect to MongoDB...");
-      const isConnected = await checkMongoDBConnection(1); // Try with 1 retry
-      
-      if (isConnected) {
-        console.log("Connected to MongoDB - fetching latest recipes");
-        try {
-          const dbRecipes = await getAllRecipesFromDB();
-          
-          if (dbRecipes?.results && Array.isArray(dbRecipes.results) && dbRecipes.results.length > 0) {
-            // Check if these are local Recipe format or Spoonacular format
-            const firstRecipe = dbRecipes.results[0];
-            
-            // If it has 'name' field, it's local Recipe format
-            if (firstRecipe.name) {
-              console.log(`Loaded ${dbRecipes.results.length} local recipes from MongoDB`);
-              localStorage.setItem(RECIPES_STORAGE_KEY, JSON.stringify(dbRecipes.results));
-              return dbRecipes.results;
-            } else {
-              // If it has 'title' field, it's Spoonacular format - don't use these for local recipes
-              console.log("MongoDB returned Spoonacular format recipes, using local storage instead");
-              return localRecipes;
-            }
-          } else {
-            console.log("No recipes found in MongoDB - initializing with default recipes");
-            
-            // If MongoDB is empty, push our initial recipes to it
-            console.log("Seeding MongoDB with initial recipes...");
-            for (const recipe of localRecipes) {
-              try {
-                await saveRecipeToDB({
-                  // Convert to MongoDB format
-                  id: recipe.id,
-                  title: recipe.name,
-                  cuisine: recipe.cuisine,
-                  cuisines: [recipe.cuisine],
-                  diets: recipe.dietaryRestrictions,
-                  ingredients: recipe.ingredients,
-                  instructions: recipe.instructions,
-                  image: recipe.image,
-                  ratings: recipe.ratings || []
-                });
-                console.log(`Seeded recipe: ${recipe.name}`);
-              } catch (err) {
-                console.error(`Failed to seed recipe ${recipe.name}:`, err);
-              }
-            }
-            console.log(`Initialized MongoDB with ${localRecipes.length} default recipes`);
-            return localRecipes;
-          }
-        } catch (dbError) {
-          console.error("Error loading recipes from MongoDB:", dbError);
-        }
-      } else {
-        console.log("MongoDB not available, using local storage recipes");
-      }
-    } catch (connectionError) {
-      console.error("MongoDB connection failed:", connectionError);
-      console.log("MongoDB not available, using local storage recipes");
-    }
-    
+  // First try to load from localStorage for immediate UI display
+  const localRecipes = getLocalRecipes();
+  
+  // First try to load from localStorage
+  if (localRecipes.length > 0) {
     return localRecipes;
-  } catch (error) {
-    console.error('Failed to load recipes:', error);
-    return initialRecipes;
   }
-};
-
-// Sync local recipes with MongoDB in the background
-const syncWithMongoDB = async (recipes: Recipe[]): Promise<boolean> => {
-  try {
-    // First check if MongoDB is available
-    const isConnected = await checkMongoDBConnection().catch(() => false);
-    
-    if (!isConnected) {
-      console.log('MongoDB not available, skipping sync');
-      return false;
-    }
-    
-    console.log(`Syncing ${recipes.length} recipes with MongoDB...`);
-    
-    // If MongoDB is available, sync local recipes to it
-    for (const recipe of recipes) {
-      try {
-        await saveRecipeToDB({
-          // Convert to MongoDB format
-          id: recipe.id,
-          title: recipe.name,
-          cuisine: recipe.cuisine,
-          cuisines: [recipe.cuisine],
-          diets: recipe.dietaryRestrictions,
-          ingredients: recipe.ingredients,
-          instructions: recipe.instructions,
-          image: recipe.image,
-          ratings: recipe.ratings || [],
-          comments: recipe.comments || []
-        });
-        console.log(`Synced recipe: ${recipe.name}`);
-      } catch (err) {
-        console.error(`Failed to sync recipe ${recipe.id} to MongoDB:`, err);
-      }
-    }
-    
-    console.log('Successfully synced local recipes with MongoDB');
-    return true;
-  } catch (error) {
-    console.error('MongoDB sync failed:', error);
-    return false;
-  }
+  
+  // If we get here, both ChromaDB and database failed - use local storage
+  console.log("Using recipes from local storage");
+  return localRecipes;
 };
 
 export const saveRecipes = (recipes: Recipe[]): void => {
   try {
     localStorage.setItem(RECIPES_STORAGE_KEY, JSON.stringify(recipes));
-    
-    // Try to sync with MongoDB in the background
-    syncWithMongoDB(recipes).catch(err => 
-      console.error('Failed to sync recipes with MongoDB:', err)
-    );
   } catch (error) {
     console.error('Failed to save recipes to localStorage:', error);
   }
@@ -166,11 +54,6 @@ export const addRecipe = (recipe: Omit<Recipe, 'id'>): Recipe => {
   const updatedRecipes = [...recipes, newRecipe];
   saveRecipes(updatedRecipes);
   
-  // Also save to MongoDB directly
-  saveRecipeToDB(newRecipe).catch(err => 
-    console.error('Failed to save new recipe to MongoDB:', err)
-  );
-  
   return newRecipe;
 };
 
@@ -180,20 +63,10 @@ export const updateRecipe = (updatedRecipe: Recipe): void => {
     recipe.id === updatedRecipe.id ? updatedRecipe : recipe
   );
   saveRecipes(updatedRecipes);
-  
-  // Also update in MongoDB
-  saveRecipeToDB(updatedRecipe).catch(err => 
-    console.error('Failed to update recipe in MongoDB:', err)
-  );
 };
 
 export const deleteRecipe = (id: string): void => {
   const recipes = getLocalRecipes();
   const updatedRecipes = recipes.filter(recipe => recipe.id !== id);
   saveRecipes(updatedRecipes);
-  
-  // Also try to delete from MongoDB directly
-  deleteRecipeFromDB(id).catch(err => 
-    console.error('Failed to delete recipe from MongoDB:', err)
-  );
 };

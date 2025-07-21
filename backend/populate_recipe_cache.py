@@ -22,7 +22,9 @@ CUISINES = [
     "Italian", "Mexican", "Indian", "Chinese", "Japanese",
     "Thai", "Mediterranean", "French", "Greek", "Spanish",
     "Korean", "Vietnamese", "American", "British", "Irish",
-    "Caribbean", "Moroccan"
+    "Caribbean", "Moroccan", "Cajun", "Southern", "Nordic",
+    "Eastern European", "Jewish", "Latin American", "African",
+    "Middle Eastern", "Asian"
 ]
 
 async def fetch_mealdb_by_cuisine(session, cuisine: str) -> list:
@@ -37,8 +39,8 @@ async def fetch_mealdb_by_cuisine(session, cuisine: str) -> list:
                 meals = data.get('meals', [])
                 logger.info(f"Found {len(meals)} {cuisine} recipes from TheMealDB")
                 
-                # Take only up to 25 recipes (since we'll get 25 from Spoonacular too)
-                meals = meals[:25]
+                # Take up to 50 recipes from TheMealDB
+                meals = meals[:50]
                 
                 # Fetch full details for each recipe
                 detailed_meals = []
@@ -70,7 +72,7 @@ async def fetch_spoonacular_by_cuisine(session, cuisine: str, api_key: str) -> l
     params = {
         "apiKey": api_key,
         "cuisine": cuisine,
-        "number": 25,  # Get 25 from each API to total 50
+        "number": 100,  # Get 25 from each API to total 50
         "addRecipeInformation": "true",
         "fillIngredients": "true",
         "instructionsRequired": "true"
@@ -136,7 +138,6 @@ async def populate_recipe_cache():
                             cuisine,  # Use cuisine as search term
                             "",      # No ingredient filter
                             {"cuisine": cuisine}  # Add cuisine metadata
-                            print("stored recipes in chroma");
                         )
                         stats["total_recipes"] += len(normalized_mealdb)
                         stats["recipes_by_cuisine"][cuisine]["mealdb"] = len(normalized_mealdb)

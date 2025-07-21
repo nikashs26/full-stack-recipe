@@ -5,6 +5,16 @@ from middleware.auth_middleware import require_auth, get_current_user_id
 preferences_bp = Blueprint('preferences', __name__)
 user_preferences_service = UserPreferencesService()
 
+@preferences_bp.route('/preferences', methods=['OPTIONS'])
+def handle_preflight():
+    """Handle CORS preflight requests"""
+    response = jsonify({"status": "preflight"})
+    response.headers.add('Access-Control-Allow-Origin', 'http://localhost:8081')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
+    response.headers.add('Access-Control-Allow-Credentials', 'true')
+    return response, 200
+
 @preferences_bp.route('/preferences', methods=['POST'])
 @require_auth
 def save_user_preferences():
@@ -26,17 +36,24 @@ def save_user_preferences():
             'allergens': preferences_data.get('allergens', []),
             'cookingSkillLevel': preferences_data.get('cookingSkillLevel', "beginner"),
             'healthGoals': preferences_data.get('healthGoals', ["General wellness"]),
-            'maxCookingTime': preferences_data.get('maxCookingTime', "30 minutes")
+            'maxCookingTime': preferences_data.get('maxCookingTime', "30 minutes"),
+            'favoriteFoods': preferences_data.get('favoriteFoods', [])
         }
         
         # Save to ChromaDB
         user_preferences_service.save_preferences(user_id, processed_preferences)
         
-        return jsonify({
+        response = jsonify({
             "success": True,
             "message": "Preferences saved successfully to ChromaDB",
             "preferences": processed_preferences
-        }), 200
+        })
+        
+        # Add CORS headers to the response
+        response.headers.add('Access-Control-Allow-Origin', 'http://localhost:8081')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        
+        return response, 200
         
     except Exception as e:
         return jsonify({"error": f"Failed to save preferences: {str(e)}"}), 500
@@ -48,18 +65,33 @@ def get_user_preferences():
     try:
         user_id = get_current_user_id()
         
+        # Get preferences from ChromaDB
         preferences = user_preferences_service.get_preferences(user_id)
-        if preferences:
-            return jsonify({
+        
+        if not preferences:
+            response = jsonify({
+                "message": "No preferences found. Using default preferences.",
+                "preferences": {
+                    "dietaryRestrictions": [],
+                    "favoriteCuisines": ["International"],
+                    "allergens": [],
+                    "cookingSkillLevel": "beginner",
+                    "healthGoals": ["General wellness"],
+                    "maxCookingTime": "30 minutes",
+                    "favoriteFoods": ["", "", ""]
+                }
+            })
+        else:
+            response = jsonify({
                 "success": True,
                 "preferences": preferences
-            }), 200
-        else:
-            return jsonify({
-                "success": False,
-                "message": "No preferences found for this user. Please set your preferences first.",
-                "preferences": None
-            }), 200
-            
+            })
+        
+        # Add CORS headers to the response
+        response.headers.add('Access-Control-Allow-Origin', 'http://localhost:8081')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        
+        return response, 200
+        
     except Exception as e:
-        return jsonify({"error": f"Failed to get preferences: {str(e)}"}), 500 
+        return jsonify({"error": f"Failed to get preferences: {str(e)}"}), 500

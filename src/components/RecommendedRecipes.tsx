@@ -10,6 +10,7 @@ import RecipeCard from './RecipeCard';
 import ManualRecipeCard from './ManualRecipeCard';
 import { Recipe } from '../types/recipe';
 import { SpoonacularRecipe } from '../types/spoonacular';
+import { UserPreferences } from '../types/auth';
 import { ThumbsUp, Loader2 } from 'lucide-react';
 
 const RecommendedRecipes: React.FC = () => {
@@ -21,29 +22,33 @@ const RecommendedRecipes: React.FC = () => {
     queryFn: loadRecipes,
   });
 
-  // Query for manual recipes
+  // Query for manual recipes - use an empty search term to get all recipes
   const { data: manualRecipes = [], isLoading: isManualLoading } = useQuery({
-    queryKey: ['manualRecipes'],
-    queryFn: fetchManualRecipes,
+    queryKey: ['recommendedManualRecipes'],
+    queryFn: () => fetchManualRecipes(''), // Empty string to get all recipes
+    placeholderData: (previousData) => previousData || [],
+    staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
-  const preferences = user?.preferences;
-  console.log('RecommendedRecipes - User preferences:', preferences);
+  // Safely access user preferences with fallback to empty arrays
+  const favoriteCuisines = user?.preferences?.favoriteCuisines || [];
+  const dietaryRestrictions = user?.preferences?.dietaryRestrictions || [];
+  
+  console.log('RecommendedRecipes - User preferences:', { favoriteCuisines, dietaryRestrictions });
 
   // Query external recipes based on user preferences
   const externalQueries = useQuery({
-    queryKey: ['recommendedExternalRecipes', preferences],
+    queryKey: ['recommendedExternalRecipes', favoriteCuisines, dietaryRestrictions],
     queryFn: async () => {
-      console.log('Fetching external recipes with preferences:', preferences);
+      console.log('Fetching external recipes with:', { favoriteCuisines, dietaryRestrictions });
       
-      if (!preferences) {
-        console.log('No preferences found, fetching popular recipes');
+      if (favoriteCuisines.length === 0 && dietaryRestrictions.length === 0) {
+        console.log('No specific preferences, fetching popular recipes');
         const response = await fetchRecipes('popular', '');
         return response?.results || [];
       }
 
       const allExternalRecipes: SpoonacularRecipe[] = [];
-      const { favoriteCuisines = [], dietaryRestrictions = [] } = preferences;
       
       console.log('Favorite cuisines:', favoriteCuisines);
       console.log('Dietary restrictions:', dietaryRestrictions);
@@ -134,7 +139,7 @@ const RecommendedRecipes: React.FC = () => {
       console.log(`Found ${allExternalRecipes.length} external recipes for recommendations`);
       return allExternalRecipes;
     },
-    enabled: !!preferences,
+    enabled: favoriteCuisines.length > 0 || dietaryRestrictions.length > 0,
     staleTime: 300000,
   });
 
@@ -169,38 +174,38 @@ const RecommendedRecipes: React.FC = () => {
     if (externalQueries.data && Array.isArray(externalQueries.data)) {
       let filteredExternal = externalQueries.data;
 
-      // Apply preference-based filtering if preferences exist
-      if (preferences?.favoriteCuisines?.length > 0) {
+      // Apply preference-based filtering if favorite cuisines exist
+      if (favoriteCuisines.length > 0) {
         filteredExternal = externalQueries.data.filter((recipe: SpoonacularRecipe) => {
           const recipeCuisines = recipe.cuisines || [];
           const recipeTitle = recipe.title?.toLowerCase() || '';
           
-          return preferences.favoriteCuisines.some(prefCuisine => 
-            recipeCuisines.some(cuisine => 
-              cuisine?.toLowerCase().includes(prefCuisine.toLowerCase())
+          return favoriteCuisines.some(cuisine => 
+            recipeCuisines.some(recipeCuisine => 
+              recipeCuisine?.toLowerCase().includes(cuisine.toLowerCase())
             ) || 
-            recipeTitle.includes(prefCuisine.toLowerCase())
+            recipeTitle.includes(cuisine.toLowerCase())
           );
         });
       }
 
       // Apply dietary restriction filtering if specified
-      if (preferences?.dietaryRestrictions?.length > 0) {
+      if (dietaryRestrictions.length > 0) {
         filteredExternal = filteredExternal.filter((recipe: SpoonacularRecipe) => {
           const recipeDiets = recipe.diets || [];
           
           // Check if recipe meets at least one dietary preference
-          return preferences.dietaryRestrictions.some(prefDiet => {
-            const prefDietLower = prefDiet.toLowerCase();
-            return recipeDiets.some(diet => {
-              const dietLower = diet?.toLowerCase() || '';
+          return dietaryRestrictions.some(diet => {
+            const dietLower = diet.toLowerCase();
+            return recipeDiets.some(recipeDiet => {
+              const recipeDietLower = recipeDiet?.toLowerCase() || '';
               // Enhanced matching for dietary restrictions
-              if (prefDietLower === 'vegetarian' && dietLower.includes('vegetarian')) return true;
-              if (prefDietLower === 'vegan' && dietLower.includes('vegan')) return true;
-              if (prefDietLower === 'gluten-free' && (dietLower.includes('gluten') && dietLower.includes('free'))) return true;
-              if (prefDietLower === 'dairy-free' && (dietLower.includes('dairy') && dietLower.includes('free'))) return true;
-              if (prefDietLower === 'keto' && (dietLower.includes('ketogenic') || dietLower.includes('keto'))) return true;
-              if (prefDietLower === 'paleo' && (dietLower.includes('paleo') || dietLower.includes('paleolithic'))) return true;
+              if (dietLower === 'vegetarian' && recipeDietLower.includes('vegetarian')) return true;
+              if (dietLower === 'vegan' && recipeDietLower.includes('vegan')) return true;
+              if (dietLower === 'gluten-free' && (recipeDietLower.includes('gluten') && recipeDietLower.includes('free'))) return true;
+              if (dietLower === 'dairy-free' && (recipeDietLower.includes('dairy') && recipeDietLower.includes('free'))) return true;
+              if (dietLower === 'keto' && (recipeDietLower.includes('ketogenic') || recipeDietLower.includes('keto'))) return true;
+              if (dietLower === 'paleo' && (recipeDietLower.includes('paleo') || recipeDietLower.includes('paleolithic'))) return true;
               return false;
             });
           });
@@ -226,9 +231,10 @@ const RecommendedRecipes: React.FC = () => {
 
     console.log(`Final recommended recipes count: ${uniqueRecipes.length}`);
     return uniqueRecipes.slice(0, 9);
-  }, [allRecipes, manualRecipes, externalQueries.data, preferences]);
+  }, [allRecipes, manualRecipes, externalQueries.data, favoriteCuisines, dietaryRestrictions]);
 
-  if (!preferences) {
+  // Don't show recommendations if no preferences are set
+  if (favoriteCuisines.length === 0 && dietaryRestrictions.length === 0) {
     console.log('No preferences found, not showing recommendations');
     return null;
   }

@@ -12,7 +12,7 @@ import {
 } from './storage';
 
 // Also export the MongoDB status checking functions
-import { checkMongoDBConnection, getDatabaseStatus } from './mongoStatus';
+import { checkChromaDBConnection as checkMongoDBConnection, getDatabaseStatus } from './dbStatus';
 
 export {
   loadRecipes,

@@ -42,6 +42,36 @@ class RecipeCacheService:
         """Generate a unique cache key for the search parameters"""
         search_params = f"query:{query.lower().strip()}_ingredient:{ingredient.lower().strip()}"
         return hashlib.md5(search_params.encode()).hexdigest()
+        
+    def get_all_recipes(self) -> List[Dict[str, Any]]:
+        """Retrieve all recipes from the cache"""
+        if not self.recipe_collection:
+            logger.warning("Recipe collection not initialized")
+            return []
+            
+        try:
+            # Get all recipes from the collection
+            results = self.recipe_collection.get(include=["documents", "metadatas"])
+            
+            if not results or not results.get("documents"):
+                logger.info("No recipes found in cache")
+                return []
+                
+            recipes = []
+            for doc in results["documents"]:
+                try:
+                    recipe = json.loads(doc)
+                    recipes.append(recipe)
+                except json.JSONDecodeError as e:
+                    logger.error(f"Error parsing recipe JSON: {e}")
+                    continue
+                    
+            logger.info(f"Retrieved {len(recipes)} recipes from cache")
+            return recipes
+            
+        except Exception as e:
+            logger.error(f"Error retrieving recipes from cache: {e}")
+            return []
 
     def get_cached_recipes(self, query: str = "", ingredient: str = "") -> Optional[List[Dict[Any, Any]]]:
         """Retrieve cached recipes for the given search parameters"""
