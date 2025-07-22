@@ -29,7 +29,7 @@ type UserPreferences = {
 // Load user preferences from the backend
 const loadUserPreferences = async (): Promise<UserPreferences> => {
   try {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('auth_token');
     if (!token) {
       throw new Error('No authentication token found');
     }
@@ -90,7 +90,7 @@ const loadUserPreferences = async (): Promise<UserPreferences> => {
 // Save user preferences to the backend
 const saveUserPreferences = async (data: UserPreferences) => {
   try {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('auth_token');
     if (!token) {
       throw new Error('No authentication token found');
     }
