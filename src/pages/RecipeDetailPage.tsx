@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Heart, Folder, ShoppingCart, Star, ArrowLeft } from 'lucide-react';
 import Header from '../components/Header';
 import { Button } from '@/components/ui/button';
-import { getRecipeById, updateRecipe, loadRecipes } from '../utils/storage';
+import { updateRecipe, loadRecipes } from '../utils/storage';
 import { useToast } from '@/hooks/use-toast';
 import FolderAssignmentModal from '../components/FolderAssignmentModal';
 import { Folder as FolderType, ShoppingListItem } from '../types/recipe';
@@ -12,6 +12,7 @@ import { v4 as uuidv4 } from 'uuid';
 import RecipeReviews, { Review } from '../components/RecipeReviews';
 import { getReviewsByRecipeId, addReview } from '../utils/chromaReviewUtils';
 import { useAuth } from '../context/AuthContext';
+import { normalizeRecipeTags } from '../utils/recipeTagUtils';
 
 const RecipeDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -23,8 +24,44 @@ const RecipeDetailPage: React.FC = () => {
   const [folders, setFolders] = useState<FolderType[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
   
-  // Load the recipe
-  const recipe = getRecipeById(id || '');
+  // Fetch the recipe from the backend
+  const { data: recipe, isLoading, error } = useQuery({
+    queryKey: ['recipe', id],
+    queryFn: async () => {
+      if (!id) return null;
+      try {
+        const response = await fetch(`http://localhost:5003/get_recipe_by_id?id=${id}`);
+        if (!response.ok) {
+          throw new Error('Recipe not found');
+        }
+        const data = await response.json();
+        
+        // Normalize the recipe data
+        const normalizedRecipe = {
+          ...data,
+          // Ensure instructions is an array
+          instructions: Array.isArray(data.instructions) 
+            ? data.instructions 
+            : data.instructions 
+              ? [data.instructions] 
+              : ['No instructions available'],
+          // Ensure ingredients is an array
+          ingredients: Array.isArray(data.ingredients) 
+            ? data.ingredients 
+            : data.ingredients 
+              ? [data.ingredients] 
+              : []
+        };
+        
+        // Normalize and validate tags
+        return normalizeRecipeTags(normalizedRecipe);
+      } catch (err) {
+        console.error('Error fetching recipe:', err);
+        throw err;
+      }
+    },
+    enabled: !!id,
+  });
 
   // Load reviews from ChromaDB
   useEffect(() => {
@@ -63,8 +100,32 @@ const RecipeDetailPage: React.FC = () => {
     setFolders(loadFolders());
   }, []);
 
+  // Handle loading and error states
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Header />
+        <main className="pt-24 md:pt-28 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="mb-6">
+            <Button 
+              variant="outline" 
+              onClick={() => navigate('/recipes')}
+              className="mb-4"
+            >
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to Recipes
+            </Button>
+          </div>
+          <div className="text-center">
+            <h1 className="text-2xl font-bold mb-4">Loading recipe...</h1>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   // Handle if recipe is not found
-  if (!recipe) {
+  if (error || !recipe) {
     return (
       <div className="min-h-screen bg-gray-50">
         <Header />
@@ -270,16 +331,41 @@ const RecipeDetailPage: React.FC = () => {
             <div className="p-6">
               <h2 className="text-2xl font-semibold mb-4">Ingredients</h2>
               <ul className="list-disc list-inside mb-6 space-y-1">
-                {recipe.ingredients.map((ingredient, index) => (
-                  <li key={index} className="text-gray-700">{ingredient}</li>
-                ))}
+                {Array.isArray(recipe.ingredients) 
+                  ? recipe.ingredients.map((ingredient, index) => {
+                      // Handle both string and object formats
+                      const ingredientText = typeof ingredient === 'string' 
+                        ? ingredient 
+                        : ingredient.name 
+                          ? `${ingredient.amount || ''} ${ingredient.unit || ''} ${ingredient.name}`.trim()
+                          : JSON.stringify(ingredient);
+                      
+                      return (
+                        <li key={index} className="text-gray-700">
+                          {ingredientText}
+                        </li>
+                      );
+                    })
+                  : <li className="text-gray-500 italic">No ingredients listed</li>
+                }
               </ul>
 
               <h2 className="text-2xl font-semibold mb-4">Instructions</h2>
               <ol className="list-decimal list-inside space-y-3 mb-6">
-                {recipe.instructions.map((instruction, index) => (
-                  <li key={index} className="text-gray-700 leading-relaxed">{instruction}</li>
-                ))}
+                {Array.isArray(recipe.instructions) 
+                  ? recipe.instructions.map((instruction, index) => (
+                      <li key={index} className="text-gray-700 leading-relaxed">
+                        {instruction}
+                      </li>
+                    ))
+                  : recipe.instructions
+                    ? recipe.instructions.split('\n').filter(Boolean).map((step: string, index: number) => (
+                        <li key={index} className="text-gray-700 leading-relaxed">
+                          {step.trim()}
+                        </li>
+                      ))
+                    : <li className="text-gray-500 italic">No instructions available</li>
+                }
               </ol>
               
               {/* Reviews section */}

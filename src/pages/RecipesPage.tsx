@@ -1,9 +1,8 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { loadRecipes } from '../utils/storage';
 import { fetchManualRecipes } from '../lib/manualRecipes';
-import type { DietaryRestriction } from '../types/recipe';
+import { DietaryRestriction, Recipe as RecipeType } from '../types/recipe';
 import { Loader2, Search, Filter, X, Clock, Flame, ChefHat } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -13,7 +12,6 @@ import { RecipeFilters } from '@/components/RecipeFilters';
 import { useDebounce } from '../hooks/useDebounce';
 import { useMediaQuery } from '../hooks/use-media-query';
 import { Drawer, DrawerContent, DrawerTrigger } from '@/components/ui/drawer';
-
 import Header from '../components/Header';
 
 // Recipe type definitions
@@ -64,7 +62,7 @@ type NormalizedRecipe = {
   servings?: number;
   sourceUrl?: string;
   summary?: string;
-  instructions?: string;
+  instructions?: string | string[];
   analyzedInstructions?: any[];
   ingredients: Array<{ name: string; amount?: string; unit?: string }>;
   cuisines: string[];
@@ -87,39 +85,33 @@ const RecipesPage: React.FC = () => {
   const [selectedCuisines, setSelectedCuisines] = useState<string[]>([]);
   const [selectedDiets, setSelectedDiets] = useState<string[]>([]);
   const [showMobileFilters, setShowMobileFilters] = useState(false);
-  const isDesktop = useMediaQuery("(min-width: 1024px");
+  const [showLoading, setShowLoading] = useState(false);
+  
+  const isDesktop = useMediaQuery("(min-width: 1024px)");
   const debouncedSearchQuery = useDebounce(searchQuery, 500);
-
-  // Define the expected recipe type from the API
-  interface ApiRecipe {
-    id: string | number;
-    title: string;
-    description?: string;
-    image?: string;
-    cuisine?: string[];
-    diets?: string[];
-    ready_in_minutes?: number;
-    type?: 'manual' | 'saved' | 'spoonacular';
-  }
 
   // Fetch all recipes from ChromaDB with search and filters
   const { 
     data: recipes = [], 
     isLoading: isLoadingRecipes, 
     isFetching 
-  } = useQuery<ApiRecipe[]>({
+  } = useQuery<Recipe[]>({
     queryKey: ['recipes', debouncedSearchQuery, selectedCuisines, selectedDiets],
     queryFn: async () => {
-      // Fetch all recipes by setting a large page size (1000)
-      const result = await fetchManualRecipes(debouncedSearchQuery, '', {
-        page: 1,
-        pageSize: 1000, // Fetch all recipes at once
-        cuisines: selectedCuisines,
-        diets: selectedDiets
-      });
-      return result as unknown as ApiRecipe[];
+      try {
+        const result = await fetchManualRecipes(debouncedSearchQuery, '', {
+          page: 1,
+          pageSize: 1000,
+          cuisines: selectedCuisines,
+          diets: selectedDiets
+        });
+        return result as unknown as Recipe[];
+      } catch (error) {
+        console.error('Error fetching recipes:', error);
+        throw error;
+      }
     },
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 5 * 60 * 1000,
     retry: 1,
     refetchOnWindowFocus: false,
   });
@@ -142,15 +134,39 @@ const RecipesPage: React.FC = () => {
       title: recipe.title || 'Untitled Recipe',
       description: recipe.description || '',
       imageUrl: recipe.image || '/placeholder-recipe.jpg',
-      type: 'manual',
-      cuisines: Array.isArray(recipe.cuisine) ? recipe.cuisine : [],
-      dietaryRestrictions: Array.isArray(recipe.diets) ? recipe.diets : [],
-      ready_in_minutes: recipe.ready_in_minutes || 30,
-      ingredients: [],
-      servings: 0, // Add default value for servings
-      sourceUrl: '', // Add default value for sourceUrl
-      summary: '', // Add default value for summary
-      analyzedInstructions: [] // Add default value for analyzedInstructions
+      type: recipe.type || 'manual',
+      cuisines: Array.isArray(recipe.cuisines) 
+        ? recipe.cuisines 
+        : recipe.type === 'manual' && 'cuisine' in recipe && Array.isArray(recipe.cuisine)
+          ? recipe.cuisine
+          : [],
+      dietaryRestrictions: Array.isArray(recipe.diets) 
+        ? recipe.diets 
+        : recipe.type === 'manual' && 'diets' in recipe && Array.isArray(recipe.diets)
+          ? recipe.diets
+          : [],
+      ready_in_minutes: recipe.type === 'manual' 
+        ? (recipe as ManualRecipe).ready_in_minutes 
+        : (recipe as SpoonacularRecipe).readyInMinutes,
+      ingredients: recipe.type === 'spoonacular' && 'extendedIngredients' in recipe && recipe.extendedIngredients
+        ? recipe.extendedIngredients.map(ing => ({
+            name: ing.name,
+            amount: ing.amount.toString(),
+            unit: ing.unit
+          }))
+        : recipe.type === 'manual' && 'ingredients' in recipe && Array.isArray(recipe.ingredients)
+          ? recipe.ingredients.map(ing => ({
+              name: ing.name,
+              amount: ing.amount?.toString(),
+              unit: ing.unit
+            }))
+          : [],
+      servings: recipe.type === 'spoonacular' ? (recipe as SpoonacularRecipe).servings : 4,
+      sourceUrl: recipe.type === 'spoonacular' ? (recipe as SpoonacularRecipe).sourceUrl : '',
+      summary: recipe.type === 'spoonacular' ? (recipe as SpoonacularRecipe).summary : '',
+      analyzedInstructions: recipe.type === 'spoonacular' 
+        ? (recipe as SpoonacularRecipe).analyzedInstructions 
+        : []
     }));
   }, [recipes]);
 
@@ -160,7 +176,7 @@ const RecipesPage: React.FC = () => {
   }, [normalizedRecipes]);
 
   // Use all filtered recipes (no pagination)
-  const displayRecipes = filteredRecipes;
+  const displayRecipes = useMemo(() => filteredRecipes, [filteredRecipes]);
 
   const handleSearch = useCallback((term: string) => {
     setSearchTerm(term);
@@ -177,7 +193,7 @@ const RecipesPage: React.FC = () => {
     return () => clearTimeout(timer);
   }, []);
 
-  const handleRecommendedSearch = (term: string) => {
+  const handleRecommendedSearch = useCallback((term: string) => {
     handleSearch(term);
     setShowRecommendedSearches(false);
     // Auto-scroll to results
@@ -187,35 +203,36 @@ const RecipesPage: React.FC = () => {
         resultsSection.scrollIntoView({ behavior: 'smooth' });
       }
     }, 300);
-  };
+  }, [handleSearch]);
 
-  const handleCuisineToggle = (cuisine: string) => {
+  const handleCuisineToggle = useCallback((cuisine: string) => {
     setSelectedCuisines(prev => 
       prev.includes(cuisine)
         ? prev.filter(c => c !== cuisine)
         : [...prev, cuisine]
     );
-  };
+  }, []);
 
-  const handleDietToggle = (diet: string) => {
+  const handleDietToggle = useCallback((diet: string) => {
     setSelectedDiets(prev => 
       prev.includes(diet)
         ? prev.filter(d => d !== diet)
         : [...prev, diet]
     );
-  };
+  }, []);
 
-  const clearAllFilters = () => {
+  const clearAllFilters = useCallback(() => {
     setSelectedCuisines([]);
     setSelectedDiets([]);
     setSearchQuery("");
-  };
+    setSearchTerm("");
+  }, []);
 
   // Show loading state only when we have a search query and data is being fetched
-  const isLoading = isLoadingRecipes && searchQuery !== '';
-  
-  // Add a small delay to prevent flash of loading state for fast responses
-  const [showLoading, setShowLoading] = useState(false);
+  const isLoading = useMemo(() => 
+    (isLoadingRecipes || isFetching) && searchQuery !== '', 
+    [isLoadingRecipes, isFetching, searchQuery]
+  );
   
   useEffect(() => {
     if (isLoading) {
@@ -226,27 +243,28 @@ const RecipesPage: React.FC = () => {
     }
   }, [isLoading]);
 
-  const renderFilters = () => (
+  const renderFilters = useCallback(() => (
     <div className="lg:w-80 space-y-6 pr-6">
       <RecipeFilters
         searchQuery={searchQuery}
         selectedCuisines={selectedCuisines}
         selectedDiets={selectedDiets}
-        onSearchChange={(query: string) => setSearchQuery(query)}
+        onSearchChange={setSearchQuery}
         onCuisineToggle={handleCuisineToggle}
         onDietToggle={handleDietToggle}
         onClearFilters={clearAllFilters}
       />
     </div>
-  );
+  ), [searchQuery, selectedCuisines, selectedDiets, handleCuisineToggle, handleDietToggle, clearAllFilters]);
 
-  const renderMobileFilters = () => (
+  const renderMobileFilters = useCallback(() => (
     <Drawer open={showMobileFilters} onOpenChange={setShowMobileFilters}>
       <div className="fixed bottom-6 right-6 z-10 lg:hidden">
         <Button
           onClick={() => setShowMobileFilters(true)}
           className="rounded-full w-14 h-14 shadow-lg"
           size="icon"
+          aria-label="Open filters"
         >
           <Filter className="h-6 w-6" />
         </Button>
@@ -258,6 +276,7 @@ const RecipesPage: React.FC = () => {
             variant="ghost"
             size="icon"
             onClick={() => setShowMobileFilters(false)}
+            aria-label="Close filters"
           >
             <X className="h-5 w-5" />
           </Button>
@@ -265,7 +284,58 @@ const RecipesPage: React.FC = () => {
         {renderFilters()}
       </DrawerContent>
     </Drawer>
-  );
+  ), [showMobileFilters, renderFilters]);
+
+  const renderRecipeCard = useCallback((recipe: NormalizedRecipe, index: number) => {
+    const recipeForCard: RecipeType = {
+      id: recipe.id.toString(),
+      title: recipe.title,
+      name: recipe.title,
+      image: recipe.imageUrl || '/placeholder-recipe.jpg',
+      imageUrl: recipe.imageUrl || '/placeholder-recipe.jpg',
+      cuisines: Array.isArray(recipe.cuisines) ? recipe.cuisines : [],
+      cuisine: Array.isArray(recipe.cuisines) && recipe.cuisines.length > 0 ? recipe.cuisines[0] : '',
+      dietaryRestrictions: (recipe.dietaryRestrictions || []).filter((d): d is DietaryRestriction => 
+        ['vegetarian', 'vegan', 'gluten-free', 'dairy-free', 'keto', 'paleo'].includes(d)
+      ),
+      diets: (recipe.dietaryRestrictions || []).filter(d => 
+        ['vegetarian', 'vegan', 'gluten-free', 'dairy-free', 'keto', 'paleo'].includes(d)
+      ),
+      ingredients: Array.isArray(recipe.ingredients) ? recipe.ingredients : [],
+      instructions: Array.isArray(recipe.instructions) 
+        ? recipe.instructions 
+        : recipe.instructions 
+          ? [recipe.instructions] 
+          : ['No instructions available'],
+      description: recipe.description || '',
+      cookingTime: recipe.ready_in_minutes ? `${recipe.ready_in_minutes} minutes` : 'Not specified',
+      servings: recipe.servings || 4,
+      source: recipe.type === 'spoonacular' ? 'spoonacular' : 'local',
+      type: recipe.type || 'saved',
+      ratings: [],
+      comments: [],
+      difficulty: 'medium',
+      ...(recipe.type === 'spoonacular' && { source: 'spoonacular' })
+    };
+    
+    return (
+      <div key={`${recipe.type}-${recipe.id}-${index}`} className="h-full">
+        <RecipeCard 
+          recipe={recipeForCard}
+          isExternal={recipe.type === 'spoonacular'}
+          onClick={() => {
+            if (recipe.type === 'spoonacular') {
+              navigate(`/external-recipe/${recipe.id}`, { 
+                state: { source: 'spoonacular' } 
+              });
+            } else {
+              navigate(`/recipe/${recipe.id}`);
+            }
+          }}
+        />
+      </div>
+    );
+  }, [navigate]);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100">
@@ -292,15 +362,17 @@ const RecipesPage: React.FC = () => {
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 onFocus={() => setShowRecommendedSearches(true)}
-                onKeyPress={(e) => {
+                onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     handleSearch(searchTerm);
                   }
                 }}
+                aria-label="Search recipes"
               />
               <Button 
                 className="absolute right-2 top-1/2 transform -translate-y-1/2 h-10"
                 onClick={() => handleSearch(searchTerm)}
+                aria-label="Search"
               >
                 Search
               </Button>
@@ -316,6 +388,13 @@ const RecipesPage: React.FC = () => {
                     key={index} 
                     className="cursor-pointer hover:bg-gray-50 transition-colors border-dashed"
                     onClick={() => handleRecommendedSearch(item.term)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        handleRecommendedSearch(item.term);
+                      }
+                    }}
                   >
                     <CardContent className="p-4 flex items-start space-x-3">
                       <div className="p-2 rounded-full bg-primary/10 text-primary">
@@ -366,70 +445,7 @@ const RecipesPage: React.FC = () => {
               </div>
             ) : filteredRecipes.length > 0 ? (
               <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-                {displayRecipes.map((recipe, index) => {
-                  // Prepare the recipe object for RecipeCard with proper typing
-                  const recipeForCard = {
-                    // Required fields
-                    id: recipe.id.toString(),
-                    title: recipe.title,
-                    name: recipe.title, // For backwards compatibility
-                    image: recipe.imageUrl || '/placeholder-recipe.jpg',
-                    imageUrl: recipe.imageUrl || '/placeholder-recipe.jpg', // For backwards compatibility
-                    
-                    // Cuisine information
-                    cuisines: Array.isArray(recipe.cuisines) ? recipe.cuisines : [],
-                    cuisine: Array.isArray(recipe.cuisines) ? recipe.cuisines[0] : '',
-                    
-                    // Dietary information
-                    dietaryRestrictions: (recipe.dietaryRestrictions || []).filter((d: string): d is DietaryRestriction => 
-                      ['vegetarian', 'vegan', 'gluten-free', 'dairy-free', 'keto', 'paleo'].includes(d)
-                    ),
-                    diets: (recipe.dietaryRestrictions || []).filter((d: string) => 
-                      ['vegetarian', 'vegan', 'gluten-free', 'dairy-free', 'keto', 'paleo'].includes(d)
-                    ),
-                    
-                    // Recipe details
-                    ingredients: Array.isArray(recipe.ingredients) ? recipe.ingredients : [],
-                    instructions: Array.isArray(recipe.instructions) 
-                      ? recipe.instructions 
-                      : recipe.instructions 
-                        ? [recipe.instructions] 
-                        : ['No instructions available'],
-                    description: recipe.description || '',
-                    cookingTime: recipe.ready_in_minutes ? `${recipe.ready_in_minutes} minutes` : 'Not specified',
-                    servings: recipe.servings || 4,
-                    
-                    // Source and type information
-                    source: recipe.type === 'spoonacular' ? 'spoonacular' : 'local',
-                    type: recipe.type || 'saved',
-                    
-                    // Additional metadata
-                    ratings: [],
-                    comments: [],
-                    difficulty: 'medium',
-                    
-                    // Add any other fields that might be used by the RecipeCard
-                    ...(recipe.type === 'spoonacular' && { source: 'spoonacular' })
-                  };
-                  
-                  return (
-                    <div key={`${recipe.type}-${recipe.id}-${index}`} className="h-full">
-                      <RecipeCard 
-                        recipe={recipeForCard}
-                        isExternal={recipe.type === 'spoonacular'}
-                        onClick={() => {
-                          if (recipe.type === 'spoonacular') {
-                            navigate(`/external-recipe/${recipe.id}`, { 
-                              state: { source: 'spoonacular' } 
-                            });
-                          } else {
-                            navigate(`/recipe/${recipe.id}`);
-                          }
-                        }}
-                      />
-                    </div>
-                  );
-                })}
+                {displayRecipes.map((recipe, index) => renderRecipeCard(recipe, index))}
               </div>
             ) : (
               <div className="text-center py-16 bg-white rounded-xl shadow-sm border border-gray-100">
