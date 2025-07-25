@@ -3,10 +3,9 @@
 
 from flask import Blueprint, jsonify, session, request
 from flask_cors import cross_origin
-from ..services.user_preferences_service import UserPreferencesService
+from services.user_preferences_service import UserPreferencesService
 import os
 import requests
-from functools import wraps
 
 ai_meal_planner_bp = Blueprint('ai_meal_planner', __name__)
 user_preferences_service = UserPreferencesService()
@@ -72,23 +71,31 @@ def build_llama_prompt(preferences, budget=None, dietary_goals=None, currency='$
 
 
 @ai_meal_planner_bp.route('/ai/meal_plan', methods=['POST', 'OPTIONS'])
-@cross_origin(origins=['http://localhost:8081'], 
-              methods=['POST', 'OPTIONS'],
-              allow_headers=['Content-Type', 'Authorization'],
-              supports_credentials=True)
 def ai_meal_plan():
     if request.method == 'OPTIONS':
-        return jsonify({'status': 'ok'}), 200
+        # Handle preflight request
+        response = jsonify({'status': 'ok'})
+        response.headers.add('Access-Control-Allow-Origin', 'http://localhost:8081')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        response.headers.add('Access-Control-Allow-Methods', 'POST, OPTIONS')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        return response
         
     # Get user from session
     user_id = session.get('user_email')
     if not user_id:
-        return jsonify({'error': 'Not logged in'}), 401
+        response = jsonify({'error': 'Not logged in'})
+        response.headers.add('Access-Control-Allow-Origin', 'http://localhost:8081')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        return response, 401
 
     # Get preferences from user profile
     preferences = user_preferences_service.get_preferences(user_id)
     if not preferences:
-        return jsonify({'error': 'No preferences found for user'}), 404
+        response = jsonify({'error': 'No preferences found for user'})
+        response.headers.add('Access-Control-Allow-Origin', 'http://localhost:8081')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        return response, 404
     
     # Get budget and dietary goals from request
     data = request.get_json() or {}
@@ -136,6 +143,12 @@ def ai_meal_plan():
         data = response.json()
         # Llama API: response['choices'][0]['message']['content']
         meal_plan = data['choices'][0]['message']['content']
-        return jsonify({'meal_plan': meal_plan})
+        response = jsonify({'meal_plan': meal_plan})
+        response.headers.add('Access-Control-Allow-Origin', 'http://localhost:8081')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        return response
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        response = jsonify({'error': str(e)})
+        response.headers.add('Access-Control-Allow-Origin', 'http://localhost:8081')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        return response, 500

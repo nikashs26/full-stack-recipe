@@ -16,12 +16,12 @@ load_dotenv()
 # Initialize Flask app
 app = Flask(__name__)
 
-# Configure CORS - allow requests from localhost:8081 only
-CORS(app, 
+# Configure CORS for development
+cors = CORS(app, 
     resources={
         r"/*": {
-            "origins": ["http://localhost:8081"],
-            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+            "origins": ["http://localhost:8081", "http://127.0.0.1:8081"],
+            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
             "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"],
             "expose_headers": ["Content-Type", "Authorization"],
             "supports_credentials": True,

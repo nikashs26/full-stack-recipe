@@ -5,7 +5,7 @@ import { useToast } from '@/hooks/use-toast';
 import Header from '../components/Header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ChefHat, Loader2, RefreshCw, Settings, Lock } from 'lucide-react';
+import { ChefHat, Loader2, RefreshCw, Settings, Lock, DollarSign, Plus, X } from 'lucide-react';
 import { generateMealPlan, regenerateMeal, MealPlan } from '../services/mealPlannerService';
 
 const MealPlannerPage: React.FC = () => {
@@ -15,6 +15,24 @@ const MealPlannerPage: React.FC = () => {
   const [mealPlan, setMealPlan] = useState<MealPlan | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
+  const [budget, setBudget] = useState<number | ''>('');
+  const [dietaryGoals, setDietaryGoals] = useState<string[]>([]);
+  const [customDietInput, setCustomDietInput] = useState('');
+  const [currency, setCurrency] = useState('$');
+  
+  const commonDietGoals = [
+    'High Protein',
+    'Low Carb',
+    'Keto',
+    'Paleo',
+    'Vegetarian',
+    'Vegan',
+    'Mediterranean',
+    'High Fiber',
+    'Low Calorie',
+    'Balanced'
+  ];
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -74,16 +92,42 @@ const MealPlannerPage: React.FC = () => {
     );
   }
 
+  const toggleDietGoal = (goal: string) => {
+    setDietaryGoals(prev => 
+      prev.includes(goal)
+        ? prev.filter(g => g !== goal)
+        : [...prev, goal]
+    );
+  };
+
+  const addCustomDietGoal = () => {
+    if (customDietInput.trim() && !dietaryGoals.includes(customDietInput.trim())) {
+      setDietaryGoals(prev => [...prev, customDietInput.trim()]);
+      setCustomDietInput('');
+    }
+  };
+
+  const removeDietGoal = (goal: string) => {
+    setDietaryGoals(prev => prev.filter(g => g !== goal));
+  };
+
   const handleGenerateMealPlan = async () => {
     setIsGenerating(true);
     setError(null);
     
+    // Prepare the meal plan options
+    const options = {
+      budget: budget ? Number(budget) : undefined,
+      dietaryGoals: dietaryGoals.length > 0 ? dietaryGoals : undefined,
+      currency
+    };
+    
     try {
-      const newMealPlan = await generateMealPlan();
+      const newMealPlan = await generateMealPlan(options);
       setMealPlan(newMealPlan);
       toast({
         title: "Meal Plan Generated!",
-        description: "Your personalized weekly meal plan is ready.",
+        description: `Your personalized weekly meal plan ${budget ? `(Budget: ${currency}${budget})` : ''} is ready.`,
       });
     } catch (error: any) {
       console.error('Error generating meal plan:', error);
@@ -143,6 +187,126 @@ const MealPlannerPage: React.FC = () => {
             </p>
           </div>
 
+          {/* Advanced Options Toggle */}
+          <div className="text-center mb-6">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={() => setShowAdvancedOptions(!showAdvancedOptions)}
+              className="text-sm text-primary hover:bg-primary/10"
+            >
+              {showAdvancedOptions ? 'Hide' : 'Show'} Advanced Options
+              {showAdvancedOptions ? (
+                <X className="ml-2 h-4 w-4" />
+              ) : (
+                <Plus className="ml-2 h-4 w-4" />
+              )}
+            </Button>
+          </div>
+
+          {/* Advanced Options Form */}
+          {showAdvancedOptions && (
+            <Card className="mb-8 p-6 bg-white/50 backdrop-blur-sm">
+              <div className="grid md:grid-cols-2 gap-6">
+                {/* Budget Section */}
+                <div>
+                  <h3 className="font-medium mb-3 flex items-center">
+                    <DollarSign className="h-4 w-4 mr-2" />
+                    Weekly Budget
+                  </h3>
+                  <div className="flex items-center">
+                    <select 
+                      value={currency}
+                      onChange={(e) => setCurrency(e.target.value)}
+                      className="h-10 rounded-l-md border-r-0 border-gray-300 bg-gray-50 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                    >
+                      <option value="$">$ USD</option>
+                      <option value="€">€ EUR</option>
+                      <option value="£">£ GBP</option>
+                      <option value="¥">¥ JPY</option>
+                    </select>
+                    <input
+                      type="number"
+                      min="0"
+                      step="10"
+                      value={budget}
+                      onChange={(e) => setBudget(e.target.value ? parseFloat(e.target.value) : '')}
+                      placeholder="Enter your weekly budget"
+                      className="h-10 flex-1 rounded-r-md border-l-0 border-gray-300 px-3 text-sm focus:ring-2 focus:ring-primary/50 focus:outline-none"
+                    />
+                  </div>
+                  <p className="mt-2 text-xs text-gray-500">
+                    {budget ? `~${currency}${(Number(budget) / 21).toFixed(2)} per meal` : 'Leave empty for no budget limit'}
+                  </p>
+                </div>
+
+                {/* Diet Goals Section */}
+                <div>
+                  <h3 className="font-medium mb-3">Dietary Goals</h3>
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {commonDietGoals.map((goal) => (
+                      <button
+                        key={goal}
+                        type="button"
+                        onClick={() => toggleDietGoal(goal)}
+                        className={`text-xs px-3 py-1 rounded-full border ${
+                          dietaryGoals.includes(goal)
+                            ? 'bg-primary/10 border-primary text-primary'
+                            : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
+                        }`}
+                      >
+                        {goal}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={customDietInput}
+                      onChange={(e) => setCustomDietInput(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && addCustomDietGoal()}
+                      placeholder="Add custom goal..."
+                      className="flex-1 h-10 rounded-md border border-gray-300 px-3 text-sm focus:ring-2 focus:ring-primary/50 focus:outline-none"
+                    />
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      size="sm"
+                      onClick={addCustomDietGoal}
+                      className="h-10"
+                    >
+                      Add
+                    </Button>
+                  </div>
+                  
+                  {/* Selected Goals */}
+                  {dietaryGoals.length > 0 && (
+                    <div className="mt-3">
+                      <h4 className="text-xs font-medium text-gray-500 mb-1">Selected Goals:</h4>
+                      <div className="flex flex-wrap gap-2">
+                        {dietaryGoals.map((goal) => (
+                          <span 
+                            key={goal}
+                            className="inline-flex items-center text-xs bg-primary/10 text-primary rounded-full px-3 py-1"
+                          >
+                            {goal}
+                            <button 
+                              type="button"
+                              onClick={() => removeDietGoal(goal)}
+                              className="ml-1.5 text-primary/70 hover:text-primary"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </Card>
+          )}
+
           {/* Action Buttons */}
           <div className="flex flex-col sm:flex-row gap-4 justify-center mb-8">
             <Button 
@@ -188,6 +352,24 @@ const MealPlannerPage: React.FC = () => {
             <div className="space-y-6">
               <div className="text-center">
                 <h2 className="text-2xl font-bold text-gray-900 mb-2">Your Weekly Meal Plan</h2>
+                <div className="flex flex-wrap justify-center gap-4 mt-3 mb-4">
+                  {mealPlan.budget && (
+                    <div className="bg-green-50 text-green-800 text-sm px-4 py-2 rounded-full flex items-center">
+                      <DollarSign className="h-4 w-4 mr-1" />
+                      Budget: {mealPlan.currency || '$'}{mealPlan.budget}
+                    </div>
+                  )}
+                  {mealPlan.totalCost !== undefined && (
+                    <div className="bg-blue-50 text-blue-800 text-sm px-4 py-2 rounded-full">
+                      Estimated Cost: {mealPlan.currency || '$'}{mealPlan.totalCost.toFixed(2)}
+                    </div>
+                  )}
+                  {dietaryGoals.length > 0 && (
+                    <div className="bg-purple-50 text-purple-800 text-sm px-4 py-2 rounded-full">
+                      {dietaryGoals.join(', ')}
+                    </div>
+                  )}
+                </div>
                 <p className="text-gray-600">Generated using {mealPlan.plan_type === 'llm_generated' ? 'AI' : 'Rule-based system'}</p>
               </div>
 
@@ -220,6 +402,11 @@ const MealPlannerPage: React.FC = () => {
                               <p><span className="font-medium">Cuisine:</span> {meal.cuisine}</p>
                               <p><span className="font-medium">Time:</span> {meal.cookingTime || meal.cook_time || meal.prep_time}</p>
                               <p><span className="font-medium">Difficulty:</span> {meal.difficulty}</p>
+                              {meal.cost && (
+                                <p className="mt-1 pt-1 border-t border-gray-100">
+                                  <span className="font-medium">Cost:</span> {meal.cost.currency || currency || '$'}{meal.cost.perServing?.toFixed(2)} per serving
+                                </p>
+                              )}
                             </div>
 
                             {meal.ingredients && (
