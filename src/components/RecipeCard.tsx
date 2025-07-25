@@ -36,63 +36,148 @@ const RecipeCard: React.FC<RecipeCardProps> = React.memo(({
     [recipe.name, recipe.title]
   );
   
-  // Handle cuisine from various formats
+  // Debug log the recipe data
+  React.useEffect(() => {
+    console.log('Recipe data:', {
+      id: recipe.id,
+      name: recipeName,
+      cuisines: recipe.cuisines,
+      cuisine: recipe.cuisine,
+      dietaryRestrictions: recipe.dietaryRestrictions,
+      diets: recipe.diets
+    });
+  }, [recipe]);
+
+  // Handle cuisine from various formats with better type safety
   const cuisines = React.useMemo(() => {
-    if (Array.isArray(recipe.cuisines)) return recipe.cuisines;
-    if (typeof recipe.cuisines === 'string') return [recipe.cuisines];
-    if (recipe.cuisine) return [recipe.cuisine];
-    return [];
-  }, [recipe.cuisines, recipe.cuisine]);
+    try {
+      // Handle array case
+      if (Array.isArray(recipe.cuisines)) {
+        return recipe.cuisines
+          .filter((c): c is string | number | boolean => c != null)
+          .map(c => String(c).trim())
+          .filter(c => c.length > 0);
+      }
+      
+      // Handle string case
+      if (typeof recipe.cuisines === 'string' && recipe.cuisines.trim()) {
+        return recipe.cuisines
+          .split(',')
+          .map(c => c.trim())
+          .filter(c => c.length > 0);
+      }
+      
+      // Handle single cuisine field
+      if (recipe.cuisine) {
+        const cuisine = String(recipe.cuisine).trim();
+        return cuisine ? [cuisine] : [];
+      }
+      
+      // Try to extract from other potential fields
+      const potentialCuisineFields = [
+        recipe.cuisine,
+        recipe.cuisineType?.[0],
+        recipe.categories?.[0],
+        recipe.tags?.find(t => typeof t === 'string' && t.length > 0)
+      ];
+      
+      const foundCuisine = potentialCuisineFields
+        .filter(Boolean)
+        .map(String)
+        .find(c => c.trim().length > 0);
+        
+      return foundCuisine ? [foundCuisine.trim()] : [];
+    } catch (error) {
+      console.error('Error processing cuisines:', error, recipe);
+      return [];
+    }
+  }, [recipe]);
   
   // Handle dietary restrictions from various formats with normalization
   const dietaryRestrictions = React.useMemo(() => {
-    // Get from either dietaryRestrictions or diets field
-    const restrictions: string[] = [];
-    
-    const addRestrictions = (items: unknown) => {
-      if (!Array.isArray(items)) return;
+    try {
+      const restrictions = new Set<string>();
       
-      for (const item of items) {
-        try {
-          if (item !== null && item !== undefined) {
-            restrictions.push(String(item));
-          }
-        } catch (e) {
-          // Skip invalid items
-        }
-      }
-    };
-    
-    addRestrictions(recipe.dietaryRestrictions);
-    addRestrictions(recipe.diets);
-    
-    // Normalize the values
-    return restrictions
-      .map(str => {
-        const normalized = str.trim().toLowerCase();
+      // Helper to add items to restrictions set
+      const addRestrictions = (items: unknown) => {
+        if (!items) return;
         
-        // Map common variations to standard values
-        switch(normalized) {
-          case 'vegetarian':
-          case 'veg':
-            return 'vegetarian';
-          case 'vegan':
-          case 'vegan friendly':
-            return 'vegan';
-          case 'gluten free':
-          case 'gluten-free':
-          case 'gf':
-            return 'gluten-free';
-          case 'dairy free':
-          case 'dairy-free':
-          case 'lactose free':
-            return 'dairy-free';
-          default:
-            return normalized;
+        // Handle array case
+        if (Array.isArray(items)) {
+          items.forEach(item => {
+            if (item != null) {
+              const str = String(item).trim().toLowerCase();
+              if (str) restrictions.add(str);
+            }
+          });
+          return;
         }
-      })
-      .filter(Boolean) // Remove any empty strings
-      .filter((value, index, self) => self.indexOf(value) === index); // Remove duplicates
+        
+        // Handle string case (comma-separated)
+        if (typeof items === 'string') {
+          items.split(',')
+            .map(s => s.trim().toLowerCase())
+            .filter(Boolean)
+            .forEach(s => restrictions.add(s));
+        }
+      };
+      
+      // Check all possible fields that might contain dietary info
+      addRestrictions(recipe.dietaryRestrictions);
+      addRestrictions(recipe.diets);
+      addRestrictions(recipe.diets);
+      addRestrictions(recipe.tags);
+      
+      // Also check healthLabels if it exists (common in some APIs)
+      if (recipe.healthLabels && Array.isArray(recipe.healthLabels)) {
+        const healthLabels = recipe.healthLabels
+          .map(String)
+          .map(s => s.toLowerCase())
+          .filter(s => s.includes('free') || s.includes('diet') || s.includes('vegan') || s.includes('vegetarian'));
+        healthLabels.forEach(label => restrictions.add(label));
+      }
+      
+      // Normalize the values
+      return Array.from(restrictions)
+        .map(normalized => {
+          // Map common variations to standard values
+          switch(normalized) {
+            case 'vegetarian':
+            case 'veg':
+              return 'vegetarian';
+            case 'vegan':
+            case 'vegan friendly':
+              return 'vegan';
+            case 'gluten free':
+            case 'gluten-free':
+            case 'gf':
+              return 'gluten-free';
+            case 'dairy free':
+            case 'dairy-free':
+            case 'lactose free':
+              return 'dairy-free';
+            case 'keto':
+            case 'ketogenic':
+              return 'keto';
+            case 'paleo':
+            case 'paleolithic':
+              return 'paleo';
+            case 'low carb':
+            case 'low-carb':
+              return 'low-carb';
+            case 'high protein':
+            case 'high-protein':
+              return 'high-protein';
+            default:
+              return normalized;
+          }
+        })
+        .filter(Boolean) // Remove any empty strings
+        .filter((value, index, self) => self.indexOf(value) === index); // Remove duplicates
+    } catch (error) {
+      console.error('Error processing dietary restrictions:', error, recipe);
+      return [];
+    }
   }, [recipe.dietaryRestrictions, recipe.diets]);
   
   // Handle image from various sources
@@ -210,56 +295,61 @@ const RecipeCard: React.FC<RecipeCardProps> = React.memo(({
           </h3>
           
           {/* Cuisine Tags */}
-          {cuisines.length > 0 && (
-            <div className="flex flex-wrap gap-2 mb-2">
-              {cuisines.map((cuisine, index) => (
-                <span
-                  key={index}
-                  className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full"
+          <div className="flex flex-wrap gap-2 mb-2">
+            {/* Show only the first cuisine as the main tag */}
+            {cuisines.length > 0 && (
+              <span
+                key={cuisines[0]}
+                className="px-2.5 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full flex items-center"
+              >
+                <span className="mr-1">🌎</span>
+                {cuisines[0].split(' ').map(word => 
+                  word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+                ).join(' ')}
+              </span>
+            )}
+            
+            {/* Show dietary restrictions as additional tags */}
+            {dietaryRestrictions.length > 0 && dietaryRestrictions.map((diet) => {
+              const getDietInfo = (d: string) => {
+                switch(d.toLowerCase()) {
+                  case 'vegetarian':
+                    return { icon: '🥕', color: 'bg-green-100 text-green-800' };
+                  case 'vegan':
+                    return { icon: '🌱', color: 'bg-teal-100 text-teal-800' };
+                  case 'gluten-free':
+                    return { icon: '🌾', color: 'bg-amber-100 text-amber-800' };
+                  case 'dairy-free':
+                    return { icon: '🥛', color: 'bg-blue-100 text-blue-800' };
+                  case 'keto':
+                    return { icon: '🥑', color: 'bg-purple-100 text-purple-800' };
+                  case 'paleo':
+                    return { icon: '🥩', color: 'bg-red-100 text-red-800' };
+                  default:
+                    return { icon: '🍽️', color: 'bg-gray-100 text-gray-800' };
+                }
+              };
+              
+              const { icon, color } = getDietInfo(diet);
+              
+              return (
+                <span 
+                  key={diet} 
+                  className={`px-2.5 py-1 text-xs font-medium rounded-full flex items-center ${color}`}
+                  title={diet.split('-').map(word => 
+                    word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+                  ).join(' ')}
                 >
-                  {cuisine}
+                  <span className="mr-1">{icon}</span>
+                  {diet.split('-').map(word => 
+                    word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+                  ).join('-')}
                 </span>
-              ))}
-            </div>
-          )}
+              );
+            })}
+          </div>
           
-          {/* Dietary restrictions with icons */}
-          {dietaryRestrictions.length > 0 && (
-            <div className="flex flex-wrap gap-2 mt-2">
-              {dietaryRestrictions.map((diet) => {
-                // Define icons and colors for different diet types
-                const getDietInfo = (d: string) => {
-                  switch(d) {
-                    case 'vegetarian':
-                      return { icon: '🥕', color: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' };
-                    case 'vegan':
-                      return { icon: '🌱', color: 'bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-200' };
-                    case 'gluten-free':
-                      return { icon: '🌾', color: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200' };
-                    case 'dairy-free':
-                      return { icon: '🥛', color: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' };
-                    default:
-                      return { icon: '🍽️', color: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200' };
-                  }
-                };
-                
-                const { icon, color } = getDietInfo(diet);
-                
-                return (
-                  <span 
-                    key={diet} 
-                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${color}`}
-                    title={diet.charAt(0).toUpperCase() + diet.slice(1)}
-                  >
-                    <span className="mr-1">{icon}</span>
-                    {diet.split('-').map(word => 
-                      word.charAt(0).toUpperCase() + word.slice(1)
-                    ).join('-')}
-                  </span>
-                );
-              })}
-            </div>
-          )}
+
           
           {/* Ingredients Preview */}
           {ingredients.length > 0 && (

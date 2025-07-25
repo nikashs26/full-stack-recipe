@@ -12,7 +12,6 @@ import { v4 as uuidv4 } from 'uuid';
 import RecipeReviews, { Review } from '../components/RecipeReviews';
 import { getReviewsByRecipeId, addReview } from '../utils/chromaReviewUtils';
 import { useAuth } from '../context/AuthContext';
-import { normalizeRecipeTags } from '../utils/recipeTagUtils';
 
 const RecipeDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -37,7 +36,7 @@ const RecipeDetailPage: React.FC = () => {
         const data = await response.json();
         
         // Normalize the recipe data
-        const normalizedRecipe = {
+        return {
           ...data,
           // Ensure instructions is an array
           instructions: Array.isArray(data.instructions) 
@@ -52,9 +51,6 @@ const RecipeDetailPage: React.FC = () => {
               ? [data.ingredients] 
               : []
         };
-        
-        // Normalize and validate tags
-        return normalizeRecipeTags(normalizedRecipe);
       } catch (err) {
         console.error('Error fetching recipe:', err);
         throw err;
@@ -351,22 +347,47 @@ const RecipeDetailPage: React.FC = () => {
               </ul>
 
               <h2 className="text-2xl font-semibold mb-4">Instructions</h2>
-              <ol className="list-decimal list-inside space-y-3 mb-6">
-                {Array.isArray(recipe.instructions) 
-                  ? recipe.instructions.map((instruction, index) => (
-                      <li key={index} className="text-gray-700 leading-relaxed">
-                        {instruction}
-                      </li>
-                    ))
-                  : recipe.instructions
-                    ? recipe.instructions.split('\n').filter(Boolean).map((step: string, index: number) => (
-                        <li key={index} className="text-gray-700 leading-relaxed">
-                          {step.trim()}
-                        </li>
-                      ))
-                    : <li className="text-gray-500 italic">No instructions available</li>
-                }
-              </ol>
+              <div className="mb-6">
+                {(() => {
+                  // Handle different instruction formats
+                  let instructions = [];
+                  
+                  if (Array.isArray(recipe.instructions)) {
+                    instructions = recipe.instructions;
+                  } else if (typeof recipe.instructions === 'string') {
+                    // First try splitting by double newlines (common format)
+                    instructions = recipe.instructions.split('\n\n');
+                    
+                    // If that doesn't give us multiple steps, try splitting by periods
+                    if (instructions.length <= 1) {
+                      instructions = recipe.instructions
+                        .split(/(?<=\.)\s+(?=[A-Z])/) // Split on period followed by space and capital letter
+                        .filter(step => step.trim().length > 0);
+                    }
+                    
+                    // If we still don't have multiple steps, try splitting by numbered steps
+                    if (instructions.length <= 1) {
+                      instructions = recipe.instructions
+                        .split(/(?<=\d+\.)\s+/)
+                        .filter(step => step.trim().length > 0);
+                    }
+                  }
+                  
+                  if (instructions.length > 0) {
+                    return (
+                      <ol className="list-decimal pl-6 space-y-3">
+                        {instructions.map((step, index) => (
+                          <li key={index} className="text-gray-700 leading-relaxed pl-2">
+                            {step.trim().replace(/^\.\s*/, '')}
+                          </li>
+                        ))}
+                      </ol>
+                    );
+                  }
+                  
+                  return <p className="text-gray-500 italic">No instructions available</p>;
+                })()}
+              </div>
               
               {/* Reviews section */}
               <div className="mt-8 pt-6 border-t border-gray-200">

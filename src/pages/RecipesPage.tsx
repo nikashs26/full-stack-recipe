@@ -129,45 +129,71 @@ const RecipesPage: React.FC = () => {
   const normalizedRecipes = useMemo<NormalizedRecipe[]>(() => {
     if (!Array.isArray(recipes)) return [];
     
-    return recipes.map(recipe => ({
-      id: String(recipe.id || Math.random().toString(36).substr(2, 9)),
-      title: recipe.title || 'Untitled Recipe',
-      description: recipe.description || '',
-      imageUrl: recipe.image || '/placeholder-recipe.jpg',
-      type: recipe.type || 'manual',
-      cuisines: Array.isArray(recipe.cuisines) 
-        ? recipe.cuisines 
-        : recipe.type === 'manual' && 'cuisine' in recipe && Array.isArray(recipe.cuisine)
-          ? recipe.cuisine
-          : [],
-      dietaryRestrictions: Array.isArray(recipe.diets) 
-        ? recipe.diets 
-        : recipe.type === 'manual' && 'diets' in recipe && Array.isArray(recipe.diets)
-          ? recipe.diets
-          : [],
-      ready_in_minutes: recipe.type === 'manual' 
-        ? (recipe as ManualRecipe).ready_in_minutes 
-        : (recipe as SpoonacularRecipe).readyInMinutes,
-      ingredients: recipe.type === 'spoonacular' && 'extendedIngredients' in recipe && recipe.extendedIngredients
-        ? recipe.extendedIngredients.map(ing => ({
-            name: ing.name,
-            amount: ing.amount.toString(),
-            unit: ing.unit
-          }))
-        : recipe.type === 'manual' && 'ingredients' in recipe && Array.isArray(recipe.ingredients)
-          ? recipe.ingredients.map(ing => ({
+    return recipes.map(recipe => {
+      // Helper to ensure we always return an array of strings
+      const normalizeList = (items: any): string[] => {
+        if (!items) return [];
+        if (Array.isArray(items)) {
+          return items
+            .map(item => String(item).trim())
+            .filter(item => item.length > 0);
+        }
+        if (typeof items === 'string') {
+          return items.split(',')
+            .map(item => item.trim())
+            .filter(item => item.length > 0);
+        }
+        return [String(items)].filter(Boolean);
+      };
+
+      // Extract cuisines from various possible fields
+      const cuisines = [
+        ...normalizeList(recipe.cuisines),
+        ...normalizeList(recipe.cuisine),
+        ...(recipe.type === 'manual' && 'cuisine' in recipe ? normalizeList(recipe.cuisine) : []),
+        ...(recipe.type === 'spoonacular' && 'cuisines' in recipe ? normalizeList(recipe.cuisines) : [])
+      ].filter((value, index, self) => self.indexOf(value) === index); // Remove duplicates
+
+      // Extract dietary restrictions from various possible fields
+      const dietaryRestrictions = [
+        ...normalizeList(recipe.diets),
+        ...normalizeList(recipe.dietaryRestrictions),
+        ...(recipe.type === 'manual' && 'diets' in recipe ? normalizeList(recipe.diets) : []),
+        ...(recipe.type === 'spoonacular' && 'diets' in recipe ? normalizeList(recipe.diets) : [])
+      ].filter((value, index, self) => self.indexOf(value) === index); // Remove duplicates
+
+      return {
+        id: String(recipe.id || Math.random().toString(36).substr(2, 9)),
+        title: recipe.title || 'Untitled Recipe',
+        description: recipe.description || '',
+        imageUrl: recipe.image || '/placeholder-recipe.jpg',
+        type: recipe.type || 'manual',
+        cuisines,
+        dietaryRestrictions,
+        ready_in_minutes: recipe.type === 'manual' 
+          ? (recipe as ManualRecipe).ready_in_minutes 
+          : (recipe as SpoonacularRecipe).readyInMinutes,
+        ingredients: recipe.type === 'spoonacular' && 'extendedIngredients' in recipe && recipe.extendedIngredients
+          ? recipe.extendedIngredients.map(ing => ({
               name: ing.name,
-              amount: ing.amount?.toString(),
-              unit: ing.unit
+              amount: ing.amount.toString(),
+              unit: ing.unit || ''
             }))
-          : [],
-      servings: recipe.type === 'spoonacular' ? (recipe as SpoonacularRecipe).servings : 4,
-      sourceUrl: recipe.type === 'spoonacular' ? (recipe as SpoonacularRecipe).sourceUrl : '',
-      summary: recipe.type === 'spoonacular' ? (recipe as SpoonacularRecipe).summary : '',
-      analyzedInstructions: recipe.type === 'spoonacular' 
-        ? (recipe as SpoonacularRecipe).analyzedInstructions 
-        : []
-    }));
+          : recipe.type === 'manual' && 'ingredients' in recipe && Array.isArray(recipe.ingredients)
+            ? recipe.ingredients.map(ing => ({
+                name: ing.name,
+                amount: ing.amount?.toString(),
+                unit: ing.unit || ''
+              }))
+            : [],
+        servings: recipe.type === 'spoonacular' ? (recipe as SpoonacularRecipe).servings : 4,
+        sourceUrl: recipe.type === 'spoonacular' ? (recipe as SpoonacularRecipe).sourceUrl : '',
+        summary: recipe.type === 'spoonacular' ? (recipe as SpoonacularRecipe).summary : '',
+        analyzedInstructions: recipe.type === 'spoonacular' 
+          ? (recipe as SpoonacularRecipe).analyzedInstructions 
+          : []
+      };
+    });
   }, [recipes]);
 
   // All recipes are now loaded at once
