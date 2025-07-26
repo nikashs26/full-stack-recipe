@@ -3,11 +3,19 @@ import { apiCall } from '../utils/apiUtils';
 export interface UserPreferences {
   dietaryRestrictions: string[];
   favoriteCuisines: string[];
-  favoriteFoods: string[]; // New field for favorite foods
+  favoriteFoods: string[];
   allergens: string[];
   cookingSkillLevel: 'beginner' | 'intermediate' | 'advanced';
   healthGoals?: string[];
   maxCookingTime?: string;
+  includeBreakfast?: boolean;
+  includeLunch?: boolean;
+  includeDinner?: boolean;
+  includeSnacks?: boolean;
+  targetCalories?: number;
+  targetProtein?: number;
+  targetCarbs?: number;
+  targetFat?: number;
 }
 
 export const loadUserPreferences = async (): Promise<UserPreferences> => {

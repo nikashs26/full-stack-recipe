@@ -69,6 +69,14 @@ const loadUserPreferences = async (): Promise<UserPreferences> => {
       cookingSkillLevel: 'beginner',
       healthGoals: [],
       maxCookingTime: '30 minutes',
+      includeBreakfast: true,
+      includeLunch: true,
+      includeDinner: true,
+      includeSnacks: false,
+      targetCalories: 2000,
+      targetProtein: 150,
+      targetCarbs: 200,
+      targetFat: 65,
       ...preferences,
       favoriteFoods
     };
@@ -146,10 +154,20 @@ const formSchema = z.object({
   dietaryRestrictions: z.array(z.string()),
   favoriteCuisines: z.array(z.string()),
   allergens: z.array(z.string()),
-  cookingSkillLevel: z.enum(['beginner', 'intermediate', 'advanced']),
-  favoriteFoods: z.array(z.string()).length(3),
-  healthGoals: z.array(z.string()).optional(),
-  maxCookingTime: z.string().optional()
+  cookingSkillLevel: z.string(),
+  favoriteFoods: z.array(z.string().min(1, "Favorite food cannot be empty")),
+  healthGoals: z.array(z.string()),
+  maxCookingTime: z.string(),
+  // Meal inclusion preferences
+  includeBreakfast: z.boolean().default(true),
+  includeLunch: z.boolean().default(true),
+  includeDinner: z.boolean().default(true),
+  includeSnacks: z.boolean().default(false),
+  // Nutritional targets
+  targetCalories: z.number().min(1200).max(4000).optional(),
+  targetProtein: z.number().min(30).max(300).optional(),
+  targetCarbs: z.number().min(100).max(500).optional(),
+  targetFat: z.number().min(20).max(200).optional()
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -380,35 +398,121 @@ const UserPreferencesPage: React.FC = () => {
               <div>
                 <h2 className="text-xl font-medium mb-4">Dietary Restrictions</h2>
                 <p className="text-sm text-gray-600 mb-4">Select any dietary restrictions you follow</p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {dietaryOptions.map((option) => (
-                    <FormField
-                      key={option.id}
-                      control={form.control}
-                      name="dietaryRestrictions"
-                      render={({ field }) => (
-                        <FormItem className="flex items-center space-x-3 space-y-0">
-                          <FormControl>
-                            <Checkbox
-                              checked={field.value?.includes(option.id)}
-                              onCheckedChange={(checked) => {
-                                return checked
-                                  ? field.onChange([...field.value, option.id])
-                                  : field.onChange(
-                                      field.value?.filter((value: string) => value !== option.id)
-                                    );
-                              }}
-                            />
-                          </FormControl>
-                          <FormLabel className="font-normal">
-                            {option.label}
-                            <p className="text-xs text-gray-500">{option.description}</p>
-                          </FormLabel>
-                        </FormItem>
-                      )}
-                    />
-                  ))}
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {dietaryOptions.map((option) => (
+                  <FormField
+                    key={option.id}
+                    control={form.control}
+                    name="dietaryRestrictions"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                        <FormControl>
+                          <Checkbox
+                            checked={field.value?.includes(option.id)}
+                            onCheckedChange={(checked) => {
+                              return checked
+                                ? field.onChange([...field.value, option.id])
+                                : field.onChange(
+                                    field.value?.filter(
+                                      (value: string) => value !== option.id
+                                    )
+                                  )
+                            }}
+                          />
+                        </FormControl>
+                        <div className="space-y-1 leading-none">
+                          <FormLabel>{option.label}</FormLabel>
+                          <p className="text-sm text-muted-foreground">
+                            {option.description}
+                          </p>
+                        </div>
+                      </FormItem>
+                    )}
+                  />
+                ))}
+              </div>
+              
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium">Nutritional Targets (Daily)</h3>
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                  <FormField
+                    control={form.control}
+                    name="targetCalories"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Calories</FormLabel>
+                        <FormControl>
+                          <Input 
+                            type="number" 
+                            min="1200" 
+                            max="4000"
+                            {...field}
+                            onChange={(e) => field.onChange(Number(e.target.value))}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="targetProtein"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Protein (g)</FormLabel>
+                        <FormControl>
+                          <Input 
+                            type="number" 
+                            min="30" 
+                            max="300"
+                            {...field}
+                            onChange={(e) => field.onChange(Number(e.target.value))}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="targetCarbs"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Carbs (g)</FormLabel>
+                        <FormControl>
+                          <Input 
+                            type="number" 
+                            min="100" 
+                            max="500"
+                            {...field}
+                            onChange={(e) => field.onChange(Number(e.target.value))}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="targetFat"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Fat (g)</FormLabel>
+                        <FormControl>
+                          <Input 
+                            type="number" 
+                            min="20" 
+                            max="200"
+                            {...field}
+                            onChange={(e) => field.onChange(Number(e.target.value))}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                 </div>
+              </div>
               </div>
 
               {/* Cuisines */}

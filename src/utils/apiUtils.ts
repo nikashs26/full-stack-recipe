@@ -1,4 +1,4 @@
-const API_BASE_URL = 'http://localhost:5003/api';
+const API_BASE_URL = 'http://localhost:5003';
 
 export const apiCall = async (endpoint: string, options: RequestInit = {}) => {
   const token = localStorage.getItem('auth_token');
@@ -13,7 +13,10 @@ export const apiCall = async (endpoint: string, options: RequestInit = {}) => {
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+  // Handle absolute URLs (starting with http:// or https://)
+  const url = endpoint.startsWith('http') ? endpoint : `${API_BASE_URL}${endpoint}`;
+  
+  const response = await fetch(url, {
     ...options,
     headers,
     credentials: 'include',

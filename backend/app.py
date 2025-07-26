@@ -9,6 +9,8 @@ from routes.preferences import preferences_bp
 from routes.meal_planner import meal_planner_bp
 from routes.health import health_bp
 from routes.review_routes import review_bp
+from test_ollama import test_bp
+from test_meal_planner import test_meal_bp
 
 # Load environment variables
 load_dotenv()
@@ -41,6 +43,8 @@ app.register_blueprint(preferences_bp, url_prefix='/api')
 app.register_blueprint(meal_planner_bp, url_prefix='/api')
 app.register_blueprint(health_bp)  # Health check routes
 app.register_blueprint(review_bp, url_prefix='/api')  # Review routes
+app.register_blueprint(test_bp, url_prefix='/api')  # Test routes
+app.register_blueprint(test_meal_bp, url_prefix='/api')  # Test meal planner routes
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5003))

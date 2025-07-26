@@ -37,7 +37,17 @@ def save_user_preferences():
             'cookingSkillLevel': preferences_data.get('cookingSkillLevel', "beginner"),
             'healthGoals': preferences_data.get('healthGoals', ["General wellness"]),
             'maxCookingTime': preferences_data.get('maxCookingTime', "30 minutes"),
-            'favoriteFoods': preferences_data.get('favoriteFoods', [])
+            'favoriteFoods': preferences_data.get('favoriteFoods', []),
+            # New meal preference fields
+            'includeBreakfast': preferences_data.get('includeBreakfast', True),
+            'includeLunch': preferences_data.get('includeLunch', True),
+            'includeDinner': preferences_data.get('includeDinner', True),
+            'includeSnacks': preferences_data.get('includeSnacks', False),
+            # Nutritional targets
+            'targetCalories': preferences_data.get('targetCalories', 2000),
+            'targetProtein': preferences_data.get('targetProtein', 150),
+            'targetCarbs': preferences_data.get('targetCarbs', 200),
+            'targetFat': preferences_data.get('targetFat', 65)
         }
         
         # Save to ChromaDB

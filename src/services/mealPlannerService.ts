@@ -4,102 +4,152 @@ export interface MealPlanOptions {
   budget?: number;
   dietaryGoals?: string[];
   currency?: string;
+  mealPreferences?: {
+    includeBreakfast: boolean;
+    includeLunch: boolean;
+    includeDinner: boolean;
+    includeSnacks: boolean;
+  };
+  nutritionTargets?: {
+    calories: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+  };
 }
 
-export interface MealPlan {
-  days: Array<{
-    day: string;
-    meals: {
-      [key: string]: {
-        name: string;
-        description: string;
-        cuisine: string;
-        cookingTime?: string;
-        cook_time?: string;
-        prep_time?: string;
-        difficulty: string;
-        ingredients: string[];
-        cost?: {
-          perServing: number;
-          total: number;
-          currency: string;
-        };
-      };
-    };
-  }>;
-  plan_type: 'llm_generated' | 'rule_based';
-  totalCost?: number;
-  budget?: number;
-  currency?: string;
+export interface NutritionInfo {
+  calories: number;
+  protein: string | number;
+  carbs: string | number;
+  fat: string | number;
+  [key: string]: string | number;
 }
 
-export const generateMealPlan = async (options?: MealPlanOptions): Promise<MealPlan> => {
-  const response = await apiCall('/ai/meal_plan', {
-    method: 'POST',
-    body: JSON.stringify({
+export interface Meal {
+  name: string;
+  meal_type: string;
+  cuisine: string;
+  is_vegetarian: boolean;
+  is_vegan: boolean;
+  ingredients: string[];
+  instructions: string[] | string;
+  nutrition: NutritionInfo;
+  prep_time?: string;
+  cook_time?: string;
+  servings?: number;
+  difficulty?: string;
+  nutritional_highlights?: string[];
+  tags?: string[];
+}
+
+export interface MealDay {
+  day: string;
+  date: string;
+  meals: Meal[];
+  daily_notes?: string;
+}
+
+export interface ShoppingListItem {
+  item: string;
+  category: string;
+  estimated_cost: number;
+  quantity?: string;
+}
+
+export interface ShoppingList {
+  ingredients: ShoppingListItem[];
+  estimated_cost: number;
+}
+
+export interface NutritionSummary {
+  daily_average: {
+    calories: number;
+    protein: string;
+    carbs: string;
+    fat: string;
+  };
+  weekly_totals: {
+    calories: number;
+    protein: string;
+    carbs: string;
+    fat: string;
+  };
+  targets: {
+    calories: number;
+    protein: string;
+    carbs: string;
+    fat: string;
+  };
+  dietary_considerations: string[];
+  meal_inclusions: {
+    breakfast: boolean;
+    lunch: boolean;
+    dinner: boolean;
+    snacks: boolean;
+  };
+}
+
+export interface MealPlanData {
+  days: MealDay[];
+  shopping_list: ShoppingList;
+  nutrition_summary: NutritionSummary;
+  generated_at: string;
+  preferences_used: Record<string, any>;
+  plan_type: string;
+}
+
+export interface MealPlanResponse {
+  success: boolean;
+  data: MealPlanData;
+  message: string;
+}
+
+export const generateMealPlan = async (options?: MealPlanOptions): Promise<MealPlanData> => {
+  try {
+    // Call the actual backend endpoint
+    const requestBody: any = {
       budget: options?.budget,
       dietary_goals: options?.dietaryGoals,
-      currency: options?.currency
-    })
-  });
+      currency: options?.currency || '$',
+      meal_preferences: options?.mealPreferences,
+      nutrition_targets: options?.nutritionTargets
+    };
 
-  if (!response.ok) {
-    const data = await response.json();
-    if (response.status === 400 && data.redirect_to) {
-      throw new Error(data.error || 'Preferences required');
-    }
-    throw new Error(data.error || 'Failed to generate meal plan');
-  }
+    // Remove undefined values
+    Object.keys(requestBody).forEach(key => requestBody[key] === undefined && delete requestBody[key]);
 
-  const data = await response.json();
-  
-  // If we already have a structured response, return it directly
-  if (data.days) {
-    return {
-      ...data,
-      days: data.days.map((day: any) => ({
-        ...day,
-        meals: Object.entries(day.meals || {}).reduce((acc, [mealType, meal]: [string, any]) => ({
-          ...acc,
-          [mealType]: {
-            name: meal.name,
-            description: meal.description || `A delicious ${mealType} option`,
-            cuisine: '',
-            difficulty: 'medium',
-            ingredients: meal.ingredients || [],
-            cost: meal.cost ? {
-              perServing: meal.cost.per_serving || 0,
-              total: meal.cost.total || 0,
-              currency: data.currency || '$'
-            } : undefined,
-            nutrition: meal.nutrition || {
-              calories: 0,
-              protein: 0,
-              carbs: 0,
-              fat: 0
-            },
-            prep_time: meal.prep_time || 15,
-            cook_time: meal.cook_time || 30
-          }
-        }), {})
-      })),
-      plan_type: data.plan_type || 'llm_generated',
-      totalCost: data.totalCost || 0,
-      budget: data.budget,
-      currency: data.currency || 'USD'
-    } as MealPlan;
-  }
-  
-  // Fallback to markdown parsing if needed
-  if (data.meal_plan) {
-    return parseMealPlanResponse(data.meal_plan, {
-      budget: options?.budget,
-      currency: options?.currency,
-      dietaryGoals: options?.dietaryGoals
+    const response = await apiCall('/api/ai/meal_plan', {
+      method: 'POST',
+      body: JSON.stringify(requestBody)
     });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      if (response.status === 400 && errorData.redirect_to) {
+        throw new Error(errorData.error || 'Preferences required');
+      }
+      throw new Error(errorData.error || 'Failed to generate meal plan');
+    }
+
+    const data = await response.json();
+    
+    // Handle the response format from the backend
+    if (data.success && data.data) {
+      return data.data;  // The plan is in the data field
+    } else if (data.error) {
+      throw new Error(data.error);
+    } else if (data.plan) {
+      // Fallback to the old format
+      return data.plan;
+    }
+    
+    console.error('Invalid response format:', data);
+    throw new Error('Invalid response format from server');
+  } catch (error) {
+    console.error('Error generating meal plan:', error);
+    throw error;
   }
-  
-  return data;
 };
 
 export const regenerateMeal = async (day: string, mealType: string): Promise<void> => {
@@ -119,90 +169,114 @@ interface ParseMealPlanOptions {
   dietaryGoals?: string[];
 }
 
-const parseMealPlanResponse = (markdown: string, options: ParseMealPlanOptions): MealPlan => {
-  const lines = markdown.split('\n').filter(line => line.trim());
-  let currentDay = '';
-  let currentMeal = '';
+export const parseMealPlanResponse = (markdown: string, options: ParseMealPlanOptions): MealPlanData => {
+  // Create empty days for the week
+  const days: MealDay[] = [];
+  const today = new Date();
   
-  const days: Array<{day: string; meals: {[key: string]: any}}> = [];
-  let currentDayMeals: {[key: string]: any} = {};
+  // Generate a week's worth of empty days
+  for (let i = 0; i < 7; i++) {
+    const date = new Date(today);
+    date.setDate(today.getDate() + i);
+    
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const dayName = dayNames[date.getDay()];
+    
+    days.push({
+      day: dayName,
+      date: date.toISOString().split('T')[0],
+      meals: []
+    });
+  }
   
-  // Helper function to parse a meal line
-  const parseMealLine = (line: string) => {
-    // Extract meal name, description, etc. from the line
-    // This is a simplified parser - you may need to adjust based on the actual format
-    const match = line.match(/^\s*-\s*(\w+):\s*(.+)$/i);
-    if (match) {
-      const mealType = match[1].toLowerCase();
-      const mealDetails = match[2];
-      
-      // Extract name, cuisine, etc. from mealDetails
-      // This is a simplified example - adjust based on your actual format
-      const nameMatch = mealDetails.match(/([^,]+),/);
-      const name = nameMatch ? nameMatch[1].trim() : mealDetails.trim();
-      
-      currentMeal = mealType;
-      currentDayMeals[mealType] = {
-        name,
-        description: mealDetails,
-        cuisine: '',
-        difficulty: '',
-        ingredients: [],
-        cost: options.budget ? {
-          perServing: options.budget / 21, // Simple average per meal
-          total: options.budget / 3, // Simple average per day
-          currency: options.currency || '$'
-        } : undefined
-      };
+  // Create a default shopping list
+  const shopping_list: ShoppingList = {
+    ingredients: [],
+    estimated_cost: 0
+  };
+  
+  // Create a default nutrition summary
+  const nutrition_summary: NutritionSummary = {
+    daily_average: {
+      calories: 0,
+      protein: '0g',
+      carbs: '0g',
+      fat: '0g'
+    },
+    weekly_totals: {
+      calories: 0,
+      protein: '0g',
+      carbs: '0g',
+      fat: '0g'
+    },
+    targets: {
+      calories: 0,
+      protein: '0g',
+      carbs: '0g',
+      fat: '0g'
+    },
+    dietary_considerations: [],
+    meal_inclusions: {
+      breakfast: true,
+      lunch: true,
+      dinner: true,
+      snacks: false
     }
   };
+  
+  // Parse the markdown to extract meal information
+  const lines = markdown.split('\n').filter(line => line.trim());
+  let currentDay: MealDay | null = null;
   
   // Process each line of the markdown
   for (const line of lines) {
     // Check for day headers
-    const dayMatch = line.match(/^#+\s*(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)/i);
+    const dayMatch = line.match(/^#+\s*(Sunday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday)/i);
     if (dayMatch) {
-      // Save previous day's meals if they exist
-      if (currentDay && Object.keys(currentDayMeals).length > 0) {
-        days.push({
-          day: currentDay,
-          meals: {...currentDayMeals}
-        });
-        currentDayMeals = {};
-      }
-      currentDay = dayMatch[1];
+      currentDay = days.find(d => d.day.toLowerCase() === dayMatch[1].toLowerCase()) || null;
       continue;
     }
     
     // Check for meal lines
-    if (line.match(/^\s*-\s*(Breakfast|Lunch|Dinner|Snack):/i)) {
-      parseMealLine(line);
+    if (currentDay) {
+      const mealMatch = line.match(/^\s*-\s*(\w+):\s*(.+)$/i);
+      if (mealMatch) {
+        const mealType = mealMatch[1].toLowerCase();
+        const mealDetails = mealMatch[2];
+        
+        // Create a new meal with default values
+        const meal: Meal = {
+          name: mealDetails.split(',')[0]?.trim() || `Meal ${currentDay.meals.length + 1}`,
+          meal_type: mealType,
+          cuisine: '',
+          is_vegetarian: false,
+          is_vegan: false,
+          ingredients: [],
+          instructions: '',
+          nutrition: {
+            calories: 0,
+            protein: '0g',
+            carbs: '0g',
+            fat: '0g'
+          }
+        };
+        
+        currentDay.meals.push(meal);
+      }
     }
-    
-    // Additional parsing for meal details could go here
   }
   
-  // Add the last day's meals
-  if (currentDay && Object.keys(currentDayMeals).length > 0) {
-    days.push({
-      day: currentDay,
-      meals: {...currentDayMeals}
-    });
-  }
-  
-  // Calculate total cost
-  const totalCost = options.budget ? 
-    days.reduce((sum, day) => {
-      return sum + Object.values(day.meals).reduce((daySum, meal) => {
-        return daySum + (meal.cost?.total || 0);
-      }, 0);
-    }, 0) : undefined;
-  
+  // Return the basic structure matching our new format
   return {
     days,
-    plan_type: 'llm_generated',
-    totalCost,
-    budget: options.budget,
-    currency: options.currency
+    shopping_list,
+    nutrition_summary,
+    generated_at: new Date().toISOString(),
+    preferences_used: {
+      budget: options.budget,
+      currency: options.currency || '$',
+      dietary_goals: options.dietaryGoals || []
+    },
+    plan_type: 'weekly'
   };
 };

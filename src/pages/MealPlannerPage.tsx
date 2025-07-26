@@ -6,13 +6,13 @@ import Header from '../components/Header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ChefHat, Loader2, RefreshCw, Settings, Lock, DollarSign, Plus, X } from 'lucide-react';
-import { generateMealPlan, regenerateMeal, MealPlan } from '../services/mealPlannerService';
+import { generateMealPlan, regenerateMeal, type MealPlanData, type MealDay, type Meal, type NutritionSummary } from '../services/mealPlannerService';
 
 const MealPlannerPage: React.FC = () => {
   const { isAuthenticated, isLoading: authLoading, user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [mealPlan, setMealPlan] = useState<MealPlan | null>(null);
+  const [mealPlan, setMealPlan] = useState<MealPlanData | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
@@ -20,6 +20,18 @@ const MealPlannerPage: React.FC = () => {
   const [dietaryGoals, setDietaryGoals] = useState<string[]>([]);
   const [customDietInput, setCustomDietInput] = useState('');
   const [currency, setCurrency] = useState('$');
+  
+  // Meal inclusion preferences
+  const [includeBreakfast, setIncludeBreakfast] = useState(true);
+  const [includeLunch, setIncludeLunch] = useState(true);
+  const [includeDinner, setIncludeDinner] = useState(true);
+  const [includeSnacks, setIncludeSnacks] = useState(true);
+  
+  // Macro targets
+  const [targetCalories, setTargetCalories] = useState<number | ''>(2000);
+  const [targetProtein, setTargetProtein] = useState<number | ''>(150);
+  const [targetCarbs, setTargetCarbs] = useState<number | ''>(200);
+  const [targetFat, setTargetFat] = useState<number | ''>(65);
   
   const commonDietGoals = [
     'High Protein',
@@ -112,40 +124,57 @@ const MealPlannerPage: React.FC = () => {
   };
 
   const handleGenerateMealPlan = async () => {
+    if (!isAuthenticated) {
+      toast({
+        title: "Authentication Required",
+        description: "Please sign in to generate a meal plan.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     setIsGenerating(true);
     setError(null);
     
-    // Prepare the meal plan options
-    const options = {
-      budget: budget ? Number(budget) : undefined,
-      dietaryGoals: dietaryGoals.length > 0 ? dietaryGoals : undefined,
-      currency
-    };
-    
     try {
-      const newMealPlan = await generateMealPlan(options);
-      setMealPlan(newMealPlan);
+      const plan = await generateMealPlan({
+        budget: budget || undefined,
+        dietaryGoals: dietaryGoals.length > 0 ? dietaryGoals : undefined,
+        currency: currency,
+        mealPreferences: {
+          includeBreakfast,
+          includeLunch,
+          includeDinner,
+          includeSnacks
+        },
+        nutritionTargets: {
+          calories: targetCalories || 2000,
+          protein: targetProtein || 150,
+          carbs: targetCarbs || 200,
+          fat: targetFat || 65
+        }
+      });
+      
+      setMealPlan(plan);
+      
       toast({
-        title: "Meal Plan Generated!",
+        title: "Success!",
         description: `Your personalized weekly meal plan ${budget ? `(Budget: ${currency}${budget})` : ''} is ready.`,
       });
-    } catch (error: any) {
-      console.error('Error generating meal plan:', error);
-      setError(error.message);
       
-      if (error.message.includes('preferences')) {
-        toast({
-          title: "Preferences Required",
-          description: error.message,
-          variant: "destructive"
-        });
-      } else {
-        toast({
-          title: "Generation Failed",
-          description: error.message || 'Failed to generate meal plan',
-          variant: "destructive"
-        });
-      }
+      return plan;
+    } catch (error) {
+      console.error('Error generating meal plan:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to generate meal plan';
+      setError(errorMessage);
+      
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive"
+      });
+      
+      throw error;
     } finally {
       setIsGenerating(false);
     }
@@ -168,6 +197,126 @@ const MealPlannerPage: React.FC = () => {
         variant: "destructive"
       });
     }
+  };
+
+  const renderNutritionalInfo = () => {
+    if (!mealPlan?.nutrition_summary) return null;
+    
+    const nutritionSummary = mealPlan.nutrition_summary;
+    const dailyAverage = nutritionSummary?.daily_average;
+    const weeklyTotals = nutritionSummary?.weekly_totals;
+    const mealInclusions = nutritionSummary?.meal_inclusions || {};
+    const dietaryConsiderations = nutritionSummary?.dietary_considerations || [];
+    
+    return (
+      <Card className="mt-8">
+        <CardHeader>
+          <CardTitle>Nutritional Summary</CardTitle>
+          <CardDescription>
+            Overview of your weekly nutritional intake
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-6">
+            <div>
+              <h4 className="font-medium mb-2">Daily Averages</h4>
+              {!dailyAverage ? (
+                <p className="text-sm text-gray-500">No daily average data available</p>
+              ) : (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="bg-orange-50 p-4 rounded-lg">
+                    <div className="text-2xl font-bold text-orange-600">
+                      {dailyAverage.calories || 'N/A'}
+                    </div>
+                    <div className="text-sm text-gray-500">Calories</div>
+                  </div>
+                  <div className="bg-green-50 p-4 rounded-lg">
+                    <div className="text-2xl font-bold text-green-600">
+                      {dailyAverage.protein || 'N/A'}
+                    </div>
+                    <div className="text-sm text-gray-500">Protein</div>
+                  </div>
+                  <div className="bg-blue-50 p-4 rounded-lg">
+                    <div className="text-2xl font-bold text-blue-600">
+                      {dailyAverage.carbs || 'N/A'}
+                    </div>
+                    <div className="text-sm text-gray-500">Carbs</div>
+                  </div>
+                  <div className="bg-purple-50 p-4 rounded-lg">
+                    <div className="text-2xl font-bold text-purple-600">
+                      {dailyAverage.fat || 'N/A'}
+                    </div>
+                    <div className="text-sm text-gray-500">Fat</div>
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            <div className="mt-6">
+              <h4 className="font-medium mb-2">Weekly Totals</h4>
+              {!weeklyTotals ? (
+                <p className="text-sm text-gray-500">No weekly total data available</p>
+              ) : (
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <div className="text-lg font-semibold">
+                      {weeklyTotals.calories ? `${weeklyTotals.calories} cal` : 'N/A'}
+                    </div>
+                    <div className="text-sm text-gray-500">Total Calories</div>
+                  </div>
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <div className="text-lg font-semibold">
+                      {weeklyTotals.protein || 'N/A'}
+                    </div>
+                    <div className="text-sm text-gray-500">Total Protein</div>
+                  </div>
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <div className="text-lg font-semibold">
+                      {weeklyTotals.carbs || 'N/A'}
+                    </div>
+                    <div className="text-sm text-gray-500">Total Carbs</div>
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            <div>
+              <h4 className="font-medium mb-2">Meal Inclusions</h4>
+              <div className="flex flex-wrap gap-2">
+                {Object.entries(mealInclusions).map(([meal, included]) => (
+                  <div 
+                    key={meal}
+                    className={`px-3 py-1 rounded-full text-sm ${
+                      included 
+                        ? 'bg-green-100 text-green-800' 
+                        : 'bg-gray-100 text-gray-500'
+                    }`}
+                  >
+                    {meal}: {included ? 'Included' : 'Excluded'}
+                  </div>
+                ))}
+              </div>
+            </div>
+            
+            {dietaryConsiderations.length > 0 && (
+              <div>
+                <h4 className="font-medium mb-2">Dietary Considerations</h4>
+                <div className="flex flex-wrap gap-2">
+                  {dietaryConsiderations.map((consideration: string, index: number) => (
+                    <span 
+                      key={index} 
+                      className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
+                    >
+                      {consideration}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    );
   };
 
   return (
@@ -240,8 +389,102 @@ const MealPlannerPage: React.FC = () => {
                   </p>
                 </div>
 
-                {/* Diet Goals Section */}
+                {/* Meal Inclusions */}
                 <div>
+                  <h3 className="font-medium mb-3">Meal Inclusions</h3>
+                  <div className="grid grid-cols-2 gap-3 mb-4">
+                    <label className="flex items-center space-x-2">
+                      <input 
+                        type="checkbox" 
+                        checked={includeBreakfast}
+                        onChange={(e) => setIncludeBreakfast(e.target.checked)}
+                        className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                      />
+                      <span>Breakfast</span>
+                    </label>
+                    <label className="flex items-center space-x-2">
+                      <input 
+                        type="checkbox" 
+                        checked={includeLunch}
+                        onChange={(e) => setIncludeLunch(e.target.checked)}
+                        className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                      />
+                      <span>Lunch</span>
+                    </label>
+                    <label className="flex items-center space-x-2">
+                      <input 
+                        type="checkbox" 
+                        checked={includeDinner}
+                        onChange={(e) => setIncludeDinner(e.target.checked)}
+                        className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                      />
+                      <span>Dinner</span>
+                    </label>
+                    <label className="flex items-center space-x-2">
+                      <input 
+                        type="checkbox" 
+                        checked={includeSnacks}
+                        onChange={(e) => setIncludeSnacks(e.target.checked)}
+                        className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                      />
+                      <span>Snacks</span>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Nutrition Targets */}
+                <div>
+                  <h3 className="font-medium mb-3">Daily Nutrition Targets</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Calories</label>
+                      <input
+                        type="number"
+                        value={targetCalories}
+                        onChange={(e) => setTargetCalories(e.target.value ? parseInt(e.target.value) : '')}
+                        className="w-full h-10 rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary"
+                        min="0"
+                        step="50"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Protein (g)</label>
+                      <input
+                        type="number"
+                        value={targetProtein}
+                        onChange={(e) => setTargetProtein(e.target.value ? parseInt(e.target.value) : '')}
+                        className="w-full h-10 rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary"
+                        min="0"
+                        step="5"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Carbs (g)</label>
+                      <input
+                        type="number"
+                        value={targetCarbs}
+                        onChange={(e) => setTargetCarbs(e.target.value ? parseInt(e.target.value) : '')}
+                        className="w-full h-10 rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary"
+                        min="0"
+                        step="5"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Fat (g)</label>
+                      <input
+                        type="number"
+                        value={targetFat}
+                        onChange={(e) => setTargetFat(e.target.value ? parseInt(e.target.value) : '')}
+                        className="w-full h-10 rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary"
+                        min="0"
+                        step="1"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Diet Goals Section */}
+                <div className="md:col-span-2">
                   <h3 className="font-medium mb-3">Dietary Goals</h3>
                   <div className="flex flex-wrap gap-2 mb-3">
                     {commonDietGoals.map((goal) => (
@@ -353,35 +596,50 @@ const MealPlannerPage: React.FC = () => {
               <div className="text-center">
                 <h2 className="text-2xl font-bold text-gray-900 mb-2">Your Weekly Meal Plan</h2>
                 <div className="flex flex-wrap justify-center gap-4 mt-3 mb-4">
-                  {mealPlan.budget && (
-                    <div className="bg-green-50 text-green-800 text-sm px-4 py-2 rounded-full flex items-center">
-                      <DollarSign className="h-4 w-4 mr-1" />
-                      Budget: {mealPlan.currency || '$'}{mealPlan.budget}
-                    </div>
-                  )}
-                  {mealPlan.totalCost !== undefined && (
-                    <div className="bg-blue-50 text-blue-800 text-sm px-4 py-2 rounded-full">
-                      Estimated Cost: {mealPlan.currency || '$'}{mealPlan.totalCost.toFixed(2)}
-                    </div>
-                  )}
+                  <div className="bg-green-50 text-green-800 text-sm px-4 py-2 rounded-full flex items-center">
+                    <DollarSign className="h-4 w-4 mr-1" />
+                    Budget: {currency}{budget || 'Not specified'}
+                  </div>
+                  <div className="bg-blue-50 text-blue-800 text-sm px-4 py-2 rounded-full">
+                    Estimated Cost: {mealPlan.shopping_list?.estimated_cost ? `${currency}${mealPlan.shopping_list.estimated_cost.toFixed(2)}` : 'N/A'}
+                  </div>
                   {dietaryGoals.length > 0 && (
                     <div className="bg-purple-50 text-purple-800 text-sm px-4 py-2 rounded-full">
                       {dietaryGoals.join(', ')}
                     </div>
                   )}
                 </div>
-                <p className="text-gray-600">Generated using {mealPlan.plan_type === 'llm_generated' ? 'AI' : 'Rule-based system'}</p>
+                <p className="text-gray-600">
+                  {mealPlan.days.flatMap(day => day.meals || []).length} meals planned • 
+                  {mealPlan.nutrition_summary?.daily_average?.calories || 'N/A'} avg calories/day
+                </p>
               </div>
 
+              {/* Nutrition Summary */}
+              {renderNutritionalInfo()}
+
+              {/* Meal Plan Days */}
               <div className="grid gap-6">
-                {mealPlan.days.map((dayPlan: any, index: number) => (
+                {mealPlan.days.map((dayPlan: MealDay, index: number) => (
                   <Card key={dayPlan.day || index}>
                     <CardHeader>
-                      <CardTitle className="capitalize text-xl">{dayPlan.day}</CardTitle>
+                      <div className="flex justify-between items-center">
+                        <CardTitle className="capitalize text-xl">
+                          {dayPlan.day}
+                          {dayPlan.date && (
+                            <span className="ml-2 text-sm font-normal text-gray-500">
+                              {new Date(dayPlan.date).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
+                            </span>
+                          )}
+                        </CardTitle>
+                        {dayPlan.daily_notes && (
+                          <span className="text-sm text-gray-500 italic">{dayPlan.daily_notes}</span>
+                        )}
+                      </div>
                     </CardHeader>
                     <CardContent>
                       <div className="grid md:grid-cols-3 gap-4">
-                        {Object.entries(dayPlan.meals || {}).map(([mealType, meal]: [string, any]) => (
+                        {Object.entries(dayPlan.meals || {}).map(([mealType, meal]) => (
                           <div key={mealType} className="border rounded-lg p-4">
                             <div className="flex justify-between items-start mb-2">
                               <h4 className="font-semibold capitalize text-lg">{mealType}</h4>
@@ -396,16 +654,19 @@ const MealPlannerPage: React.FC = () => {
                             </div>
                             
                             <h5 className="font-medium text-gray-900 mb-1">{meal.name}</h5>
-                            <p className="text-sm text-gray-600 mb-2">{meal.description}</p>
                             
-                            <div className="text-xs space-y-1">
-                              <p><span className="font-medium">Cuisine:</span> {meal.cuisine}</p>
-                              <p><span className="font-medium">Time:</span> {meal.cookingTime || meal.cook_time || meal.prep_time}</p>
+                            <div className="text-xs space-y-1 mb-3">
+                              <p><span className="font-medium">Cuisine:</span> {meal.cuisine || 'N/A'}</p>
+                              <p><span className="font-medium">Prep Time:</span> {meal.prep_time}</p>
+                              <p><span className="font-medium">Cook Time:</span> {meal.cook_time}</p>
                               <p><span className="font-medium">Difficulty:</span> {meal.difficulty}</p>
-                              {meal.cost && (
-                                <p className="mt-1 pt-1 border-t border-gray-100">
-                                  <span className="font-medium">Cost:</span> {meal.cost.currency || currency || '$'}{meal.cost.perServing?.toFixed(2)} per serving
-                                </p>
+                              <p><span className="font-medium">Servings:</span> {meal.servings}</p>
+                              
+                              {meal.nutritional_highlights?.length > 0 && (
+                                <div className="mt-1 pt-1 border-t border-gray-100">
+                                  <p className="font-medium">Highlights:</p>
+                                  <p className="text-xs">{meal.nutritional_highlights.join(', ')}</p>
+                                </div>
                               )}
                             </div>
 
@@ -413,13 +674,31 @@ const MealPlannerPage: React.FC = () => {
                               <div className="mt-3">
                                 <p className="text-xs font-medium mb-1">Ingredients:</p>
                                 <ul className="text-xs text-gray-600 space-y-0.5">
-                                  {meal.ingredients.slice(0, 3).map((ingredient: string, idx: number) => (
-                                    <li key={idx}>• {ingredient}</li>
-                                  ))}
-                                  {meal.ingredients.length > 3 && (
+                                  {(Array.isArray(meal.ingredients) ? meal.ingredients : [meal.ingredients])
+                                    .slice(0, 3)
+                                    .map((ingredient: string, idx: number) => (
+                                      <li key={idx}>• {ingredient}</li>
+                                    ))}
+                                  {Array.isArray(meal.ingredients) && meal.ingredients.length > 3 && (
                                     <li>• ... and {meal.ingredients.length - 3} more</li>
                                   )}
                                 </ul>
+                              </div>
+                            )}
+
+                            {meal.instructions && (
+                              <div className="mt-3">
+                                <p className="text-xs font-medium mb-1">Instructions:</p>
+                                <ol className="text-xs text-gray-600 space-y-1 list-decimal list-inside">
+                                  {(Array.isArray(meal.instructions) ? meal.instructions : [meal.instructions])
+                                    .slice(0, 2)
+                                    .map((step: string, idx: number) => (
+                                      <li key={idx} className="truncate">{step}</li>
+                                    ))}
+                                  {Array.isArray(meal.instructions) && meal.instructions.length > 2 && (
+                                    <li>... and {meal.instructions.length - 2} more steps</li>
+                                  )}
+                                </ol>
                               </div>
                             )}
                           </div>
@@ -429,8 +708,6 @@ const MealPlannerPage: React.FC = () => {
                   </Card>
                 ))}
               </div>
-
-              {/* Action Buttons for Generated Plan */}
               <div className="flex flex-col sm:flex-row gap-4 justify-center pt-8">
                 <Button 
                   onClick={handleGenerateMealPlan} 

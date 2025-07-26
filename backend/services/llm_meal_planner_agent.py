@@ -229,6 +229,29 @@ class LLMMealPlannerAgent:
         print(f'🔥 PROMPT_BUILDER: Extracted weekly_budget: {weekly_budget}')
         print(f'🔥 PROMPT_BUILDER: Extracted serving_amount: {serving_amount}')
         
+        # Extract meal preferences with fallbacks
+        include_breakfast = preferences.get('includeBreakfast', True)
+        include_lunch = preferences.get('includeLunch', True)
+        include_dinner = preferences.get('includeDinner', True)
+        include_snacks = preferences.get('includeSnacks', False)
+        
+        # Extract nutritional targets with defaults
+        target_calories = preferences.get('targetCalories', 2000)
+        target_protein = preferences.get('targetProtein', 150)
+        target_carbs = preferences.get('targetCarbs', 200)
+        target_fat = preferences.get('targetFat', 65)
+        
+        # Build meal preferences info
+        meal_preferences = []
+        if include_breakfast:
+            meal_preferences.append("breakfast")
+        if include_lunch:
+            meal_preferences.append("lunch")
+        if include_dinner:
+            meal_preferences.append("dinner")
+        if include_snacks:
+            meal_preferences.append("snacks")
+            
         # Build dietary info
         dietary_info = []
         if dietary_restrictions:
@@ -241,6 +264,13 @@ class LLMMealPlannerAgent:
             dietary_info.append(f"Weekly budget: ${weekly_budget}")
         if serving_amount:
             dietary_info.append(f"Serving {serving_amount} people")
+            
+        # Add meal preferences to dietary info
+        if meal_preferences:
+            dietary_info.append(f"Meals to include: {', '.join(meal_preferences)}")
+            
+        # Add nutritional targets
+        dietary_info.append(f"Daily nutritional targets: {target_calories} calories, {target_protein}g protein, {target_carbs}g carbs, {target_fat}g fat")
         
         dietary_text = '. '.join(dietary_info) if dietary_info else "No specific dietary restrictions"
         
@@ -488,11 +518,23 @@ Make the meals varied and follow the dietary restrictions. Don't use random reci
         # Get current date
         today = datetime.now()
         
-        # Extract preferences
+        # Extract preferences with fallbacks
         dietary_restrictions = preferences.get('dietary_restrictions', preferences.get('dietaryRestrictions', []))
         favorite_cuisines = preferences.get('favorite_cuisines', preferences.get('favoriteCuisines', []))
         cooking_skill = preferences.get('cooking_skill_level', preferences.get('cookingSkillLevel', 'intermediate'))
         max_time = preferences.get('max_cooking_time', preferences.get('maxCookingTime', '30 minutes'))
+        
+        # Extract meal preferences with fallbacks
+        include_breakfast = preferences.get('includeBreakfast', True)
+        include_lunch = preferences.get('includeLunch', True)
+        include_dinner = preferences.get('includeDinner', True)
+        include_snacks = preferences.get('includeSnacks', False)
+        
+        # Extract nutritional targets with defaults
+        target_calories = preferences.get('targetCalories', 2000)
+        target_protein = preferences.get('targetProtein', 150)
+        target_carbs = preferences.get('targetCarbs', 200)
+        target_fat = preferences.get('targetFat', 65)
         
         is_vegetarian = 'vegetarian' in [r.lower() for r in dietary_restrictions]
         is_vegan = 'vegan' in [r.lower() for r in dietary_restrictions]
@@ -622,12 +664,22 @@ Make the meals varied and follow the dietary restrictions. Don't use random reci
         days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
         weekly_plan = []
         
+        # Define meal types based on preferences
+        meal_types = []
+        if include_breakfast:
+            meal_types.append("breakfast")
+        if include_lunch:
+            meal_types.append("lunch")
+        if include_dinner:
+            meal_types.append("dinner")
+        
         for i, day in enumerate(days):
             day_date = today + timedelta(days=i)
+            day_meals = []
             
-            day_meals = {}
-            for meal_type in ["breakfast", "lunch", "dinner"]:
-                available_for_meal = available_meals[meal_type]
+            # Add main meals (breakfast, lunch, dinner)
+            for meal_type in meal_types:
+                available_for_meal = available_meals.get(meal_type, [])
                 
                 # Filter by dietary restrictions
                 filtered_meals = []
@@ -643,34 +695,167 @@ Make the meals varied and follow the dietary restrictions. Don't use random reci
                     filtered_meals = available_for_meal
                 
                 # Select a meal (cycle through to avoid repetition)
-                selected_meal = filtered_meals[i % len(filtered_meals)]
-                
-                day_meals[meal_type] = {
-                    "name": selected_meal["name"],
-                    "ingredients": ["ingredients vary"],  # Simplified for fallback
-                    "cuisine": selected_meal["cuisine"]
-                }
+                if filtered_meals:  # Only add if there are meals available
+                    selected_meal = filtered_meals[i % len(filtered_meals)]
+                    
+                    # Calculate nutritional values based on meal type
+                    if meal_type == "breakfast":
+                        calories = min(target_calories * 0.25, 500)  # 25% of daily calories, max 500
+                        protein = min(target_protein * 0.25, 20)     # 25% of daily protein, max 20g
+                        carbs = min(target_carbs * 0.25, 70)         # 25% of daily carbs, max 70g
+                        fat = min(target_fat * 0.25, 20)             # 25% of daily fat, max 20g
+                    elif meal_type == "lunch":
+                        calories = min(target_calories * 0.35, 700)  # 35% of daily calories, max 700
+                        protein = min(target_protein * 0.35, 30)     # 35% of daily protein, max 30g
+                        carbs = min(target_carbs * 0.35, 80)         # 35% of daily carbs, max 80g
+                        fat = min(target_fat * 0.35, 25)             # 35% of daily fat, max 25g
+                    else:  # dinner
+                        calories = min(target_calories * 0.4, 800)   # 40% of daily calories, max 800
+                        protein = min(target_protein * 0.4, 35)      # 40% of daily protein, max 35g
+                        carbs = min(target_carbs * 0.3, 60)          # 30% of daily carbs, max 60g
+                        fat = min(target_fat * 0.35, 25)             # 35% of daily fat, max 25g
+                    
+                    day_meals.append({
+                        "meal_type": meal_type,
+                        "name": selected_meal["name"],
+                        "cuisine": selected_meal["cuisine"],
+                        "is_vegetarian": selected_meal.get("vegetarian", True),
+                        "is_vegan": selected_meal.get("vegan", False),
+                        "nutrition": {
+                            "calories": round(calories),
+                            "protein": round(protein, 1),
+                            "carbs": round(carbs, 1),
+                            "fat": round(fat, 1)
+                        },
+                        "ingredients": ["ingredients vary"],  # Simplified for fallback
+                        "instructions": "Detailed instructions not available in fallback mode."
+                    })
             
+            # Add snacks if enabled (every other day to avoid repetition)
+            if include_snacks and i % 2 == 0:
+                snack_options = [
+                    {"name": "Fruit and Nuts", "cuisine": "International", "vegetarian": True, "vegan": True},
+                    {"name": "Hummus with Veggies", "cuisine": "Mediterranean", "vegetarian": True, "vegan": True},
+                    {"name": "Yogurt with Honey", "cuisine": "International", "vegetarian": True, "vegan": False},
+                    {"name": "Energy Balls", "cuisine": "International", "vegetarian": True, "vegan": True}
+                ]
+                
+                # Filter snacks based on dietary restrictions
+                filtered_snacks = []
+                for snack in snack_options:
+                    if is_vegan and not snack.get("vegan", False):
+                        continue
+                    if is_vegetarian and not snack.get("vegetarian", True):
+                        continue
+                    filtered_snacks.append(snack)
+                
+                if filtered_snacks:  # Only add if we have valid snacks
+                    selected_snack = filtered_snacks[i % len(filtered_snacks)]
+                    
+                    # Calculate snack nutrition (10% of daily targets)
+                    snack_calories = min(target_calories * 0.1, 200)  # 10% of daily calories, max 200
+                    snack_protein = min(target_protein * 0.1, 10)     # 10% of daily protein, max 10g
+                    snack_carbs = min(target_carbs * 0.1, 25)         # 10% of daily carbs, max 25g
+                    snack_fat = min(target_fat * 0.1, 10)             # 10% of daily fat, max 10g
+                    
+                    day_meals.append({
+                        "meal_type": "snack",
+                        "name": selected_snack["name"],
+                        "cuisine": selected_snack["cuisine"],
+                        "is_vegetarian": selected_snack.get("vegetarian", True),
+                        "is_vegan": selected_snack.get("vegan", False),
+                        "nutrition": {
+                            "calories": round(snack_calories),
+                            "protein": round(snack_protein, 1),
+                            "carbs": round(snack_carbs, 1),
+                            "fat": round(snack_fat, 1)
+                        },
+                        "ingredients": ["ingredients vary"],
+                        "instructions": "Enjoy as a light snack between meals."
+                    })
+            
+            # Add the day to the weekly plan
             weekly_plan.append({
                 "day": day,
                 "date": day_date.strftime("%Y-%m-%d"),
-                **day_meals
+                "meals": day_meals
             })
         
         # Generate shopping list based on cuisine
         shopping_list = self._generate_cuisine_shopping_list(favorite_cuisines, dietary_restrictions)
         
+        # Calculate total nutritional values for the week
+        total_calories = 0
+        total_protein = 0
+        total_carbs = 0
+        total_fat = 0
+        
+        for day in weekly_plan:
+            for meal in day.get('meals', []):
+                if 'nutrition' in meal:
+                    total_calories += meal['nutrition'].get('calories', 0)
+                    total_protein += meal['nutrition'].get('protein', 0)
+                    total_carbs += meal['nutrition'].get('carbs', 0)
+                    total_fat += meal['nutrition'].get('fat', 0)
+        
+        # Calculate daily averages
+        days_with_meals = len(weekly_plan)
+        if days_with_meals > 0:
+            avg_daily_calories = round(total_calories / days_with_meals)
+            avg_daily_protein = round(total_protein / days_with_meals, 1)
+            avg_daily_carbs = round(total_carbs / days_with_meals, 1)
+            avg_daily_fat = round(total_fat / days_with_meals, 1)
+        else:
+            avg_daily_calories = avg_daily_protein = avg_daily_carbs = avg_daily_fat = 0
+        
+        # Calculate macronutrient distribution
+        total_macros = avg_daily_protein * 4 + avg_daily_carbs * 4 + avg_daily_fat * 9
+        if total_macros > 0:
+            protein_pct = round(avg_daily_protein * 4 * 100 / total_macros)
+            carbs_pct = round(avg_daily_carbs * 4 * 100 / total_macros)
+            fat_pct = 100 - protein_pct - carbs_pct
+        else:
+            protein_pct = carbs_pct = fat_pct = 0
+        
         return {
-            "week_summary": f"Fallback meal plan focusing on {', '.join(favorite_cuisines) if favorite_cuisines else 'varied'} cuisine",
-            "days": weekly_plan,
-            "weekly_shopping_list": shopping_list,
-            "nutritional_summary": {
-                "focus": "Balanced nutrition with emphasis on fresh ingredients",
-                "dietary_accommodations": dietary_restrictions
+            "success": True,
+            "plan": {
+                "days": weekly_plan,
+                "shopping_list": {
+                    "ingredients": shopping_list,
+                    "estimated_cost": sum(item.get('estimated_cost', 0) for item in shopping_list)
+                },
+                "nutrition_summary": {
+                    "daily_average": {
+                        "calories": avg_daily_calories,
+                        "protein": f"{avg_daily_protein}g ({protein_pct}%)",
+                        "carbs": f"{avg_daily_carbs}g ({carbs_pct}%)",
+                        "fat": f"{avg_daily_fat}g ({fat_pct}%)"
+                    },
+                    "weekly_totals": {
+                        "calories": round(total_calories),
+                        "protein": f"{round(total_protein, 1)}g",
+                        "carbs": f"{round(total_carbs, 1)}g",
+                        "fat": f"{round(total_fat, 1)}g"
+                    },
+                    "targets": {
+                        "calories": target_calories,
+                        "protein": f"{target_protein}g",
+                        "carbs": f"{target_carbs}g",
+                        "fat": f"{target_fat}g"
+                    },
+                    "dietary_considerations": dietary_restrictions,
+                    "meal_inclusions": {
+                        "breakfast": include_breakfast,
+                        "lunch": include_lunch,
+                        "dinner": include_dinner,
+                        "snacks": include_snacks
+                    }
+                }
             },
             "generated_at": datetime.now().isoformat(),
             "preferences_used": preferences,
-            "plan_type": "fallback_cuisine_focused"
+            "plan_type": "fallback"
         }
     
     def _generate_cuisine_shopping_list(self, favorite_cuisines: List[str], dietary_restrictions: List[str]) -> List[Dict[str, Any]]:

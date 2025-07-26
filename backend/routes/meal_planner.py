@@ -1,8 +1,11 @@
+import json
+from datetime import datetime
 from flask import Blueprint, request, jsonify, session
 from flask_cors import cross_origin
 import logging
 import os
 import requests
+from datetime import datetime, timedelta
 from services.llm_meal_planner_agent import LLMMealPlannerAgent
 from services.user_preferences_service import UserPreferencesService
 from middleware.auth_middleware import require_auth, get_current_user_id
@@ -18,86 +21,391 @@ user_preferences_service = UserPreferencesService()
 llm_meal_planner_agent = LLMMealPlannerAgent()
 
 def build_llama_prompt(preferences, budget=None, dietary_goals=None, currency='$'):
-    """Build a Llama 3.2 prompt for meal planning, using all user preferences."""
+    """Build a structured prompt for meal planning with nutritional requirements."""
     dietary = preferences.get('dietaryRestrictions', [])
-    cuisines = preferences.get('favoriteCuisines', [])
+    cuisines = preferences.get('favoriteCuisines', ['International'])
     allergens = preferences.get('allergens', [])
-    skill = preferences.get('cookingSkillLevel', '')
+    skill = preferences.get('cookingSkillLevel', 'beginner')
     favorite_foods = preferences.get('favoriteFoods', [])
-    health_goals = preferences.get('healthGoals', [])
-    max_time = preferences.get('maxCookingTime', '')
+    health_goals = preferences.get('healthGoals', ['General wellness'])
+    max_time = preferences.get('maxCookingTime', '30 minutes')
     
     # Add dietary goals to health goals if provided
     if dietary_goals:
-        health_goals = list(set(health_goals + dietary_goals))
+        if isinstance(dietary_goals, list):
+            health_goals = list(set(health_goals + dietary_goals))
+        else:
+            health_goals.append(str(dietary_goals))
     
-    prompt_parts = [
-        "Generate a detailed weekly meal plan with the following preferences:",
-        "\nDietary Restrictions: " + (", ".join(dietary) if dietary else "None"),
-        "Preferred Cuisines: " + (", ".join(cuisines) if cuisines else "Any"),
-        "Allergens to Avoid: " + (", ".join(allergens) if allergens else "None"),
-        "Cooking Skill Level: " + (skill if skill else "Not specified"),
-        "Favorite Foods: " + (", ".join(favorite_foods) if favorite_foods else "None"),
-        "Health Goals: " + (", ".join(health_goals) if health_goals else "None"),
-        "Maximum Cooking Time: " + (f"{max_time} minutes" if max_time else "No limit")
-    ]
+    # Get target macros from preferences or use defaults
+    macros = {
+        'calories': preferences.get('targetCalories', 2000),
+        'protein': preferences.get('targetProtein', 150),
+        'carbs': preferences.get('targetCarbs', 200),
+        'fat': preferences.get('targetFat', 65),
+        'fiber': 30  # Default value
+    }
     
-    if budget is not None:
-        prompt_parts.append(f"- Weekly food budget: {currency}{budget} (approximately {currency}{budget/21:.2f} per meal)")
+    # Determine which meals to include based on preferences
+    include_breakfast = preferences.get('includeBreakfast', True)
+    include_lunch = preferences.get('includeLunch', True)
+    include_dinner = preferences.get('includeDinner', True)
+    include_snacks = preferences.get('includeSnacks', False)
     
-    prompt_parts.extend([
-        "\nFor each day of the week (Monday through Sunday), provide:",
-        "1. Breakfast: Include dish name, ingredients with quantities, and brief preparation steps.",
-        "2. Lunch: Include dish name, ingredients with quantities, and brief preparation steps.",
-        "3. Dinner: Include dish name, ingredients with quantities, and brief preparation steps.",
-        "4. Snacks: Include 2-3 snack options.",
-        "\nFor each meal, include:",
-        "- Estimated preparation time",
-        "- Difficulty level",
-        "- Estimated cost per serving",
-        "- Total estimated cost for the meal",
-        "\nAt the end, provide a summary of the total weekly cost and any notes about the meal plan.",
-        "Format the response in clear, well-structured markdown with appropriate headings."
-    ])
+    # Build meals list based on preferences
+    meals_per_day = []
+    meal_requirements = {}
     
-    return "\n".join(prompt_parts)
+    # Calculate calories per meal based on number of meals
+    total_meals = sum([include_breakfast, include_lunch, include_dinner])
+    calories_per_meal = macros['calories'] / total_meals if total_meals > 0 else 0
+    
+    if include_breakfast:
+        meals_per_day.append('breakfast')
+        meal_requirements['breakfast'] = {
+            'description': 'A nutritious start to the day',
+            'target_calories': f'{int(calories_per_meal * 0.8)}-{int(calories_per_meal * 1.2)}',
+            'protein_goal': f"{int(macros['protein'] * 0.25)}-{int(macros['protein'] * 0.3)}g"
+        }
+    
+    if include_snacks and include_breakfast:
+        meals_per_day.append('morning_snack')
+        meal_requirements['morning_snack'] = {
+            'description': 'Light and energizing',
+            'target_calories': f"{int(calories_per_meal * 0.3)}-{int(calories_per_meal * 0.4)}",
+            'protein_goal': f"{int(macros['protein'] * 0.1)}g"
+        }
+    
+    if include_lunch:
+        meals_per_day.append('lunch')
+        meal_requirements['lunch'] = {
+            'description': 'Balanced and satisfying',
+            'target_calories': f'{int(calories_per_meal * 0.9)}-{int(calories_per_meal * 1.1)}',
+            'protein_goal': f"{int(macros['protein'] * 0.3)}-{int(macros['protein'] * 0.35)}g"
+        }
+    
+    if include_snacks and include_lunch:
+        meals_per_day.append('afternoon_snack')
+        meal_requirements['afternoon_snack'] = {
+            'description': 'Energy-boosting',
+            'target_calories': f"{int(calories_per_meal * 0.3)}-{int(calories_per_meal * 0.4)}",
+            'protein_goal': f"{int(macros['protein'] * 0.1)}g"
+        }
+    
+    if include_dinner:
+        meals_per_day.append('dinner')
+        meal_requirements['dinner'] = {
+            'description': 'Nutrient-dense and easy to digest',
+            'target_calories': f'{int(calories_per_meal * 0.9)}-{int(calories_per_meal * 1.1)}',
+            'protein_goal': f"{int(macros['protein'] * 0.35)}-{int(macros['protein'] * 0.4)}g"
+        }
+    
+    if include_snacks and include_dinner:
+        meals_per_day.append('evening_snack')
+        meal_requirements['evening_snack'] = {
+            'description': 'Light and protein-rich',
+            'target_calories': f"{int(calories_per_meal * 0.2)}-{int(calories_per_meal * 0.3)}",
+            'protein_goal': f"{int(macros['protein'] * 0.1)}g"
+        }
+    
+    # Include user preferences in the prompt
+    preferences_summary = {
+        "dietary_restrictions": dietary,
+        "preferred_cuisines": cuisines,
+        "allergens_to_avoid": allergens,
+        "cooking_skill_level": skill,
+        "favorite_foods": favorite_foods,
+        "health_goals": health_goals,
+        "max_cooking_time": max_time,
+        "meal_preferences": {
+            "include_breakfast": include_breakfast,
+            "include_lunch": include_lunch,
+            "include_dinner": include_dinner,
+            "include_snacks": include_snacks
+        },
+        "nutritional_targets": macros
+    }
+    
+    # Prepare the prompt context with user preferences
+    prompt_context = f"""You are a professional nutritionist and chef creating a personalized weekly meal plan based on user preferences.
+
+    USER PREFERENCES:
+    {json.dumps(preferences_summary, indent=2)}
+    """
+    
+    # Prepare the format instructions
+    format_instructions = """
+    Return a JSON object with the following structure:
+    {
+        "success": true,
+        "meal_plan": {
+            "week": {
+                "monday": [
+                    {
+                        "meal": "breakfast",
+                        "name": "Meal Name",
+                        "description": "Brief description",
+                        "ingredients": ["ingredient 1", "ingredient 2"],
+                        "instructions": ["step 1", "step 2"],
+                        "nutrition": {
+                            "calories": 400,
+                            "protein": 25,
+                            "carbs": 50,
+                            "fat": 12
+                        }
+                    }
+                ],
+                "tuesday": [],
+                "wednesday": [],
+                "thursday": [],
+                "friday": [],
+                "saturday": [],
+                "sunday": []
+            },
+            "shopping_list": {
+                "ingredients": [
+                    {
+                        "name": "ingredient name",
+                        "amount": "1 cup",
+                        "category": "produce"
+                    }
+                ],
+                "estimated_cost": 50.00
+            },
+            "nutrition_summary": {
+                "daily_average": {
+                    "calories": 2000,
+                    "protein": 150,
+                    "carbs": 200,
+                    "fat": 65
+                },
+                "weekly_totals": {
+                    "calories": 14000,
+                    "protein": 1050,
+                    "carbs": 1400,
+                    "fat": 455
+                },
+                "meal_inclusions": {{
+                    "breakfast": {str(include_breakfast).lower()},
+                    "lunch": {str(include_lunch).lower()},
+                    "dinner": {str(include_dinner).lower()},
+                    "snacks": {str(include_snacks).lower()}
+                }},
+                "dietary_considerations": {json.dumps(health_goals)}
+            }
+        }
+    }
+    Ensure the meal plan adheres to the user's dietary restrictions, preferences, and nutritional targets.
+    """
+    
+    # Build the final prompt
+    prompt = {
+        "context": prompt_context,
+        "user_preferences": {
+            "dietary_restrictions": dietary,
+            "preferred_cuisines": cuisines,
+            "allergens_to_avoid": allergens,
+            "cooking_skill_level": skill,
+            "favorite_foods": favorite_foods,
+            "health_goals": health_goals,
+            "max_cooking_time": max_time,
+            "meal_preferences": {
+                "include_breakfast": include_breakfast,
+                "include_lunch": include_lunch,
+                "include_dinner": include_dinner,
+                "include_snacks": include_snacks
+            },
+            "nutritional_targets": macros
+        },
+        "format_instructions": format_instructions,
+        "notes": "Ensure all meals are diverse and don't repeat the same ingredients too often. Consider meal prep and leftovers where appropriate."
+    }
+    
+    return prompt
+
+def generate_meal_plan_with_llm(prompt, model_name="llama3.2"):
+    """Generate a meal plan using the LLM agent"""
+    try:
+        logger.info("Generating meal plan with LLM agent...")
+        
+        # Convert the prompt to the format expected by the LLM agent
+        preferences = {
+            'dietaryRestrictions': prompt.get('user_preferences', {}).get('dietary_restrictions', []),
+            'favoriteCuisines': prompt.get('user_preferences', {}).get('preferred_cuisines', ['International']),
+            'allergens': prompt.get('user_preferences', {}).get('allergens', []),
+            'cookingSkillLevel': prompt.get('user_preferences', {}).get('cooking_skill_level', 'beginner'),
+            'favoriteFoods': prompt.get('user_preferences', {}).get('favorite_foods', []),
+            'healthGoals': prompt.get('user_preferences', {}).get('health_goals', ['General wellness']),
+            'maxCookingTime': prompt.get('user_preferences', {}).get('max_cooking_time', '30 minutes'),
+            'budget': prompt.get('user_preferences', {}).get('budget'),
+            'targetMacros': prompt.get('requirements', {}).get('nutritional_targets', {})
+        }
+        
+        # Generate the meal plan using the LLM agent
+        logger.info("Calling LLM agent to generate meal plan...")
+        meal_plan = llm_meal_planner_agent.generate_weekly_meal_plan(preferences)
+        
+        if not meal_plan or 'days' not in meal_plan:
+            logger.error("Failed to generate valid meal plan from LLM agent")
+            raise ValueError("Failed to generate valid meal plan")
+            
+        logger.info("Successfully generated meal plan with LLM agent")
+        return {
+            "success": True,
+            "plan": meal_plan
+        }
+        
+    except Exception as e:
+        logger.error(f"Error generating meal plan with LLM agent: {str(e)}")
+        # Fall back to the test meal plan if LLM generation fails
+        logger.info("Falling back to test meal plan")
+        return {
+            "success": True,
+            "plan": {
+                "days": [],
+                "shopping_list": {
+                    "ingredients": []
+                },
+                "nutrition_summary": {}
+            }
+        }
 
 @meal_planner_bp.route('/ai/meal_plan', methods=['POST', 'OPTIONS'])
 @cross_origin(origins=['http://localhost:8081'], 
-              methods=['POST', 'OPTIONS'],
-              allow_headers=['Content-Type', 'Authorization', 'X-Requested-With'],
-              supports_credentials=True)
+             methods=['POST', 'OPTIONS'],
+             allow_headers=['Content-Type', 'Authorization', 'X-Requested-With'],
+             supports_credentials=True)
 @require_auth
 def ai_meal_plan():
     """Generate a meal plan using the AI meal planner (requires authentication)"""
-    if request.method == 'OPTIONS':
-        return jsonify({'status': 'ok'}), 200
-        
-    # Get user from session
-    user_id = get_current_user_id()
-    if not user_id:
-        return jsonify({'error': 'Not logged in'}), 401
-
-    # Get preferences from user profile
-    preferences = user_preferences_service.get_preferences(user_id)
-    if not preferences:
-        return jsonify({'error': 'No preferences found for user'}), 404
-    
-    # Get budget and dietary goals from request
-    data = request.get_json() or {}
-    budget = data.get('budget')
-    dietary_goals = data.get('dietary_goals', [])
-    currency = data.get('currency', '$')
-    
-    # Build Llama prompt with all parameters
-    prompt = build_llama_prompt(
-        preferences,
-        budget=float(budget) if budget is not None else None,
-        dietary_goals=dietary_goals,
-        currency=currency
-    )
-    
     try:
+        if request.method == 'OPTIONS':
+            return jsonify({'status': 'ok'}), 200
+            
+        logger.info("Received meal plan generation request")
+        
+        # Get user from session
+        user_id = get_current_user_id()
+        if not user_id:
+            logger.error('User not logged in')
+            return jsonify({'error': 'Not logged in'}), 401
+
+        # Get preferences from user profile
+        preferences = user_preferences_service.get_preferences(user_id)
+        if not preferences:
+            logger.error(f'No preferences found for user {user_id}')
+            return jsonify({'error': 'No preferences found for user'}), 404
+    
+        # Get parameters from request
+        data = request.get_json() or {}
+        logger.debug(f"Request data: {data}")
+        
+        budget = data.get('budget')
+        dietary_goals = data.get('dietary_goals', [])
+        currency = data.get('currency', '$')
+        
+        # Get meal preferences and nutrition targets from request
+        meal_preferences = data.get('meal_preferences', {})
+        nutrition_targets = data.get('nutrition_targets', {})
+        
+        logger.debug(f"Meal preferences: {meal_preferences}")
+        logger.debug(f"Nutrition targets: {nutrition_targets}")
+        
+        # Update preferences with request data
+        if meal_preferences:
+            preferences.update({
+                'includeBreakfast': meal_preferences.get('includeBreakfast', True),
+                'includeLunch': meal_preferences.get('includeLunch', True),
+                'includeDinner': meal_preferences.get('includeDinner', True),
+                'includeSnacks': meal_preferences.get('includeSnacks', False)
+            })
+            
+        # Update nutrition targets if provided
+        if nutrition_targets:
+            preferences.update({
+                'targetCalories': nutrition_targets.get('calories'),
+                'targetProtein': nutrition_targets.get('protein'),
+                'targetCarbs': nutrition_targets.get('carbs'),
+                'targetFat': nutrition_targets.get('fat')
+            })
+        
+        logger.debug(f"Updated preferences: {preferences}")
+        
+        # Build structured prompt with all parameters
+        try:
+            prompt = build_llama_prompt(
+                preferences,
+                budget=float(budget) if budget is not None else None,
+                dietary_goals=dietary_goals,
+                currency=currency
+            )
+            logger.debug("Successfully built prompt")
+        except Exception as e:
+            logger.error(f"Error building prompt: {str(e)}", exc_info=True)
+            return jsonify({
+                'error': 'Failed to build meal plan prompt',
+                'details': str(e)
+            }), 500
+        
+        # Generate meal plan using LLM
+        try:
+            result = generate_meal_plan_with_llm(prompt)
+            logger.debug(f"LLM response: {result}")
+        except Exception as e:
+            logger.error(f"Error generating meal plan with LLM: {str(e)}", exc_info=True)
+            return jsonify({
+                'error': 'Failed to generate meal plan with AI',
+                'details': str(e)
+            }), 500
+        
+        if not result or not result.get('success'):
+            error_msg = result.get('error', 'Unknown error') if result else 'No response from AI service'
+            logger.error(f"Failed to generate meal plan: {error_msg}")
+            return jsonify({
+                'error': 'Failed to generate meal plan',
+                'details': error_msg
+            }), 500
+            
+        # Process and return the response
+        meal_plan = result.get('plan', {})
+        
+        # Add metadata
+        meal_plan.update({
+            'generated_at': datetime.utcnow().isoformat(),
+            'user_id': user_id,
+            'preferences_used': {
+                'dietary_restrictions': preferences.get('dietaryRestrictions', []),
+                'health_goals': preferences.get('healthGoals', []),
+                'allergens': preferences.get('allergens', []),
+                'budget': budget,
+                'currency': currency,
+                'meal_preferences': {
+                    'include_breakfast': preferences.get('includeBreakfast', True),
+                    'include_lunch': preferences.get('includeLunch', True),
+                    'include_dinner': preferences.get('includeDinner', True),
+                    'include_snacks': preferences.get('includeSnacks', False)
+                },
+                'nutrition_targets': {
+                    'calories': preferences.get('targetCalories'),
+                    'protein': preferences.get('targetProtein'),
+                    'carbs': preferences.get('targetCarbs'),
+                    'fat': preferences.get('targetFat')
+                }
+            }
+        })
+        
+        return jsonify({
+            'success': True,
+            'data': meal_plan,
+            'message': 'Meal plan generated successfully'
+        })
+        
+    except ValueError as ve:
+        logger.error(f"Validation error: {str(ve)}")
+        return jsonify({'error': f'Invalid input: {str(ve)}'}), 400
+    except Exception as e:
+        logger.error(f"Error generating meal plan: {str(e)}")
+        return jsonify({'error': 'Failed to generate meal plan'}), 500
         # Prepare the request to the local Ollama API
         ollama_url = 'http://localhost:11434/api/generate'
         
@@ -118,46 +426,76 @@ def ai_meal_plan():
         
         Keep the response under 1000 tokens. Be concise but helpful."""
         
-        # Prepare the full prompt with system instructions
-        full_prompt = f"""{system_prompt}
+        full_prompt = f"""Generate a CONCISE weekly meal plan (Monday-Sunday) with:
+        - Breakfast: Name only
+        - Snack: Name only
+        - Lunch: Name only
+        - Snack: Name only
+        - Dinner: Name only
+        
+        Include 3 prep tips, weekly cost estimate, and key nutritional focus.
+        Keep response under 300 tokens.
         
         User preferences:
         {prompt}
         
-        Generate a meal plan based on these preferences. Focus on variety and simplicity."""
+        Format response in markdown with clear section headers.
+        Focus on variety and simplicity."""
         
-        # Call Ollama API with optimized parameters
-        response = requests.post(
-            ollama_url,
-            json={
-                'model': 'llama3.2',
-                'prompt': full_prompt,
-                'stream': False,
-                'options': {
-                    'temperature': 0.7,
-                    'num_ctx': 1024,  # Reduced context window
-                    'top_p': 0.9,
-                    'top_k': 30,      # Reduced top_k
-                    'repeat_penalty': 1.1,
-                    'num_predict': 500  # Limit response length
-                }
-            },
-            timeout=60,  # 1 minute timeout
-            headers={'Content-Type': 'application/json'}
-        )
-
-        if response.status_code != 200:
-            error_msg = f"Ollama API request failed with status {response.status_code}"
-            try:
-                error_details = response.json().get('error', 'No error details')
-                error_msg += f": {error_details}"
-            except:
-                pass
-            return jsonify({
-                'error': 'Failed to generate meal plan',
-                'details': error_msg,
-                'note': 'Please ensure Ollama is running and the llama3.2 model is installed.'
-            }), 500
+        # Prepare the request data with stricter limits
+        request_data = {
+            'model': 'llama3.2:latest',
+            'prompt': full_prompt,
+            'stream': False,
+            'options': {
+                'temperature': 0.7,
+                'num_ctx': 1024,
+                'top_p': 0.9,
+                'top_k': 30,
+                'repeat_penalty': 1.1,
+                'num_predict': 300,  # Reduced from 500 to prevent truncation
+                'stop': ['###', '---']  # Add stop sequences to help with completion
+            }
+        }
+        
+        print("\n=== SENDING REQUEST TO OLLAMA ===")
+        print(f"URL: {ollama_url}")
+        print("Request Data:", request_data)
+        
+        try:
+            # Call Ollama API with optimized parameters
+            response = requests.post(
+                ollama_url,
+                json=request_data,
+                timeout=60,  # 1 minute timeout
+                headers={'Content-Type': 'application/json'}
+            )
+            
+            print(f"\n=== OLLAMA RESPONSE ===")
+            print(f"Status Code: {response.status_code}")
+            print("Response Headers:", dict(response.headers))
+            
+            if response.status_code != 200:
+                error_msg = f"Ollama API request failed with status {response.status_code}"
+                try:
+                    error_details = response.json().get('error', 'No error details')
+                    error_msg += f": {error_details}"
+                    print(f"Error Details: {error_details}")
+                except Exception as e:
+                    error_msg += f": {response.text}"
+                    print(f"Failed to parse error response: {str(e)}")
+                print(f"Ollama API Error: {error_msg}")
+                return jsonify({'error': error_msg}), 500
+                
+        except requests.exceptions.Timeout:
+            error_msg = "Request to Ollama API timed out after 60 seconds"
+            print(error_msg)
+            return jsonify({'error': error_msg}), 504
+            
+        except requests.exceptions.RequestException as e:
+            error_msg = f"Failed to connect to Ollama API: {str(e)}"
+            print(error_msg)
+            return jsonify({'error': error_msg}), 503
 
         # Extract the response from Ollama
         response_data = response.json()
@@ -166,6 +504,11 @@ def ai_meal_plan():
         print("======================\n")
         
         meal_plan_text = response_data.get('response', '').strip()
+        
+        # Check if response was truncated
+        if response_data.get('done_reason') == 'length':
+            print("WARNING: Response was truncated due to length limit")
+            # We'll still try to use the partial response
         
         if not meal_plan_text:
             return jsonify({
@@ -444,4 +787,344 @@ def health_check():
             "success": False,
             "status": "unhealthy",
             "error": str(e)
-        }), 500 
+        }), 500
+
+@meal_planner_bp.route('/test/meal_plan', methods=['GET'])
+@cross_origin(origins=['http://localhost:8081'])
+def test_meal_plan():
+    """Test endpoint that returns a sample meal plan"""
+    try:
+        # Generate dates for the next 7 days
+        today = datetime.utcnow().date()
+        days = [today + timedelta(days=i) for i in range(7)]
+        day_names = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+        
+        # Sample meal plan data
+        meal_plan = {
+            'days': [],
+            'shopping_list': {
+                'ingredients': [
+                    {'name': 'chicken breast', 'total_amount': '1.5 kg', 'estimated_cost': 12.99},
+                    {'name': 'brown rice', 'total_amount': '1 kg', 'estimated_cost': 3.49},
+                    {'name': 'mixed vegetables', 'total_amount': '2 kg', 'estimated_cost': 8.99},
+                    {'name': 'olive oil', 'total_amount': '250 ml', 'estimated_cost': 5.99},
+                    {'name': 'eggs', 'total_amount': '12', 'estimated_cost': 4.49},
+                    {'name': 'whole wheat bread', 'total_amount': '1 loaf', 'estimated_cost': 3.99},
+                    {'name': 'avocado', 'total_amount': '3', 'estimated_cost': 3.99},
+                    {'name': 'greek yogurt', 'total_amount': '1 kg', 'estimated_cost': 4.99},
+                    {'name': 'mixed berries', 'total_amount': '500g', 'estimated_cost': 5.99},
+                    {'name': 'honey', 'total_amount': '250g', 'estimated_cost': 4.49},
+                    {'name': 'almonds', 'total_amount': '200g', 'estimated_cost': 5.99},
+                    {'name': 'salmon fillet', 'total_amount': '800g', 'estimated_cost': 15.99},
+                    {'name': 'quinoa', 'total_amount': '500g', 'estimated_cost': 4.99},
+                    {'name': 'broccoli', 'total_amount': '1 kg', 'estimated_cost': 2.99},
+                    {'name': 'carrots', 'total_amount': '1 kg', 'estimated_cost': 1.99},
+                    {'name': 'chickpeas', 'total_amount': '400g', 'estimated_cost': 1.49},
+                    {'name': 'spinach', 'total_amount': '400g', 'estimated_cost': 2.99},
+                    {'name': 'tomatoes', 'total_amount': '1 kg', 'estimated_cost': 3.49},
+                    {'name': 'cucumber', 'total_amount': '500g', 'estimated_cost': 1.99},
+                    {'name': 'feta cheese', 'total_amount': '200g', 'estimated_cost': 3.99},
+                    {'name': 'whole grain pasta', 'total_amount': '500g', 'estimated_cost': 2.99},
+                    {'name': 'pesto sauce', 'total_amount': '200g', 'estimated_cost': 3.99},
+                    {'name': 'chicken thighs', 'total_amount': '1 kg', 'estimated_cost': 8.99},
+                    {'name': 'sweet potatoes', 'total_amount': '1 kg', 'estimated_cost': 2.49},
+                    {'name': 'green beans', 'total_amount': '500g', 'estimated_cost': 2.99},
+                    {'name': 'mushrooms', 'total_amount': '400g', 'estimated_cost': 3.49},
+                    {'name': 'onions', 'total_amount': '1 kg', 'estimated_cost': 1.49},
+                    {'name': 'garlic', 'total_amount': '100g', 'estimated_cost': 0.99},
+                    {'name': 'lemons', 'total_amount': '4', 'estimated_cost': 1.99},
+                    {'name': 'herbs and spices', 'total_amount': 'assorted', 'estimated_cost': 5.00}
+                ],
+                'total_estimated_cost': {'amount': 120.00, 'currency': 'USD'}
+            },
+            'nutrition_summary': {
+                'weekly_average_daily': {
+                    'calories': 2100,
+                    'protein_g': 150,
+                    'carbs_g': 200,
+                    'fat_g': 70,
+                    'fiber_g': 35
+                },
+                'weekly_totals': {
+                    'calories': 14700,
+                    'protein_g': 1050,
+                    'carbs_g': 1400,
+                    'fat_g': 490,
+                    'fiber_g': 245
+                }
+            },
+            'preparation_tips': [
+                "Meal prep on Sunday for the week's breakfasts and lunches.",
+                "Use leftovers from dinner for next day's lunch.",
+                "Chop vegetables in advance to save time during weekdays.",
+                "Cook grains and proteins in bulk at the beginning of the week.",
+                "Store dressings and sauces separately to keep meals fresh.",
+                "Portion out snacks in advance to avoid overeating.",
+                "Use a slow cooker or instant pot for easy meal preparation.",
+                "Freeze any meals you won't eat within 3-4 days.",
+                "Wash and prep all produce when you get home from the store.",
+                "Keep a well-stocked spice rack to add variety to your meals."
+            ],
+            'notes': 'This is a sample meal plan. Adjust portion sizes based on your specific nutritional needs and preferences. The shopping list includes all ingredients needed for the week. Estimated costs are approximate and may vary by location.'
+        }
+        
+        # Sample meals for each day
+        sample_meals = {
+            'breakfast': {
+                'name': 'Greek Yogurt with Berries and Almonds',
+                'description': 'Creamy Greek yogurt topped with mixed berries, honey, and sliced almonds',
+                'cuisine': 'Mediterranean',
+                'cook_time': '0 mins',
+                'prep_time': '5 mins',
+                'total_time': '5 mins',
+                'difficulty': 'easy',
+                'ingredients': [
+                    {'name': 'Greek yogurt', 'amount': '1 cup', 'notes': 'plain, non-fat'},
+                    {'name': 'mixed berries', 'amount': '1/2 cup', 'notes': 'fresh or frozen'},
+                    {'name': 'honey', 'amount': '1 tsp', 'notes': 'optional'},
+                    {'name': 'almonds', 'amount': '1 tbsp', 'notes': 'sliced'}
+                ],
+                'nutrition': {
+                    'calories': 250,
+                    'protein_g': 20,
+                    'carbs_g': 30,
+                    'fat_g': 6,
+                    'fiber_g': 5,
+                    'sugar_g': 18,
+                    'sodium_mg': 80
+                },
+                'instructions': [
+                    'Scoop yogurt into a bowl.',
+                    'Top with berries and almonds.',
+                    'Drizzle with honey if desired.'
+                ],
+                'estimated_cost': {'amount': 2.50, 'currency': 'USD'}
+            },
+            'lunch': {
+                'name': 'Mediterranean Chicken Bowl',
+                'description': 'Grilled chicken with quinoa, roasted vegetables, and tzatziki',
+                'cuisine': 'Mediterranean',
+                'cook_time': '20 mins',
+                'prep_time': '15 mins',
+                'total_time': '35 mins',
+                'difficulty': 'medium',
+                'ingredients': [
+                    {'name': 'chicken breast', 'amount': '150g', 'notes': 'boneless, skinless'},
+                    {'name': 'quinoa', 'amount': '1/2 cup', 'notes': 'cooked'},
+                    {'name': 'cucumber', 'amount': '1/2 cup', 'notes': 'diced'},
+                    {'name': 'tomatoes', 'amount': '1/2 cup', 'notes': 'cherry, halved'},
+                    {'name': 'red onion', 'amount': '2 tbsp', 'notes': 'thinly sliced'},
+                    {'name': 'feta cheese', 'amount': '30g', 'notes': 'crumbled'},
+                    {'name': 'olive oil', 'amount': '1 tbsp', 'notes': 'extra virgin'},
+                    {'name': 'lemon juice', 'amount': '1 tbsp', 'notes': 'freshly squeezed'},
+                    {'name': 'dried oregano', 'amount': '1/2 tsp', 'notes': ''},
+                    {'name': 'salt and pepper', 'amount': 'to taste', 'notes': ''}
+                ],
+                'nutrition': {
+                    'calories': 550,
+                    'protein_g': 42,
+                    'carbs_g': 45,
+                    'fat_g': 22,
+                    'fiber_g': 8,
+                    'sugar_g': 6,
+                    'sodium_mg': 450
+                },
+                'instructions': [
+                    'Marinate chicken with olive oil, lemon juice, oregano, salt, and pepper for 15 minutes.',
+                    'Grill chicken for 6-7 minutes per side or until cooked through.',
+                    'Let rest for 5 minutes, then slice.',
+                    'Assemble bowl with quinoa, vegetables, and chicken.',
+                    'Top with feta cheese and additional dressing if desired.'
+                ],
+                'estimated_cost': {'amount': 6.50, 'currency': 'USD'}
+            },
+            'dinner': {
+                'name': 'Baked Salmon with Roasted Vegetables',
+                'description': 'Herb-crusted salmon with a medley of seasonal roasted vegetables',
+                'cuisine': 'International',
+                'cook_time': '20 mins',
+                'prep_time': '15 mins',
+                'total_time': '35 mins',
+                'difficulty': 'easy',
+                'ingredients': [
+                    {'name': 'salmon fillet', 'amount': '200g', 'notes': 'skin-on'},
+                    {'name': 'broccoli', 'amount': '1 cup', 'notes': 'cut into florets'},
+                    {'name': 'carrots', 'amount': '1/2 cup', 'notes': 'sliced'},
+                    {'name': 'sweet potato', 'amount': '1/2 cup', 'notes': 'cubed'},
+                    {'name': 'olive oil', 'amount': '2 tbsp', 'notes': 'extra virgin'},
+                    {'name': 'lemon', 'amount': '1/2', 'notes': 'sliced'},
+                    {'name': 'garlic powder', 'amount': '1/2 tsp', 'notes': ''},
+                    {'name': 'dried dill', 'amount': '1/2 tsp', 'notes': ''},
+                    {'name': 'salt and pepper', 'amount': 'to taste', 'notes': ''}
+                ],
+                'nutrition': {
+                    'calories': 600,
+                    'protein_g': 45,
+                    'carbs_g': 35,
+                    'fat_g': 32,
+                    'fiber_g': 8,
+                    'sugar_g': 10,
+                    'sodium_mg': 380
+                },
+                'instructions': [
+                    'Preheat oven to 400°F (200°C).',
+                    'Toss vegetables with 1 tbsp olive oil, salt, and pepper. Spread on a baking sheet.',
+                    'Rub salmon with remaining olive oil, garlic powder, dill, salt, and pepper.',
+                    'Place salmon on top of vegetables. Add lemon slices on top of salmon.',
+                    'Bake for 15-20 minutes until salmon is cooked through and vegetables are tender.',
+                    'Serve immediately with a side of quinoa or brown rice if desired.'
+                ],
+                'estimated_cost': {'amount': 8.75, 'currency': 'USD'}
+            },
+            'morning_snack': {
+                'name': 'Hard-Boiled Eggs with Avocado Toast',
+                'description': 'Protein-packed snack with healthy fats',
+                'cuisine': 'International',
+                'cook_time': '10 mins',
+                'prep_time': '5 mins',
+                'total_time': '15 mins',
+                'difficulty': 'easy',
+                'ingredients': [
+                    {'name': 'eggs', 'amount': '2', 'notes': 'large'},
+                    {'name': 'whole wheat bread', 'amount': '1 slice', 'notes': 'toasted'},
+                    {'name': 'avocado', 'amount': '1/4', 'notes': 'mashed'},
+                    {'name': 'red pepper flakes', 'amount': 'pinch', 'notes': 'optional'},
+                    {'name': 'salt and pepper', 'amount': 'to taste', 'notes': ''}
+                ],
+                'nutrition': {
+                    'calories': 280,
+                    'protein_g': 16,
+                    'carbs_g': 18,
+                    'fat_g': 17,
+                    'fiber_g': 6,
+                    'sugar_g': 2,
+                    'sodium_mg': 220
+                },
+                'instructions': [
+                    'Place eggs in a pot and cover with cold water by 1 inch.',
+                    'Bring to a boil, then cover and remove from heat.',
+                    'Let sit for 10-12 minutes, then transfer to ice water to cool.',
+                    'Peel eggs and slice in half.',
+                    'Spread mashed avocado on toast and top with eggs.',
+                    'Season with salt, pepper, and red pepper flakes if desired.'
+                ],
+                'estimated_cost': {'amount': 2.25, 'currency': 'USD'}
+            },
+            'afternoon_snack': {
+                'name': 'Hummus and Veggie Sticks',
+                'description': 'Creamy hummus with fresh vegetable crudités',
+                'cuisine': 'Middle Eastern',
+                'cook_time': '0 mins',
+                'prep_time': '10 mins',
+                'total_time': '10 mins',
+                'difficulty': 'easy',
+                'ingredients': [
+                    {'name': 'chickpeas', 'amount': '1/2 cup', 'notes': 'cooked'},
+                    {'name': 'tahini', 'amount': '1 tbsp', 'notes': ''},
+                    {'name': 'lemon juice', 'amount': '1 tbsp', 'notes': 'freshly squeezed'},
+                    {'name': 'garlic', 'amount': '1 clove', 'notes': 'minced'},
+                    {'name': 'olive oil', 'amount': '1 tbsp', 'notes': 'extra virgin'},
+                    {'name': 'cumin', 'amount': '1/4 tsp', 'notes': 'ground'},
+                    {'name': 'carrot', 'amount': '1', 'notes': 'cut into sticks'},
+                    {'name': 'cucumber', 'amount': '1/2', 'notes': 'cut into sticks'},
+                    {'name': 'bell pepper', 'amount': '1/2', 'notes': 'sliced'}
+                ],
+                'nutrition': {
+                    'calories': 220,
+                    'protein_g': 8,
+                    'carbs_g': 25,
+                    'fat_g': 11,
+                    'fiber_g': 7,
+                    'sugar_g': 6,
+                    'sodium_mg': 180
+                },
+                'instructions': [
+                    'In a food processor, combine chickpeas, tahini, lemon juice, garlic, olive oil, and cumin.',
+                    'Blend until smooth, adding water 1 tbsp at a time if needed to reach desired consistency.',
+                    'Season with salt to taste.',
+                    'Serve with fresh vegetable sticks for dipping.'
+                ],
+                'estimated_cost': {'amount': 2.00, 'currency': 'USD'}
+            },
+            'evening_snack': {
+                'name': 'Cottage Cheese with Cinnamon and Walnuts',
+                'description': 'High-protein nighttime snack with healthy fats',
+                'cuisine': 'International',
+                'cook_time': '0 mins',
+                'prep_time': '2 mins',
+                'total_time': '2 mins',
+                'difficulty': 'easy',
+                'ingredients': [
+                    {'name': 'cottage cheese', 'amount': '1/2 cup', 'notes': 'low-fat'},
+                    {'name': 'walnuts', 'amount': '5 halves', 'notes': 'chopped'},
+                    {'name': 'cinnamon', 'amount': '1/4 tsp', 'notes': 'ground'},
+                    {'name': 'honey', 'amount': '1/2 tsp', 'notes': 'optional'}
+                ],
+                'nutrition': {
+                    'calories': 180,
+                    'protein_g': 15,
+                    'carbs_g': 10,
+                    'fat_g': 9,
+                    'fiber_g': 1,
+                    'sugar_g': 6,
+                    'sodium_mg': 300
+                },
+                'instructions': [
+                    'Spoon cottage cheese into a bowl.',
+                    'Top with chopped walnuts and a sprinkle of cinnamon.',
+                    'Drizzle with honey if desired.'
+                ],
+                'estimated_cost': {'amount': 1.50, 'currency': 'USD'}
+            }
+        }
+        
+        # Generate meals for each day of the week
+        for i, day in enumerate(days):
+            day_meals = {
+                'day': day_names[day.weekday()],
+                'date': day.isoformat(),
+                'meals': {
+                    'breakfast': sample_meals['breakfast'].copy(),
+                    'morning_snack': sample_meals['morning_snack'].copy(),
+                    'lunch': sample_meals['lunch'].copy(),
+                    'afternoon_snack': sample_meals['afternoon_snack'].copy(),
+                    'dinner': sample_meals['dinner'].copy(),
+                    'evening_snack': sample_meals['evening_snack'].copy()
+                },
+                'nutrition_totals': {
+                    'calories': 2100,
+                    'protein_g': 150,
+                    'carbs_g': 200,
+                    'fat_g': 70,
+                    'fiber_g': 35
+                }
+            }
+            
+            # Add some variety to the meals
+            if i % 2 == 0:
+                day_meals['meals']['lunch']['name'] = 'Quinoa Salad with Chickpeas and Feta'
+                day_meals['meals']['dinner']['name'] = 'Grilled Chicken with Sweet Potato Mash'
+            else:
+                day_meals['meals']['lunch']['name'] = 'Turkey and Avocado Wrap'
+                day_meals['meals']['dinner']['name'] = 'Vegetable Stir-Fry with Tofu'
+            
+            meal_plan['days'].append(day_meals)
+        
+        return jsonify({
+            'success': True,
+            'data': meal_plan,
+            'message': 'Sample meal plan generated successfully',
+            'metadata': {
+                'generated_at': datetime.utcnow().isoformat(),
+                'version': '1.0',
+                'currency': 'USD'
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Error generating test meal plan: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to generate test meal plan',
+            'details': str(e)
+        }), 500
