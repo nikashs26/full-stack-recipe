@@ -40,9 +40,12 @@ def save_preferences():
     This is STEP 1: Data Storage
     """
     try:
-        preferences_data = request.get_json()
-        if not preferences_data:
+        request_data = request.get_json()
+        if not request_data:
             return jsonify({"error": "No preferences provided"}), 400
+            
+        # Extract preferences from the request data
+        preferences_data = request_data.get('preferences', {}) if 'preferences' in request_data else request_data
         
         # Get or create session user ID
         if 'user_id' not in session:
@@ -50,11 +53,17 @@ def save_preferences():
         
         user_id = session['user_id']
         
+        # Ensure favoriteCuisines is a list and filter out any empty strings
+        favorite_cuisines = [
+            cuisine for cuisine in preferences_data.get("favoriteCuisines", []) 
+            if cuisine and isinstance(cuisine, str) and cuisine.strip()
+        ]
+        
         # Convert lists to JSON strings for ChromaDB metadata
         metadata = {
             "user_id": user_id,
             "dietaryRestrictions": json.dumps(preferences_data.get("dietaryRestrictions", [])),
-            "favoriteCuisines": json.dumps(preferences_data.get("favoriteCuisines", [])),
+            "favoriteCuisines": json.dumps(favorite_cuisines),  # Use the cleaned list
             "cookingSkillLevel": preferences_data.get("cookingSkillLevel", "beginner"),
             "healthGoals": json.dumps(preferences_data.get("healthGoals", [])),
             "stored_at": datetime.now().isoformat()

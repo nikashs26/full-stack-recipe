@@ -38,13 +38,13 @@ const RecommendedRecipes: React.FC = () => {
 
   // Query external recipes based on user preferences
   const externalQueries = useQuery({
-    queryKey: ['recommendedExternalRecipes', favoriteCuisines, dietaryRestrictions],
+    queryKey: ['recommendedExternalRecipes', favoriteCuisines, dietaryRestrictions, 12], // Added limit to query key for cache invalidation
     queryFn: async () => {
       console.log('Fetching external recipes with:', { favoriteCuisines, dietaryRestrictions });
       
       if (favoriteCuisines.length === 0 && dietaryRestrictions.length === 0) {
         console.log('No specific preferences, fetching popular recipes');
-        const response = await fetchRecipes('popular', '');
+        const response = await fetchRecipes('popular', '', 12); // Request 12 recipes
         return response?.results || [];
       }
 
@@ -60,7 +60,7 @@ const RecommendedRecipes: React.FC = () => {
         for (const cuisine of favoriteCuisines) {
           try {
             console.log(`Fetching recipes for cuisine: ${cuisine}`);
-            const response = await fetchRecipes(cuisine, '');
+            const response = await fetchRecipes(cuisine, '', 6); // Fetch 6 recipes per cuisine
             
             if (response?.results && Array.isArray(response.results)) {
               // Process each recipe from the response
@@ -115,7 +115,7 @@ const RecommendedRecipes: React.FC = () => {
                 recipe.image.includes('http')
               );
               console.log(`Found ${realRecipes.length} real recipes for ${diet}`);
-              allExternalRecipes.push(...realRecipes.slice(0, 4));
+              allExternalRecipes.push(...realRecipes.slice(0, 6)); // Show more recipes per cuisine
             }
           } catch (error) {
             console.error(`Error fetching recipes for diet "${diet}":`, error);
@@ -127,7 +127,7 @@ const RecommendedRecipes: React.FC = () => {
       if (allExternalRecipes.length < 3) {
         try {
           console.log('Fetching popular recipes as fallback');
-          const response = await fetchRecipes('popular', '');
+          const response = await fetchRecipes('popular', '', 12); // Fetch 12 popular recipes
           if (response?.results && Array.isArray(response.results)) {
             const realRecipes = response.results.filter(recipe => 
               recipe.id > 1000 &&
@@ -136,7 +136,7 @@ const RecommendedRecipes: React.FC = () => {
               recipe.image && 
               recipe.image.includes('http')
             );
-            allExternalRecipes.push(...realRecipes.slice(0, 6));
+            allExternalRecipes.push(...realRecipes.slice(0, 12)); // Show more popular recipes
           }
         } catch (error) {
           console.error('Error fetching popular recipes:', error);
@@ -162,8 +162,10 @@ const RecommendedRecipes: React.FC = () => {
         isExternal: false,
         type: 'local'
       }));
-      console.log(`Adding ${localToAdd.length} local recipes`);
+      console.log(`Adding ${localToAdd.length} local recipes:`, localToAdd.map(r => r.title));
       combinedRecipes.push(...localToAdd);
+    } else {
+      console.log('No local recipes found');
     }
 
     // Add manual recipes (first 2)
@@ -173,13 +175,16 @@ const RecommendedRecipes: React.FC = () => {
         isExternal: false,
         type: 'manual'
       }));
-      console.log(`Adding ${manualToAdd.length} manual recipes`);
+      console.log(`Adding ${manualToAdd.length} manual recipes:`, manualToAdd.map(r => r.title));
       combinedRecipes.push(...manualToAdd);
+    } else {
+      console.log('No manual recipes found');
     }
 
     // Add external recipes
     if (externalQueries.data && Array.isArray(externalQueries.data)) {
       let filteredExternal = externalQueries.data;
+      console.log(`Total external recipes available: ${externalQueries.data.length}`);
 
       // Apply preference-based filtering if favorite cuisines exist
       if (favoriteCuisines.length > 0) {
@@ -194,6 +199,7 @@ const RecommendedRecipes: React.FC = () => {
             recipeTitle.includes(cuisine.toLowerCase())
           );
         });
+        console.log(`After cuisine filtering: ${filteredExternal.length} recipes`);
       }
 
       // Apply dietary restriction filtering if specified
@@ -217,27 +223,36 @@ const RecommendedRecipes: React.FC = () => {
             });
           });
         });
+        console.log(`After dietary filtering: ${filteredExternal.length} recipes`);
       }
 
-      const externalToAdd = (filteredExternal.length >= 3 ? filteredExternal : externalQueries.data)
-        .slice(0, 6)
+      // Calculate how many more recipes we need to reach 8
+      const currentCount = combinedRecipes.length;
+      const needed = 8 - currentCount;
+      
+      // If we don't have enough recipes, use unfiltered results
+      const sourceRecipes = filteredExternal.length >= needed ? filteredExternal : externalQueries.data;
+      
+      // Take as many as we need to reach 8 total recipes
+      const externalToAdd = sourceRecipes
+        .slice(0, Math.max(needed, 4)) // Always take at least 4 external recipes
         .map(recipe => ({ 
           ...recipe, 
           isExternal: true,
           type: 'external'
         }));
       
-      console.log(`Adding ${externalToAdd.length} external recipes`);
+      console.log(`Adding ${externalToAdd.length} external recipes:`, externalToAdd.map(r => r.title));
       combinedRecipes.push(...externalToAdd);
     }
 
-    // Remove duplicates and return first 9
+    // Remove duplicates and return first 8
     const uniqueRecipes = combinedRecipes.filter((recipe, index, self) => 
       index === self.findIndex(r => r.id === recipe.id && r.type === recipe.type)
     );
 
-    console.log(`Final recommended recipes count: ${uniqueRecipes.length}`);
-    return uniqueRecipes.slice(0, 9);
+    console.log(`Final recommended recipes count: ${uniqueRecipes.length}`, uniqueRecipes);
+    return uniqueRecipes.slice(0, 8);
   }, [allRecipes, manualRecipes, externalQueries.data, favoriteCuisines, dietaryRestrictions]);
 
   // Don't show recommendations if no preferences are set

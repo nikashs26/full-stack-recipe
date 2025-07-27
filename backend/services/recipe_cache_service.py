@@ -440,41 +440,111 @@ class RecipeCacheService:
         return min(max(score, 0.0), 1.0)
 
     def cache_recipes(self, recipes: List[Dict[Any, Any]], query: str = "", ingredient: str = "", filters: Optional[Dict[str, Any]] = None) -> bool:
-        """Cache recipes in ChromaDB with TTL support"""
+        """
+        Cache recipes in ChromaDB with TTL support
+        
+        Args:
+            recipes: List of recipe dictionaries to cache
+            query: Search query that resulted in these recipes (for search context)
+            ingredient: Ingredient filter that was used (for search context)
+            filters: Dictionary of filters that were applied
+            
+        Returns:
+            bool: True if caching was successful, False otherwise
+        """
         if not self.recipe_collection or not recipes:
             return False
-        
-        try:
-            # Store each recipe individually in the recipe collection
-            for recipe in recipes:
-                recipe_id = str(recipe['id'])
-                print("caching recipe", recipe_id)
-                metadata = self._extract_recipe_metadata(recipe)
-                search_terms = self._extract_search_terms(recipe)
-                
-                # Store both search terms and full recipe data
-                self.recipe_collection.upsert(
-                    ids=[recipe_id],
-                    documents=[json.dumps(recipe)],  # Store full recipe data
-                    metadatas=[metadata]
-                )
-                print("recipe name: ", recipe['title'])
-                
-                # Store search terms in a separate collection for semantic search
-                self.search_collection.upsert(
-                    ids=[recipe_id],
-                    documents=[search_terms],  # Store search terms for semantic search
-                    metadatas=[metadata]
-                )
-                
             
-            logger.info(f"Cached {len(recipes)} recipes")
+        try:
+            # Process filters if provided
+            where = {}
+            if filters:
+                try:
+                    if "min_rating" in filters and filters["min_rating"] is not None:
+                        min_rating = float(filters["min_rating"])
+                        where["avg_rating"] = {"$gte": min_rating}
+                except (ValueError, TypeError) as e:
+                    logger.warning(f"Invalid min_rating value: {filters.get('min_rating')}")
+            
+            # Process each recipe
+            for recipe in recipes:
+                try:
+                    recipe_id = str(recipe.get('id'))
+                    if not recipe_id:
+                        logger.warning("Skipping recipe with missing ID")
+                        continue
+                        
+                    # Extract metadata and search terms
+                    metadata = self._extract_recipe_metadata(recipe)
+                    search_terms = self._extract_search_terms(recipe)
+                    
+                    # Store the full recipe
+                    self.recipe_collection.upsert(
+                        ids=[recipe_id],
+                        documents=[json.dumps(recipe)],
+                        metadatas=[metadata]
+                    )
+                    
+                    # If we have a search query, index the search terms
+                    search_context = f"{query} {ingredient}".strip()
+                    if search_context:
+                        self.search_collection.upsert(
+                            ids=[f"{recipe_id}_{hash(search_context) % 10**8}"],
+                            documents=[search_terms],
+                            metadatas=[{
+                                "recipe_id": recipe_id,
+                                "search_context": search_context,
+                                "indexed_at": datetime.now().isoformat()
+                            }]
+                        )
+                        
+                    logger.debug(f"Cached recipe: {recipe.get('title', 'Untitled')} (ID: {recipe_id})")
+                    
+                except Exception as recipe_error:
+                    logger.error(f"Error caching recipe {recipe.get('id')}: {recipe_error}")
+                    continue
+            
+            logger.info(f"Successfully cached {len(recipes)} recipes")
             return True
             
         except Exception as e:
-            logger.error(f"Error caching recipes: {e}")
+            logger.error(f"Error in cache_recipes: {e}")
             return False
 
+    def get_recipes_by_ids(self, recipe_ids: List[str]) -> List[Dict[str, Any]]:
+        """
+        Get multiple recipes by their IDs from the cache
+        
+        Args:
+            recipe_ids: List of recipe IDs to retrieve
+            
+        Returns:
+            List of recipe dictionaries (or None for missing recipes)
+        """
+        if not self.recipe_collection or not recipe_ids:
+            return []
+            
+        try:
+            results = self.recipe_collection.get(
+                ids=recipe_ids,
+                include=['documents', 'metadatas']
+            )
+            
+            recipes = []
+            for doc, meta in zip(results['documents'], results['metadatas']):
+                try:
+                    recipe = json.loads(doc)
+                    recipes.append(recipe)
+                except json.JSONDecodeError:
+                    logger.warning(f"Failed to parse cached recipe: {doc[:100]}...")
+                    recipes.append(None)
+                    
+            return recipes
+            
+        except Exception as e:
+            logger.error(f"Error getting recipes by IDs: {e}")
+            return []
+            
     def cache_recipe(self, recipe: Dict[Any, Any]) -> bool:
         """Cache a single recipe in ChromaDB with TTL support"""
         if not self.recipe_collection or not recipe:
@@ -482,6 +552,13 @@ class RecipeCacheService:
         
         try:
             recipe_id = str(recipe['id'])
+            
+            # Check if recipe already exists in cache
+            existing = self.recipe_collection.get(ids=[recipe_id])
+            if existing and existing.get('documents'):
+                logger.debug(f"Recipe {recipe_id} already in cache, skipping")
+                return True
+                
             metadata = self._extract_recipe_metadata(recipe)
             search_terms = self._extract_search_terms(recipe)
             
@@ -492,7 +569,7 @@ class RecipeCacheService:
                 embeddings=[search_terms]
             )
             
-            logger.info(f"Cached recipe: {recipe.get('title', 'Untitled')}")
+            logger.debug(f"Cached recipe: {recipe.get('title', 'Untitled')} (ID: {recipe_id})")
             return True
             
         except Exception as e:

@@ -401,72 +401,131 @@ const HomePage: React.FC = () => {
       console.log(`🎉 Found ${recommendedRecipes.length} STRICT preference-matched recipes:`, 
         recommendedRecipes.map(r => r.title || r.name));
       
-      // The recipes are already sorted by the scoring system above
-      // which prioritizes dietary restrictions, then favorite foods, then cuisine
+      // Group recipes by cuisine for proportional distribution
+      const recipesByCuisine: Record<string, any[]> = {};
+      const uncategorizedRecipes: any[] = [];
       
-      // If we have very few high-quality matches, add some broader matches
-      const MIN_RECOMMENDED_RECIPES = 4;
-      const highQualityRecipes = recommendedRecipes.filter(r => r._matchScore > 20);
-      
-      if (highQualityRecipes.length < MIN_RECOMMENDED_RECIPES) {
-        console.log(`🔄 Adding broader matches (${highQualityRecipes.length} high-quality recipes found, want ${MIN_RECOMMENDED_RECIPES})`);
-        
-        // Get all recipes that match dietary restrictions but weren't in top recommendations
-        const potentialMatches = allCombined
-          .filter(recipe => !recommendedRecipes.some(r => 
-            (r.id === recipe.id || r._id === recipe._id) && 
-            r.type === recipe.type
-          ))
-          .filter(recipe => {
-            // Only include recipes that match dietary restrictions
-            if (dietaryRestrictions && dietaryRestrictions.length > 0) {
-              const recipeDiets = recipe.diets || [];
-              return dietaryRestrictions.every(prefDiet => {
-                if (!prefDiet) return true;
-                const prefLower = prefDiet.toLowerCase().trim();
-                return recipeDiets.some(diet => {
-                  if (!diet) return false;
-                  const dietLower = diet.toLowerCase().trim();
-                  if (prefLower === 'vegetarian' && dietLower === 'vegetarian') return true;
-                  if (prefLower === 'vegan' && dietLower === 'vegan') return true;
-                  if (prefLower === 'gluten-free' && (dietLower === 'gluten-free' || dietLower === 'gluten free')) return true;
-                  if (prefLower === 'dairy-free' && (dietLower === 'dairy-free' || dietLower === 'dairy free')) return true;
-                  if (prefLower === 'keto' && (dietLower === 'ketogenic' || dietLower === 'keto')) return true;
-                  if (prefLower === 'paleo' && (dietLower === 'paleo' || dietLower === 'paleolithic')) return true;
-                  return false;
-                });
-              });
-            }
-            return true;
-          });
-        
-        // Sort potential matches by relevance (using title/ingredient matches as a proxy)
-        const sortedPotentialMatches = [...potentialMatches].sort((a, b) => {
-          // Prefer recipes with images
-          const aHasImage = a.image && !['/placeholder.svg', ''].includes(a.image);
-          const bHasImage = b.image && !['/placeholder.svg', ''].includes(b.image);
-          if (aHasImage && !bHasImage) return -1;
-          if (!aHasImage && bHasImage) return 1;
-          
-          // Then by cooking time (shorter is better)
-          const aTime = a.readyInMinutes || a.ready_in_minutes || 999;
-          const bTime = b.readyInMinutes || b.ready_in_minutes || 999;
-          return aTime - bTime;
+      // Initialize cuisine groups
+      if (favoriteCuisines && favoriteCuisines.length > 0) {
+        favoriteCuisines.forEach(cuisine => {
+          if (cuisine) recipesByCuisine[cuisine] = [];
         });
-        
-        // Add enough to reach MIN_RECOMMENDED_RECIPES, but no more than 4 total
-        const needed = Math.min(
-          MIN_RECOMMENDED_RECIPES - highQualityRecipes.length,
-          sortedPotentialMatches.length,
-          4 - highQualityRecipes.length // Don't add more than 4 total
-        );
-        
-        if (needed > 0) {
-          const broaderMatches = sortedPotentialMatches.slice(0, needed);
-          console.log(`➕ Adding ${broaderMatches.length} broader matches to reach minimum recommendations`);
-          recommendedRecipes = [...recommendedRecipes, ...broaderMatches];
-        }
       }
+      
+      // Categorize recipes by cuisine
+      recommendedRecipes.forEach(recipe => {
+        const recipeCuisines = Array.isArray(recipe.cuisines) ? recipe.cuisines : [];
+        let categorized = false;
+        
+        // Try to match with preferred cuisines
+        for (const [cuisine, recipes] of Object.entries(recipesByCuisine)) {
+          const cuisineLower = cuisine.toLowerCase();
+          const hasMatchingCuisine = recipeCuisines.some(c => 
+            c && c.toLowerCase().includes(cuisineLower)
+          );
+          
+          if (hasMatchingCuisine) {
+            recipes.push(recipe);
+            categorized = true;
+            break; // Only add to the first matching cuisine
+          }
+        }
+        
+        // If no cuisine match, check title
+        if (!categorized) {
+          const title = (recipe.title || '').toLowerCase();
+          for (const [cuisine, recipes] of Object.entries(recipesByCuisine)) {
+            if (title.includes(cuisine.toLowerCase())) {
+              recipes.push(recipe);
+              categorized = true;
+              break;
+            }
+          }
+        }
+        
+        // If still not categorized, add to uncategorized
+        if (!categorized) {
+          uncategorizedRecipes.push(recipe);
+        }
+      });
+      
+      console.log('📊 Recipes by cuisine:', Object.fromEntries(
+        Object.entries(recipesByCuisine).map(([k, v]) => [k, v.length])
+      ));
+      
+      // Calculate number of recipes per cuisine (distribute 8 recipes proportionally)
+      const targetCount = 8;
+      const cuisineCount = Object.keys(recipesByCuisine).length;
+      let remainingRecipesList = [...recommendedRecipes];
+      let distributedRecipes: any[] = [];
+      
+      if (cuisineCount > 0) {
+        // First pass: distribute recipes evenly
+        let recipesPerCuisine = Math.max(1, Math.floor(targetCount / cuisineCount));
+        
+        // Distribute recipes
+        for (const [cuisine, recipes] of Object.entries(recipesByCuisine)) {
+          const takeCount = Math.min(recipesPerCuisine, recipes.length);
+          const selected = recipes
+            .sort((a, b) => (b._matchScore || 0) - (a._matchScore || 0))
+            .slice(0, takeCount);
+          
+          distributedRecipes = [...distributedRecipes, ...selected];
+          remainingRecipesList = remainingRecipesList.filter(r => !selected.includes(r));
+        }
+        
+        // If we have space left, add more from cuisines that have more recipes
+        if (distributedRecipes.length < targetCount) {
+          // Sort cuisines by number of remaining recipes (descending)
+          const sortedCuisines = Object.entries(recipesByCuisine)
+            .sort(([, a], [, b]) => b.length - a.length);
+          
+          let added = 0;
+          while (distributedRecipes.length < targetCount && added < 100) { // safety check
+            let madeProgress = false;
+            
+            for (const [cuisine, recipes] of sortedCuisines) {
+              const remaining = recipes.filter(r => !distributedRecipes.includes(r));
+              if (remaining.length > 0) {
+                const recipe = remaining[0]; // Take the next best recipe
+                distributedRecipes.push(recipe);
+                remainingRecipesList = remainingRecipesList.filter(r => r !== recipe);
+                madeProgress = true;
+                
+                if (distributedRecipes.length >= targetCount) break;
+              }
+            }
+            
+            if (!madeProgress) break; // No more recipes to add
+            added++;
+          }
+        }
+      } else {
+        // If no cuisines, just take top recipes
+        distributedRecipes = recommendedRecipes
+          .sort((a, b) => (b._matchScore || 0) - (a._matchScore || 0))
+          .slice(0, targetCount);
+      }
+      
+      // If we still don't have enough, add from uncategorized
+      if (distributedRecipes.length < targetCount && uncategorizedRecipes.length > 0) {
+        const needed = targetCount - distributedRecipes.length;
+        const toAdd = uncategorizedRecipes
+          .sort((a, b) => (b._matchScore || 0) - (a._matchScore || 0))
+          .slice(0, needed);
+        
+        distributedRecipes = [...distributedRecipes, ...toAdd];
+      }
+      
+      // Update recommendedRecipes with our distributed selection
+      recommendedRecipes = distributedRecipes.slice(0, targetCount);
+      
+      console.log(`✅ Final distributed recommendations (${recommendedRecipes.length}):`, 
+        recommendedRecipes.map(r => ({
+          title: r.title || r.name,
+          cuisines: r.cuisines || [],
+          score: r._matchScore
+        })));
       
       // Get remaining recipes for popular/newest sections
       const remainingRecipes = allCombined.filter(recipe => 
@@ -483,13 +542,13 @@ const HomePage: React.FC = () => {
       // For non-authenticated users or users without preferences, show curated selection
       console.log('🔄 No preferences found, showing default recipes');
       const shuffled = [...allCombined].sort(() => Math.random() - 0.5);
-      recommendedRecipes = shuffled.slice(0, 4);
+      recommendedRecipes = shuffled.slice(0, 8); // Keep 8 recipes in the shuffled list
       popularRecipes = shuffled.slice(4, 8);
       newestRecipes = shuffled.slice(8, 12);
     }
 
     return {
-      recommended: recommendedRecipes.slice(0, 4),
+      recommended: recommendedRecipes.slice(0, 8), // Show 8 recommended recipes
       popular: popularRecipes.slice(0, 4),
       newest: newestRecipes.slice(0, 4)
     };

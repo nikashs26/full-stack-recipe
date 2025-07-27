@@ -275,9 +275,19 @@ class RecipeSearchService:
         # Create a query based on user preferences
         query_parts = []
         
+        # Get and normalize favorite cuisines
+        favorite_cuisines = set()
         if user_preferences.get("favoriteCuisines"):
-            query_parts.append(f"cuisine: {', '.join(user_preferences['favoriteCuisines'])}")
+            favorite_cuisines = {
+                self._normalize_cuisine(cuisine) 
+                for cuisine in user_preferences["favoriteCuisines"]
+                if self._normalize_cuisine(cuisine)  # Only include valid cuisines
+            }
+            
+            if favorite_cuisines:
+                query_parts.append(f"cuisine: {', '.join(favorite_cuisines)}")
         
+        # Add other preferences to the query
         if user_preferences.get("cookingSkillLevel"):
             query_parts.append(f"difficulty: {user_preferences['cookingSkillLevel']}")
         
@@ -286,6 +296,11 @@ class RecipeSearchService:
         
         if user_preferences.get("healthGoals"):
             query_parts.append(f"healthy: {', '.join(user_preferences['healthGoals'])}")
+        
+        # If we have favorite cuisines, boost their importance in the search
+        if favorite_cuisines:
+            for cuisine in favorite_cuisines:
+                query_parts.append(cuisine)  # Add cuisine as a standalone term for better matching
         
         query = " ".join(query_parts) if query_parts else "popular delicious recipes"
         
@@ -298,35 +313,152 @@ class RecipeSearchService:
         if "gluten-free" in user_preferences.get("dietaryRestrictions", []):
             filters["is_gluten_free"] = True
         
-        # Perform semantic search
-        results = self.semantic_search(query, filters, limit * 2)  # Overfetch to allow post-filtering
+        # Perform semantic search with a higher limit to ensure we get enough results
+        results = self.semantic_search(query, filters, limit * 3)  # Overfetch more to ensure quality
 
-        # Process favorite cuisines for filtering
-        favorite_cuisines = set([str(c).lower() for c in user_preferences.get('favoriteCuisines', [])])
-        
+        # Filter out recipes with empty or invalid cuisines if we have favorite cuisines
         if favorite_cuisines:
-            # First, try to find recipes that match any of the favorite cuisines
-            matched_results = [
-                recipe for recipe in results
-                if recipe.get('cuisine', '').lower() in favorite_cuisines
-            ]
+            valid_results = []
+            other_results = []
             
-            # If we have enough matching results, return them
-            if len(matched_results) >= limit:
-                return matched_results[:limit]
+            for recipe in results:
+                # Pass the entire recipe for better cuisine detection
+                recipe_cuisine = self._normalize_cuisine(recipe.get('cuisine', ''), recipe)
+                if not recipe_cuisine:
+                    # If we can't determine a valid cuisine, skip or add to other results
+                    other_results.append(recipe)
+                    continue
+                    
+                # Update the recipe's cuisine with the normalized version
+                recipe['cuisine'] = recipe_cuisine
                 
-            # If not enough matches, include other results as fallback
-            remaining_slots = limit - len(matched_results)
-            other_results = [
-                recipe for recipe in results
-                if recipe.get('cuisine', '').lower() not in favorite_cuisines
-            ][:remaining_slots]
+                if recipe_cuisine in favorite_cuisines:
+                    valid_results.append(recipe)
+                else:
+                    other_results.append(recipe)
             
-            return matched_results + other_results
+            # If we have enough matches from favorite cuisines, return them
+            if len(valid_results) >= limit:
+                return valid_results[:limit]
+                
+            # Otherwise, fill the remaining slots with other results
+            remaining_slots = limit - len(valid_results)
+            return valid_results + other_results[:remaining_slots]
             
-        return results[:limit]
+        # If no favorite cuisines, return top results with valid cuisines
+        filtered_results = []
+        for recipe in results[:limit]:
+            # Pass the entire recipe for better cuisine detection
+            recipe_cuisine = self._normalize_cuisine(recipe.get('cuisine', ''), recipe)
+            if recipe_cuisine:
+                # Update the recipe's cuisine with the normalized version
+                recipe['cuisine'] = recipe_cuisine
+                filtered_results.append(recipe)
+                
+        return filtered_results
 
     
+    def _detect_cuisine_from_ingredients(self, recipe: Dict[str, Any]) -> str:
+        """Try to detect cuisine from recipe ingredients and name"""
+        if not isinstance(recipe, dict):
+            return ""
+            
+        # Get text to analyze
+        text_parts = []
+        if 'name' in recipe:
+            text_parts.append(recipe['name'].lower())
+        if 'ingredients' in recipe and isinstance(recipe['ingredients'], list):
+            text_parts.extend(str(i).lower() for i in recipe['ingredients'])
+        if 'instructions' in recipe:
+            text_parts.append(str(recipe['instructions']).lower())
+            
+        text = ' '.join(text_parts)
+        
+        # Look for cuisine indicators
+        cuisine_indicators = {
+            'italian': ['pasta', 'pizza', 'risotto', 'prosciutto', 'parmesan', 'mozzarella', 'basil', 'oregano'],
+            'mexican': ['taco', 'tortilla', 'salsa', 'guacamole', 'queso', 'cilantro', 'jalapeno', 'enchilada'],
+            'chinese': ['soy sauce', 'hoisin', 'szechuan', 'wok', 'stir-fry', 'dumpling', 'bok choy'],
+            'indian': ['curry', 'masala', 'tikka', 'naan', 'samosas', 'tandoori', 'garam masala'],
+            'thai': ['curry', 'coconut milk', 'lemongrass', 'thai basil', 'fish sauce', 'pad thai'],
+            'japanese': ['sushi', 'ramen', 'miso', 'wasabi', 'teriyaki', 'tempura', 'dashi'],
+            'french': ['baguette', 'brie', 'provençal', 'ratatouille', 'béchamel', 'au vin', 'coq au vin'],
+            'mediterranean': ['olive oil', 'feta', 'hummus', 'tzatziki', 'falafel', 'pita', 'eggplant'],
+            'greek': ['feta', 'tzatziki', 'gyro', 'dolma', 'moussaka', 'kalamata'],
+            'spanish': ['paella', 'chorizo', 'saffron', 'tapas', 'manchego', 'gazpacho'],
+            'vietnamese': ['pho', 'banh mi', 'fish sauce', 'lemongrass', 'rice paper', 'hoisin'],
+            'korean': ['kimchi', 'gochujang', 'bulgogi', 'bibimbap', 'korean bbq', 'soju'],
+            'american': ['burger', 'hot dog', 'barbecue', 'mac and cheese', 'apple pie', 'buffalo wings']
+        }
+        
+        # Count matches for each cuisine
+        cuisine_scores = {cuisine: 0 for cuisine in cuisine_indicators}
+        for cuisine, indicators in cuisine_indicators.items():
+            for indicator in indicators:
+                if indicator in text:
+                    cuisine_scores[cuisine] += 1
+        
+        # Return cuisine with highest score, if any
+        max_score = max(cuisine_scores.values())
+        if max_score > 0:
+            top_cuisines = [c for c, s in cuisine_scores.items() if s == max_score]
+            return top_cuisines[0]  # Return first if tie
+            
+        return ""
+        
+    def _normalize_cuisine(self, cuisine: str, recipe: Optional[Dict[str, Any]] = None) -> str:
+        """
+        Normalize and validate cuisine string
+        
+        Args:
+            cuisine: The cuisine string to normalize
+            recipe: Optional recipe dictionary for additional context
+            
+        Returns:
+            Normalized cuisine string or empty string if invalid
+        """
+        if not cuisine or not isinstance(cuisine, str):
+            if recipe:
+                # Try to detect cuisine from recipe details if no cuisine provided
+                detected = self._detect_cuisine_from_ingredients(recipe)
+                if detected:
+                    return detected
+            return ""
+            
+        # Common cuisine normalization
+        cuisine = cuisine.lower().strip()
+        
+        # Map common variations to standard names
+        cuisine_map = {
+            'american': ['american', 'usa', 'united states', 'us'],
+            'italian': ['italian', 'italy'],
+            'mexican': ['mexican', 'mexico'],
+            'chinese': ['chinese', 'china'],
+            'indian': ['indian', 'india'],
+            'thai': ['thai', 'thailand'],
+            'japanese': ['japanese', 'japan'],
+            'french': ['french', 'france'],
+            'mediterranean': ['mediterranean', 'mediterranean'],
+            'greek': ['greek', 'greece'],
+            'spanish': ['spanish', 'spain'],
+            'vietnamese': ['vietnamese', 'vietnam'],
+            'korean': ['korean', 'korea']
+        }
+        
+        # Check for matches in the map
+        for standard_name, variations in cuisine_map.items():
+            if cuisine in variations:
+                return standard_name
+                
+        # If we have a recipe and cuisine is not recognized, try to detect from ingredients
+        if recipe and cuisine in ['international', 'fusion', 'global', '']:
+            detected = self._detect_cuisine_from_ingredients(recipe)
+            if detected:
+                return detected
+                
+        # If still no match, return empty string for invalid cuisines
+        return "" if cuisine in ['international', 'fusion', 'global', ''] else cuisine
+        
     def _create_searchable_text(self, recipe: Dict[str, Any]) -> str:
         """
         Create a rich text representation of the recipe for embedding
@@ -338,9 +470,14 @@ class RecipeSearchService:
         parts.extend([f"Recipe: {name}"] * 3)  # Repeat for higher weight
         
         # Cuisine and meal type with context
-        cuisine = recipe.get('cuisine', '')
+        cuisine = self._normalize_cuisine(recipe.get('cuisine', ''))
         meal_type = recipe.get('mealType', '')
-        parts.append(f"This is a {cuisine} {meal_type} dish")
+        
+        # Only include cuisine in the description if it's valid
+        if cuisine:
+            parts.append(f"This is a {cuisine} {meal_type} dish")
+        elif meal_type:
+            parts.append(f"This is a {meal_type} dish")
         
         # Dietary info with natural language
         dietary = recipe.get('dietaryRestrictions', [])
@@ -411,10 +548,13 @@ class RecipeSearchService:
             searchable_text = self._create_searchable_text(recipe)
             documents.append(searchable_text)
             
+            # Normalize cuisine before storing in metadata
+            cuisine = self._normalize_cuisine(recipe.get("cuisine", ""))
+            
             metadata = {
                 "recipe_id": str(recipe.get("id", "")),
                 "name": recipe.get("name", ""),
-                "cuisine": recipe.get("cuisine", ""),
+                "cuisine": cuisine,  # Use normalized cuisine
                 "difficulty": recipe.get("difficulty", ""),
                 "meal_type": recipe.get("mealType", ""),
                 "cooking_time": recipe.get("cookingTime", ""),

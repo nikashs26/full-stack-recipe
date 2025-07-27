@@ -295,17 +295,29 @@ class RecipeService:
                                     found_recipes = True
                                     all_recipes.extend(mealdb_recipes)
                                     
-                                    # Cache the recipes
+                                    # Only cache recipes that aren't already in the cache
                                     try:
-                                        await asyncio.to_thread(
-                                            self.recipe_cache.cache_recipes,
-                                            mealdb_recipes,
-                                            query,
-                                            ingredient
+                                        # Filter out recipes that are already in the cache
+                                        recipe_ids = [str(r['id']) for r in mealdb_recipes]
+                                        existing_recipes = await asyncio.to_thread(
+                                            self.recipe_cache.get_recipes_by_ids,
+                                            recipe_ids
                                         )
-                                        logger.info(f"Cached {len(mealdb_recipes)} TheMealDB recipes")
+                                        existing_ids = {r['id'] for r in existing_recipes if r}
+                                        new_recipes = [r for r in mealdb_recipes if str(r['id']) not in existing_ids]
+                                        
+                                        if new_recipes:
+                                            await asyncio.to_thread(
+                                                self.recipe_cache.cache_recipes,
+                                                new_recipes,
+                                                query,
+                                                ingredient
+                                            )
+                                            logger.info(f"Cached {len(new_recipes)} new TheMealDB recipes")
+                                        else:
+                                            logger.debug("All recipes already in cache")
                                     except Exception as cache_error:
-                                        logger.error(f"Failed to cache TheMealDB recipes: {cache_error}")
+                                        logger.error(f"Failed to check/cache TheMealDB recipes: {cache_error}")
                         else:
                             error_msg = f"TheMealDB API error: {response.status}"
                             logger.error(error_msg)

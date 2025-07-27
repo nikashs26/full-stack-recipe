@@ -152,7 +152,7 @@ const FALLBACK_RECIPES = [
   }
 ];
 
-export const fetchRecipes = async (query: string = "", ingredient: string = "") => {
+export const fetchRecipes = async (query: string = "", ingredient: string = "", limit: number = 12) => {
     console.log(`[DEBUG] Fetching recipes with query: "${query}", ingredient: "${ingredient}"`);
     
     try {
@@ -212,7 +212,7 @@ export const fetchRecipes = async (query: string = "", ingredient: string = "") 
             }
             
             // Format recipes to match expected frontend format
-            const formattedResults = results.map((recipe: any) => {
+            const formattedResults = results.slice(0, limit).map((recipe: any) => {
                 try {
                     // If recipe is a string, try to parse it as JSON
                     const recipeData = typeof recipe === 'string' ? JSON.parse(recipe) : recipe;

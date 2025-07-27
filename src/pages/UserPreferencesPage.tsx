@@ -23,6 +23,10 @@ type UserPreferences = {
   favoriteFoods?: string[];
   healthGoals?: string[];
   maxCookingTime?: string;
+  includeBreakfast?: boolean;
+  includeLunch?: boolean;
+  includeDinner?: boolean;
+  includeSnacks?: boolean;
   [key: string]: any; // Add index signature for additional properties
 };
 
@@ -77,12 +81,8 @@ const loadUserPreferences = async (): Promise<UserPreferences> => {
       includeLunch: true,
       includeDinner: true,
       includeSnacks: false,
-      targetCalories: 2000,
-      targetProtein: 150,
-      targetCarbs: 200,
-      targetFat: 65,
       favoriteFoods,
-      favoriteCuisines // Include custom cuisines
+      favoriteCuisines
     };
     
     // Merge with API preferences, ensuring our defaults are used for missing values
@@ -120,11 +120,13 @@ const saveUserPreferences = async (data: UserPreferences) => {
       ...data,
       // Ensure favoriteFoods is an array of strings
       favoriteFoods: Array.isArray(data.favoriteFoods) 
-        ? data.favoriteFoods.slice(0, 3).map(food => String(food || ''))
+        ? data.favoriteFoods.slice(0, 3).map(food => String(food || '').trim()).filter(Boolean)
         : ['', '', ''],
       // Ensure favoriteCuisines is an array of non-empty strings
       favoriteCuisines: Array.isArray(data.favoriteCuisines)
-        ? data.favoriteCuisines.filter(c => c && typeof c === 'string')
+        ? data.favoriteCuisines
+            .map(c => typeof c === 'string' ? c.trim() : '')
+            .filter(Boolean)
         : []
     };
 
@@ -137,9 +139,7 @@ const saveUserPreferences = async (data: UserPreferences) => {
         'Authorization': `Bearer ${token}`,
         'Accept': 'application/json'
       },
-      body: JSON.stringify({
-        preferences: payload
-      }),
+      body: JSON.stringify(payload), // Send payload directly, not nested under 'preferences'
       credentials: 'include'
     });
 
@@ -168,23 +168,18 @@ interface FormOption {
 
 // Form schema for validation
 const formSchema = z.object({
-  dietaryRestrictions: z.array(z.string()),
-  favoriteCuisines: z.array(z.string()),
-  allergens: z.array(z.string()),
-  cookingSkillLevel: z.string(),
-  favoriteFoods: z.array(z.string()).optional(),
-  healthGoals: z.array(z.string()),
-  maxCookingTime: z.string(),
+  dietaryRestrictions: z.array(z.string()).default([]),
+  favoriteCuisines: z.array(z.string()).default([]),
+  allergens: z.array(z.string()).default([]),
+  cookingSkillLevel: z.string().default('beginner'),
+  favoriteFoods: z.array(z.string()).default(['', '', '']).optional(),
+  healthGoals: z.array(z.string()).default([]),
+  maxCookingTime: z.string().default('30 minutes'),
   // Meal inclusion preferences
   includeBreakfast: z.boolean().default(true),
   includeLunch: z.boolean().default(true),
   includeDinner: z.boolean().default(true),
-  includeSnacks: z.boolean().default(false),
-  // Nutritional targets
-  targetCalories: z.number().min(1200).max(4000).optional(),
-  targetProtein: z.number().min(30).max(300).optional(),
-  targetCarbs: z.number().min(100).max(500).optional(),
-  targetFat: z.number().min(20).max(200).optional()
+  includeSnacks: z.boolean().default(false)
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -238,6 +233,7 @@ const UserPreferencesPage: React.FC = () => {
     const cuisine = customCuisine.trim();
     if (!cuisine) return;
     
+    // Get current values from form
     const currentCuisines = form.getValues('favoriteCuisines') || [];
     
     // Check if cuisine already exists (case-insensitive)
@@ -246,21 +242,28 @@ const UserPreferencesPage: React.FC = () => {
     );
     
     if (!cuisineExists) {
+      // Create new array with the added cuisine
       const newCuisines = [...currentCuisines, cuisine];
       
-      // Update form state
+      // Update the form state
       form.setValue('favoriteCuisines', newCuisines, { 
         shouldDirty: true,
         shouldValidate: true
       });
       
-      // Clear input and force UI update
+      // Clear the input field
       setCustomCuisine('');
       
-      // Force form validation and UI update
-      setTimeout(() => {
-        form.trigger('favoriteCuisines');
-      }, 0);
+      // Force form to re-render and validate
+      form.trigger('favoriteCuisines').then(() => {
+        // Manually trigger save after a short delay
+        setTimeout(() => {
+          form.handleSubmit(onSubmit)();
+        }, 100);
+      });
+    } else {
+      // If cuisine already exists, just clear the input
+      setCustomCuisine('');
     }
   };
   
@@ -284,23 +287,7 @@ const UserPreferencesPage: React.FC = () => {
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
-    defaultValues: {
-      dietaryRestrictions: [],
-      favoriteCuisines: [], // This will be populated from the API
-      allergens: [],
-      cookingSkillLevel: 'beginner',
-      favoriteFoods: [],
-      healthGoals: [],
-      maxCookingTime: '30 minutes',
-      includeBreakfast: true,
-      includeLunch: true,
-      includeDinner: true,
-      includeSnacks: false,
-      targetCalories: 2000,
-      targetProtein: 150,
-      targetCarbs: 200,
-      targetFat: 65
-    }
+    defaultValues: formSchema.parse({}) // Use schema defaults
   });
 
   // Load user preferences on mount
@@ -365,7 +352,7 @@ const UserPreferencesPage: React.FC = () => {
   }, [isAuthenticated, form, toast]);
 
   // Handle form submission
-  const onSubmit = async (data: FormValues) => {
+  const onSubmit = async (formData: FormValues) => {
     if (!isAuthenticated) {
       navigate('/login');
       return;
@@ -374,47 +361,49 @@ const UserPreferencesPage: React.FC = () => {
     try {
       setIsSaving(true);
       
-      // Prepare the data to be saved
-      const preferencesData: UserPreferences = {
-        dietaryRestrictions: data.dietaryRestrictions || [],
-        favoriteCuisines: data.favoriteCuisines || [],
-        allergens: data.allergens || [],
-        cookingSkillLevel: data.cookingSkillLevel as 'beginner' | 'intermediate' | 'advanced',
-        favoriteFoods: data.favoriteFoods?.filter(Boolean) || [],
-        healthGoals: data.healthGoals || [],
-        maxCookingTime: data.maxCookingTime || '30 minutes'
+      // Clean up the data before sending
+      const cleanedData: UserPreferences = {
+        dietaryRestrictions: Array.isArray(formData.dietaryRestrictions) 
+          ? formData.dietaryRestrictions.filter(Boolean) 
+          : [],
+        favoriteCuisines: Array.isArray(formData.favoriteCuisines) 
+          ? [...new Set(formData.favoriteCuisines.filter(Boolean).map(c => c.trim()))]
+          : [],
+        allergens: Array.isArray(formData.allergens) 
+          ? formData.allergens.filter(Boolean) 
+          : [],
+        cookingSkillLevel: formData.cookingSkillLevel as 'beginner' | 'intermediate' | 'advanced',
+        favoriteFoods: Array.isArray(formData.favoriteFoods)
+          ? formData.favoriteFoods.filter(Boolean).map(f => f.trim())
+          : [],
+        healthGoals: Array.isArray(formData.healthGoals)
+          ? formData.healthGoals.filter(Boolean)
+          : [],
+        maxCookingTime: formData.maxCookingTime || '30 minutes',
+        includeBreakfast: formData.includeBreakfast,
+        includeLunch: formData.includeLunch,
+        includeDinner: formData.includeDinner,
+        includeSnacks: formData.includeSnacks
       };
-
-      await saveUserPreferences(preferencesData);
+      
+      console.log('Submitting preferences:', cleanedData);
+      
+      await saveUserPreferences(cleanedData);
+      
+      // Force a refresh of the form to ensure state is in sync
+      const prefs = await loadUserPreferences();
+      form.reset(prefs);
       
       toast({
-        title: 'Success',
-        description: 'Your preferences have been saved.',
+        title: "Success",
+        description: "Your preferences have been saved successfully.",
       });
-      
-      // Refresh the preferences after saving
-      const updatedPreferences = await loadUserPreferences();
-      
-      // Reset the form with all updated preferences
-      form.reset({
-        ...updatedPreferences,
-        // Ensure arrays are properly initialized
-        dietaryRestrictions: updatedPreferences.dietaryRestrictions || [],
-        favoriteCuisines: updatedPreferences.favoriteCuisines || [],
-        allergens: updatedPreferences.allergens || [],
-        healthGoals: updatedPreferences.healthGoals || [],
-        favoriteFoods: updatedPreferences.favoriteFoods || []
-      });
-      
-      // Force a re-render of the form
-      form.trigger();
-      
     } catch (error) {
-      console.error('Failed to save preferences:', error);
+      console.error('Error saving preferences:', error);
       toast({
-        title: 'Error',
-        description: 'Failed to save your preferences. Please try again.',
-        variant: 'destructive',
+        title: "Error",
+        description: error instanceof Error ? error.message : 'Failed to save preferences',
+        variant: "destructive",
       });
     } finally {
       setIsSaving(false);
@@ -539,88 +528,6 @@ const UserPreferencesPage: React.FC = () => {
                     )}
                   />
                 ))}
-              </div>
-              
-              <div className="space-y-4">
-                <h3 className="text-lg font-medium">Nutritional Targets (Daily)</h3>
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                  <FormField
-                    control={form.control}
-                    name="targetCalories"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Calories</FormLabel>
-                        <FormControl>
-                          <Input 
-                            type="number" 
-                            min="1200" 
-                            max="4000"
-                            {...field}
-                            onChange={(e) => field.onChange(Number(e.target.value))}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="targetProtein"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Protein (g)</FormLabel>
-                        <FormControl>
-                          <Input 
-                            type="number" 
-                            min="30" 
-                            max="300"
-                            {...field}
-                            onChange={(e) => field.onChange(Number(e.target.value))}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="targetCarbs"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Carbs (g)</FormLabel>
-                        <FormControl>
-                          <Input 
-                            type="number" 
-                            min="100" 
-                            max="500"
-                            {...field}
-                            onChange={(e) => field.onChange(Number(e.target.value))}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="targetFat"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Fat (g)</FormLabel>
-                        <FormControl>
-                          <Input 
-                            type="number" 
-                            min="20" 
-                            max="200"
-                            {...field}
-                            onChange={(e) => field.onChange(Number(e.target.value))}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
               </div>
               </div>
 
