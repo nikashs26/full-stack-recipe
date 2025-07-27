@@ -93,51 +93,62 @@ class RecipeService:
             return True
             
         # Normalize the input cuisines (convert to lowercase and strip whitespace)
-        cuisines = [c.lower().strip() for c in cuisines if c and isinstance(c, str)]
-        
-        # If no valid cuisines after normalization, include all recipes
-        if not cuisines:
-            return True
-            
-        # Get cuisines from various possible fields in the recipe
         recipe_cuisines = set()
         
-        # Check all possible cuisine fields in the recipe
-        if 'cuisines' in recipe and isinstance(recipe['cuisines'], list) and recipe['cuisines']:
-            recipe_cuisines.update(c.lower().strip() 
-                                for c in recipe['cuisines'] 
-                                if isinstance(c, str) and c.lower().strip() != 'international')
-        if 'cuisine' in recipe and isinstance(recipe['cuisine'], list) and recipe['cuisine']:
-            recipe_cuisines.update(c.lower().strip() 
-                                for c in recipe['cuisine'] 
-                                if isinstance(c, str) and c.lower().strip() != 'international')
-        if 'cuisine' in recipe and isinstance(recipe['cuisine'], str) and recipe['cuisine'].strip():
-            cuisine = recipe['cuisine'].lower().strip()
-            if cuisine != 'international':
-                recipe_cuisines.add(cuisine)
+        # Check 'cuisine' field
+        if 'cuisine' in recipe and recipe['cuisine']:
+            if isinstance(recipe['cuisine'], str):
+                recipe_cuisines.add(recipe['cuisine'].lower())
+            elif isinstance(recipe['cuisine'], list):
+                recipe_cuisines.update(c.lower() for c in recipe['cuisine'] if c and isinstance(c, str))
         
-        # If no cuisine information is available or only 'international' was present, include the recipe in results
-    
+        # Check 'cuisines' field
+        if 'cuisines' in recipe and recipe['cuisines']:
+            if isinstance(recipe['cuisines'], str):
+                recipe_cuisines.add(recipe['cuisines'].lower())
+            elif isinstance(recipe['cuisines'], list):
+                recipe_cuisines.update(c.lower() for c in recipe['cuisines'] if c and isinstance(c, str))
+        
+        # Check 'tags' field for common cuisine tags
+        if 'tags' in recipe and isinstance(recipe['tags'], list):
+            cuisine_tags = [
+                'american', 'italian', 'mexican', 'chinese', 'indian', 'japanese', 'thai', 'french', 'greek', 'spanish',
+                'mediterranean', 'middle eastern', 'vietnamese', 'korean', 'german', 'british', 'caribbean', 'african',
+                'latin american', 'cajun', 'southern', 'soul food', 'southwestern', 'hawaiian', 'cuban', 'jamaican',
+                'russian', 'irish', 'swedish', 'danish', 'dutch', 'portuguese', 'brazilian', 'peruvian', 'argentinian',
+                'moroccan', 'ethiopian', 'lebanese', 'turkish', 'israeli', 'persian', 'pakistani', 'filipino', 'malaysian',
+                'indonesian', 'australian', 'new zealand', 'polish', 'hungarian', 'austrian', 'swiss', 'belgian', 'scandinavian'
+            ]
+            
+            # Only add tags that are actual cuisines
+            for tag in recipe['tags']:
+                if not tag or not isinstance(tag, str):
+                    continue
+                tag_lower = tag.lower()
+                if tag_lower in cuisine_tags:
+                    recipe_cuisines.add(tag_lower)
+        
+        # Remove 'international' as it's not a real cuisine
+        recipe_cuisines.discard('international')
+        recipe_cuisines.discard('international cuisine')
+        
+        # If no specific cuisines found after filtering, don't match any cuisine filter
+        if not recipe_cuisines:
+            logger.debug(f"No specific cuisine found for {recipe.get('title', 'Unknown')} - only had: {recipe.get('cuisine') or recipe.get('cuisines') or recipe.get('tags', [])}")
+            return False
             
         # Debug log
-        print(f"Matching cuisines for {recipe.get('title', 'Unknown')}:")
-        print(f"- Looking for: {cuisines}")
-        print(f"- Recipe has: {recipe_cuisines}")
+        logger.debug(f"Matching cuisines for {recipe.get('title', 'Unknown')}:")
+        logger.debug(f"- Looking for: {cuisines}")
+        logger.debug(f"- Recipe has: {recipe_cuisines}")
             
-        # Check for exact matches first (case-insensitive)
+        # Only allow exact matches for cuisines
         for cuisine in cuisines:
             if cuisine in recipe_cuisines:
-                print(f"✓ Exact match found: {cuisine}")
+                logger.debug(f"✓ Exact match found: {cuisine}")
                 return True
-                
-        # If no exact matches, check for partial matches
-        for cuisine in cuisines:
-            for recipe_cuisine in recipe_cuisines:
-                if cuisine in recipe_cuisine or recipe_cuisine in cuisine:
-                    print(f"✓ Partial match found: '{cuisine}' in '{recipe_cuisine}'")
-                    return True
         
-        print("✗ No cuisine matches found")
+        logger.debug(f"✗ No cuisine matches found for {recipe.get('title', 'Unknown')}")
         return False
         
     def _contains_foods_to_avoid(self, recipe: Dict[str, Any], foods_to_avoid: List[str]) -> bool:

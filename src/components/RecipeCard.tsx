@@ -1,8 +1,9 @@
 
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Edit, Trash2, Star, Clock, Heart } from 'lucide-react';
+import { Edit, Trash2, Star, Clock, Heart, Utensils, Clock3, Users, BarChart2 } from 'lucide-react';
 import { Recipe } from '../types/recipe';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from './ui/hover-card';
 
 // Extended recipe type to handle various sources
 type ExtendedRecipe = Recipe & {
@@ -270,11 +271,13 @@ const RecipeCard: React.FC<RecipeCardProps> = React.memo(({
   }, [onClick, recipe, getRecipePath]);
 
   return (
-    <div 
-      className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-300 cursor-pointer"
-      onClick={handleClick}
-    >
-      <Link to={getRecipePath()} onClick={(e) => e.stopPropagation()}>
+    <HoverCard>
+      <HoverCardTrigger asChild>
+        <div 
+          className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-300 cursor-pointer h-full flex flex-col"
+          onClick={handleClick}
+        >
+          <Link to={getRecipePath()} onClick={(e) => e.stopPropagation()} className="flex flex-col h-full">
         <div className="relative h-48 overflow-hidden">
           <img
             src={imageUrl}
@@ -289,7 +292,7 @@ const RecipeCard: React.FC<RecipeCardProps> = React.memo(({
           />
         </div>
         
-        <div className="p-4">
+        <div className="p-4 flex-grow">
           <h3 className="text-lg font-semibold text-gray-900 mb-2 line-clamp-2">
             {recipeName}
           </h3>
@@ -373,10 +376,10 @@ const RecipeCard: React.FC<RecipeCardProps> = React.memo(({
             </div>
           </div>
         </div>
-      </Link>
-      
-      {/* Admin actions */}
-      {onDelete && (
+          </Link>
+          
+          {/* Admin actions */}
+          {onDelete && (
         <div className="p-4 bg-gray-50 border-t border-gray-100 flex justify-end">
           <button
             onClick={(e) => {
@@ -388,9 +391,79 @@ const RecipeCard: React.FC<RecipeCardProps> = React.memo(({
             <Trash2 className="w-4 h-4 mr-1" />
             Delete Recipe
           </button>
+            </div>
+          )}
         </div>
-      )}
-    </div>
+      </HoverCardTrigger>
+      
+      <HoverCardContent className="w-80 p-0 overflow-hidden" align="start">
+        <div className="p-4">
+          <h4 className="font-semibold text-lg mb-2">{recipeName}</h4>
+          
+          {/* Description */}
+          {recipe.description && (
+            <p className="text-sm text-gray-600 mb-3 line-clamp-3">
+              {recipe.description}
+            </p>
+          )}
+          
+          {/* Key Info */}
+          <div className="space-y-2 text-sm">
+            <div className="flex items-center text-gray-700">
+              <Clock3 className="w-4 h-4 mr-2 text-gray-500" />
+              <span>Prep: {recipe.prep_time || 'N/A'}</span>
+            </div>
+            <div className="flex items-center text-gray-700">
+              <Utensils className="w-4 h-4 mr-2 text-gray-500" />
+              <span>Cook: {recipe.cook_time || 'N/A'}</span>
+            </div>
+            <div className="flex items-center text-gray-700">
+              <Users className="w-4 h-4 mr-2 text-gray-500" />
+              <span>Servings: {recipe.servings || 'N/A'}</span>
+            </div>
+            {averageRating !== undefined && (
+              <div className="flex items-center text-gray-700">
+                <BarChart2 className="w-4 h-4 mr-2 text-gray-500" />
+                <span>Rating: {Number(averageRating).toFixed(1)}/5</span>
+              </div>
+            )}
+          </div>
+          
+          {/* Dietary Tags */}
+          {(cuisines.length > 0 || dietaryRestrictions.length > 0) && (
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {cuisines.map((cuisine, idx) => (
+                <span 
+                  key={`cuisine-${idx}`}
+                  className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full"
+                >
+                  {cuisine}
+                </span>
+              ))}
+              {dietaryRestrictions.map((diet, idx) => (
+                <span 
+                  key={`diet-${idx}`}
+                  className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full"
+                >
+                  {diet}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+        
+        {/* View Recipe Button */}
+        <div className="bg-gray-50 px-4 py-3 border-t border-gray-100 text-right">
+          <Link 
+            to={getRecipePath()} 
+            className="text-sm font-medium text-blue-600 hover:text-blue-800"
+            onClick={(e) => e.stopPropagation()}
+          >
+            View Full Recipe →
+          </Link>
+        </div>
+      </HoverCardContent>
+    </HoverCard>
   );
 });
 

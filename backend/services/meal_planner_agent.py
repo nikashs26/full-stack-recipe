@@ -1,4 +1,5 @@
 import random
+import re
 import logging
 from typing import List, Dict, Any, Optional
 from services.user_preferences_service import UserPreferencesService
@@ -119,12 +120,21 @@ class MealPlannerAgent:
             ]
         }
         
-        # Filter recipes based on dietary restrictions
+        # Get foods to avoid from preferences
+        foods_to_avoid = preferences.get('foodsToAvoid', [])
+        if isinstance(foods_to_avoid, str):
+            foods_to_avoid = [foods_to_avoid]
+        foods_to_avoid = [f.strip() for f in foods_to_avoid if f and f.strip()]
+        
+        if foods_to_avoid:
+            logger.info(f"Filtering out recipes containing: {', '.join(foods_to_avoid)}")
+        
+        # Filter recipes based on dietary restrictions and foods to avoid
         filtered_meals = {}
         for meal_type, recipes in meal_templates.items():
             filtered_meals[meal_type] = []
             for recipe in recipes:
-                if self._is_recipe_compatible_simple(recipe, dietary_restrictions, allergies):
+                if self._is_recipe_compatible_simple(recipe, dietary_restrictions, allergies, foods_to_avoid):
                     filtered_meals[meal_type].append(recipe)
         
         # Generate 7-day plan
@@ -214,16 +224,72 @@ class MealPlannerAgent:
             "note": "This is a simplified meal plan. For personalized AI-generated plans with detailed recipes, please ensure your preferences are set and try again."
         }
     
-    def _is_recipe_compatible_simple(self, recipe: Dict[str, Any], dietary_restrictions: List[str], allergies: List[str]) -> bool:
-        """Simple compatibility check for fallback recipes"""
-        # Check dietary restrictions
-        for restriction in dietary_restrictions:
-            if restriction.lower() == "vegetarian" and not recipe.get("vegetarian", False):
-                return False
-            if restriction.lower() == "vegan" and not recipe.get("vegan", False):
-                return False
+    def _is_recipe_compatible_simple(self, recipe: Dict[str, Any], dietary_restrictions: List[str], allergies: List[str], foods_to_avoid: List[str] = None) -> bool:
+        """
+        Check if a recipe is compatible with the given restrictions and preferences.
         
-        # For simplicity, assume other restrictions are handled in recipe selection
+        Args:
+            recipe: The recipe to check
+            dietary_restrictions: List of dietary restrictions
+            allergies: List of allergies to check against
+            foods_to_avoid: List of foods to avoid (case-insensitive)
+            
+        Returns:
+            bool: True if recipe is compatible, False otherwise
+        """
+        # Check dietary restrictions
+        if 'vegetarian' in dietary_restrictions and not recipe.get('vegetarian', False):
+            return False
+        if 'vegan' in dietary_restrictions and not recipe.get('vegan', False):
+            return False
+            
+        # Check for allergies (simple check for now)
+        if allergies and 'name' in recipe:
+            recipe_name = recipe['name'].lower()
+            for allergy in allergies:
+                if allergy and allergy.lower() in recipe_name:
+                    return False
+        
+        # Check for foods to avoid
+        if foods_to_avoid and 'ingredients' in recipe and isinstance(recipe['ingredients'], list):
+            # Get all ingredients as lowercase strings
+            ingredients = []
+            for ing in recipe['ingredients']:
+                if isinstance(ing, dict) and 'name' in ing:
+                    ingredients.append(ing['name'].lower())
+                elif isinstance(ing, str):
+                    ingredients.append(ing.lower())
+            
+            # Also check ingredientLines if available
+            if 'ingredientLines' in recipe and isinstance(recipe['ingredientLines'], list):
+                ingredients.extend(ing.lower() for ing in recipe['ingredientLines'] if isinstance(ing, str))
+            
+            # Check if any food to avoid is in the ingredients
+            for food in foods_to_avoid:
+                if not food:
+                    continue
+                    
+                food_lower = food.lower().strip()
+                if not food_lower:
+                    continue
+                    
+                # Create a regex pattern that matches whole words only
+                # This will match 'beef' but not 'beefy' or 'beef pho'
+                pattern = r'(?:^|\s)' + re.escape(food_lower) + r'(?:\s|$)'
+                
+                for ingredient in ingredients:
+                    # Check if the food appears as a whole word in the ingredient
+                    if re.search(pattern, ingredient):
+                        logger.debug(f"Excluding recipe '{recipe.get('name', 'Unknown')}' "
+                                   f"due to containing food to avoid: '{food}' in ingredient: '{ingredient}'")
+                        return False
+                        
+                    # Also check if the ingredient is exactly the food (e.g., 'beef' matches 'beef')
+                    if ingredient == food_lower:
+                        logger.debug(f"Excluding recipe '{recipe.get('name', 'Unknown')}' "
+                                   f"due to exact match with food to avoid: '{food}'")
+                        return False
+                    
         return True
     
     def _get_default_preferences(self) -> Dict[str, Any]:
