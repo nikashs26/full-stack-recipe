@@ -301,17 +301,30 @@ class RecipeSearchService:
         # Perform semantic search
         results = self.semantic_search(query, filters, limit * 2)  # Overfetch to allow post-filtering
 
-        # Post-filter: Only include recipes whose cuisine matches the user's favorite cuisines
-        favorite_cuisines = set([c.lower() for c in user_preferences.get('favoriteCuisines', [])])
+        # Process favorite cuisines for filtering
+        favorite_cuisines = set([str(c).lower() for c in user_preferences.get('favoriteCuisines', [])])
+        
         if favorite_cuisines:
-            filtered_results = [
+            # First, try to find recipes that match any of the favorite cuisines
+            matched_results = [
                 recipe for recipe in results
                 if recipe.get('cuisine', '').lower() in favorite_cuisines
             ]
-            # Limit to requested number
-            return filtered_results[:limit]
-        else:
-            return results[:limit]
+            
+            # If we have enough matching results, return them
+            if len(matched_results) >= limit:
+                return matched_results[:limit]
+                
+            # If not enough matches, include other results as fallback
+            remaining_slots = limit - len(matched_results)
+            other_results = [
+                recipe for recipe in results
+                if recipe.get('cuisine', '').lower() not in favorite_cuisines
+            ][:remaining_slots]
+            
+            return matched_results + other_results
+            
+        return results[:limit]
 
     
     def _create_searchable_text(self, recipe: Dict[str, Any]) -> str:

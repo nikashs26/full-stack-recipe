@@ -104,46 +104,39 @@ def ai_meal_plan():
     currency = data.get('currency', '$')
 
     # Build Llama prompt with all parameters
-    prompt = build_llama_prompt(
-        preferences,
-        budget=float(budget) if budget is not None else None,
-        dietary_goals=dietary_goals,
-        currency=currency
-    )
-
-    llama_payload = {
-        "model": "llama-3-70b-instruct",  # Update as needed
-        "messages": [
-            {"role": "system", "content": "You are a helpful, expert meal planner and chef."},
-            {"role": "user", "content": prompt}
-        ],
-        "max_tokens": 1200,
-        "temperature": 0.7
-    }
-    headers = {
-        "Content-Type": "application/json"
-    }
-    if LLAMA_API_KEY:
-        headers["Authorization"] = f"Bearer {LLAMA_API_KEY}"
-
+    # Call the LLM service
     try:
-        # Call Llama API
-        response = requests.post(
-            LLAMA_API_URL,
-            headers={
-                'Content-Type': 'application/json',
-                'Authorization': f'Bearer {LLAMA_API_KEY}'
-            },
-            json=llama_payload
-        )
-
-        if response.status_code != 200:
-            return jsonify({'error': 'Failed to generate meal plan'}), 500
-
-        data = response.json()
-        # Llama API: response['choices'][0]['message']['content']
-        meal_plan = data['choices'][0]['message']['content']
-        response = jsonify({'meal_plan': meal_plan})
+        # Initialize the meal planner agent
+        meal_planner = LLMMealPlannerAgent()
+        
+        # Prepare preferences for the meal planner
+        meal_plan_preferences = {
+            **preferences,
+            'budget': request.json.get('budget'),
+            'dietaryGoals': request.json.get('dietary_goals', []),
+            'currency': request.json.get('currency', '$'),
+            'mealPreferences': request.json.get('meal_preferences', {
+                'includeBreakfast': True,
+                'includeLunch': True,
+                'includeDinner': True,
+                'includeSnacks': True
+            }),
+            'nutritionTargets': request.json.get('nutrition_targets', {
+                'calories': 2000,
+                'protein': 150,
+                'carbs': 200,
+                'fat': 65
+            })
+        }
+        
+        # Generate the meal plan
+        meal_plan = meal_planner.generate_weekly_meal_plan(meal_plan_preferences)
+        
+        # Return the meal plan in the expected format
+        response = jsonify({
+            'success': True,
+            'data': meal_plan
+        })
         response.headers.add('Access-Control-Allow-Origin', 'http://localhost:8081')
         response.headers.add('Access-Control-Allow-Credentials', 'true')
         return response

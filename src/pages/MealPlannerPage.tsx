@@ -200,7 +200,11 @@ const MealPlannerPage: React.FC = () => {
   };
 
   const renderNutritionalInfo = () => {
-    if (!mealPlan?.nutrition_summary) return null;
+    console.log('Meal Plan Data:', JSON.stringify(mealPlan, null, 2));
+    if (!mealPlan?.nutrition_summary) {
+      console.log('No nutrition_summary found in meal plan');
+      return null;
+    }
     
     const nutritionSummary = mealPlan.nutrition_summary;
     const dailyAverage = nutritionSummary?.daily_average;

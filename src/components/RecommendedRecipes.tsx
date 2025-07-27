@@ -55,42 +55,49 @@ const RecommendedRecipes: React.FC = () => {
 
       // Fetch recipes for favorite cuisines
       if (favoriteCuisines.length > 0) {
-        for (const cuisine of favoriteCuisines.slice(0, 3)) {
+        const cuisineRecipes = new Map(); // Use a map to deduplicate recipes by ID
+        
+        for (const cuisine of favoriteCuisines) {
           try {
             console.log(`Fetching recipes for cuisine: ${cuisine}`);
             const response = await fetchRecipes(cuisine, '');
+            
             if (response?.results && Array.isArray(response.results)) {
-              // Filter recipes to only include those that actually match the cuisine from API data
-              const cuisineFilteredRecipes = response.results.filter(recipe => {
-                const recipeCuisines = recipe.cuisines || [];
+              // Process each recipe from the response
+              response.results.forEach(recipe => {
+                if (!recipe.id) return;
+                
+                const recipeCuisines = Array.isArray(recipe.cuisines) 
+                  ? recipe.cuisines.map(c => c?.toLowerCase())
+                  : [];
+                
                 const recipeTitle = recipe.title?.toLowerCase() || '';
                 
-                // Primary check: Does the recipe's cuisine array contain the requested cuisine?
-                const directCuisineMatch = recipeCuisines.some(recipeCuisine => 
-                  recipeCuisine?.toLowerCase() === cuisine.toLowerCase()
-                );
+                // Check if recipe matches the cuisine
+                const matchesCuisine = recipeCuisines.includes(cuisine.toLowerCase()) ||
+                                     recipeTitle.includes(cuisine.toLowerCase());
                 
-                // Secondary check: Does the recipe title contain the cuisine name?
-                const titleMatch = recipeTitle.includes(cuisine.toLowerCase());
-                
-                // If it's a direct match, accept it
-                if (directCuisineMatch || titleMatch) {
-                  console.log(`✅ Recipe "${recipe.title}" matches ${cuisine} cuisine (cuisines: ${recipeCuisines.join(', ')})`);
-                  return true;
+                if (matchesCuisine) {
+                  // Add cuisine to recipe's cuisines if not already present
+                  if (!recipeCuisines.includes(cuisine.toLowerCase())) {
+                    recipe.cuisines = [...recipeCuisines, cuisine.toLowerCase()];
+                  }
+                  
+                  // Add to our map (automatically handles duplicates by ID)
+                  cuisineRecipes.set(recipe.id, recipe);
                 }
-                
-                // If no direct match, reject it
-                console.log(`❌ Recipe "${recipe.title}" does not match ${cuisine} cuisine (cuisines: ${recipeCuisines.join(', ')})`);
-                return false;
               });
               
-              console.log(`Found ${cuisineFilteredRecipes.length} recipes matching ${cuisine} cuisine`);
-              allExternalRecipes.push(...cuisineFilteredRecipes.slice(0, 6));
+              console.log(`Found ${response.results.length} total recipes for ${cuisine}, ` +
+                        `${cuisineRecipes.size} unique recipes across all cuisines so far`);
             }
           } catch (error) {
             console.error(`Error fetching ${cuisine} recipes:`, error);
           }
         }
+        
+        // Add all unique recipes to our results
+        allExternalRecipes.push(...Array.from(cuisineRecipes.values()));
       }
 
       // Fetch recipes for dietary restrictions

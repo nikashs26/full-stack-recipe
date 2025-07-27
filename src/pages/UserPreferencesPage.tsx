@@ -56,15 +56,19 @@ const loadUserPreferences = async (): Promise<UserPreferences> => {
     // The preferences are in the 'preferences' field of the response
     const preferences = data.preferences || data;
     
-    // Ensure favoriteFoods is an array of exactly 3 strings
+    // Ensure favoriteFoods is an array of strings
     const favoriteFoods = Array.isArray(preferences.favoriteFoods) 
       ? [...preferences.favoriteFoods, '', '', ''].slice(0, 3)
       : ['', '', ''];
     
-    // Return with defaults for any missing fields
-    return {
+    // Ensure favoriteCuisines is an array and filter out any empty strings or invalid values
+    const favoriteCuisines = Array.isArray(preferences.favoriteCuisines) 
+      ? preferences.favoriteCuisines.filter((c: any) => c && typeof c === 'string')
+      : [];
+    
+    // Default values for all preferences
+    const defaultPreferences = {
       dietaryRestrictions: [],
-      favoriteCuisines: [],
       allergens: [],
       cookingSkillLevel: 'beginner',
       healthGoals: [],
@@ -77,8 +81,16 @@ const loadUserPreferences = async (): Promise<UserPreferences> => {
       targetProtein: 150,
       targetCarbs: 200,
       targetFat: 65,
-      ...preferences,
-      favoriteFoods
+      favoriteFoods,
+      favoriteCuisines // Include custom cuisines
+    };
+    
+    // Merge with API preferences, ensuring our defaults are used for missing values
+    return {
+      ...defaultPreferences,
+      ...preferences, // Spread API preferences second to override defaults
+      favoriteFoods,  // Ensure our processed favoriteFoods is used
+      favoriteCuisines // Ensure our processed favoriteCuisines is used
     };
   } catch (error) {
     console.error('Error loading preferences:', error);
@@ -103,12 +115,20 @@ const saveUserPreferences = async (data: UserPreferences) => {
       throw new Error('No authentication token found');
     }
 
-    console.log('Saving preferences:', data);
+    // Process the data before sending
+    const payload = {
+      ...data,
+      // Ensure favoriteFoods is an array of strings
+      favoriteFoods: Array.isArray(data.favoriteFoods) 
+        ? data.favoriteFoods.slice(0, 3).map(food => String(food || ''))
+        : ['', '', ''],
+      // Ensure favoriteCuisines is an array of non-empty strings
+      favoriteCuisines: Array.isArray(data.favoriteCuisines)
+        ? data.favoriteCuisines.filter(c => c && typeof c === 'string')
+        : []
+    };
 
-    // Ensure favoriteFoods is an array of exactly 3 strings
-    const favoriteFoods = Array.isArray(data.favoriteFoods) 
-      ? data.favoriteFoods.slice(0, 3).map(food => String(food || ''))
-      : ['', '', ''];
+    console.log('Saving preferences:', payload);
 
     const response = await fetch('http://localhost:5003/api/preferences', {
       method: 'POST',
@@ -118,10 +138,7 @@ const saveUserPreferences = async (data: UserPreferences) => {
         'Accept': 'application/json'
       },
       body: JSON.stringify({
-        preferences: {
-          ...data,
-          favoriteFoods
-        }
+        preferences: payload
       }),
       credentials: 'include'
     });
@@ -155,7 +172,7 @@ const formSchema = z.object({
   favoriteCuisines: z.array(z.string()),
   allergens: z.array(z.string()),
   cookingSkillLevel: z.string(),
-  favoriteFoods: z.array(z.string().min(1, "Favorite food cannot be empty")),
+  favoriteFoods: z.array(z.string()).optional(),
   healthGoals: z.array(z.string()),
   maxCookingTime: z.string(),
   // Meal inclusion preferences
@@ -215,19 +232,74 @@ const UserPreferencesPage: React.FC = () => {
   const { isAuthenticated } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
+
+  const handleAddCustomCuisine = (e: React.FormEvent) => {
+    e.preventDefault();
+    const cuisine = customCuisine.trim();
+    if (!cuisine) return;
+    
+    const currentCuisines = form.getValues('favoriteCuisines') || [];
+    
+    // Check if cuisine already exists (case-insensitive)
+    const cuisineExists = currentCuisines.some(
+      (c: string) => c.toLowerCase() === cuisine.toLowerCase()
+    );
+    
+    if (!cuisineExists) {
+      const newCuisines = [...currentCuisines, cuisine];
+      
+      // Update form state
+      form.setValue('favoriteCuisines', newCuisines, { 
+        shouldDirty: true,
+        shouldValidate: true
+      });
+      
+      // Clear input and force UI update
+      setCustomCuisine('');
+      
+      // Force form validation and UI update
+      setTimeout(() => {
+        form.trigger('favoriteCuisines');
+      }, 0);
+    }
+  };
+  
+  const removeCuisine = (cuisineToRemove: string) => {
+    const currentCuisines = form.getValues('favoriteCuisines') || [];
+    const newCuisines = currentCuisines.filter(c => c !== cuisineToRemove);
+    
+    form.setValue('favoriteCuisines', newCuisines, { 
+      shouldDirty: true, 
+      shouldValidate: true 
+    });
+    
+    // Force form validation and UI update
+    setTimeout(() => {
+      form.trigger('favoriteCuisines');
+    }, 0);
+  };
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [customCuisine, setCustomCuisine] = useState('');
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       dietaryRestrictions: [],
-      favoriteCuisines: [],
+      favoriteCuisines: [], // This will be populated from the API
       allergens: [],
       cookingSkillLevel: 'beginner',
-      favoriteFoods: ['', '', ''],
+      favoriteFoods: [],
       healthGoals: [],
-      maxCookingTime: '30 minutes'
+      maxCookingTime: '30 minutes',
+      includeBreakfast: true,
+      includeLunch: true,
+      includeDinner: true,
+      includeSnacks: false,
+      targetCalories: 2000,
+      targetProtein: 150,
+      targetCarbs: 200,
+      targetFat: 65
     }
   });
 
@@ -241,13 +313,40 @@ const UserPreferencesPage: React.FC = () => {
 
       try {
         const preferences = await loadUserPreferences();
-        // Ensure we have exactly 3 favorite foods
-        const favoriteFoods = [...preferences.favoriteFoods, '', '', ''].slice(0, 3) as [string, string, string];
         
-        form.reset({
+        // Prepare form values with proper defaults
+        const formValues = {
           ...preferences,
-          favoriteFoods
-        });
+          // Ensure arrays are properly initialized
+          dietaryRestrictions: Array.isArray(preferences.dietaryRestrictions) 
+            ? preferences.dietaryRestrictions 
+            : [],
+          favoriteCuisines: Array.isArray(preferences.favoriteCuisines)
+            ? preferences.favoriteCuisines
+            : [],
+          allergens: Array.isArray(preferences.allergens) 
+            ? preferences.allergens 
+            : [],
+          healthGoals: Array.isArray(preferences.healthGoals) 
+            ? preferences.healthGoals 
+            : [],
+          favoriteFoods: Array.isArray(preferences.favoriteFoods) 
+            ? preferences.favoriteFoods 
+            : ['', '', ''],
+          cookingSkillLevel: preferences.cookingSkillLevel || 'beginner',
+          maxCookingTime: preferences.maxCookingTime || '30 minutes',
+          includeBreakfast: preferences.includeBreakfast !== false,
+          includeLunch: preferences.includeLunch !== false,
+          includeDinner: preferences.includeDinner !== false,
+          includeSnacks: !!preferences.includeSnacks,
+          targetCalories: preferences.targetCalories || 2000,
+          targetProtein: preferences.targetProtein || 150,
+          targetCarbs: preferences.targetCarbs || 200,
+          targetFat: preferences.targetFat || 65
+        };
+        
+        console.log('Resetting form with values:', formValues);
+        form.reset(formValues);
       } catch (error) {
         console.error('Failed to load preferences:', error);
         toast({
@@ -281,7 +380,7 @@ const UserPreferencesPage: React.FC = () => {
         favoriteCuisines: data.favoriteCuisines || [],
         allergens: data.allergens || [],
         cookingSkillLevel: data.cookingSkillLevel as 'beginner' | 'intermediate' | 'advanced',
-        favoriteFoods: data.favoriteFoods.filter(Boolean),
+        favoriteFoods: data.favoriteFoods?.filter(Boolean) || [],
         healthGoals: data.healthGoals || [],
         maxCookingTime: data.maxCookingTime || '30 minutes'
       };
@@ -293,12 +392,22 @@ const UserPreferencesPage: React.FC = () => {
         description: 'Your preferences have been saved.',
       });
       
-      // Optional: Refresh the preferences after saving
+      // Refresh the preferences after saving
       const updatedPreferences = await loadUserPreferences();
+      
+      // Reset the form with all updated preferences
       form.reset({
         ...updatedPreferences,
-        favoriteFoods: [...updatedPreferences.favoriteFoods || [], '', '', ''].slice(0, 3) as [string, string, string]
+        // Ensure arrays are properly initialized
+        dietaryRestrictions: updatedPreferences.dietaryRestrictions || [],
+        favoriteCuisines: updatedPreferences.favoriteCuisines || [],
+        allergens: updatedPreferences.allergens || [],
+        healthGoals: updatedPreferences.healthGoals || [],
+        favoriteFoods: updatedPreferences.favoriteFoods || []
       });
+      
+      // Force a re-render of the form
+      form.trigger();
       
     } catch (error) {
       console.error('Failed to save preferences:', error);
@@ -520,33 +629,82 @@ const UserPreferencesPage: React.FC = () => {
                 <h2 className="text-xl font-medium mb-4">Favorite Cuisines</h2>
                 <p className="text-sm text-gray-600 mb-4">Choose cuisines you enjoy</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {cuisineOptions.map((option) => (
-                    <FormField
-                      key={option.id}
-                      control={form.control}
-                      name="favoriteCuisines"
-                      render={({ field }) => (
-                        <FormItem className="flex items-center space-x-3 space-y-0">
-                          <FormControl>
-                            <Checkbox
-                              checked={field.value?.includes(option.id)}
-                              onCheckedChange={(checked) => {
-                                return checked
-                                  ? field.onChange([...field.value, option.id])
-                                  : field.onChange(
-                                      field.value?.filter((value: string) => value !== option.id)
-                                    );
-                              }}
-                            />
-                          </FormControl>
-                          <FormLabel className="font-normal">
-                            {option.label}
-                            <p className="text-xs text-gray-500">{option.description}</p>
-                          </FormLabel>
-                        </FormItem>
-                      )}
+                  {cuisineOptions.map((option) => {
+                    const field = form.getFieldState('favoriteCuisines');
+                    const currentValue = form.getValues('favoriteCuisines') || [];
+                    
+                    return (
+                      <FormField
+                        key={option.id}
+                        control={form.control}
+                        name="favoriteCuisines"
+                        render={() => (
+                          <FormItem className="flex items-center space-x-3 space-y-0">
+                            <FormControl>
+                              <Checkbox
+                                checked={currentValue.includes(option.id)}
+                                onCheckedChange={(checked) => {
+                                  const newValue = checked
+                                    ? [...new Set([...currentValue, option.id])]
+                                    : currentValue.filter((value: string) => value !== option.id);
+                                  form.setValue('favoriteCuisines', newValue, { shouldDirty: true });
+                                }}
+                              />
+                            </FormControl>
+                            <FormLabel className="font-normal">
+                              {option.label}
+                              <p className="text-xs text-gray-500">{option.description}</p>
+                            </FormLabel>
+                          </FormItem>
+                        )}
+                      />
+                    );
+                  })}
+                </div>
+                
+                {/* Custom Cuisine Input */}
+                <div className="mt-4">
+                  <form onSubmit={handleAddCustomCuisine} className="flex gap-2">
+                    <Input
+                      type="text"
+                      placeholder="Add a custom cuisine..."
+                      value={customCuisine}
+                      onChange={(e) => setCustomCuisine(e.target.value)}
+                      className="flex-1"
                     />
-                  ))}
+                    <Button 
+                      type="submit" 
+                      variant="outline"
+                      disabled={!customCuisine.trim()}
+                    >
+                      Add
+                    </Button>
+                  </form>
+                  
+                  {/* Display selected custom cuisines */}
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {Array.isArray(form.watch('favoriteCuisines')) && form.watch('favoriteCuisines')
+                      .filter(cuisine => 
+                        cuisine && 
+                        typeof cuisine === 'string' &&
+                        !cuisineOptions.some(opt => opt.id.toLowerCase() === cuisine.toLowerCase())
+                      )
+                      .map((cuisine, index) => (
+                      <div 
+                        key={cuisine} 
+                        className="bg-gray-100 px-3 py-1 rounded-full text-sm flex items-center gap-1"
+                      >
+                        {cuisine}
+                        <button 
+                          type="button" 
+                          onClick={() => removeCuisine(cuisine)}
+                          className="text-gray-500 hover:text-red-500"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
 
