@@ -18,7 +18,7 @@ import { Link, useNavigate } from 'react-router-dom';
 type UserPreferences = {
   dietaryRestrictions?: string[];
   favoriteCuisines?: string[];
-  allergens?: string[];
+  foodsToAvoid?: string[];
   cookingSkillLevel?: 'beginner' | 'intermediate' | 'advanced';
   favoriteFoods?: string[];
   healthGoals?: string[];
@@ -74,10 +74,15 @@ const loadUserPreferences = async (): Promise<UserPreferences> => {
       ? preferences.favoriteCuisines.filter((c: any) => c && typeof c === 'string')
       : [];
     
+    // Ensure foodsToAvoid is an array
+    const foodsToAvoid = Array.isArray(preferences.foodsToAvoid) 
+      ? preferences.foodsToAvoid
+      : [];
+    
     // Default values for all preferences
     const defaultPreferences = {
       dietaryRestrictions: [],
-      allergens: [],
+      foodsToAvoid: [],
       cookingSkillLevel: 'beginner',
       healthGoals: [],
       maxCookingTime: '30 minutes',
@@ -94,7 +99,8 @@ const loadUserPreferences = async (): Promise<UserPreferences> => {
       ...defaultPreferences,
       ...preferences, // Spread API preferences second to override defaults
       favoriteFoods,  // Ensure our processed favoriteFoods is used
-      favoriteCuisines // Ensure our processed favoriteCuisines is used
+      favoriteCuisines, // Ensure our processed favoriteCuisines is used
+      foodsToAvoid    // Ensure our processed foodsToAvoid is used
     };
   } catch (error) {
     console.error('Error loading preferences:', error);
@@ -102,11 +108,19 @@ const loadUserPreferences = async (): Promise<UserPreferences> => {
     return {
       dietaryRestrictions: [],
       favoriteCuisines: [],
-      allergens: [],
+      foodsToAvoid: [],
       cookingSkillLevel: 'beginner',
       favoriteFoods: ['', '', ''],
       healthGoals: [],
-      maxCookingTime: '30 minutes'
+      maxCookingTime: '30 minutes',
+      includeBreakfast: true,
+      includeLunch: true,
+      includeDinner: true,
+      includeSnacks: false,
+      targetCalories: 2000,
+      targetProtein: 150,
+      targetCarbs: 200,
+      targetFat: 65
     };
   }
 };
@@ -130,6 +144,12 @@ const saveUserPreferences = async (data: UserPreferences) => {
       favoriteCuisines: Array.isArray(data.favoriteCuisines)
         ? data.favoriteCuisines
             .map(c => typeof c === 'string' ? c.trim() : '')
+            .filter(Boolean)
+        : [],
+      // Ensure foodsToAvoid is an array of non-empty strings
+      foodsToAvoid: Array.isArray(data.foodsToAvoid)
+        ? data.foodsToAvoid
+            .map(food => typeof food === 'string' ? food.trim() : '')
             .filter(Boolean)
         : []
     };
@@ -174,7 +194,7 @@ interface FormOption {
 const formSchema = z.object({
   dietaryRestrictions: z.array(z.string()).default([]),
   favoriteCuisines: z.array(z.string()).default([]),
-  allergens: z.array(z.string()).default([]),
+  foodsToAvoid: z.array(z.string()).default([]),
   cookingSkillLevel: z.string().default('beginner'),
   favoriteFoods: z.array(z.string()).default(['', '', '']).optional(),
   healthGoals: z.array(z.string()).default([]),
@@ -223,13 +243,19 @@ const cuisineOptions: FormOption[] = [
   { id: 'moroccan', label: 'Moroccan', description: 'Tagines, couscous, aromatic spices' }
 ];
 
-const allergenOptions: FormOption[] = [
+const commonFoodsToAvoid: FormOption[] = [
   { id: 'nuts', label: 'Nuts', description: 'Tree nuts and peanuts' },
   { id: 'shellfish', label: 'Shellfish', description: 'Shrimp, crab, lobster' },
   { id: 'dairy', label: 'Dairy', description: 'Milk and milk products' },
   { id: 'eggs', label: 'Eggs', description: 'All egg products' },
   { id: 'soy', label: 'Soy', description: 'Soybeans and soy products' },
-  { id: 'wheat', label: 'Wheat', description: 'Wheat and wheat products' }
+  { id: 'wheat', label: 'Wheat', description: 'Wheat and wheat products' },
+  { id: 'beef', label: 'Beef', description: 'All beef products' },
+  { id: 'pork', label: 'Pork', description: 'All pork products' },
+  { id: 'poultry', label: 'Poultry', description: 'Chicken, turkey, etc.' },
+  { id: 'fish', label: 'Fish', description: 'All fish' },
+  { id: 'seafood', label: 'Seafood', description: 'All seafood' },
+  { id: 'gluten', label: 'Gluten', description: 'Wheat, barley, rye' }
 ];
 
 const UserPreferencesPage: React.FC = () => {
@@ -285,13 +311,66 @@ const UserPreferencesPage: React.FC = () => {
       form.trigger('favoriteCuisines');
     }, 0);
   };
+
+  const handleAddFoodToAvoid = (e: React.FormEvent) => {
+    e.preventDefault();
+    const food = customFoodToAvoid.trim();
+    if (!food) return;
+    
+    const currentFoods = form.getValues('foodsToAvoid') || [];
+    const foodExists = currentFoods.some(
+      (f: string) => f.toLowerCase() === food.toLowerCase()
+    );
+    
+    if (!foodExists) {
+      const newFoods = [...currentFoods, food];
+      form.setValue('foodsToAvoid', newFoods, { 
+        shouldDirty: true,
+        shouldValidate: true 
+      });
+      setCustomFoodToAvoid('');
+    } else {
+      setCustomFoodToAvoid('');
+    }
+  };
+  
+  const removeFoodToAvoid = (foodToRemove: string) => {
+    const currentFoods = form.getValues('foodsToAvoid') || [];
+    const newFoods = currentFoods.filter(f => f !== foodToRemove);
+    
+    form.setValue('foodsToAvoid', newFoods, { 
+      shouldDirty: true, 
+      shouldValidate: true 
+    });
+    
+    setTimeout(() => {
+      form.trigger('foodsToAvoid');
+    }, 0);
+  };
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [customCuisine, setCustomCuisine] = useState('');
+  const [customFoodToAvoid, setCustomFoodToAvoid] = useState('');
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
-    defaultValues: formSchema.parse({}) // Use schema defaults
+    defaultValues: {
+      dietaryRestrictions: [],
+      favoriteCuisines: [],
+      foodsToAvoid: [], // Initialize with empty array
+      cookingSkillLevel: 'beginner',
+      favoriteFoods: ['', '', ''],
+      healthGoals: [],
+      maxCookingTime: '30 minutes',
+      includeBreakfast: true,
+      includeLunch: true,
+      includeDinner: true,
+      includeSnacks: false,
+      targetCalories: 2000,
+      targetProtein: 150,
+      targetCarbs: 200,
+      targetFat: 65
+    }
   });
 
   // Load user preferences on mount
@@ -306,25 +385,24 @@ const UserPreferencesPage: React.FC = () => {
         const preferences = await loadUserPreferences();
         
         // Prepare form values with proper defaults
-        const formValues = {
-          ...preferences,
-          // Ensure arrays are properly initialized
+        const formValues: FormValues = {
+          // Initialize with defaults and override with saved preferences
           dietaryRestrictions: Array.isArray(preferences.dietaryRestrictions) 
             ? preferences.dietaryRestrictions 
             : [],
           favoriteCuisines: Array.isArray(preferences.favoriteCuisines)
             ? preferences.favoriteCuisines
             : [],
-          allergens: Array.isArray(preferences.allergens) 
-            ? preferences.allergens 
+          foodsToAvoid: Array.isArray(preferences.foodsToAvoid)
+            ? preferences.foodsToAvoid
             : [],
           healthGoals: Array.isArray(preferences.healthGoals) 
             ? preferences.healthGoals 
             : [],
           favoriteFoods: Array.isArray(preferences.favoriteFoods) 
-            ? preferences.favoriteFoods 
+            ? [...preferences.favoriteFoods, '', '', ''].slice(0, 3)
             : ['', '', ''],
-          cookingSkillLevel: preferences.cookingSkillLevel || 'beginner',
+          cookingSkillLevel: (preferences.cookingSkillLevel as 'beginner' | 'intermediate' | 'advanced') || 'beginner',
           maxCookingTime: preferences.maxCookingTime || '30 minutes',
           includeBreakfast: preferences.includeBreakfast !== false,
           includeLunch: preferences.includeLunch !== false,
@@ -380,8 +458,9 @@ const UserPreferencesPage: React.FC = () => {
               .map((c: string) => c.trim())
               .filter(Boolean))]
           : [],
-        allergens: Array.isArray(currentValues.allergens) 
-          ? currentValues.allergens.filter(Boolean) 
+        // Preserve foodsToAvoid exactly as is
+        foodsToAvoid: Array.isArray(currentValues.foodsToAvoid) 
+          ? currentValues.foodsToAvoid
           : [],
         cookingSkillLevel: (currentValues.cookingSkillLevel as 'beginner' | 'intermediate' | 'advanced') || 'beginner',
         favoriteFoods: Array.isArray(currentValues.favoriteFoods)
@@ -406,9 +485,14 @@ const UserPreferencesPage: React.FC = () => {
       // Save with proper structure that backend expects
       await saveUserPreferences(cleanedData);
       
-      // Force a refresh of the form to ensure state is in sync
-      const prefs = await loadUserPreferences();
-      form.reset(prefs);
+      // Update the form without resetting the entire form state
+      form.setValue('foodsToAvoid', cleanedData.foodsToAvoid || [], {
+        shouldDirty: false,
+        shouldValidate: true
+      });
+      
+      // Force a re-render to update the UI
+      form.trigger('foodsToAvoid');
       
       toast({
         title: "Success",
@@ -430,7 +514,10 @@ const UserPreferencesPage: React.FC = () => {
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin" />
+        <div className="flex flex-col items-center space-y-4">
+          <Loader2 className="h-8 w-8 animate-spin text-gray-500" />
+          <p className="text-gray-500">Loading your preferences...</p>
+        </div>
       </div>
     );
   }
@@ -627,48 +714,116 @@ const UserPreferencesPage: React.FC = () => {
                         <button 
                           type="button" 
                           onClick={() => removeCuisine(cuisine)}
-                          className="text-gray-500 hover:text-red-500"
+                          className="text-gray-500 hover:text-red-500 ml-1"
                         >
                           ×
                         </button>
                       </div>
-                    ))}
+                      ))
+                    }
                   </div>
                 </div>
               </div>
 
-              {/* Allergens */}
+              {/* Foods to Avoid */}
               <div>
-                <h2 className="text-xl font-medium mb-4">Allergens to Avoid</h2>
-                <p className="text-sm text-gray-600 mb-4">Select any food allergies</p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {allergenOptions.map((option) => (
+                <h2 className="text-xl font-medium mb-4">Foods to Avoid</h2>
+                <p className="text-sm text-gray-600 mb-4">Select any foods you want to avoid</p>
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  {[
+                    { id: 'nuts', label: 'Nuts' },
+                    { id: 'dairy', label: 'Dairy' },
+                    { id: 'gluten', label: 'Gluten' },
+                    { id: 'shellfish', label: 'Shellfish' },
+                    { id: 'eggs', label: 'Eggs' },
+                    { id: 'soy', label: 'Soy' },
+                    { id: 'fish', label: 'Fish' },
+                    { id: 'pork', label: 'Pork' },
+                    { id: 'beef', label: 'Beef' },
+                    { id: 'poultry', label: 'Poultry' },
+                  ].map((option) => (
                     <FormField
                       key={option.id}
                       control={form.control}
-                      name="allergens"
+                      name="foodsToAvoid"
                       render={({ field }) => (
-                        <FormItem className="flex items-center space-x-3 space-y-0">
+                        <FormItem className="flex flex-row items-start space-x-3 space-y-0">
                           <FormControl>
                             <Checkbox
-                              checked={field.value?.includes(option.id)}
+                              checked={Array.isArray(field.value) && field.value.includes(option.id)}
                               onCheckedChange={(checked) => {
+                                const currentValue = Array.isArray(field.value) ? field.value : [];
                                 return checked
-                                  ? field.onChange([...field.value, option.id])
+                                  ? field.onChange([...currentValue, option.id])
                                   : field.onChange(
-                                      field.value?.filter((value: string) => value !== option.id)
-                                    );
+                                      currentValue.filter(
+                                        (value: string) => value !== option.id
+                                      )
+                                    )
                               }}
                             />
                           </FormControl>
-                          <FormLabel className="font-normal">
-                            {option.label}
-                            <p className="text-xs text-gray-500">{option.description}</p>
-                          </FormLabel>
+                          <FormLabel>{option.label}</FormLabel>
                         </FormItem>
                       )}
                     />
                   ))}
+                </div>
+
+                {/* Custom Food to Avoid Input */}
+                <div className="mt-4">
+                  <div className="flex gap-2">
+                    <Input
+                      type="text"
+                      placeholder="Add a custom food to avoid..."
+                      value={customFoodToAvoid}
+                      onChange={(e) => setCustomFoodToAvoid(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleAddFoodToAvoid(e);
+                        }
+                      }}
+                      className="flex-1"
+                    />
+                    <Button 
+                      type="button"
+                      variant="outline"
+                      onClick={handleAddFoodToAvoid}
+                      disabled={!customFoodToAvoid.trim()}
+                    >
+                      Add
+                    </Button>
+                  </div>
+                  
+                  {/* Display selected custom foods to avoid */}
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {Array.isArray(form.watch('foodsToAvoid')) && form.watch('foodsToAvoid')
+                      .filter(food => 
+                        food && 
+                        typeof food === 'string' &&
+                        ![
+                          'nuts', 'dairy', 'gluten', 'shellfish', 'eggs', 
+                          'soy', 'fish', 'pork', 'beef', 'poultry'
+                        ].includes(food.toLowerCase())
+                      )
+                      .map((food) => (
+                        <div 
+                          key={food} 
+                          className="bg-gray-100 px-3 py-1 rounded-full text-sm flex items-center gap-1"
+                        >
+                          {food}
+                          <button 
+                            type="button" 
+                            onClick={() => removeFoodToAvoid(food)}
+                            className="text-gray-500 hover:text-red-500 ml-1"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))
+                    }
+                  </div>
                 </div>
               </div>
 

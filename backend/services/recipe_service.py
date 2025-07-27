@@ -84,28 +84,132 @@ class RecipeService:
         return False
         
     def _matches_cuisine(self, recipe: Dict[str, Any], cuisines: List[str]) -> bool:
-        """Check if a recipe matches any of the specified cuisines."""
+        """
+        Check if a recipe matches any of the specified cuisines.
+        All recipes are included by default if no cuisine filter is applied.
+        The 'international' tag is always excluded from matching.
+        """
+        if not cuisines:
+            return True
+            
+        # Normalize the input cuisines (convert to lowercase and strip whitespace)
+        cuisines = [c.lower().strip() for c in cuisines if c and isinstance(c, str)]
+        
+        # If no valid cuisines after normalization, include all recipes
         if not cuisines:
             return True
             
         # Get cuisines from various possible fields in the recipe
         recipe_cuisines = set()
         
-        if 'cuisines' in recipe and isinstance(recipe['cuisines'], list):
-            recipe_cuisines.update(c.lower() for c in recipe['cuisines'] if isinstance(c, str))
-        if 'cuisine' in recipe and isinstance(recipe['cuisine'], list):
-            recipe_cuisines.update(c.lower() for c in recipe['cuisine'] if isinstance(c, str))
-        if 'cuisine' in recipe and isinstance(recipe['cuisine'], str):
-            recipe_cuisines.add(recipe['cuisine'].lower())
+        # Check all possible cuisine fields in the recipe
+        if 'cuisines' in recipe and isinstance(recipe['cuisines'], list) and recipe['cuisines']:
+            recipe_cuisines.update(c.lower().strip() 
+                                for c in recipe['cuisines'] 
+                                if isinstance(c, str) and c.lower().strip() != 'international')
+        if 'cuisine' in recipe and isinstance(recipe['cuisine'], list) and recipe['cuisine']:
+            recipe_cuisines.update(c.lower().strip() 
+                                for c in recipe['cuisine'] 
+                                if isinstance(c, str) and c.lower().strip() != 'international')
+        if 'cuisine' in recipe and isinstance(recipe['cuisine'], str) and recipe['cuisine'].strip():
+            cuisine = recipe['cuisine'].lower().strip()
+            if cuisine != 'international':
+                recipe_cuisines.add(cuisine)
+        
+        # If no cuisine information is available or only 'international' was present, include the recipe in results
+    
             
-        # Check if any of the recipe's cuisines match the filter
+        # Debug log
+        print(f"Matching cuisines for {recipe.get('title', 'Unknown')}:")
+        print(f"- Looking for: {cuisines}")
+        print(f"- Recipe has: {recipe_cuisines}")
+            
+        # Check for exact matches first (case-insensitive)
         for cuisine in cuisines:
-            if not cuisine:
-                continue
-            cuisine_lower = cuisine.lower()
+            if cuisine in recipe_cuisines:
+                print(f"✓ Exact match found: {cuisine}")
+                return True
+                
+        # If no exact matches, check for partial matches
+        for cuisine in cuisines:
             for recipe_cuisine in recipe_cuisines:
-                if cuisine_lower in recipe_cuisine or recipe_cuisine in cuisine_lower:
+                if cuisine in recipe_cuisine or recipe_cuisine in cuisine:
+                    print(f"✓ Partial match found: '{cuisine}' in '{recipe_cuisine}'")
                     return True
+        
+        print("✗ No cuisine matches found")
+        return False
+        
+    def _contains_foods_to_avoid(self, recipe: Dict[str, Any], foods_to_avoid: List[str]) -> bool:
+        """
+        Check if a recipe contains any of the foods to avoid.
+        
+        Args:
+            recipe: The recipe to check
+            foods_to_avoid: List of food items to avoid (case-insensitive)
+            
+        Returns:
+            bool: True if any food to avoid is found in the recipe, False otherwise
+        """
+        if not foods_to_avoid:
+            return False
+            
+        # Get all ingredients from the recipe
+        ingredients = []
+        if 'ingredients' in recipe and isinstance(recipe['ingredients'], list):
+            for ing in recipe['ingredients']:
+                if isinstance(ing, dict) and 'name' in ing:
+                    ingredients.append(ing['name'].lower())
+                elif isinstance(ing, str):
+                    ingredients.append(ing.lower())
+        
+        # Also check ingredientLines if available
+        if 'ingredientLines' in recipe and isinstance(recipe['ingredientLines'], list):
+            ingredients.extend(ing.lower() for ing in recipe['ingredientLines'] if isinstance(ing, str))
+        
+        # Clean and normalize ingredients
+        cleaned_ingredients = []
+        for ing in ingredients:
+            # Remove measurements and special characters
+            ing = re.sub(r'^\d+\s*(\d+/\d+)?\s*(tsp|tbsp|cup|pound|oz|g|kg|ml|l|liter|liters|teaspoon|tablespoon|cups|pounds|ounces|grams|kilograms|milliliters)?\s*', '', ing)
+            ing = re.sub(r'[^\w\s]', ' ', ing).strip()
+            if ing:
+                cleaned_ingredients.append(ing)
+        
+        # Debug log
+        recipe_name = recipe.get('title', 'Unknown Recipe')
+        logger.debug(f"\n=== Checking recipe: {recipe_name} ===")
+        logger.debug(f"Foods to avoid: {foods_to_avoid}")
+        logger.debug(f"Recipe ingredients: {cleaned_ingredients}")
+        
+        # Check if any food to avoid is in the ingredients
+        for food in foods_to_avoid:
+            if not food:
+                continue
+                
+            food_lower = food.lower().strip()
+            logger.debug(f"Checking for food: {food_lower}")
+            
+            # Check for exact matches first
+            for ing in cleaned_ingredients:
+                if food_lower == ing:
+                    logger.debug(f"❌ Exact match found: '{food_lower}' in recipe")
+                    return True
+            
+            # Then check for partial matches (whole word only)
+            for ing in cleaned_ingredients:
+                # Split into words and check each word
+                words = ing.split()
+                if any(food_lower == word for word in words):
+                    logger.debug(f"❌ Found whole word match: '{food_lower}' in '{ing}'")
+                    return True
+                
+                # Check for partial matches within words (but not too short words)
+                if len(food_lower) > 3 and food_lower in ing:
+                    logger.debug(f"❌ Found partial match: '{food_lower}' in '{ing}'")
+                    return True
+        
+        logger.debug(f"✅ No foods to avoid found in recipe: {recipe_name}")
         return False
         
     def _matches_dietary_restrictions(self, recipe: Dict[str, Any], restrictions: List[str]) -> bool:
@@ -152,7 +256,8 @@ class RecipeService:
     async def search_recipes(self, query: str = "", ingredient: str = "", 
                            offset: int = 0, limit: int = 1000,
                            cuisines: List[str] = None, 
-                           dietary_restrictions: List[str] = None) -> List[Dict[str, Any]]:
+                           dietary_restrictions: List[str] = None,
+                           foods_to_avoid: List[str] = None) -> List[Dict[str, Any]]:
         """
         Search recipes from local cache with filtering.
         
@@ -161,11 +266,21 @@ class RecipeService:
             ingredient: Filter by ingredient name
             offset: Pagination offset
             limit: Maximum number of results to return (default: 1000)
+            cuisines: List of cuisines to filter by
+            dietary_restrictions: List of dietary restrictions to filter by
+            foods_to_avoid: List of foods to exclude from results
             
         Returns:
             List of filtered recipe dictionaries from local cache
         """
+        # Normalize inputs
+        cuisines = [c.lower().strip() for c in cuisines] if cuisines else []
+        dietary_restrictions = [dr.lower().strip() for dr in dietary_restrictions] if dietary_restrictions else []
+        foods_to_avoid = [fa.lower().strip() for fa in foods_to_avoid] if foods_to_avoid else []
+        
         logger.info(f"Searching recipes with query='{query}', ingredient='{ingredient}'")
+        logger.info(f"Filters - Cuisines: {cuisines}, Dietary Restrictions: {dietary_restrictions}")
+        logger.info(f"Foods to avoid: {foods_to_avoid}")
         
         # Get all recipes from cache
         all_recipes = self.recipe_cache.get_cached_recipes()
@@ -178,18 +293,48 @@ class RecipeService:
         
         # Filter recipes based on query, ingredient, cuisine, and dietary restrictions
         filtered_recipes = []
-        for recipe in all_recipes:
+        total_recipes = len(all_recipes)
+        
+        logger.info(f"\n=== Starting recipe filtering ===")
+        logger.info(f"Total recipes to process: {total_recipes}")
+        
+        for idx, recipe in enumerate(all_recipes, 1):
             if not isinstance(recipe, dict) or 'id' not in recipe:
+                logger.warning(f"Skipping invalid recipe at index {idx}")
                 continue
                 
-            # Check if recipe matches all criteria
+            recipe_name = recipe.get('title', 'Unknown Recipe')
+            recipe_id = recipe.get('id', 'unknown')
+            
+            logger.debug(f"\n[{idx}/{total_recipes}] Processing: {recipe_name} (ID: {recipe_id})")
+            
+            # Skip if recipe contains any foods to avoid
+            if foods_to_avoid:
+                contains_bad_food = self._contains_foods_to_avoid(recipe, foods_to_avoid)
+                if contains_bad_food:
+                    logger.info(f"❌ Excluding recipe due to containing foods to avoid: {recipe_name}")
+                    continue
+            
+            # Check other criteria
             matches_query = self._matches_query(recipe, query)
             has_ingredient = self._contains_ingredient(recipe, ingredient)
-            matches_cuisine = self._matches_cuisine(recipe, cuisines or [])
-            matches_diet = self._matches_dietary_restrictions(recipe, dietary_restrictions or [])
+            matches_cuisine = self._matches_cuisine(recipe, cuisines)
+            matches_diet = self._matches_dietary_restrictions(recipe, dietary_restrictions)
             
+            # Include recipe only if it matches all criteria
             if all([matches_query, has_ingredient, matches_cuisine, matches_diet]):
+                logger.debug(f"✅ Including recipe: {recipe_name}")
                 filtered_recipes.append(recipe)
+            else:
+                logger.debug(f"❌ Excluding recipe - Criteria not met: {recipe_name}")
+                logger.debug(f"  - Matches query: {matches_query}")
+                logger.debug(f"  - Has ingredient: {has_ingredient}")
+                logger.debug(f"  - Matches cuisine: {matches_cuisine}")
+                logger.debug(f"  - Matches diet: {matches_diet}")
+        
+        logger.info(f"\n=== Filtering complete ===")
+        logger.info(f"Total recipes processed: {total_recipes}")
+        logger.info(f"Recipes after filtering: {len(filtered_recipes)}")
         
         # Apply offset and limit
         start_idx = min(offset, len(filtered_recipes))

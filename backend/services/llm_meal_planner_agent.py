@@ -1,14 +1,64 @@
 import os
 import json
 import requests
-from typing import Dict, List, Optional, Any
-from datetime import datetime, timedelta
-import logging
+import sys
+import time
 import re
+import logging
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Dict, List, Optional, Any, Callable
+from functools import wraps
+
+# Add the backend directory to the Python path
+backend_dir = str(Path(__file__).parent.parent)
+if backend_dir not in sys.path:
+    sys.path.insert(0, backend_dir)
+
+# Now import local modules
+from utils.cache_utils import get_llm_cache, cached_llm_response
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+# Create console handler with a higher log level
+ch = logging.StreamHandler()
+ch.setLevel(logging.INFO)
+
+# Create formatter and add it to the handlers
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+ch.setFormatter(formatter)
+
+# Add the handlers to the logger
+if not logger.handlers:
+    logger.addHandler(ch)
+
+# Constants
+MAX_RETRIES = 3
+REQUEST_TIMEOUT = 30  # seconds
+
+# Initialize cache
+llm_cache = get_llm_cache()
+
+def retry_on_failure(max_retries: int = 3, delay: float = 1.0):
+    """Decorator to retry a function on failure."""
+    def decorator(func: Callable) -> Callable:
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            last_exception = None
+            for attempt in range(max_retries):
+                try:
+                    return func(*args, **kwargs)
+                except requests.exceptions.RequestException as e:
+                    last_exception = e
+                    logger.warning(f"Attempt {attempt + 1} failed: {str(e)}")
+                    if attempt < max_retries - 1:
+                        time.sleep(delay * (2 ** attempt))  # Exponential backoff
+            logger.error(f"All {max_retries} attempts failed")
+            raise last_exception or Exception("Unknown error occurred")
+        return wrapper
+    return decorator
 
 class LLMMealPlannerAgent:
     def __init__(self):
@@ -43,6 +93,7 @@ class LLMMealPlannerAgent:
         # Fallback to rule-based
         return 'fallback'
     
+    @cached_llm_response(llm_cache)
     def generate_weekly_meal_plan(self, preferences: Dict[str, Any]) -> Dict[str, Any]:
         """
         Generate a comprehensive weekly meal plan using free LLM
@@ -53,45 +104,65 @@ class LLMMealPlannerAgent:
         Returns:
             Dict containing the weekly meal plan with recipes and details
         """
-        print(f'🔥 LLM_AGENT: generate_weekly_meal_plan called with preferences: {preferences}')
-        print(f'🔥 LLM_AGENT: Using service: {self.service}')
+        logger.info('Generate weekly meal plan called with preferences')
+        logger.debug(f'Preferences: {json.dumps(preferences, indent=2)}')
+        
+        start_time = time.time()
         
         try:
+            # Select the appropriate generation method based on available services
             if self.service == 'ollama':
-                return self._generate_with_ollama(preferences)
+                logger.info("Using Ollama for meal plan generation")
+                plan = self._generate_with_ollama(preferences)
             elif self.service == 'huggingface':
-                return self._generate_with_huggingface(preferences)
+                logger.info("Using Hugging Face for meal plan generation")
+                plan = self._generate_with_huggingface(preferences)
             else:
-                logger.info("Using fallback meal plan generation")
-                return self._generate_fallback_meal_plan(preferences)
-                
+                logger.warning("No LLM service available, using fallback meal plan")
+                plan = self._generate_fallback_meal_plan(preferences)
+            
+            # Log performance metrics
+            duration = time.time() - start_time
+            logger.info(f"Meal plan generated in {duration:.2f} seconds")
+            
+            return plan
+            
         except Exception as e:
-            logger.error(f"Error generating meal plan: {str(e)}")
+            logger.error(f"Error generating meal plan: {str(e)}", exc_info=True)
+            logger.info("Falling back to default meal plan")
             return self._generate_fallback_meal_plan(preferences)
     
+    @retry_on_failure(max_retries=MAX_RETRIES)
     def _generate_with_ollama(self, preferences: Dict[str, Any]) -> Dict[str, Any]:
         """Generate meal plan using free Ollama LLM"""
+        logger.info("Building meal plan prompt...")
+        prompt = self._build_meal_plan_prompt(preferences)
+        logger.debug(f"Prompt length: {len(prompt)} characters")
+        
+        request_data = {
+            "model": self.ollama_model,
+            "prompt": prompt,
+            "stream": False,
+            "options": {
+                "temperature": 0.7,
+                "top_p": 0.9,
+                "max_tokens": 2000,
+                "num_ctx": 4096
+            }
+        }
+        
         try:
-            print("🔍 Building meal plan prompt...")
-            prompt = self._build_meal_plan_prompt(preferences)
-            print(f"📝 Prompt length: {len(prompt)} characters")
+            logger.info(f"Sending request to Ollama at {self.ollama_url}")
+            start_time = time.time()
             
-            print("🚀 Sending request to Ollama...")
             response = requests.post(
                 f"{self.ollama_url}/api/generate",
-                json={
-                    "model": self.ollama_model,
-                    "prompt": prompt,
-                    "stream": False,
-                    "options": {
-                        "temperature": 0.7,
-                        "top_p": 0.9,
-                        "max_tokens": 2000,
-                        "num_ctx": 4096
-                    }
-                },
-                timeout=60
+                json=request_data,
+                timeout=REQUEST_TIMEOUT
             )
+            
+            duration = time.time() - start_time
+            logger.info(f"Received Ollama response in {duration:.2f} seconds")
             
             print(f"✅ Received response with status code: {response.status_code}")
             
@@ -145,36 +216,47 @@ class LLMMealPlannerAgent:
             traceback.print_exc()
             return self._generate_fallback_meal_plan(preferences)
     
+    @retry_on_failure(max_retries=MAX_RETRIES)
     def _generate_with_huggingface(self, preferences: Dict[str, Any]) -> Dict[str, Any]:
         """Generate meal plan using Hugging Face free inference API"""
-        try:
-            prompt = self._build_simplified_prompt(preferences)
-            print(f'🔥 HUGGING_FACE: Generated prompt length: {len(prompt)} characters')
-            print(f'🔥 HUGGING_FACE: Prompt preview (first 500 chars): {prompt[:500]}...')
+        if not self.huggingface_api_key:
+            logger.warning("No Hugging Face API key found, using fallback")
+            return self._generate_fallback_meal_plan(preferences)
             
-            headers = {
-                "Authorization": f"Bearer {self.huggingface_api_key}",
-                "Content-Type": "application/json"
+        prompt = self._build_simplified_prompt(preferences)
+        logger.debug(f"Hugging Face prompt length: {len(prompt)} characters")
+        
+        headers = {
+            "Authorization": f"Bearer {self.huggingface_api_key}",
+            "Content-Type": "application/json"
+        }
+        
+        # Use a free text generation model
+        api_url = "https://api-inference.huggingface.co/models/microsoft/DialoGPT-medium"
+        
+        request_data = {
+            "inputs": prompt,
+            "parameters": {
+                "max_length": 1000,
+                "temperature": 0.7,
+                "do_sample": True,
+                "return_full_text": False
             }
-            
-            # Use a free text generation model
-            api_url = f"https://api-inference.huggingface.co/models/microsoft/DialoGPT-medium"
-            print(f'🔥 HUGGING_FACE: Sending request to {api_url}')
-            print(f'🔥 HUGGING_FACE: Using API key: {"Yes" if self.huggingface_api_key else "No"}')
+        }
+        
+        try:
+            logger.info(f"Sending request to Hugging Face API: {api_url}")
+            start_time = time.time()
             
             response = requests.post(
                 api_url,
                 headers=headers,
-                json={
-                    "inputs": prompt,
-                    "parameters": {
-                        "max_length": 1000,
-                        "temperature": 0.7,
-                        "do_sample": True
-                    }
-                },
-                timeout=30
+                json=request_data,
+                timeout=REQUEST_TIMEOUT
             )
+            
+            duration = time.time() - start_time
+            logger.info(f"Received Hugging Face response in {duration:.2f} seconds")
             
             print(f'🔥 HUGGING_FACE: Response status code: {response.status_code}')
             

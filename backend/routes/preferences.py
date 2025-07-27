@@ -38,6 +38,7 @@ def save_user_preferences():
         processed_preferences = {
             'dietaryRestrictions': preferences_data.get('dietaryRestrictions', []),
             'favoriteCuisines': preferences_data.get('favoriteCuisines', []) or ["International"],
+            'foodsToAvoid': preferences_data.get('foodsToAvoid', []),  # Add foodsToAvoid
             'allergens': preferences_data.get('allergens', []),
             'cookingSkillLevel': preferences_data.get('cookingSkillLevel', "beginner"),
             'healthGoals': preferences_data.get('healthGoals', ["General wellness"]),
@@ -97,6 +98,7 @@ def get_user_preferences():
                 "preferences": {
                     "dietaryRestrictions": [],
                     "favoriteCuisines": ["International"],
+                    "foodsToAvoid": [],
                     "allergens": [],
                     "cookingSkillLevel": "beginner",
                     "healthGoals": ["General wellness"],
