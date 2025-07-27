@@ -27,6 +27,10 @@ type UserPreferences = {
   includeLunch?: boolean;
   includeDinner?: boolean;
   includeSnacks?: boolean;
+  targetCalories?: number;
+  targetProtein?: number;
+  targetCarbs?: number;
+  targetFat?: number;
   [key: string]: any; // Add index signature for additional properties
 };
 
@@ -179,7 +183,12 @@ const formSchema = z.object({
   includeBreakfast: z.boolean().default(true),
   includeLunch: z.boolean().default(true),
   includeDinner: z.boolean().default(true),
-  includeSnacks: z.boolean().default(false)
+  includeSnacks: z.boolean().default(false),
+  // Nutritional targets
+  targetCalories: z.number().min(0).max(10000).default(2000),
+  targetProtein: z.number().min(0).max(1000).default(150),
+  targetCarbs: z.number().min(0).max(1000).default(200),
+  targetFat: z.number().min(0).max(500).default(65)
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -254,13 +263,8 @@ const UserPreferencesPage: React.FC = () => {
       // Clear the input field
       setCustomCuisine('');
       
-      // Force form to re-render and validate
-      form.trigger('favoriteCuisines').then(() => {
-        // Manually trigger save after a short delay
-        setTimeout(() => {
-          form.handleSubmit(onSubmit)();
-        }, 100);
-      });
+      // Just update the form state, don't auto-save here
+      form.trigger('favoriteCuisines');
     } else {
       // If cuisine already exists, just clear the input
       setCustomCuisine('');
@@ -361,33 +365,45 @@ const UserPreferencesPage: React.FC = () => {
     try {
       setIsSaving(true);
       
+      // Get current form state to ensure we have the latest values
+      const currentValues = form.getValues();
+      console.log('Current form values before submit:', currentValues);
+      
       // Clean up the data before sending
       const cleanedData: UserPreferences = {
-        dietaryRestrictions: Array.isArray(formData.dietaryRestrictions) 
-          ? formData.dietaryRestrictions.filter(Boolean) 
+        dietaryRestrictions: Array.isArray(currentValues.dietaryRestrictions) 
+          ? currentValues.dietaryRestrictions.filter(Boolean) 
           : [],
-        favoriteCuisines: Array.isArray(formData.favoriteCuisines) 
-          ? [...new Set(formData.favoriteCuisines.filter(Boolean).map(c => c.trim()))]
+        favoriteCuisines: Array.isArray(currentValues.favoriteCuisines) 
+          ? [...new Set(currentValues.favoriteCuisines
+              .filter((c: any) => c && typeof c === 'string')
+              .map((c: string) => c.trim())
+              .filter(Boolean))]
           : [],
-        allergens: Array.isArray(formData.allergens) 
-          ? formData.allergens.filter(Boolean) 
+        allergens: Array.isArray(currentValues.allergens) 
+          ? currentValues.allergens.filter(Boolean) 
           : [],
-        cookingSkillLevel: formData.cookingSkillLevel as 'beginner' | 'intermediate' | 'advanced',
-        favoriteFoods: Array.isArray(formData.favoriteFoods)
-          ? formData.favoriteFoods.filter(Boolean).map(f => f.trim())
+        cookingSkillLevel: (currentValues.cookingSkillLevel as 'beginner' | 'intermediate' | 'advanced') || 'beginner',
+        favoriteFoods: Array.isArray(currentValues.favoriteFoods)
+          ? currentValues.favoriteFoods.filter(Boolean).map((f: any) => f.trim())
           : [],
-        healthGoals: Array.isArray(formData.healthGoals)
-          ? formData.healthGoals.filter(Boolean)
+        healthGoals: Array.isArray(currentValues.healthGoals)
+          ? currentValues.healthGoals.filter(Boolean)
           : [],
-        maxCookingTime: formData.maxCookingTime || '30 minutes',
-        includeBreakfast: formData.includeBreakfast,
-        includeLunch: formData.includeLunch,
-        includeDinner: formData.includeDinner,
-        includeSnacks: formData.includeSnacks
+        maxCookingTime: currentValues.maxCookingTime || '30 minutes',
+        includeBreakfast: currentValues.includeBreakfast !== false,
+        includeLunch: currentValues.includeLunch !== false,
+        includeDinner: currentValues.includeDinner !== false,
+        includeSnacks: !!currentValues.includeSnacks,
+        targetCalories: currentValues.targetCalories || 2000,
+        targetProtein: currentValues.targetProtein || 150,
+        targetCarbs: currentValues.targetCarbs || 200,
+        targetFat: currentValues.targetFat || 65
       };
       
       console.log('Submitting preferences:', cleanedData);
       
+      // Save with proper structure that backend expects
       await saveUserPreferences(cleanedData);
       
       // Force a refresh of the form to ensure state is in sync
@@ -536,25 +552,24 @@ const UserPreferencesPage: React.FC = () => {
                 <h2 className="text-xl font-medium mb-4">Favorite Cuisines</h2>
                 <p className="text-sm text-gray-600 mb-4">Choose cuisines you enjoy</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {cuisineOptions.map((option) => {
-                    const field = form.getFieldState('favoriteCuisines');
-                    const currentValue = form.getValues('favoriteCuisines') || [];
-                    
-                    return (
-                      <FormField
-                        key={option.id}
-                        control={form.control}
-                        name="favoriteCuisines"
-                        render={() => (
+                  {cuisineOptions.map((option) => (
+                    <FormField
+                      key={option.id}
+                      control={form.control}
+                      name="favoriteCuisines"
+                      render={({ field }) => {
+                        const isChecked = field.value?.includes(option.id) || false;
+                        return (
                           <FormItem className="flex items-center space-x-3 space-y-0">
                             <FormControl>
                               <Checkbox
-                                checked={currentValue.includes(option.id)}
+                                checked={isChecked}
                                 onCheckedChange={(checked) => {
+                                  const currentValue = field.value || [];
                                   const newValue = checked
                                     ? [...new Set([...currentValue, option.id])]
                                     : currentValue.filter((value: string) => value !== option.id);
-                                  form.setValue('favoriteCuisines', newValue, { shouldDirty: true });
+                                  field.onChange(newValue);
                                 }}
                               />
                             </FormControl>
@@ -563,30 +578,37 @@ const UserPreferencesPage: React.FC = () => {
                               <p className="text-xs text-gray-500">{option.description}</p>
                             </FormLabel>
                           </FormItem>
-                        )}
-                      />
-                    );
-                  })}
+                        );
+                      }}
+                    />
+                  ))}
                 </div>
                 
                 {/* Custom Cuisine Input */}
                 <div className="mt-4">
-                  <form onSubmit={handleAddCustomCuisine} className="flex gap-2">
+                  <div className="flex gap-2">
                     <Input
                       type="text"
                       placeholder="Add a custom cuisine..."
                       value={customCuisine}
                       onChange={(e) => setCustomCuisine(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleAddCustomCuisine(e);
+                        }
+                      }}
                       className="flex-1"
                     />
                     <Button 
-                      type="submit" 
+                      type="button"
                       variant="outline"
+                      onClick={handleAddCustomCuisine}
                       disabled={!customCuisine.trim()}
                     >
                       Add
                     </Button>
-                  </form>
+                  </div>
                   
                   {/* Display selected custom cuisines */}
                   <div className="flex flex-wrap gap-2 mt-2">

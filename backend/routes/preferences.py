@@ -26,13 +26,18 @@ def save_user_preferences():
         if not data:
             return jsonify({"error": "No preferences data provided"}), 400
         
+        print(f"Received preferences data: {data}")  # Debug log
+        
         # Extract preferences from the request
         preferences_data = data.get('preferences', data)  # Support both formats
+        
+        # Debug log the incoming data
+        print(f"Processing preferences: {preferences_data}")
         
         # Validate and set defaults for preferences
         processed_preferences = {
             'dietaryRestrictions': preferences_data.get('dietaryRestrictions', []),
-            'favoriteCuisines': preferences_data.get('favoriteCuisines', ["International"]),
+            'favoriteCuisines': preferences_data.get('favoriteCuisines', []) or ["International"],
             'allergens': preferences_data.get('allergens', []),
             'cookingSkillLevel': preferences_data.get('cookingSkillLevel', "beginner"),
             'healthGoals': preferences_data.get('healthGoals', ["General wellness"]),
@@ -50,8 +55,14 @@ def save_user_preferences():
             'targetFat': preferences_data.get('targetFat', 65)
         }
         
+        # Debug log before saving
+        print(f"Saving preferences for user {user_id}: {processed_preferences}")
+        
         # Save to ChromaDB
         user_preferences_service.save_preferences(user_id, processed_preferences)
+        
+        # Debug log after saving
+        print(f"Preferences saved successfully for user {user_id}")
         
         response = jsonify({
             "success": True,
@@ -61,6 +72,8 @@ def save_user_preferences():
         
         # Add CORS headers to the response
         response.headers.add('Access-Control-Allow-Origin', 'http://localhost:8081')
+        response.headers.add('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type, Authorization')
         response.headers.add('Access-Control-Allow-Credentials', 'true')
         
         return response, 200

@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
+import { Plus, X } from 'lucide-react';
 
 type FilterOption = {
   value: string;
@@ -49,6 +50,20 @@ export const RecipeFilters = ({
   onDietToggle,
   onClearFilters,
 }: RecipeFiltersProps) => {
+  const [customCuisine, setCustomCuisine] = useState('');
+
+  const handleAddCustomCuisine = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (customCuisine.trim() && !selectedCuisines.includes(customCuisine)) {
+      onCuisineToggle(customCuisine.trim());
+      setCustomCuisine('');
+    }
+  };
+
+  const removeCuisine = (cuisine: string) => {
+    onCuisineToggle(cuisine);
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -78,27 +93,69 @@ export const RecipeFilters = ({
           )}
         </div>
         <ScrollArea className="h-40 pr-2">
-          <div className="space-y-2">
-            {CUISINE_OPTIONS.map((option) => (
-              <div key={option.value} className="flex items-center">
-                <input
-                  type="checkbox"
-                  id={`cuisine-${option.value}`}
-                  checked={selectedCuisines.includes(option.value)}
-                  onChange={() => onCuisineToggle(option.value)}
-                  className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-                />
-                <label
-                  htmlFor={`cuisine-${option.value}`}
-                  className="ml-2 text-sm text-gray-700"
-                >
-                  {option.label}
-                  {option.count !== undefined && (
-                    <span className="ml-1 text-xs text-gray-500">({option.count})</span>
-                  )}
-                </label>
+          <div className="space-y-3">
+            {/* Selected Cuisine Badges */}
+            {selectedCuisines.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-2">
+                {selectedCuisines.map((cuisine) => (
+                  <Badge 
+                    key={cuisine} 
+                    variant="secondary" 
+                    className="flex items-center gap-1"
+                  >
+                    {cuisine}
+                    <button 
+                      type="button" 
+                      onClick={() => removeCuisine(cuisine)}
+                      className="ml-1 hover:text-destructive"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                ))}
               </div>
-            ))}
+            )}
+            
+            {/* Predefined Cuisine Options */}
+            <div className="space-y-2">
+              {CUISINE_OPTIONS.map((option) => (
+                <div key={option.value} className="flex items-center">
+                  <input
+                    type="checkbox"
+                    id={`cuisine-${option.value}`}
+                    checked={selectedCuisines.includes(option.value)}
+                    onChange={() => onCuisineToggle(option.value)}
+                    className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                  />
+                  <label
+                    htmlFor={`cuisine-${option.value}`}
+                    className="ml-2 text-sm text-gray-700"
+                  >
+                    {option.label}
+                  </label>
+                </div>
+              ))}
+            </div>
+            
+            {/* Custom Cuisine Input */}
+            <form onSubmit={handleAddCustomCuisine} className="mt-3 flex gap-2">
+              <Input
+                type="text"
+                value={customCuisine}
+                onChange={(e) => setCustomCuisine(e.target.value)}
+                placeholder="Add custom cuisine..."
+                className="flex-1 text-sm h-9"
+              />
+              <Button 
+                type="submit" 
+                size="sm" 
+                variant="outline"
+                disabled={!customCuisine.trim()}
+                className="h-9"
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            </form>
           </div>
         </ScrollArea>
       </div>

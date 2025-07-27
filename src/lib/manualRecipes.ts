@@ -165,7 +165,22 @@ export const fetchManualRecipes = async (
     
     // Handle diets filter - ensure consistent naming with backend
     if (options.diets?.length) {
-      params.append('diet', options.diets.join(',')); // Changed from 'diets' to 'diet' to match backend
+      // Map frontend diet names to backend-expected values if needed
+      const mappedDiets = options.diets.map(diet => {
+        // Convert to lowercase for case-insensitive comparison
+        const lowerDiet = diet.toLowerCase();
+        if (lowerDiet === 'vegetarian') return 'vegetarian';
+        if (lowerDiet === 'vegan') return 'vegan';
+        if (lowerDiet === 'gluten-free') return 'gluten free';
+        if (lowerDiet === 'dairy-free') return 'dairy free';
+        return diet;
+      });
+      
+      // Join with comma and ensure no empty values
+      const dietParam = mappedDiets.join(',');
+      if (dietParam) {
+        params.append('dietary_restrictions', dietParam);
+      }
     }
     
     const url = `${API_BASE_URL}/get_recipes${params.toString() ? `?${params.toString()}` : ''}`;

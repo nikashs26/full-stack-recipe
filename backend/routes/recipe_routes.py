@@ -39,6 +39,18 @@ def register_recipe_routes(app, recipe_cache):
         offset = int(request.args.get("offset", "0"))
         limit = int(request.args.get("limit", "1000"))  # Default to 1000 results
         
+        # Get cuisine and dietary restrictions filters
+        cuisine_param = request.args.get("cuisine", "")
+        diet_param = request.args.get("dietary_restrictions", "")
+        
+        # Parse comma-separated values
+        cuisines = [c.strip() for c in cuisine_param.split(",") if c.strip()] if cuisine_param else []
+        dietary_restrictions = [d.strip() for d in diet_param.split(",") if d.strip()] if diet_param else []
+        
+        print(f"Cuisines filter: {cuisines}")
+        print(f"Dietary restrictions filter: {dietary_restrictions}")
+        
+        
         print(f"\n=== Recipe Search Request ===")
         print(f"Query: '{query}'")
         print(f"Ingredient: '{ingredient}'")
@@ -46,12 +58,14 @@ def register_recipe_routes(app, recipe_cache):
         print(f"Limit: {limit}")
         
         try:
-            # Search recipes from all sources with pagination
+            # Search recipes from all sources with pagination and filters
             recipes = await recipe_service.search_recipes(
                 query=query,
                 ingredient=ingredient,
                 offset=offset,
-                limit=limit
+                limit=limit,
+                cuisines=cuisines,
+                dietary_restrictions=dietary_restrictions
             )
             
             print(f"Found {len(recipes)} recipes in {time.time() - start_time:.2f}s")
