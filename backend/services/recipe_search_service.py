@@ -408,53 +408,165 @@ class RecipeSearchService:
         
     def _normalize_cuisine(self, cuisine: str, recipe: Optional[Dict[str, Any]] = None) -> str:
         """
-        Normalize and validate cuisine string
+        Normalize and validate cuisine string, ensuring every recipe gets a specific country.
         
         Args:
             cuisine: The cuisine string to normalize
             recipe: Optional recipe dictionary for additional context
             
         Returns:
-            Normalized cuisine string or empty string if invalid
+            Normalized cuisine string, never returns empty string
         """
-        if not cuisine or not isinstance(cuisine, str):
-            if recipe:
-                # Try to detect cuisine from recipe details if no cuisine provided
-                detected = self._detect_cuisine_from_ingredients(recipe)
-                if detected:
-                    return detected
-            return ""
+        # Common ingredient to cuisine mappings
+        INGREDIENT_CUISINE_MAP = {
+            # Italian
+            'pasta': 'Italian', 'risotto': 'Italian', 'pesto': 'Italian', 'pancetta': 'Italian',
+            'prosciutto': 'Italian', 'mozzarella': 'Italian', 'parmesan': 'Italian', 'basil': 'Italian',
+            'oregano': 'Italian', 'balsamic': 'Italian',
+            
+            # Mexican
+            'tortilla': 'Mexican', 'salsa': 'Mexican', 'guacamole': 'Mexican', 'taco': 'Mexican',
+            'quesadilla': 'Mexican', 'enchilada': 'Mexican', 'chipotle': 'Mexican', 'pico de gallo': 'Mexican',
+            
+            # Chinese
+            'soy sauce': 'Chinese', 'hoisin': 'Chinese', 'oyster sauce': 'Chinese', 'bok choy': 'Chinese',
+            'szechuan': 'Chinese', 'sriracha': 'Chinese', 'wonton': 'Chinese', 'dumpling': 'Chinese',
+            
+            # Indian
+            'curry': 'Indian', 'masala': 'Indian', 'tandoori': 'Indian', 'naan': 'Indian',
+            'tikka': 'Indian', 'samosas': 'Indian', 'dal': 'Indian', 'paneer': 'Indian',
+            
+            # Japanese
+            'sushi': 'Japanese', 'miso': 'Japanese', 'wasabi': 'Japanese', 'teriyaki': 'Japanese',
+            'ramen': 'Japanese', 'udon': 'Japanese', 'tempura': 'Japanese',
+            
+            # Thai
+            'lemongrass': 'Thai', 'kaffir lime': 'Thai', 'fish sauce': 'Thai', 'green curry': 'Thai',
+            'pad thai': 'Thai', 'tom yum': 'Thai',
+            
+            # French
+            'baguette': 'French', 'ratatouille': 'French', 'quiche': 'French', 'croissant': 'French',
+            'bechamel': 'French', 'bouillabaisse': 'French',
+            
+            # Mediterranean
+            'hummus': 'Mediterranean', 'falafel': 'Mediterranean', 'tzatziki': 'Mediterranean',
+            'feta': 'Mediterranean', 'olive oil': 'Mediterranean', 'tahini': 'Mediterranean'
+        }
+        
+        # Common categories that can hint at cuisine
+        CATEGORY_CUISINE_MAP = {
+            'pasta': 'Italian', 'noodles': 'Asian', 'curry': 'Indian', 'stir-fry': 'Chinese',
+            'taco': 'Mexican', 'sushi': 'Japanese', 'paella': 'Spanish', 'moussaka': 'Greek',
+            'pho': 'Vietnamese', 'tagine': 'Moroccan', 'risotto': 'Italian', 'dumpling': 'Chinese'
+        }
+        
+        # If we have a valid cuisine, return it
+        if cuisine and isinstance(cuisine, str) and cuisine.lower() not in ['', 'international', 'fusion', 'global']:
+            return cuisine
+            
+        # Try to determine cuisine from recipe details
+        if recipe:
+            # 1. Check recipe cuisines list
+            if 'cuisines' in recipe and isinstance(recipe['cuisines'], list) and recipe['cuisines']:
+                for c in recipe['cuisines']:
+                    if c and isinstance(c, str) and c.lower() not in ['', 'international', 'fusion', 'global']:
+                        return c
+            
+            # 2. Check recipe title and description for cuisine hints
+            title = recipe.get('title', '').lower()
+            description = recipe.get('description', '').lower()
+            
+            for keyword, cuisine in CATEGORY_CUISINE_MAP.items():
+                if keyword in title or keyword in description:
+                    return cuisine
+            
+            # 3. Check ingredients for cuisine hints
+            ingredients = ' '.join([i.get('name', '').lower() for i in recipe.get('ingredients', [])])
+            
+            for keyword, cuisine in INGREDIENT_CUISINE_MAP.items():
+                if keyword in ingredients:
+                    return cuisine
+            
+            # 4. Check dish types or categories
+            for category in ['dishTypes', 'category', 'categories']:
+                if category in recipe and recipe[category]:
+                    if isinstance(recipe[category], str):
+                        for keyword, cuisine in CATEGORY_CUISINE_MAP.items():
+                            if keyword in recipe[category].lower():
+                                return cuisine
+                    elif isinstance(recipe[category], list):
+                        for item in recipe[category]:
+                            if not isinstance(item, str):
+                                continue
+                            for keyword, cuisine in CATEGORY_CUISINE_MAP.items():
+                                if keyword in item.lower():
+                                    return cuisine
+        
+        # If we still don't have a cuisine, make an educated guess based on common ingredients
+        if recipe and 'ingredients' in recipe:
+            ingredients = ' '.join([i.get('name', '').lower() for i in recipe['ingredients']])
+            
+            # Check for common ingredient patterns
+            if 'pasta' in ingredients or 'tomato sauce' in ingredients:
+                return 'Italian'
+            elif 'soy sauce' in ingredients or 'ginger' in ingredients:
+                return 'Chinese'
+            elif 'curry' in ingredients or 'turmeric' in ingredients:
+                return 'Indian'
+            elif 'tortilla' in ingredients or 'avocado' in ingredients:
+                return 'Mexican'
+            elif 'olive oil' in ingredients and 'feta' in ingredients:
+                return 'Mediterranean'
+        
+        # Final fallback - assign based on most common cuisines
+        return 'American'  # Default fallback
             
         # Common cuisine normalization
         cuisine = cuisine.lower().strip()
         
         # Map common variations to standard names
         cuisine_map = {
-            'american': ['american', 'usa', 'united states', 'us'],
-            'italian': ['italian', 'italy'],
-            'mexican': ['mexican', 'mexico'],
-            'chinese': ['chinese', 'china'],
-            'indian': ['indian', 'india'],
+            'american': ['american', 'usa', 'united states', 'us', 'united states of america'],
+            'italian': ['italian', 'italy', 'tuscan', 'sicilian', 'venetian', 'roman'],
+            'mexican': ['mexican', 'mexico', 'tex-mex'],
+            'chinese': ['chinese', 'china', 'cantonese', 'szechuan', 'sichuan'],
+            'indian': ['indian', 'india', 'punjabi', 'south indian', 'north indian'],
             'thai': ['thai', 'thailand'],
-            'japanese': ['japanese', 'japan'],
-            'french': ['french', 'france'],
-            'mediterranean': ['mediterranean', 'mediterranean'],
+            'japanese': ['japanese', 'japan', 'sushi', 'ramen'],
+            'french': ['french', 'france', 'provencal', 'provençal'],
+            'mediterranean': ['mediterranean', 'middle eastern', 'levantine'],
             'greek': ['greek', 'greece'],
-            'spanish': ['spanish', 'spain'],
+            'spanish': ['spanish', 'spain', 'catalan', 'basque'],
             'vietnamese': ['vietnamese', 'vietnam'],
-            'korean': ['korean', 'korea']
+            'korean': ['korean', 'korea'],
+            'caribbean': ['caribbean', 'jamaican', 'trinidadian', 'barbadian'],
+            'latin american': ['latin american', 'latin', 'brazilian', 'peruvian', 'argentinian', 'colombian'],
+            'british': ['british', 'english', 'scottish', 'irish', 'welsh'],
+            'german': ['german', 'germany', 'bavarian'],
+            'african': ['african', 'ethiopian', 'moroccan', 'south african', 'north african']
         }
         
         # Check for matches in the map
         for standard_name, variations in cuisine_map.items():
-            if cuisine in variations:
+            if cuisine in variations or any(cuisine == v for v in variations):
                 return standard_name
                 
-        # If we have a recipe and cuisine is not recognized, try to detect from ingredients
+        # Check for partial matches (e.g., 'south indian' contains 'indian')
+        for standard_name, variations in cuisine_map.items():
+            if any(v in cuisine for v in variations):
+                return standard_name
+                
+        # If we have a recipe and cuisine is still not recognized, try to detect from ingredients
         if recipe and cuisine in ['international', 'fusion', 'global', '']:
             detected = self._detect_cuisine_from_ingredients(recipe)
             if detected:
                 return detected
+        
+        # If we still don't have a match, try to extract from the cuisine string
+        # by looking for known cuisine keywords
+        for standard_name in cuisine_map.keys():
+            if standard_name in cuisine:
+                return standard_name
                 
         # If still no match, return empty string for invalid cuisines
         return "" if cuisine in ['international', 'fusion', 'global', ''] else cuisine

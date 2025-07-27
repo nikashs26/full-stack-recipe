@@ -20,7 +20,7 @@ def test_meal_plan():
                 'breakfast': {
                     'name': 'Protein Oatmeal',
                     'description': 'Oatmeal with protein powder and berries',
-                    'cuisine': 'International',
+                    'cuisine': 'American',
                     'cook_time': '10 mins',
                     'prep_time': '5 mins',
                     'difficulty': 'easy',
@@ -36,7 +36,7 @@ def test_meal_plan():
                 'lunch': {
                     'name': 'Grilled Chicken Salad',
                     'description': 'Mixed greens with grilled chicken and vinaigrette',
-                    'cuisine': 'International',
+                    'cuisine': 'American',
                     'cook_time': '15 mins',
                     'prep_time': '10 mins',
                     'difficulty': 'easy',

@@ -39,18 +39,29 @@ DIETARY_RESTRICTIONS = {
     'dairy-free': ['milk', 'cheese', 'butter', 'cream', 'yogurt'],
 }
 
-# Cuisine mapping
+# Cuisine mapping with more comprehensive coverage
 CUISINE_MAPPING = {
-    'American': ['American', 'Southern', 'Cajun', 'Creole', 'Soul Food'],
-    'Italian': ['Italian', 'Mediterranean'],
-    'Chinese': ['Chinese', 'Cantonese', 'Sichuan'],
-    'Japanese': ['Japanese', 'Sushi'],
-    'Mexican': ['Mexican', 'Tex-Mex'],
-    'Indian': ['Indian', 'Pakistani', 'Bangladeshi'],
-    'Thai': ['Thai'],
-    'French': ['French'],
-    'Mediterranean': ['Mediterranean', 'Greek', 'Turkish', 'Lebanese', 'Moroccan'],
-    'Other': []
+    'American': ['American', 'Southern', 'Cajun', 'Creole', 'Soul Food', 'Jamaican', 'Barbadian'],
+    'Italian': ['Italian', 'Tuscan', 'Sicilian', 'Roman', 'Venetian'],
+    'Chinese': ['Chinese', 'Cantonese', 'Sichuan', 'Szechuan', 'Hunan'],
+    'Japanese': ['Japanese', 'Sushi', 'Ramen', 'Udon', 'Sashimi'],
+    'Mexican': ['Mexican', 'Tex-Mex', 'Yucatecan', 'Oaxacan'],
+    'Indian': ['Indian', 'Pakistani', 'Bangladeshi', 'Punjabi', 'Kashmiri', 'Kerala', 'Tamil', 'Andhra'],
+    'Thai': ['Thai', 'Isan', 'Lanna'],
+    'French': ['French', 'Provencal', 'Provençal', 'Burgundian', 'Lyonnaise'],
+    'Mediterranean': ['Mediterranean', 'Greek', 'Turkish', 'Lebanese', 'Moroccan', 'Tunisian', 'Algerian'],
+    'Spanish': ['Spanish', 'Catalan', 'Basque', 'Galician', 'Valencian'],
+    'Vietnamese': ['Vietnamese', 'Viet'],
+    'Korean': ['Korean'],
+    'Filipino': ['Filipino', 'Filipino-Chinese'],
+    'British': ['British', 'English', 'Scottish', 'Welsh', 'Irish'],
+    'German': ['German', 'Bavarian', 'Swabian'],
+    'Russian': ['Russian', 'Ukrainian', 'Belarusian'],
+    'Polish': ['Polish'],
+    'Caribbean': ['Caribbean', 'Jamaican', 'Trinidadian', 'Barbadian', 'Bahamian'],
+    'Latin American': ['Latin American', 'Brazilian', 'Peruvian', 'Argentinian', 'Colombian', 'Chilean'],
+    'Middle Eastern': ['Middle Eastern', 'Iranian', 'Iraqi', 'Syrian', 'Jordanian', 'Israeli'],
+    'African': ['African', 'Ethiopian', 'Nigerian', 'South African', 'North African', 'West African', 'East African']
 }
 
 async def fetch_all_meals():
@@ -107,13 +118,63 @@ def enhance_recipe(recipe: Dict[str, Any]) -> Dict[str, Any]:
         area = str(recipe.get('strArea', '')).strip()
         category = str(recipe.get('strCategory', '')).strip()
         
-        # Determine cuisine
-        cuisine = 'Other'
-        for main_cuisine, aliases in CUISINE_MAPPING.items():
-            if (area and any(alias.lower() in area.lower() for alias in aliases)) or \
-               (category and any(alias.lower() in category.lower() for alias in aliases)):
-                cuisine = main_cuisine
-                break
+        # Determine cuisine - first try to match area, then category
+        cuisine = None
+        
+        # First try to match area exactly
+        if area:
+            area_lower = area.lower()
+            for main_cuisine, aliases in CUISINE_MAPPING.items():
+                if any(alias.lower() == area_lower for alias in [main_cuisine] + aliases):
+                    cuisine = main_cuisine
+                    break
+        
+        # If no match from area, try category
+        if not cuisine and category:
+            category_lower = category.lower()
+            for main_cuisine, aliases in CUISINE_MAPPING.items():
+                if any(alias.lower() == category_lower for alias in [main_cuisine] + aliases):
+                    cuisine = main_cuisine
+                    break
+        
+        # If still no match, try partial matching
+        if not cuisine and area:
+            area_lower = area.lower()
+            for main_cuisine, aliases in CUISINE_MAPPING.items():
+                if any(alias.lower() in area_lower for alias in [main_cuisine] + aliases):
+                    cuisine = main_cuisine
+                    break
+        
+        # If still no match, try to infer from ingredients
+        if not cuisine:
+            ingredients = ' '.join(
+                str(recipe.get(f'strIngredient{i}', '')).lower() 
+                for i in range(1, 21)
+                if recipe.get(f'strIngredient{i}')
+            )
+            
+            # Common ingredient-based cuisine detection
+            if 'soy sauce' in ingredients or 'hoisin' in ingredients or 'oyster sauce' in ingredients:
+                cuisine = 'Chinese'
+            elif 'curry' in ingredients or 'garam masala' in ingredients or 'tandoori' in ingredients:
+                cuisine = 'Indian'
+            elif 'sriracha' in ingredients or 'fish sauce' in ingredients or 'lemongrass' in ingredients:
+                if 'coconut milk' in ingredients or 'kaffir lime' in ingredients:
+                    cuisine = 'Thai'
+                else:
+                    cuisine = 'Vietnamese'
+            elif 'tortilla' in ingredients or 'salsa' in ingredients or 'guacamole' in ingredients:
+                cuisine = 'Mexican'
+            elif 'pasta' in ingredients or 'risotto' in ingredients or 'parmesan' in ingredients:
+                cuisine = 'Italian'
+            elif 'kimchi' in ingredients or 'gochujang' in ingredients or 'gochugaru' in ingredients:
+                cuisine = 'Korean'
+            elif 'tahini' in ingredients or 'zaatar' in ingredients or 'sumac' in ingredients:
+                cuisine = 'Middle Eastern'
+        
+        # If we still don't have a cuisine, use the area or category as is
+        if not cuisine:
+            cuisine = area or category or 'International'
         
         # Add dietary restrictions
         ingredients = ' '.join(

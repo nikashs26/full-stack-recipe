@@ -941,7 +941,7 @@ def test_meal_plan():
             'dinner': {
                 'name': 'Baked Salmon with Roasted Vegetables',
                 'description': 'Herb-crusted salmon with a medley of seasonal roasted vegetables',
-                'cuisine': 'International',
+                'cuisine': 'American',
                 'cook_time': '20 mins',
                 'prep_time': '15 mins',
                 'total_time': '35 mins',

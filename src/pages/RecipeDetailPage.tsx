@@ -325,20 +325,48 @@ const RecipeDetailPage: React.FC = () => {
 
             {/* Recipe content */}
             <div className="p-6">
+              {recipe.description && (
+                <div className="mb-8 bg-blue-50 p-4 rounded-lg">
+                  <h2 className="text-xl font-semibold mb-2">About This Recipe</h2>
+                  <p className="text-gray-700">{recipe.description}</p>
+                </div>
+              )}
+              
               <h2 className="text-2xl font-semibold mb-4">Ingredients</h2>
-              <ul className="list-disc list-inside mb-6 space-y-1">
+              <ul className="list-disc list-inside mb-6 space-y-2">
                 {Array.isArray(recipe.ingredients) 
                   ? recipe.ingredients.map((ingredient, index) => {
-                      // Handle both string and object formats
-                      const ingredientText = typeof ingredient === 'string' 
-                        ? ingredient 
-                        : ingredient.name 
-                          ? `${ingredient.amount || ''} ${ingredient.unit || ''} ${ingredient.name}`.trim()
-                          : JSON.stringify(ingredient);
+                      // Handle different ingredient formats
+                      let displayText = '';
+                      
+                      if (typeof ingredient === 'string') {
+                        // If it's already a string, use it as is
+                        displayText = ingredient;
+                      } else if (ingredient.original) {
+                        // Prefer the original format if available
+                        displayText = ingredient.original;
+                      } else if (ingredient.name) {
+                        // Build from parts if no original is available
+                        const parts = [
+                          ingredient.amount,
+                          ingredient.unit,
+                          ingredient.name
+                        ].filter(Boolean);
+                        displayText = parts.join(' ');
+                      } else {
+                        // Fallback to JSON stringify if format is unknown
+                        displayText = JSON.stringify(ingredient);
+                      }
+                      
+                      // Clean up common formatting issues
+                      displayText = displayText
+                        .replace(/\.$/, '')  // Remove trailing period
+                        .replace(/\s+/g, ' ')  // Collapse multiple spaces
+                        .trim();
                       
                       return (
-                        <li key={index} className="text-gray-700">
-                          {ingredientText}
+                        <li key={index} className="text-gray-700 pl-2 -indent-4 ml-4">
+                          {displayText}
                         </li>
                       );
                     })
@@ -350,42 +378,118 @@ const RecipeDetailPage: React.FC = () => {
               <div className="mb-6">
                 {(() => {
                   // Handle different instruction formats
-                  let instructions = [];
+                  let instructions: string[] = [];
                   
-                  if (Array.isArray(recipe.instructions)) {
-                    instructions = recipe.instructions;
-                  } else if (typeof recipe.instructions === 'string') {
-                    // First try splitting by double newlines (common format)
-                    instructions = recipe.instructions.split('\n\n');
+                  // Get instructions from recipe, handling both string and array formats
+                  const instructionsSource = Array.isArray(recipe.instructions) 
+                    ? recipe.instructions 
+                    : recipe.instructions || '';
+                  
+                  // If it's a string, process it
+                  if (typeof instructionsSource === 'string') {
+                    // First, normalize line endings and clean up the string
+                    let text = instructionsSource
+                      .replace(/\r\n/g, '\n')  // Normalize line endings
+                      .trim();
                     
-                    // If that doesn't give us multiple steps, try splitting by periods
-                    if (instructions.length <= 1) {
-                      instructions = recipe.instructions
-                        .split(/(?<=\.)\s+(?=[A-Z])/) // Split on period followed by space and capital letter
-                        .filter(step => step.trim().length > 0);
-                    }
+                    // Try splitting by numbered steps (1., 2. etc.)
+                    const numberedSteps = text.split(/(?<=\d+[\.\)])\s+/);
                     
-                    // If we still don't have multiple steps, try splitting by numbered steps
-                    if (instructions.length <= 1) {
-                      instructions = recipe.instructions
-                        .split(/(?<=\d+\.)\s+/)
-                        .filter(step => step.trim().length > 0);
+                    // If we have multiple steps from numbering, use those
+                    if (numberedSteps.length > 1) {
+                      instructions = numberedSteps
+                        .map(step => step.replace(/^\d+[\.\)]\s*/, '').trim())
+                        .filter(step => step.length > 0);
+                    } 
+                    // Otherwise try splitting by double newlines
+                    else {
+                      const paragraphs = text.split(/\n\s*\n+/);
+                      if (paragraphs.length > 1) {
+                        instructions = paragraphs.map(p => p.trim()).filter(p => p.length > 0);
+                      }
+                      // As a last resort, split by periods or newlines
+                      else {
+                        instructions = text
+                          .split(/(?<=\S[.!?])\s+(?=[A-Z])|\n/)
+                          .map(step => step.trim())
+                          .filter(step => step.length > 0);
+                      }
                     }
+                  } 
+                  // If it's already an array, use it directly
+                  else if (Array.isArray(instructionsSource)) {
+                    instructions = instructionsSource;
                   }
                   
+                  // Clean up each instruction
+                  instructions = instructions
+                    .map(step => {
+                      // Remove any leading numbers or bullets
+                      step = step.replace(/^\s*[\d•-]+\.?\s*/, '').trim();
+                      // Capitalize first letter if it's a letter
+                      if (step.length > 0 && /[a-z]/.test(step[0])) {
+                        step = step.charAt(0).toUpperCase() + step.slice(1);
+                      }
+                      return step;
+                    })
+                    .filter(step => step.trim().length > 0);
+                  
+                  // If we have instructions, render them
                   if (instructions.length > 0) {
                     return (
-                      <ol className="list-decimal pl-6 space-y-3">
-                        {instructions.map((step, index) => (
-                          <li key={index} className="text-gray-700 leading-relaxed pl-2">
-                            {step.trim().replace(/^\.\s*/, '')}
-                          </li>
-                        ))}
-                      </ol>
+                      <div className="space-y-6">
+                        {instructions.map((step, index) => {
+                          // Clean up the step text
+                          let stepText = step.trim();
+                          
+                          // Remove trailing period if there's already punctuation
+                          if (/[.!?]$/.test(stepText) && stepText.endsWith('..')) {
+                            stepText = stepText.slice(0, -1);
+                          }
+                          
+                          // Add a period if the step doesn't end with punctuation
+                          if (!/[.!?]$/.test(stepText)) {
+                            stepText += '.';
+                          }
+                          
+                          return (
+                            <div key={index} className="mb-6 last:mb-0">
+                              <div className="flex group">
+                                <div className="flex-shrink-0">
+                                  <div className="flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 text-blue-700 text-sm font-semibold mr-4 mt-0.5 group-hover:bg-blue-200 transition-colors">
+                                    {index + 1}
+                                  </div>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-gray-700 leading-relaxed">
+                                    {stepText}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
                     );
                   }
                   
-                  return <p className="text-gray-500 italic">No instructions available</p>;
+                  // Fallback if no instructions are found
+                  return (
+                    <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4">
+                      <div className="flex">
+                        <div className="flex-shrink-0">
+                          <svg className="h-5 w-5 text-yellow-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                          </svg>
+                        </div>
+                        <div className="ml-3">
+                          <p className="text-sm text-yellow-700">
+                            No detailed instructions available for this recipe.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  );
                 })()}
               </div>
               
