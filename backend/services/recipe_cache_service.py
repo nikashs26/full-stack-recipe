@@ -1,15 +1,10 @@
 import chromadb
 import json
 import hashlib
-from typing import List, Dict, Any, Optional, Union
+from typing import List, Dict, Any, Optional
 import logging
-from datetime import datetime, timedelta
 import time
-import random
-import re
-
-# Import recipe utilities
-from . import recipe_utils
+from datetime import datetime, timedelta
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -193,19 +188,26 @@ class RecipeCacheService:
 
     def _extract_search_terms(self, recipe: Dict[Any, Any]) -> str:
         """Extract searchable terms from a recipe"""
-        return recipe_utils.extract_search_terms(recipe)
+        terms = []
         
-    def _normalize_recipe(self, recipe: Union[Dict[Any, Any], str]) -> Optional[Dict[str, Any]]:
-        """
-        Normalize recipe data using the recipe_utils module.
-        
-        Args:
-            recipe: The recipe data to normalize (can be dict or JSON string)
+        # Add title with higher weight
+        title = recipe.get('title', '')
+        if title:
+            terms.extend([title] * 3)  # Repeat title for higher weight
             
-        Returns:
-            Normalized recipe dictionary or None if invalid
-        """
-        return recipe_utils.normalize_recipe(recipe)
+        # Add cuisine types
+        terms.extend(recipe.get('cuisines', []))
+        
+        # Add diet types
+        terms.extend(recipe.get('diets', []))
+        
+        # Add dish types
+        terms.extend(recipe.get('dishTypes', []))
+        
+        # Add main ingredients
+        ingredients = [ing.get('name', '') for ing in recipe.get('ingredients', [])]
+        terms.extend(ingredients)
+        
         # Add cooking method keywords from instructions
         instructions = recipe.get('instructions', '').lower()
         cooking_methods = ['bake', 'fry', 'grill', 'roast', 'boil', 'steam', 'saute']
@@ -327,36 +329,23 @@ class RecipeCacheService:
                 
                 for i, doc in enumerate(recipe_results['documents']):
                     try:
-                        if not doc:
-                            continue
-                            
-                        # Try to parse as JSON if it's a string
-                        if isinstance(doc, str):
-                            try:
-                                recipe = json.loads(doc)
-                            except json.JSONDecodeError:
-                                # If it's not JSON, try to use it as a document directly
-                                recipe = {'title': doc, 'ingredients': []}
-                        else:
-                            recipe = doc
-                            
+                        recipe = json.loads(doc) if isinstance(doc, str) else doc
                         if not isinstance(recipe, dict):
+                            logger.warning(f"Invalid recipe format: {type(recipe)}")
                             continue
                             
                         metadata = recipe_results['metadatas'][i] if i < len(recipe_results['metadatas']) else {}
+                        recipe_id = metadata.get('id')
                         
-                        # Generate a default ID if not present
-                        if 'id' not in recipe:
-                            recipe['id'] = f"recipe_{hash(str(recipe))}"
-                            
-                        recipe_id = recipe['id']
-                            
-                        if recipe_id in seen_ids or not self._is_cache_valid(metadata.get('cached_at')):
+                        if not recipe_id or recipe_id in seen_ids or not self._is_cache_valid(metadata.get('cached_at')):
                             continue
                         
-                        # Calculate relevance score
+                        # Get base score from search results
+                        score = recipe_scores.get(recipe_id, 1.0)
+                        
+                        # Boost score based on metadata
                         try:
-                            score = self._calculate_relevance_score(1.0, recipe, query, ingredient)
+                            score = self._calculate_relevance_score(score, recipe, query, ingredient)
                         except Exception as e:
                             logger.error(f"Error calculating relevance score: {e}")
                             score = 1.0
@@ -366,6 +355,9 @@ class RecipeCacheService:
                         all_recipes.append(recipe)
                         seen_ids.add(recipe_id)
                         
+                    except json.JSONDecodeError as e:
+                        logger.error(f"Error decoding recipe JSON: {e}")
+                        continue
                     except Exception as e:
                         logger.error(f"Error processing recipe result: {e}")
                         continue
@@ -399,36 +391,22 @@ class RecipeCacheService:
                 
                 for i, doc in enumerate(recipe_results['documents']):
                     try:
-                        if not doc:
-                            continue
-                            
-                        # Try to parse as JSON if it's a string
-                        if isinstance(doc, str):
-                            try:
-                                recipe = json.loads(doc)
-                            except json.JSONDecodeError:
-                                # If it's not JSON, try to use it as a document directly
-                                recipe = {'title': doc, 'ingredients': []}
-                        else:
-                            recipe = doc
-                            
+                        recipe = json.loads(doc) if isinstance(doc, str) else doc
                         if not isinstance(recipe, dict):
                             continue
                             
                         metadata = recipe_results['metadatas'][i] if i < len(recipe_results['metadatas']) else {}
                         
-                        # Generate a default ID if not present
-                        if 'id' not in recipe:
-                            recipe['id'] = f"recipe_{hash(str(recipe))}"
-                            
-                        recipe_id = recipe['id']
-                            
-                        if recipe_id in seen_ids or not self._is_cache_valid(metadata.get('cached_at')):
+                        recipe_id = recipe.get('id')
+                        if not recipe_id or recipe_id in seen_ids or not self._is_cache_valid(metadata.get('cached_at')):
                             continue
                         
                         all_recipes.append(recipe)
                         seen_ids.add(recipe_id)
                         
+                    except json.JSONDecodeError as e:
+                        logger.error(f"Error decoding recipe JSON: {e}")
+                        continue
                     except Exception as e:
                         logger.error(f"Error processing recipe result: {e}")
                         continue
