@@ -44,15 +44,13 @@ const SimpleRecipeCard = ({ recipe, onClick }: { recipe: Recipe; onClick: () => 
   };
 
   const getCookTime = () => {
-    if ('ready_in_minutes' in recipe && recipe.ready_in_minutes) return recipe.ready_in_minutes;
-    if ('readyInMinutes' in recipe && recipe.readyInMinutes) return recipe.readyInMinutes;
-    return null;
+    if ('cookingTime' in recipe && recipe.cookingTime) return recipe.cookingTime;
+    return '30 min'; // default fallback
   };
 
   const getCuisines = () => {
-    if ('cuisine' in recipe && Array.isArray(recipe.cuisine)) return recipe.cuisine;
-    if ('cuisines' in recipe && Array.isArray(recipe.cuisines)) return recipe.cuisines;
-    if ('cuisine' in recipe && typeof recipe.cuisine === 'string') return [recipe.cuisine];
+    if (recipe.cuisines && Array.isArray(recipe.cuisines)) return recipe.cuisines;
+    if (recipe.cuisine && typeof recipe.cuisine === 'string') return [recipe.cuisine];
     return [];
   };
 
@@ -79,12 +77,10 @@ const SimpleRecipeCard = ({ recipe, onClick }: { recipe: Recipe; onClick: () => 
         </h3>
         
         <div className="flex items-center justify-between text-sm text-gray-500 mb-3">
-          {getCookTime() && (
-            <div className="flex items-center">
-              <Clock className="w-4 h-4 mr-1" />
-              <span>{getCookTime()} min</span>
-            </div>
-          )}
+          <div className="flex items-center">
+            <Clock className="w-4 h-4 mr-1" />
+            <span>{getCookTime()}</span>
+          </div>
           <div className="flex items-center">
             <Star className="w-4 h-4 mr-1 text-yellow-400" />
             <span>4.5</span>
@@ -92,7 +88,7 @@ const SimpleRecipeCard = ({ recipe, onClick }: { recipe: Recipe; onClick: () => 
         </div>
         
         <div className="flex flex-wrap gap-1">
-          {getCuisines().slice(0, 2).map((cuisine, index) => (
+          {getCuisines().slice(0, 2).map((cuisine: string, index: number) => (
             <span
               key={index}
               className="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full"
@@ -138,22 +134,20 @@ const SearchPage: React.FC = () => {
           id: '1',
           title: 'Spaghetti Carbonara',
           image: '/placeholder.svg',
-          ready_in_minutes: 30,
-          cuisine: ['Italian'],
+          cuisine: 'Italian',
           diets: [],
-          ingredients: [],
-          instructions: '',
+          ingredients: ['spaghetti', 'eggs', 'bacon', 'parmesan'],
+          instructions: ['Cook pasta', 'Make sauce', 'Combine'],
           ratings: []
         },
         {
           id: '2', 
           title: 'Chicken Tikka Masala',
           image: '/placeholder.svg',
-          ready_in_minutes: 45,
-          cuisine: ['Indian'],
+          cuisine: 'Indian',
           diets: [],
-          ingredients: [],
-          instructions: '',
+          ingredients: ['chicken', 'tomatoes', 'cream', 'spices'],
+          instructions: ['Marinate chicken', 'Cook sauce', 'Combine'],
           ratings: []
         }
       ];
@@ -162,11 +156,14 @@ const SearchPage: React.FC = () => {
       await new Promise(resolve => setTimeout(resolve, 500));
 
       const filteredRecipes = mockRecipes.filter(recipe => {
-        if (searchQuery && !recipe.title.toLowerCase().includes(searchQuery.toLowerCase())) {
+        if (searchQuery && !recipe.title?.toLowerCase().includes(searchQuery.toLowerCase())) {
           return false;
         }
-        if (selectedCuisines.length > 0 && !selectedCuisines.some(c => recipe.cuisine?.includes(c))) {
-          return false;
+        if (selectedCuisines.length > 0) {
+          const recipeCuisines = recipe.cuisines || (recipe.cuisine ? [recipe.cuisine] : []);
+          if (!selectedCuisines.some(c => recipeCuisines.includes(c))) {
+            return false;
+          }
         }
         return true;
       });

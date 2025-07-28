@@ -59,7 +59,7 @@ const App = () => (
             </div>
             <Routes>
               <Route path="/" element={<HomePage />} />
-              <Route path="/recipes" element={<RecipesPage />} />
+              {/* <Route path="/recipes" element={<RecipesPage />} /> */}
               <Route path="/search" element={<SearchPage />} />
               <Route path="/themealdb" element={<MealDBRecipesPage />} />
               <Route path="/recipes/:id" element={<RecipeDetailPage />} />
@@ -70,7 +70,7 @@ const App = () => (
               <Route path="/folders" element={<FoldersPage />} />
               {/* <Route path="/folders/:folderId" element={<FolderDetail />} /> */}
               <Route path="/favorites" element={<FavoritesPage />} />
-              <Route path="/shopping-list" element={<ShoppingListPage />} />
+              {/* <Route path="/shopping-list" element={<ShoppingListPage />} /> */}
               <Route path="/signin" element={<SignInPage />} />
               <Route path="/signup" element={<SignUpPage />} />
               <Route path="/verify-email" element={<VerifyEmailPage />} />
