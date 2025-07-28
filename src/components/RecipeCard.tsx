@@ -6,7 +6,17 @@ import { Recipe } from '../types/recipe';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from './ui/hover-card';
 
 // Extended recipe type to handle various sources
-type ExtendedRecipe = Recipe;
+type ExtendedRecipe = Recipe & {
+  title?: string;
+  imageUrl?: string;
+  cuisines?: string | string[];
+  cuisine?: string;
+  diets?: string[];
+  source?: string;
+  ready_in_minutes?: number;
+  rating?: number | Array<{ score: number; count: number }>;
+  ratings?: number | Array<{ score: number; count: number }>;
+};
 
 interface RecipeCardProps {
   recipe: ExtendedRecipe;
@@ -45,7 +55,7 @@ const RecipeCard: React.FC<RecipeCardProps> = React.memo(({
       // Handle array case
       if (Array.isArray(recipe.cuisines)) {
         return recipe.cuisines
-          .filter(c => c != null)
+          .filter((c): c is string | number | boolean => c != null)
           .map(c => String(c).trim())
           .filter(c => c.length > 0);
       }

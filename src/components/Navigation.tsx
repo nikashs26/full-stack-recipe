@@ -12,18 +12,12 @@ const Navigation: React.FC = () => {
             </Link>
             <div className="hidden md:flex space-x-4">
               <Link
-                to="/search"
-                className="text-foreground/60 hover:text-foreground"
-              >
-                Search
-              </Link>
-              <Link
                 to="/recipes"
                 className="text-foreground/60 hover:text-foreground"
               >
                 Recipes
               </Link>
-              {/* <Link
+              <Link
                 to="/folders"
                 className="text-foreground/60 hover:text-foreground"
               >
@@ -34,7 +28,7 @@ const Navigation: React.FC = () => {
                 className="text-foreground/60 hover:text-foreground"
               >
                 Create Recipe
-              </Link> */}
+              </Link>
             </div>
           </div>
           {/* ... rest of the navigation ... */}

@@ -119,11 +119,7 @@ const MealDBRecipesPage: React.FC = () => {
                   className="cursor-pointer transform transition-transform hover:scale-105"
                   onClick={() => handleRecipeClick(recipe)}
                 >
-                  {/* <RecipeCard recipe={recipe} /> */}
-                  <div className="bg-white rounded-lg shadow-sm border p-4">
-                    <h3 className="font-semibold">{recipe.title || recipe.name}</h3>
-                    <p className="text-sm text-gray-600">Recipe from TheMealDB</p>
-                  </div>
+                  <RecipeCard recipe={recipe} />
                 </div>
               ))}
             </div>
