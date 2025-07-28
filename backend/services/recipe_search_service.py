@@ -268,9 +268,33 @@ class RecipeSearchService:
         
         return similar_recipes[:limit]
     
+    def _recipe_contains_favorite_food(self, recipe: Dict[str, Any], favorite_foods: List[str]) -> bool:
+        """Check if a recipe contains any of the user's favorite foods"""
+        if not favorite_foods:
+            return False
+            
+        # Check recipe name
+        recipe_name = recipe.get('name', '').lower()
+        if any(food.lower() in recipe_name for food in favorite_foods):
+            return True
+            
+        # Check ingredients
+        ingredients = ' '.join(recipe.get('ingredients', [])).lower()
+        if any(food.lower() in ingredients for food in favorite_foods):
+            return True
+            
+        # Check tags if available
+        tags = ' '.join(recipe.get('tags', [])).lower()
+        if any(food.lower() in tags for food in favorite_foods):
+            return True
+            
+        return False
+
     def get_recipe_recommendations(self, user_preferences: Dict[str, Any], limit: int = 8) -> List[Dict[str, Any]]:
         """
-        Get personalized recipe recommendations based on user preferences
+        Get personalized recipe recommendations based on user preferences.
+        Returns only the number of recipes that match the user's preferences,
+        which may be fewer than the requested limit.
         """
         # Create a query based on user preferences
         query_parts = []
@@ -297,6 +321,12 @@ class RecipeSearchService:
         if user_preferences.get("healthGoals"):
             query_parts.append(f"healthy: {', '.join(user_preferences['healthGoals'])}")
         
+        # Get favorite foods if available
+        favorite_foods = user_preferences.get("favoriteFoods", [])
+        if favorite_foods:
+            # Add favorite foods to the query to boost them in search
+            query_parts.extend(favorite_foods)
+        
         # If we have favorite cuisines, boost their importance in the search
         if favorite_cuisines:
             for cuisine in favorite_cuisines:
@@ -313,49 +343,63 @@ class RecipeSearchService:
         if "gluten-free" in user_preferences.get("dietaryRestrictions", []):
             filters["is_gluten_free"] = True
         
-        # Perform semantic search with a higher limit to ensure we get enough results
-        results = self.semantic_search(query, filters, limit * 3)  # Overfetch more to ensure quality
-
-        # Filter out recipes with empty or invalid cuisines if we have favorite cuisines
-        if favorite_cuisines:
-            valid_results = []
-            other_results = []
+        # Perform semantic search with the requested limit (slightly higher to ensure we get enough matches)
+        results = self.semantic_search(query, filters, max(limit * 2, 20))
+        
+        if not results:
+            return []
             
-            for recipe in results:
-                # Pass the entire recipe for better cuisine detection
-                recipe_cuisine = self._normalize_cuisine(recipe.get('cuisine', ''), recipe)
-                if not recipe_cuisine:
-                    # If we can't determine a valid cuisine, skip or add to other results
-                    other_results.append(recipe)
-                    continue
-                    
-                # Update the recipe's cuisine with the normalized version
-                recipe['cuisine'] = recipe_cuisine
-                
-                if recipe_cuisine in favorite_cuisines:
-                    valid_results.append(recipe)
-                else:
-                    other_results.append(recipe)
-            
-            # If we have enough matches from favorite cuisines, return them
-            if len(valid_results) >= limit:
-                return valid_results[:limit]
-                
-            # Otherwise, fill the remaining slots with other results
-            remaining_slots = limit - len(valid_results)
-            return valid_results + other_results[:remaining_slots]
-            
-        # If no favorite cuisines, return top results with valid cuisines
+        # Filter out recipes with empty or invalid cuisines
         filtered_results = []
-        for recipe in results[:limit]:
+        for recipe in results:
             # Pass the entire recipe for better cuisine detection
             recipe_cuisine = self._normalize_cuisine(recipe.get('cuisine', ''), recipe)
             if recipe_cuisine:
                 # Update the recipe's cuisine with the normalized version
                 recipe['cuisine'] = recipe_cuisine
                 filtered_results.append(recipe)
+        
+        # If we have favorite foods, they take highest priority
+        if favorite_foods and filtered_results:
+            # First, separate recipes into those with and without favorite foods
+            favorite_food_matches = []
+            other_recipes = []
+            
+            for recipe in filtered_results:
+                if self._recipe_contains_favorite_food(recipe, favorite_foods):
+                    favorite_food_matches.append(recipe)
+                else:
+                    other_recipes.append(recipe)
+            
+            # If we found recipes with favorite foods, they should come first
+            if favorite_food_matches:
+                # Take all favorite food matches (up to limit)
+                filtered_results = favorite_food_matches[:limit]
                 
-        return filtered_results
+                # Only add other recipes if we have room and need more results
+                if len(filtered_results) < limit and other_recipes:
+                    remaining_slots = limit - len(filtered_results)
+                    filtered_results.extend(other_recipes[:remaining_slots])
+            
+            # Within favorite food matches, sort by cuisine match if we have favorite cuisines
+            if favorite_cuisines:
+                def sort_key(recipe):
+                    # First priority: contains favorite food (already handled by the separation above)
+                    # Second priority: matches favorite cuisine
+                    # Third priority: original score (stored in similarity_score)
+                    return (
+                        0 if self._recipe_contains_favorite_food(recipe, favorite_foods) else 1,
+                        0 if recipe.get('cuisine') in favorite_cuisines else 1,
+                        -recipe.get('similarity_score', 0)  # Higher score comes first
+                    )
+                
+                filtered_results.sort(key=sort_key)
+        # If no favorite foods but we have favorite cuisines, sort by cuisine
+            filtered_results.sort(
+                key=lambda x: 0 if x.get('cuisine') in favorite_cuisines else 1
+            )
+                
+        return filtered_results[:limit]  # Ensure we don't exceed the limit
 
     
     def _detect_cuisine_from_ingredients(self, recipe: Dict[str, Any]) -> str:
