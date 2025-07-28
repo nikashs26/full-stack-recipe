@@ -23,7 +23,7 @@ const Navigation: React.FC = () => {
               >
                 Recipes
               </Link>
-              <Link
+              {/* <Link
                 to="/folders"
                 className="text-foreground/60 hover:text-foreground"
               >
@@ -34,7 +34,7 @@ const Navigation: React.FC = () => {
                 className="text-foreground/60 hover:text-foreground"
               >
                 Create Recipe
-              </Link>
+              </Link> */}
             </div>
           </div>
           {/* ... rest of the navigation ... */}
