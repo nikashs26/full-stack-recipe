@@ -68,7 +68,7 @@ const App = () => (
               <Route path="/add-recipe" element={<AddRecipePage />} />
               <Route path="/edit-recipe/:id" element={<EditRecipePage />} />
               <Route path="/folders" element={<FoldersPage />} />
-              <Route path="/folders/:folderId" element={<FolderDetail />} />
+              {/* <Route path="/folders/:folderId" element={<FolderDetail />} /> */}
               <Route path="/favorites" element={<FavoritesPage />} />
               <Route path="/shopping-list" element={<ShoppingListPage />} />
               <Route path="/signin" element={<SignInPage />} />

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Search, Filter, SlidersHorizontal, Grid, List } from 'lucide-react';
+import { Search, Filter, SlidersHorizontal, Grid, List, Clock, Star } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -8,7 +8,6 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { RecipeFilters } from '@/components/RecipeFilters';
-import RecipeCard from '@/components/RecipeCard';
 import Header from '@/components/Header';
 import { Recipe } from '@/types/recipe';
 import {
@@ -29,6 +28,83 @@ interface SearchResults {
 }
 
 const RECIPES_PER_PAGE = 20;
+
+// Simple Recipe Card component for search page
+const SimpleRecipeCard = ({ recipe, onClick }: { recipe: Recipe; onClick: () => void }) => {
+  const getImageUrl = () => {
+    if (recipe.image) return recipe.image;
+    if ('imageUrl' in recipe && recipe.imageUrl) return recipe.imageUrl;
+    return '/placeholder.svg';
+  };
+
+  const getTitle = () => {
+    if (recipe.title) return recipe.title;
+    if ('name' in recipe && recipe.name) return recipe.name;
+    return 'Untitled Recipe';
+  };
+
+  const getCookTime = () => {
+    if ('ready_in_minutes' in recipe && recipe.ready_in_minutes) return recipe.ready_in_minutes;
+    if ('readyInMinutes' in recipe && recipe.readyInMinutes) return recipe.readyInMinutes;
+    return null;
+  };
+
+  const getCuisines = () => {
+    if ('cuisine' in recipe && Array.isArray(recipe.cuisine)) return recipe.cuisine;
+    if ('cuisines' in recipe && Array.isArray(recipe.cuisines)) return recipe.cuisines;
+    if ('cuisine' in recipe && typeof recipe.cuisine === 'string') return [recipe.cuisine];
+    return [];
+  };
+
+  return (
+    <div 
+      className="bg-white rounded-lg shadow-sm border overflow-hidden hover:shadow-md transition-shadow duration-200 cursor-pointer"
+      onClick={onClick}
+    >
+      <div className="relative h-48">
+        <img
+          src={getImageUrl()}
+          alt={getTitle()}
+          className="w-full h-full object-cover"
+          onError={(e) => {
+            const target = e.target as HTMLImageElement;
+            target.src = '/placeholder.svg';
+          }}
+        />
+      </div>
+      
+      <div className="p-4">
+        <h3 className="text-lg font-semibold text-gray-900 mb-2 line-clamp-2">
+          {getTitle()}
+        </h3>
+        
+        <div className="flex items-center justify-between text-sm text-gray-500 mb-3">
+          {getCookTime() && (
+            <div className="flex items-center">
+              <Clock className="w-4 h-4 mr-1" />
+              <span>{getCookTime()} min</span>
+            </div>
+          )}
+          <div className="flex items-center">
+            <Star className="w-4 h-4 mr-1 text-yellow-400" />
+            <span>4.5</span>
+          </div>
+        </div>
+        
+        <div className="flex flex-wrap gap-1">
+          {getCuisines().slice(0, 2).map((cuisine, index) => (
+            <span
+              key={index}
+              className="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full"
+            >
+              {cuisine}
+            </span>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const SearchPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -52,41 +128,64 @@ const SearchPage: React.FC = () => {
   });
   const [isLoading, setIsLoading] = useState(false);
 
-  // Search recipes with pagination
+  // Mock search function for development
   const searchRecipes = async (page: number = 1) => {
     setIsLoading(true);
     try {
-      const params = new URLSearchParams();
-      if (searchQuery.trim()) params.append('q', searchQuery);
-      if (selectedCuisines.length > 0) params.append('cuisines', selectedCuisines.join(','));
-      if (selectedDiets.length > 0) params.append('diets', selectedDiets.join(','));
-      params.append('page', page.toString());
-      params.append('limit', RECIPES_PER_PAGE.toString());
-      params.append('sort', sortBy);
+      // Mock data for development
+      const mockRecipes: Recipe[] = [
+        {
+          id: '1',
+          title: 'Spaghetti Carbonara',
+          image: '/placeholder.svg',
+          ready_in_minutes: 30,
+          cuisine: ['Italian'],
+          diets: [],
+          ingredients: [],
+          instructions: '',
+          ratings: []
+        },
+        {
+          id: '2', 
+          title: 'Chicken Tikka Masala',
+          image: '/placeholder.svg',
+          ready_in_minutes: 45,
+          cuisine: ['Indian'],
+          diets: [],
+          ingredients: [],
+          instructions: '',
+          ratings: []
+        }
+      ];
 
-      // Mock API call - replace with actual endpoint
-      const response = await fetch(`http://localhost:5003/api/recipes/search?${params.toString()}`);
+      // Simulate API delay
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      const filteredRecipes = mockRecipes.filter(recipe => {
+        if (searchQuery && !recipe.title.toLowerCase().includes(searchQuery.toLowerCase())) {
+          return false;
+        }
+        if (selectedCuisines.length > 0 && !selectedCuisines.some(c => recipe.cuisine?.includes(c))) {
+          return false;
+        }
+        return true;
+      });
+
+      setSearchResults({
+        recipes: filteredRecipes,
+        totalCount: filteredRecipes.length,
+        currentPage: page,
+        totalPages: Math.ceil(filteredRecipes.length / RECIPES_PER_PAGE)
+      });
+      setCurrentPage(page);
       
-      if (response.ok) {
-        const data = await response.json();
-        setSearchResults(data);
-        setCurrentPage(page);
-        
-        // Update URL params
-        const newParams = new URLSearchParams();
-        if (searchQuery.trim()) newParams.set('q', searchQuery);
-        if (page > 1) newParams.set('page', page.toString());
-        setSearchParams(newParams);
-      }
+      // Update URL params
+      const newParams = new URLSearchParams();
+      if (searchQuery.trim()) newParams.set('q', searchQuery);
+      if (page > 1) newParams.set('page', page.toString());
+      setSearchParams(newParams);
     } catch (error) {
       console.error('Error searching recipes:', error);
-      // Mock data for development
-      setSearchResults({
-        recipes: [],
-        totalCount: 0,
-        currentPage: page,
-        totalPages: 0
-      });
     } finally {
       setIsLoading(false);
     }
@@ -393,13 +492,11 @@ const SearchPage: React.FC = () => {
                     : "space-y-4"
                 }>
                   {searchResults.recipes.map((recipe) => (
-                    <div
+                    <SimpleRecipeCard
                       key={recipe.id}
-                      className="cursor-pointer transition-transform hover:scale-105"
+                      recipe={recipe}
                       onClick={() => handleRecipeClick(recipe)}
-                    >
-                      <RecipeCard recipe={recipe} viewMode={viewMode} />
-                    </div>
+                    />
                   ))}
                 </div>
 
