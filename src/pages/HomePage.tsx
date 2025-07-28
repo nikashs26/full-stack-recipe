@@ -4,7 +4,6 @@ import { useQuery } from '@tanstack/react-query';
 import { Search, ChefHat, ThumbsUp, Award, TrendingUp, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Header from '../components/Header';
-import RecipeCard from '../components/RecipeCard';
 import ManualRecipeCard from '../components/ManualRecipeCard';
 import { Recipe } from '../types/recipe';
 import { SpoonacularRecipe } from '../types/spoonacular';
@@ -12,6 +11,55 @@ import { loadRecipes } from '../utils/storage';
 import { fetchManualRecipes } from '../lib/manualRecipes';
 import { fetchRecipes } from '../lib/spoonacular';
 import { useAuth } from '../context/AuthContext';
+
+// Simple Recipe Card component for HomePage
+const SimpleRecipeCard = ({ recipe, type }: { recipe: any; type: string }) => {
+  const getImageUrl = () => {
+    if (recipe.image) return recipe.image;
+    if (recipe.imageUrl) return recipe.imageUrl;
+    return '/placeholder.svg';
+  };
+
+  const getTitle = () => {
+    if (recipe.title) return recipe.title;
+    if (recipe.name) return recipe.name;
+    return 'Untitled Recipe';
+  };
+
+  return (
+    <div className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-300">
+      <div className="relative h-48 overflow-hidden">
+        <img
+          src={getImageUrl()}
+          alt={getTitle()}
+          className="w-full h-full object-cover transform hover:scale-105 transition-transform duration-300"
+          onError={(e) => {
+            const target = e.target as HTMLImageElement;
+            if (target.src !== "/placeholder.svg") {
+              target.src = "/placeholder.svg";
+            }
+          }}
+        />
+      </div>
+      
+      <div className="p-4">
+        <h3 className="text-lg font-semibold text-gray-900 mb-2 line-clamp-2">
+          {getTitle()}
+        </h3>
+        
+        <div className="flex items-center justify-between text-sm text-gray-500">
+          <div className="flex items-center">
+            <Clock className="w-4 h-4 mr-1" />
+            <span>{recipe.readyInMinutes || recipe.ready_in_minutes || '30 min'}</span>
+          </div>
+          <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+            {type}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const HomePage: React.FC = () => {
   const { isAuthenticated, user } = useAuth();
@@ -720,10 +768,10 @@ const HomePage: React.FC = () => {
                         return <ManualRecipeCard key={`recommended-${recipe.id}-${index}`} recipe={recipe} />;
                       }
                       return (
-                        <RecipeCard 
+                        <SimpleRecipeCard 
                           key={`recommended-${recipe.id}-${index}`} 
-                          recipe={recipe} 
-                          onDelete={handleDeleteRecipe}
+                          recipe={recipe}
+                          type={recipe.type || 'external'}
                         />
                       );
                     })}
@@ -773,10 +821,10 @@ const HomePage: React.FC = () => {
                       return <ManualRecipeCard key={`popular-${recipe.id}-${index}`} recipe={recipe} />;
                     }
                     return (
-                      <RecipeCard 
+                      <SimpleRecipeCard 
                         key={`popular-${recipe.id}-${index}`} 
-                        recipe={recipe} 
-                        onDelete={handleDeleteRecipe}
+                        recipe={recipe}
+                        type={recipe.type || 'external'}
                       />
                     );
                   })}
@@ -822,10 +870,10 @@ const HomePage: React.FC = () => {
                       return <ManualRecipeCard key={`newest-${recipe.id}-${index}`} recipe={recipe} />;
                     }
                     return (
-                      <RecipeCard 
+                      <SimpleRecipeCard 
                         key={`newest-${recipe.id}-${index}`} 
-                        recipe={recipe} 
-                        onDelete={handleDeleteRecipe}
+                        recipe={recipe}
+                        type={recipe.type || 'external'}
                       />
                     );
                   })}
