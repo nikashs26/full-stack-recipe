@@ -10,6 +10,7 @@ import ExternalRecipeDetailPage from "./pages/ExternalRecipeDetailPage";
 import AddRecipePage from "./pages/AddRecipePage";
 import EditRecipePage from "./pages/EditRecipePage";
 import MealDBRecipesPage from "./pages/MealDBRecipesPage";
+import SearchPage from "./pages/SearchPage";
 
 import NotFound from "./pages/NotFound";
 import Footer from "./components/Footer";
@@ -59,6 +60,7 @@ const App = () => (
             <Routes>
               <Route path="/" element={<HomePage />} />
               <Route path="/recipes" element={<RecipesPage />} />
+              <Route path="/search" element={<SearchPage />} />
               <Route path="/themealdb" element={<MealDBRecipesPage />} />
               <Route path="/recipes/:id" element={<RecipeDetailPage />} />
               <Route path="/external-recipe/:id" element={<ExternalRecipeDetailPage />} />

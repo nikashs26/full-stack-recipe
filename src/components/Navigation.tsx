@@ -12,6 +12,12 @@ const Navigation: React.FC = () => {
             </Link>
             <div className="hidden md:flex space-x-4">
               <Link
+                to="/search"
+                className="text-foreground/60 hover:text-foreground"
+              >
+                Search
+              </Link>
+              <Link
                 to="/recipes"
                 className="text-foreground/60 hover:text-foreground"
               >
