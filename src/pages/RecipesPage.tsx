@@ -2,8 +2,16 @@ import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { fetchManualRecipes } from '../lib/manualRecipes';
-import { DietaryRestriction, Recipe as RecipeType } from '../types/recipe';
-import { Loader2, Search, Filter, X, Clock, Flame, ChefHat } from 'lucide-react';
+import { DietaryRestriction } from '../types/recipe';
+
+// Helper function to convert string array to DietaryRestriction array
+const toDietaryRestrictions = (restrictions?: string[]): DietaryRestriction[] => {
+  if (!restrictions) return [];
+  return restrictions.filter((d): d is DietaryRestriction => 
+    ['vegetarian', 'vegan', 'gluten-free', 'dairy-free', 'keto', 'paleo'].includes(d)
+  );
+};
+import { Loader2, Search, Filter, X, ChefHat } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import RecipeCard from '@/components/RecipeCard';
@@ -14,44 +22,62 @@ import { useMediaQuery } from '../hooks/use-media-query';
 import { Drawer, DrawerContent, DrawerTrigger } from '@/components/ui/drawer';
 import Header from '../components/Header';
 
-// Recipe type definitions
-type BaseRecipe = {
+// Base recipe type that includes all possible fields from different sources
+type Recipe = {
+  // Core fields
   id: string | number;
-  title: string;
+  name: string;
+  title?: string;
   description?: string;
   image?: string;
-  type: 'saved' | 'manual' | 'spoonacular';
-  created_at?: string;
-  updated_at?: string;
-};
-
-type ManualRecipe = BaseRecipe & {
-  type: 'manual';
-  ready_in_minutes?: number;
-  cuisine?: string[];
-  diets?: string[];
-  ingredients?: Array<{ name: string; amount?: string | number; unit?: string }>;
-};
-
-type SpoonacularRecipe = BaseRecipe & {
-  type: 'spoonacular';
+  imageUrl?: string;
+  
+  // Cuisine and categories
+  cuisine: string;
+  cuisines?: string[];
+  
+  // Dietary information
+  dietaryRestrictions: DietaryRestriction[];
+  diets?: DietaryRestriction[];
+  
+  // Ingredients and instructions
+  ingredients: Array<{
+    id?: number | string;
+    name: string;
+    original?: string;
+    amount?: string | number;
+    unit?: string;
+  }>;
+  
+  instructions: string | string[];
+  analyzedInstructions?: any[];
+  
+  // Timing and servings
+  prepTime?: number;
+  cookTime?: number;
+  totalTime?: number;
   readyInMinutes?: number;
+  ready_in_minutes?: number;
+  cookingTime?: string;
   servings?: number;
+  
+  // Difficulty and ratings
+  difficulty?: 'easy' | 'medium' | 'hard';
+  ratings: Array<{ score: number; count: number }> | number[];
+  averageRating?: number;
+  
+  // Source and metadata
+  source?: string;
   sourceUrl?: string;
   summary?: string;
-  analyzedInstructions?: any[];
-  cuisines?: string[];
-  diets?: string[];
-  extendedIngredients?: Array<{
-    id: number;
-    name: string;
-    original: string;
-    amount: number;
-    unit: string;
-  }>;
+  
+  // Internal fields
+  type?: 'manual' | 'spoonacular' | 'saved';
+  isFavorite?: boolean;
+  comments?: any[];
+  createdAt?: string;
+  updatedAt?: string;
 };
-
-type Recipe = ManualRecipe | SpoonacularRecipe;
 
 type NormalizedRecipe = {
   id: string;
@@ -70,25 +96,58 @@ type NormalizedRecipe = {
   type: 'saved' | 'manual' | 'spoonacular';
 };
 
-// Recommended search items
-const recommendedSearches = [
-  { icon: <Clock className="w-4 h-4" />, term: 'Quick meals', description: 'Ready in under 30 minutes' },
-  { icon: <Flame className="w-4 h-4" />, term: 'Spicy food', description: 'For those who love heat' },
-  { icon: <ChefHat className="w-4 h-4" />, term: 'Gourmet', description: 'Restaurant-quality dishes' },
-];
-
 const RecipesPage: React.FC = () => {
   const navigate = useNavigate();
-  const [searchTerm, setSearchTerm] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [showRecommendedSearches, setShowRecommendedSearches] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [ingredientTerm, setIngredientTerm] = useState("");
+  const [ingredientQuery, setIngredientQuery] = useState("");
+  const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [selectedCuisines, setSelectedCuisines] = useState<string[]>([]);
   const [selectedDiets, setSelectedDiets] = useState<string[]>([]);
+  const [favoriteFoods, setFavoriteFoods] = useState<string[]>([]);
   const [showMobileFilters, setShowMobileFilters] = useState(false);
   const [showLoading, setShowLoading] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const recipesPerPage = 20;
   
   const isDesktop = useMediaQuery("(min-width: 1024px)");
   const debouncedSearchQuery = useDebounce(searchQuery, 500);
+  
+  // Reset to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, ingredientQuery, selectedCuisines, selectedDiets]);
+
+  // Fetch user preferences to get favorite foods
+  const { data: userPreferences } = useQuery({
+    queryKey: ['userPreferences'],
+    queryFn: async () => {
+      try {
+        const response = await fetch('http://localhost:5003/api/user/preferences', {
+          credentials: 'include',
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+        if (!response.ok) throw new Error('Failed to fetch user preferences');
+        return await response.json();
+      } catch (error) {
+        console.error('Error fetching user preferences:', error);
+        return null;
+      }
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    retry: 1,
+    enabled: !!localStorage.getItem('token'), // Only fetch if user is logged in
+  });
+
+  // Update favorite foods when user preferences change
+  useEffect(() => {
+    if (userPreferences?.favoriteFoods) {
+      setFavoriteFoods(userPreferences.favoriteFoods);
+    }
+  }, [userPreferences]);
 
   // Fetch all recipes from ChromaDB with search and filters
   const { 
@@ -96,15 +155,20 @@ const RecipesPage: React.FC = () => {
     isLoading: isLoadingRecipes, 
     isFetching 
   } = useQuery<Recipe[]>({
-    queryKey: ['recipes', debouncedSearchQuery, selectedCuisines, selectedDiets],
+    queryKey: ['recipes', debouncedSearchQuery, ingredientQuery, selectedCuisines, selectedDiets, favoriteFoods],
     queryFn: async () => {
       try {
-        const result = await fetchManualRecipes(debouncedSearchQuery, '', {
-          page: 1,
-          pageSize: 1000,
-          cuisines: selectedCuisines,
-          diets: selectedDiets
-        });
+        const result = await fetchManualRecipes(
+          debouncedSearchQuery, 
+          ingredientQuery, 
+          {
+            page: 1,
+            pageSize: 1000,
+            cuisines: selectedCuisines,
+            diets: selectedDiets,
+            favoriteFoods: favoriteFoods
+          }
+        );
         return result as unknown as Recipe[];
       } catch (error) {
         console.error('Error fetching recipes:', error);
@@ -116,17 +180,24 @@ const RecipesPage: React.FC = () => {
     refetchOnWindowFocus: false,
   });
 
-  // Debounce search input
+  // Debounce search inputs
   useEffect(() => {
     const timer = setTimeout(() => {
       setSearchQuery(searchTerm);
     }, 500);
-
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
+  // Debounce ingredient search
+  const debouncedIngredientQuery = useDebounce(ingredientTerm, 500);
+  
+  useEffect(() => {
+    setIngredientQuery(debouncedIngredientQuery);
+  }, [debouncedIngredientQuery]);
+
   // Normalize recipes to a common format
   const normalizedRecipes = useMemo<NormalizedRecipe[]>(() => {
+    console.log('Raw recipes from API:', recipes?.length, recipes);
     if (!Array.isArray(recipes)) return [];
     
     return recipes.map(recipe => {
@@ -196,17 +267,30 @@ const RecipesPage: React.FC = () => {
     });
   }, [recipes]);
 
-  // All recipes are now loaded at once
-  const filteredRecipes = useMemo(() => {
-    return normalizedRecipes;
+  // Debug effect to track recipe counts
+  useEffect(() => {
+    console.log('Current recipe count:', normalizedRecipes.length);
+    console.log('Sample recipe IDs:', normalizedRecipes.slice(0, 5).map(r => r.id));
   }, [normalizedRecipes]);
 
-  // Use all filtered recipes (no pagination)
-  const displayRecipes = useMemo(() => filteredRecipes, [filteredRecipes]);
+  // Filter and sort recipes - only show recipes that exist in local cache
+  const filteredRecipes = useMemo(() => {
+    // Filter out any recipes with negative IDs (Spoonacular recipes)
+    return normalizedRecipes.filter(recipe => {
+      // Only include recipes with positive numeric IDs or string IDs that don't start with 'recipe_'
+      const id = recipe.id.toString();
+      return !id.startsWith('recipe_') || !/^recipe_-?\d+$/.test(id);
+    });
+  }, [normalizedRecipes]);
+
+  // Get current recipes for the current page
+  const indexOfLastRecipe = currentPage * recipesPerPage;
+  const indexOfFirstRecipe = indexOfLastRecipe - recipesPerPage;
+  const currentRecipes = filteredRecipes.slice(indexOfFirstRecipe, indexOfLastRecipe);
+  const totalPages = Math.ceil(filteredRecipes.length / recipesPerPage);
 
   const handleSearch = useCallback((term: string) => {
     setSearchTerm(term);
-    setShowRecommendedSearches(false);
     
     // Scroll to results after a short delay to allow re-render
     const timer = setTimeout(() => {
@@ -218,18 +302,6 @@ const RecipesPage: React.FC = () => {
     
     return () => clearTimeout(timer);
   }, []);
-
-  const handleRecommendedSearch = useCallback((term: string) => {
-    handleSearch(term);
-    setShowRecommendedSearches(false);
-    // Auto-scroll to results
-    setTimeout(() => {
-      const resultsSection = document.getElementById('recipe-results');
-      if (resultsSection) {
-        resultsSection.scrollIntoView({ behavior: 'smooth' });
-      }
-    }, 300);
-  }, [handleSearch]);
 
   const handleCuisineToggle = useCallback((cuisine: string) => {
     setSelectedCuisines(prev => 
@@ -252,6 +324,8 @@ const RecipesPage: React.FC = () => {
     setSelectedDiets([]);
     setSearchQuery("");
     setSearchTerm("");
+    setIngredientQuery("");
+    setIngredientTerm("");
   }, []);
 
   // Show loading state only when we have a search query and data is being fetched
@@ -270,12 +344,14 @@ const RecipesPage: React.FC = () => {
   }, [isLoading]);
 
   const renderFilters = useCallback(() => (
-    <div className="lg:w-80 space-y-6 pr-6">
+    <div className="space-y-6">
       <RecipeFilters
-        searchQuery={searchQuery}
+        searchQuery={searchTerm}
+        ingredientQuery={ingredientTerm}
         selectedCuisines={selectedCuisines}
         selectedDiets={selectedDiets}
-        onSearchChange={setSearchQuery}
+        onSearchChange={setSearchTerm}
+        onIngredientChange={setIngredientTerm}
         onCuisineToggle={handleCuisineToggle}
         onDietToggle={handleDietToggle}
         onClearFilters={clearAllFilters}
@@ -313,35 +389,66 @@ const RecipesPage: React.FC = () => {
   ), [showMobileFilters, renderFilters]);
 
   const renderRecipeCard = useCallback((recipe: NormalizedRecipe, index: number) => {
-    const recipeForCard: RecipeType = {
+    // Convert ingredients to the expected format
+    const normalizedIngredients = (recipe.ingredients || []).map(ing => ({
+      name: typeof ing === 'string' ? ing : ing.name,
+      amount: typeof ing === 'string' ? undefined : ing.amount?.toString()
+    }));
+
+    // Convert dietary restrictions to the correct type
+    const normalizedDietaryRestrictions = toDietaryRestrictions(recipe.dietaryRestrictions);
+
+    // Create the base recipe object
+    const recipeObj: Recipe = {
       id: recipe.id.toString(),
       title: recipe.title,
-      name: recipe.title,
+      description: recipe.description || '',
       image: recipe.imageUrl || '/placeholder-recipe.jpg',
-      imageUrl: recipe.imageUrl || '/placeholder-recipe.jpg',
-      cuisines: Array.isArray(recipe.cuisines) ? recipe.cuisines : [],
-      cuisine: Array.isArray(recipe.cuisines) && recipe.cuisines.length > 0 ? recipe.cuisines[0] : '',
-      dietaryRestrictions: (recipe.dietaryRestrictions || []).filter((d): d is DietaryRestriction => 
-        ['vegetarian', 'vegan', 'gluten-free', 'dairy-free', 'keto', 'paleo'].includes(d)
-      ),
-      diets: (recipe.dietaryRestrictions || []).filter(d => 
-        ['vegetarian', 'vegan', 'gluten-free', 'dairy-free', 'keto', 'paleo'].includes(d)
-      ),
-      ingredients: Array.isArray(recipe.ingredients) ? recipe.ingredients : [],
+      type: recipe.type === 'spoonacular' ? 'spoonacular' : 'manual',
+      cuisines: recipe.cuisines || [],
+      cuisine: recipe.cuisines?.[0] || '',
+      dietaryRestrictions: normalizedDietaryRestrictions,
+      diets: normalizedDietaryRestrictions, // Use the same restrictions for diets
       instructions: Array.isArray(recipe.instructions) 
         ? recipe.instructions 
         : recipe.instructions 
           ? [recipe.instructions] 
           : ['No instructions available'],
-      description: recipe.description || '',
-      cookingTime: recipe.ready_in_minutes ? `${recipe.ready_in_minutes} minutes` : 'Not specified',
       servings: recipe.servings || 4,
-      source: recipe.type === 'spoonacular' ? 'spoonacular' : 'local',
-      type: recipe.type || 'saved',
+      cookingTime: recipe.ready_in_minutes ? `${recipe.ready_in_minutes} minutes` : 'Not specified',
+      difficulty: 'medium',
       ratings: [],
       comments: [],
+      ingredients: normalizedIngredients,
+      // Handle both timing formats
+      ...(recipe.ready_in_minutes && { ready_in_minutes: recipe.ready_in_minutes }),
+      ...(recipe.ready_in_minutes && { readyInMinutes: recipe.ready_in_minutes }),
+      // Spoonacular specific
+      ...(recipe.type === 'spoonacular' && {
+        sourceUrl: recipe.sourceUrl,
+        summary: recipe.summary,
+        analyzedInstructions: recipe.analyzedInstructions || []
+      })
+    };
+
+    // Create the card data with additional UI-specific properties
+    const recipeForCard: Recipe = {
+      ...recipeObj,
+      id: recipeObj.id,
+      name: recipe.title,
+      image: recipeObj.image || '/placeholder-recipe.jpg',
+      imageUrl: recipe.imageUrl || '/placeholder-recipe.jpg',
+      source: recipe.type === 'spoonacular' ? 'spoonacular' : 'local',
+      cookingTime: recipeObj.cookingTime || recipeObj.cookTime?.toString() || 'Not specified',
       difficulty: 'medium',
-      ...(recipe.type === 'spoonacular' && { source: 'spoonacular' })
+      ratings: [],
+      comments: [],
+      instructions: Array.isArray(recipeObj.instructions) 
+        ? recipeObj.instructions 
+        : [recipeObj.instructions || 'No instructions available'],
+      dietaryRestrictions: normalizedDietaryRestrictions,
+      diets: normalizedDietaryRestrictions,
+      ingredients: normalizedIngredients
     };
     
     return (
@@ -387,7 +494,7 @@ const RecipesPage: React.FC = () => {
                 className="pl-10 py-6 text-base border-0 shadow-sm focus-visible:ring-2 focus-visible:ring-primary/50"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                onFocus={() => setShowRecommendedSearches(true)}
+
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     handleSearch(searchTerm);
@@ -404,103 +511,161 @@ const RecipesPage: React.FC = () => {
               </Button>
             </div>
           </CardHeader>
-          
-          {/* Recommended Searches */}
-          {showRecommendedSearches && !searchTerm && (
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-2">
-                {recommendedSearches.map((item, index) => (
-                  <Card 
-                    key={index} 
-                    className="cursor-pointer hover:bg-gray-50 transition-colors border-dashed"
-                    onClick={() => handleRecommendedSearch(item.term)}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        handleRecommendedSearch(item.term);
-                      }
-                    }}
-                  >
-                    <CardContent className="p-4 flex items-start space-x-3">
-                      <div className="p-2 rounded-full bg-primary/10 text-primary">
-                        {item.icon}
-                      </div>
-                      <div>
-                        <h4 className="font-medium">{item.term}</h4>
-                        <p className="text-sm text-gray-500">{item.description}</p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            </CardContent>
-          )}
         </Card>
 
-        {/* Filters */}
-        <div className="flex flex-col lg:flex-row">
-          {/* Desktop Filters */}
-          {isDesktop && renderFilters()}
-          
-          {/* Mobile Filters */}
-          {!isDesktop && renderMobileFilters()}
-        </div>
-
-        {/* Recipe Results */}
-        <div id="recipe-results" className="py-8">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="mb-8">
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                {searchTerm ? `Search Results for "${searchTerm}"` : 'All Recipes'}
-              </h2>
-              <p className="text-gray-600">
-                {filteredRecipes.length} {filteredRecipes.length === 1 ? 'recipe' : 'recipes'} found
-              </p>
-            </div>
-
-            {showLoading ? (
-              <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-                {[...Array(8)].map((_, i) => (
-                  <div key={i} className="bg-white rounded-lg shadow-md p-4 animate-pulse">
-                    <div className="bg-gray-300 h-48 rounded-lg mb-4"></div>
-                    <div className="bg-gray-300 h-4 rounded mb-2"></div>
-                    <div className="bg-gray-300 h-3 rounded w-2/3"></div>
+        {/* Main Content Area */}
+        <div className="flex flex-col lg:flex-row gap-8 mt-8">
+          {/* Filters - Left Sidebar */}
+          <div className="lg:w-80 flex-shrink-0">
+            <div className="sticky top-24">
+              {isDesktop ? (
+                <>
+                  <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-lg font-semibold">Filters</h2>
+                    {(selectedCuisines.length > 0 || selectedDiets.length > 0) && (
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={clearAllFilters}
+                        className="text-sm"
+                      >
+                        Clear all
+                      </Button>
+                    )}
                   </div>
-                ))}
-              </div>
-            ) : filteredRecipes.length > 0 ? (
-              <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-                {displayRecipes.map((recipe, index) => renderRecipeCard(recipe, index))}
-              </div>
-            ) : (
-              <div className="text-center py-16 bg-white rounded-xl shadow-sm border border-gray-100">
-                <ChefHat className="mx-auto h-16 w-16 text-gray-300" />
-                <h3 className="mt-4 text-xl font-semibold text-gray-700">No recipes found</h3>
-                <p className="mt-2 text-gray-500 max-w-md mx-auto">
-                  {searchTerm
-                    ? 'No recipes match your search. Try adjusting your search term.'
-                    : 'No recipes available at the moment. Check back later or add your own recipe!'}
+                  {renderFilters()}
+                </>
+              ) : (
+                renderMobileFilters()
+              )}
+            </div>
+          </div>
+
+          {/* Recipe Results - Main Content */}
+          <div className="flex-1 min-w-0">
+            <div id="recipe-results" className="pb-8">
+              <div className="mb-6">
+                <h2 className="text-2xl font-bold text-gray-900 mb-1">
+                  {searchTerm ? `Search Results for "${searchTerm}"` : 'All Recipes'}
+                </h2>
+                <p className="text-gray-600">
+                  {filteredRecipes.length} {filteredRecipes.length === 1 ? 'recipe' : 'recipes'} found
                 </p>
-                {!searchTerm && (
-                  <Button 
-                    className="mt-6" 
-                    variant="outline"
-                    onClick={() => setShowRecommendedSearches(true)}
-                  >
-                    <Search className="mr-2 h-4 w-4" />
-                    Show Recommended Searches
-                  </Button>
-                )}
               </div>
-            )}
+
+              {showLoading ? (
+                <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                  {[...Array(8)].map((_, i) => (
+                    <div key={i} className="bg-white rounded-lg shadow-md p-4 animate-pulse">
+                      <div className="bg-gray-200 h-48 rounded-lg mb-4"></div>
+                      <div className="bg-gray-200 h-4 rounded mb-2"></div>
+                      <div className="bg-gray-200 h-3 rounded w-2/3"></div>
+                    </div>
+                  ))}
+                </div>
+              ) : filteredRecipes.length > 0 ? (
+                <>
+                  <div className="grid md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6">
+                    {currentRecipes.map((recipe, index) => renderRecipeCard(recipe, index))}
+                  </div>
+                  
+                  {/* Pagination Controls */}
+                  {totalPages > 1 && (
+                    <div className="mt-8 flex items-center justify-center space-x-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                        disabled={currentPage === 1}
+                        className="h-9 w-9 p-0"
+                      >
+                        <span className="sr-only">Previous page</span>
+                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                        </svg>
+                      </Button>
+                      
+                      <div className="flex items-center space-x-1">
+                        {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                          // Show first page, last page, current page, and pages around current
+                          let pageNum;
+                          if (totalPages <= 5) {
+                            pageNum = i + 1;
+                          } else if (currentPage <= 3) {
+                            pageNum = i + 1;
+                          } else if (currentPage >= totalPages - 2) {
+                            pageNum = totalPages - 4 + i;
+                          } else {
+                            pageNum = currentPage - 2 + i;
+                          }
+                          
+                          return (
+                            <Button
+                              key={pageNum}
+                              variant={currentPage === pageNum ? "default" : "outline"}
+                              size="sm"
+                              className={`h-9 w-9 p-0 ${currentPage === pageNum ? 'font-bold' : ''}`}
+                              onClick={() => setCurrentPage(pageNum)}
+                            >
+                              {pageNum}
+                            </Button>
+                          );
+                        })}
+                        
+                        {totalPages > 5 && currentPage < totalPages - 2 && (
+                          <span className="px-2 text-sm text-muted-foreground">...</span>
+                        )}
+                        
+                        {totalPages > 5 && currentPage < totalPages - 2 && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-9 w-9 p-0"
+                            onClick={() => setCurrentPage(totalPages)}
+                          >
+                            {totalPages}
+                          </Button>
+                        )}
+                      </div>
+                      
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                        disabled={currentPage === totalPages}
+                        className="h-9 w-9 p-0"
+                      >
+                        <span className="sr-only">Next page</span>
+                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </Button>
+                      
+                      <div className="text-sm text-muted-foreground ml-2">
+                        Page {currentPage} of {totalPages}
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="text-center py-16 bg-white rounded-xl shadow-sm border border-gray-100">
+                  <ChefHat className="mx-auto h-16 w-16 text-gray-300" />
+                  <h3 className="mt-4 text-xl font-semibold text-gray-700">No recipes found</h3>
+                  <p className="mt-2 text-gray-500 max-w-md mx-auto">
+                    {searchTerm
+                      ? 'No recipes match your search. Try adjusting your search term.'
+                      : 'No recipes available at the moment. Check back later or add your own recipe!'}
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Showing all results at once */}
+        {/* Showing pagination info */}
         {filteredRecipes.length > 0 && (
           <div className="text-center text-sm text-muted-foreground mt-4">
-            Showing all {filteredRecipes.length} recipes
+            Showing {Math.min(indexOfFirstRecipe + 1, filteredRecipes.length)}-{Math.min(indexOfLastRecipe, filteredRecipes.length)} of {filteredRecipes.length} {filteredRecipes.length === 1 ? 'recipe' : 'recipes'}
           </div>
         )}
       </main>

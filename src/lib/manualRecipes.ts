@@ -135,6 +135,7 @@ export interface FetchRecipesOptions {
   pageSize?: number;
   cuisines?: string[];
   diets?: string[];
+  favoriteFoods?: string[];
 }
 
 export const fetchManualRecipes = async (
@@ -161,6 +162,11 @@ export const fetchManualRecipes = async (
     // Handle cuisines filter
     if (options.cuisines?.length) {
       params.append('cuisine', options.cuisines.join(','));
+    }
+    
+    // Handle favorite foods
+    if (options.favoriteFoods?.length) {
+      params.append('favorite_foods', options.favoriteFoods.join(','));
     }
     
     // Handle diets filter - ensure consistent naming with backend

@@ -1,6 +1,123 @@
 
-import { Recipe, DietaryRestriction } from '../types/recipe';
+import { Recipe, DietaryRestriction, NutritionInfo } from '../types/recipe';
 import { SpoonacularRecipe } from '../types/spoonacular';
+
+/**
+ * Normalizes recipe data to ensure consistent structure
+ */
+export const normalizeRecipe = (recipeData: any): Recipe => {
+  if (!recipeData) return null;
+
+  // Handle both name and title fields
+  const name = recipeData.name || recipeData.title || 'Untitled Recipe';
+  
+  // Handle both single cuisine and cuisines array
+  let cuisine = '';
+  if (recipeData.cuisine) {
+    cuisine = recipeData.cuisine;
+  } else if (Array.isArray(recipeData.cuisines) && recipeData.cuisines.length > 0) {
+    cuisine = recipeData.cuisines[0];
+  }
+
+  // Handle both dietaryRestrictions and diets arrays
+  let dietaryRestrictions: DietaryRestriction[] = [];
+  if (Array.isArray(recipeData.dietaryRestrictions)) {
+    dietaryRestrictions = recipeData.dietaryRestrictions;
+  } else if (Array.isArray(recipeData.diets)) {
+    dietaryRestrictions = recipeData.diets;
+  }
+
+  // Handle ingredients in different formats
+  let ingredients: {name: string, amount?: string | number, unit?: string}[] = [];
+  if (Array.isArray(recipeData.ingredients)) {
+    ingredients = recipeData.ingredients.map(ing => {
+      if (typeof ing === 'string') {
+        // Try to parse string format like "2 cups flour"
+        const match = ing.match(/^(\d+\s*\/?\d*\s*\w*)?\s*(.+)$/);
+        return {
+          name: match ? match[2].trim() : ing,
+          amount: match && match[1] ? match[1].trim() : undefined
+        };
+      }
+      // Already in object format
+      return {
+        name: ing.name || ing.ingredient || 'Unknown',
+        amount: ing.amount,
+        unit: ing.unit
+      };
+    });
+  }
+
+  // Handle instructions in different formats
+  let instructions: string[] = [];
+  if (Array.isArray(recipeData.instructions)) {
+    instructions = recipeData.instructions;
+  } else if (typeof recipeData.instructions === 'string') {
+    // Split by newlines and filter out empty lines
+    instructions = recipeData.instructions
+      .split('\n')
+      .map((s: string) => s.trim())
+      .filter(Boolean);
+  }
+
+  // Extract nutrition info if available
+  let nutrition: NutritionInfo | undefined;
+  if (recipeData.nutrition) {
+    nutrition = {
+      calories: recipeData.nutrition.calories,
+      protein: recipeData.nutrition.protein,
+      carbohydrates: recipeData.nutrition.carbohydrates,
+      fat: recipeData.nutrition.fat,
+      fiber: recipeData.nutrition.fiber,
+      sugar: recipeData.nutrition.sugar,
+      sodium: recipeData.nutrition.sodium,
+      servingSize: recipeData.nutrition.servingSize
+    };
+  } else if (recipeData.nutritionalInfo) {
+    // Alternative nutrition field
+    nutrition = {
+      calories: recipeData.nutritionalInfo.calories,
+      protein: recipeData.nutritionalInfo.protein,
+      carbohydrates: recipeData.nutritionalInfo.carbs,
+      fat: recipeData.nutritionalInfo.fat,
+      fiber: recipeData.nutritionalInfo.fiber,
+      sugar: recipeData.nutritionalInfo.sugar,
+      sodium: recipeData.nutritionalInfo.sodium,
+      servingSize: recipeData.nutritionalInfo.servingSize
+    };
+  }
+
+  // Handle time fields
+  const prepTime = recipeData.prepTime || recipeData.prepTimeMinutes || 0;
+  const cookTime = recipeData.cookTime || recipeData.cookTimeMinutes || 0;
+  const totalTime = recipeData.totalTime || (prepTime + cookTime) || undefined;
+
+  return {
+    id: recipeData.id || `recipe-${Date.now()}`,
+    name,
+    cuisine,
+    dietaryRestrictions,
+    image: recipeData.image || recipeData.imageUrl || '/placeholder-recipe.jpg',
+    ingredients,
+    instructions,
+    nutrition,
+    description: recipeData.description,
+    prepTime,
+    cookTime,
+    totalTime,
+    servings: recipeData.servings,
+    difficulty: recipeData.difficulty,
+    source: recipeData.source,
+    sourceUrl: recipeData.sourceUrl || recipeData.source_url,
+    ratings: recipeData.ratings || [],
+    averageRating: recipeData.averageRating || getAverageRating(recipeData.ratings || []),
+    reviewCount: recipeData.reviewCount || 0,
+    isFavorite: !!recipeData.isFavorite,
+    folderId: recipeData.folderId,
+    createdAt: recipeData.createdAt || new Date().toISOString(),
+    updatedAt: recipeData.updatedAt || new Date().toISOString()
+  };
+};
 
 export const getAverageRating = (ratings: number[]): number => {
   if (ratings.length === 0) return 0;

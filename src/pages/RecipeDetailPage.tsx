@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Heart, Folder, ShoppingCart, Star, ArrowLeft } from 'lucide-react';
+import { Heart, Folder, ShoppingCart, Star, ArrowLeft, Loader2 } from 'lucide-react';
 import Header from '../components/Header';
 import { Button } from '@/components/ui/button';
 import { updateRecipe, loadRecipes } from '../utils/storage';
@@ -101,46 +101,36 @@ const RecipeDetailPage: React.FC = () => {
     return (
       <div className="min-h-screen bg-gray-50">
         <Header />
-        <main className="pt-24 md:pt-28 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="mb-6">
-            <Button 
-              variant="outline" 
-              onClick={() => navigate('/recipes')}
-              className="mb-4"
-            >
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Recipes
-            </Button>
-          </div>
+        <div className="flex-1 flex items-center justify-center p-4">
           <div className="text-center">
-            <h1 className="text-2xl font-bold mb-4">Loading recipe...</h1>
+            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+            <p>Loading recipe...</p>
           </div>
-        </main>
+        </div>
       </div>
     );
   }
 
-  // Handle if recipe is not found
   if (error || !recipe) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="flex flex-col min-h-screen">
         <Header />
-        <main className="pt-24 md:pt-28 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="mb-6">
-            <Button 
-              variant="outline" 
-              onClick={() => navigate('/recipes')}
-              className="mb-4"
-            >
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Recipes
-            </Button>
+        <div className="flex-1 flex items-center justify-center p-4">
+          <div className="text-center max-w-md">
+            <h2 className="text-2xl font-bold mb-2">Recipe Not Found</h2>
+            <p className="text-muted-foreground mb-6">
+              The recipe you're looking for isn't available in your local collection.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <Button onClick={() => navigate(-1)} variant="outline" className="w-full sm:w-auto">
+                <ArrowLeft className="mr-2 h-4 w-4" /> Back to recipes
+              </Button>
+              <Button onClick={() => navigate('/recipes')} variant="default" className="w-full sm:w-auto">
+                Browse All Recipes
+              </Button>
+            </div>
           </div>
-          <div className="text-center">
-            <h1 className="text-2xl font-bold mb-4">Recipe not found</h1>
-            <Button onClick={() => navigate('/recipes')}>Back to Recipes</Button>
-          </div>
-        </main>
+        </div>
       </div>
     );
   }
