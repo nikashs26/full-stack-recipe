@@ -1,7 +1,7 @@
 
-export type DietaryRestriction = 'vegetarian' | 'vegan' | 'gluten-free' | 'dairy-free' | 'keto' | 'paleo';
+export type DietaryRestriction = 'vegetarian' | 'vegan' | 'gluten-free' | 'dairy-free' | 'keto' | 'paleo' | 'carnivore' | 'non-vegetarian';
 export type DifficultyLevel = 'easy' | 'medium' | 'hard';
-export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'dessert' | 'any'; // New MealType definition
+export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'dessert' | 'any';
 
 export interface Folder {
   id: string;
@@ -33,10 +33,26 @@ export interface Recipe {
   cookingTime?: string;
   servings?: number;
   difficulty?: string;
-  ratings?: number[];
+  ratings?: number[] | number | Array<{ score: number; count: number }>;
   comments?: string[];
   // Support relevance score from search
   relevance_score?: number;
+  // Missing properties that components expect
+  folderId?: string;
+  isFavorite?: boolean;
+  mealType?: MealType;
+  type?: string;
+  // External recipe properties
+  ready_in_minutes?: number;
+  rating?: number | Array<{ score: number; count: number }>;
+  source?: string;
+  // Additional properties for compatibility
+  cuisineType?: string[];
+  categories?: string[];
+  tags?: string[];
+  healthLabels?: string[];
+  prep_time?: string;
+  cook_time?: string;
 }
 
 export interface Comment {

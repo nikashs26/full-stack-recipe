@@ -1,4 +1,3 @@
-// Temporary file to fix build error
 export interface ManualRecipe {
   id: string;
   title: string;
@@ -10,6 +9,10 @@ export interface ManualRecipe {
   servings?: number;
   difficulty?: string;
   cuisine?: string[];
+  cuisines?: string[];
   diets?: string[];
+  dietaryRestrictions?: string[];
   ratings?: number[];
+  ready_in_minutes?: number;
+  cooking_instructions?: string[];
 }
