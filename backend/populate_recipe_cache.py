@@ -145,38 +145,56 @@ async def populate_recipe_cache():
                     except Exception as e:
                         logger.error(f"Failed to cache {cuisine} recipes from TheMealDB: {e}")
             
-            # Fetch from Spoonacular if API key is available
-            if recipe_service.spoonacular_key:
-                spoonacular_recipes = await fetch_spoonacular_by_cuisine(
-                    session,
-                    cuisine,
-                    recipe_service.spoonacular_key
-                )
-                if spoonacular_recipes:
-                    normalized_spoonacular = []
-                    for recipe in spoonacular_recipes:
-                        normalized = recipe_service._normalize_spoonacular_recipe(recipe)
-                        if normalized:
-                            # Ensure cuisine is in recipe data
-                            if cuisine not in normalized.get('cuisines', []):
-                                normalized['cuisines'] = [cuisine]
-                            normalized_spoonacular.append(normalized)
+            # Fetch from Spoonacular
+            spoonacular_key = os.getenv('SPOONACULAR_API_KEY')
+            if spoonacular_key:
+                logger.info(f"Fetching {cuisine} recipes from Spoonacular...")
+                try:
+                    # Add a small delay to respect rate limits (5 requests per second for free tier)
+                    await asyncio.sleep(0.5)
                     
-                    if normalized_spoonacular:
-                        try:
-                            # Cache with cuisine as a search term
-                            await asyncio.to_thread(
-                                recipe_cache.cache_recipes,
-                                normalized_spoonacular,
-                                cuisine,  # Use cuisine as search term
-                                "",      # No ingredient filter
-                                {"cuisine": cuisine}  # Add cuisine metadata
-                            )
-                            stats["total_recipes"] += len(normalized_spoonacular)
-                            stats["recipes_by_cuisine"][cuisine]["spoonacular"] = len(normalized_spoonacular)
-                            logger.info(f"Cached {len(normalized_spoonacular)} {cuisine} recipes from Spoonacular")
-                        except Exception as e:
-                            logger.error(f"Failed to cache {cuisine} recipes from Spoonacular: {e}")
+                    spoonacular_recipes = await fetch_spoonacular_by_cuisine(
+                        session,
+                        cuisine,
+                        spoonacular_key
+                    )
+                    
+                    if spoonacular_recipes:
+                        normalized_spoonacular = []
+                        for recipe in spoonacular_recipes:
+                            try:
+                                normalized = recipe_service._normalize_spoonacular_recipe(recipe)
+                                if normalized:
+                                    # Ensure cuisine is in recipe data
+                                    if cuisine.lower() not in [c.lower() for c in normalized.get('cuisines', [])]:
+                                        if 'cuisines' not in normalized:
+                                            normalized['cuisines'] = []
+                                        normalized['cuisines'].append(cuisine)
+                                    normalized_spoonacular.append(normalized)
+                            except Exception as e:
+                                logger.error(f"Error normalizing Spoonacular recipe: {e}", exc_info=True)
+                        
+                        if normalized_spoonacular:
+                            try:
+                                # Cache with cuisine as a search term
+                                await asyncio.to_thread(
+                                    recipe_cache.cache_recipes,
+                                    normalized_spoonacular,
+                                    cuisine,  # Use cuisine as search term
+                                    "",      # No ingredient filter
+                                    {"cuisine": cuisine}  # Add cuisine metadata
+                                )
+                                stats["total_recipes"] += len(normalized_spoonacular)
+                                stats["recipes_by_cuisine"][cuisine]["spoonacular"] = len(normalized_spoonacular)
+                                logger.info(f"Cached {len(normalized_spoonacular)} {cuisine} recipes from Spoonacular")
+                            except Exception as e:
+                                logger.error(f"Failed to cache {cuisine} recipes from Spoonacular: {e}", exc_info=True)
+                    else:
+                        logger.warning(f"No Spoonacular recipes found for {cuisine}")
+                except Exception as e:
+                    logger.error(f"Error fetching from Spoonacular for {cuisine}: {e}", exc_info=True)
+            else:
+                logger.warning("Spoonacular API key not found in environment variables")
             
             # Add a small delay between cuisines to avoid rate limits
             await asyncio.sleep(1)

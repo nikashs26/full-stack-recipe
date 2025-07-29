@@ -199,18 +199,78 @@ const MealPlannerPage: React.FC = () => {
     }
   };
 
+  // Define more specific types for nutrition data
+  type NutritionValue = number | string | { amount?: number | string; value?: number | string; unit?: string; name?: string };
+  
+  interface NutritionInfo {
+    calories?: NutritionValue;
+    protein?: NutritionValue;
+    carbs?: NutritionValue;
+    fat?: NutritionValue;
+    [key: string]: any;
+  }
+
+  interface NutritionSummaryData {
+    daily_average?: NutritionInfo;
+    weekly_totals?: NutritionInfo;
+    meal_inclusions?: {
+      breakfast?: boolean;
+      lunch?: boolean;
+      dinner?: boolean;
+      snacks?: boolean;
+      [key: string]: any;
+    };
+    dietary_considerations?: string[];
+    [key: string]: any;
+  }
+
+  // Helper function to safely access nested properties
+  const safeGet = <T,>(obj: any, path: string, defaultValue: T): T => {
+    const value = path.split('.').reduce((acc, key) => {
+      if (acc && typeof acc === 'object' && key in acc) {
+        return acc[key as keyof typeof acc];
+      }
+      return undefined;
+    }, obj);
+    return value !== undefined ? value : defaultValue;
+  };
+
+  // Helper function to extract numeric value from nutrition data
+  const getNutritionValue = (value: NutritionValue | undefined): string => {
+    if (value === undefined || value === null) return 'N/A';
+    if (typeof value === 'number') return value.toString();
+    if (typeof value === 'string') return value;
+    if (value && typeof value === 'object') {
+      if ('amount' in value && value.amount !== undefined) {
+        return value.amount.toString();
+      }
+      if ('value' in value && value.value !== undefined) {
+        return value.value.toString();
+      }
+    }
+    return 'N/A';
+  };
+
   const renderNutritionalInfo = () => {
-    console.log('Meal Plan Data:', JSON.stringify(mealPlan, null, 2));
     if (!mealPlan?.nutrition_summary) {
       console.log('No nutrition_summary found in meal plan');
       return null;
     }
     
-    const nutritionSummary = mealPlan.nutrition_summary;
-    const dailyAverage = nutritionSummary?.daily_average;
-    const weeklyTotals = nutritionSummary?.weekly_totals;
-    const mealInclusions = nutritionSummary?.meal_inclusions || {};
-    const dietaryConsiderations = nutritionSummary?.dietary_considerations || [];
+    const nutritionSummary: NutritionSummaryData = mealPlan.nutrition_summary || {};
+    
+    // Safely extract values with fallbacks
+    const dailyCalories = getNutritionValue(safeGet(nutritionSummary, 'daily_average.calories', undefined));
+    const dailyProtein = getNutritionValue(safeGet(nutritionSummary, 'daily_average.protein', undefined));
+    const dailyCarbs = getNutritionValue(safeGet(nutritionSummary, 'daily_average.carbs', undefined));
+    const dailyFat = getNutritionValue(safeGet(nutritionSummary, 'daily_average.fat', undefined));
+    
+    const weeklyCalories = getNutritionValue(safeGet(nutritionSummary, 'weekly_totals.calories', undefined));
+    const weeklyProtein = getNutritionValue(safeGet(nutritionSummary, 'weekly_totals.protein', undefined));
+    const weeklyCarbs = getNutritionValue(safeGet(nutritionSummary, 'weekly_totals.carbs', undefined));
+    
+    const mealInclusions = nutritionSummary.meal_inclusions || {};
+    const dietaryConsiderations = nutritionSummary.dietary_considerations || [];
     
     return (
       <Card className="mt-8">
@@ -224,64 +284,56 @@ const MealPlannerPage: React.FC = () => {
           <div className="space-y-6">
             <div>
               <h4 className="font-medium mb-2">Daily Averages</h4>
-              {!dailyAverage ? (
-                <p className="text-sm text-gray-500">No daily average data available</p>
-              ) : (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="bg-orange-50 p-4 rounded-lg">
-                    <div className="text-2xl font-bold text-orange-600">
-                      {dailyAverage.calories || 'N/A'}
-                    </div>
-                    <div className="text-sm text-gray-500">Calories</div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="bg-orange-50 p-4 rounded-lg">
+                  <div className="text-2xl font-bold text-orange-600">
+                    {dailyCalories}
                   </div>
-                  <div className="bg-green-50 p-4 rounded-lg">
-                    <div className="text-2xl font-bold text-green-600">
-                      {dailyAverage.protein || 'N/A'}
-                    </div>
-                    <div className="text-sm text-gray-500">Protein</div>
-                  </div>
-                  <div className="bg-blue-50 p-4 rounded-lg">
-                    <div className="text-2xl font-bold text-blue-600">
-                      {dailyAverage.carbs || 'N/A'}
-                    </div>
-                    <div className="text-sm text-gray-500">Carbs</div>
-                  </div>
-                  <div className="bg-purple-50 p-4 rounded-lg">
-                    <div className="text-2xl font-bold text-purple-600">
-                      {dailyAverage.fat || 'N/A'}
-                    </div>
-                    <div className="text-sm text-gray-500">Fat</div>
-                  </div>
+                  <div className="text-sm text-gray-500">Calories</div>
                 </div>
-              )}
+                <div className="bg-green-50 p-4 rounded-lg">
+                  <div className="text-2xl font-bold text-green-600">
+                    {dailyProtein} {typeof dailyProtein === 'string' && !isNaN(Number(dailyProtein)) ? 'g' : ''}
+                  </div>
+                  <div className="text-sm text-gray-500">Protein</div>
+                </div>
+                <div className="bg-blue-50 p-4 rounded-lg">
+                  <div className="text-2xl font-bold text-blue-600">
+                    {dailyCarbs} {typeof dailyCarbs === 'string' && !isNaN(Number(dailyCarbs)) ? 'g' : ''}
+                  </div>
+                  <div className="text-sm text-gray-500">Carbs</div>
+                </div>
+                <div className="bg-purple-50 p-4 rounded-lg">
+                  <div className="text-2xl font-bold text-purple-600">
+                    {dailyFat} {typeof dailyFat === 'string' && !isNaN(Number(dailyFat)) ? 'g' : ''}
+                  </div>
+                  <div className="text-sm text-gray-500">Fat</div>
+                </div>
+              </div>
             </div>
             
             <div className="mt-6">
               <h4 className="font-medium mb-2">Weekly Totals</h4>
-              {!weeklyTotals ? (
-                <p className="text-sm text-gray-500">No weekly total data available</p>
-              ) : (
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="bg-gray-50 p-4 rounded-lg">
-                    <div className="text-lg font-semibold">
-                      {weeklyTotals.calories ? `${weeklyTotals.calories} cal` : 'N/A'}
-                    </div>
-                    <div className="text-sm text-gray-500">Total Calories</div>
+              <div className="grid grid-cols-3 gap-4">
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <div className="text-lg font-semibold">
+                    {weeklyCalories} {!isNaN(Number(weeklyCalories)) ? 'cal' : ''}
                   </div>
-                  <div className="bg-gray-50 p-4 rounded-lg">
-                    <div className="text-lg font-semibold">
-                      {weeklyTotals.protein || 'N/A'}
-                    </div>
-                    <div className="text-sm text-gray-500">Total Protein</div>
-                  </div>
-                  <div className="bg-gray-50 p-4 rounded-lg">
-                    <div className="text-lg font-semibold">
-                      {weeklyTotals.carbs || 'N/A'}
-                    </div>
-                    <div className="text-sm text-gray-500">Total Carbs</div>
-                  </div>
+                  <div className="text-sm text-gray-500">Total Calories</div>
                 </div>
-              )}
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <div className="text-lg font-semibold">
+                    {weeklyProtein} {typeof weeklyProtein === 'string' && !isNaN(Number(weeklyProtein)) ? 'g' : ''}
+                  </div>
+                  <div className="text-sm text-gray-500">Total Protein</div>
+                </div>
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <div className="text-lg font-semibold">
+                    {weeklyCarbs} {typeof weeklyCarbs === 'string' && !isNaN(Number(weeklyCarbs)) ? 'g' : ''}
+                  </div>
+                  <div className="text-sm text-gray-500">Total Carbs</div>
+                </div>
+              </div>
             </div>
             
             <div>
@@ -296,7 +348,7 @@ const MealPlannerPage: React.FC = () => {
                         : 'bg-gray-100 text-gray-500'
                     }`}
                   >
-                    {meal}: {included ? 'Included' : 'Excluded'}
+                    {meal.charAt(0).toUpperCase() + meal.slice(1)}: {included ? 'Included' : 'Excluded'}
                   </div>
                 ))}
               </div>
@@ -615,7 +667,7 @@ const MealPlannerPage: React.FC = () => {
                 </div>
                 <p className="text-gray-600">
                   {mealPlan.days.flatMap(day => day.meals || []).length} meals planned • 
-                  {mealPlan.nutrition_summary?.daily_average?.calories || 'N/A'} avg calories/day
+                  {getNutritionValue(mealPlan.nutrition_summary?.daily_average?.calories)} avg calories/day
                 </p>
               </div>
 
@@ -680,9 +732,15 @@ const MealPlannerPage: React.FC = () => {
                                 <ul className="text-xs text-gray-600 space-y-0.5">
                                   {(Array.isArray(meal.ingredients) ? meal.ingredients : [meal.ingredients])
                                     .slice(0, 3)
-                                    .map((ingredient: string, idx: number) => (
-                                      <li key={idx}>• {ingredient}</li>
-                                    ))}
+                                    .map((ingredient: any, idx: number) => {
+                                      // Handle both string and object formats
+                                      let ingredientText = ingredient;
+                                      if (ingredient && typeof ingredient === 'object') {
+                                        ingredientText = ingredient.name || 
+                                                       (ingredient.amount ? `${ingredient.amount} ${ingredient.unit || ''} ${ingredient.name || ''}` : '');
+                                      }
+                                      return <li key={idx}>• {ingredientText}</li>;
+                                    })}
                                   {Array.isArray(meal.ingredients) && meal.ingredients.length > 3 && (
                                     <li>• ... and {meal.ingredients.length - 3} more</li>
                                   )}
@@ -696,11 +754,16 @@ const MealPlannerPage: React.FC = () => {
                                 <ol className="text-xs text-gray-600 space-y-1 list-decimal list-inside">
                                   {(Array.isArray(meal.instructions) ? meal.instructions : [meal.instructions])
                                     .slice(0, 2)
-                                    .map((step: string, idx: number) => (
-                                      <li key={idx} className="truncate">{step}</li>
-                                    ))}
-                                  {Array.isArray(meal.instructions) && meal.instructions.length > 2 && (
-                                    <li>... and {meal.instructions.length - 2} more steps</li>
+                                    .map((step: any, idx: number) => {
+                                      // Handle both string and object formats
+                                      let stepText = step;
+                                      if (step && typeof step === 'object') {
+                                        stepText = step.text || step.step || JSON.stringify(step);
+                                      }
+                                      return <li key={idx} className="truncate">{stepText}</li>;
+                                    })}
+                                  {(Array.isArray(meal.instructions) ? meal.instructions.length > 2 : false) && (
+                                    <li>... more steps</li>
                                   )}
                                 </ol>
                               </div>

@@ -105,16 +105,41 @@ export interface Recipe extends BaseRecipe {
   // Required fields for the application
   id: string | number;
   name: string;
+  title?: string;
   image: string;
+  imageUrl?: string;
   ingredients: Array<{
+    id?: string | number;
     name: string;
+    original?: string;
     amount?: string | number;
     unit?: string;
   }>;
   instructions: string[];
   dietaryRestrictions: DietaryRestriction[];
-  cuisine: string;
+  cuisine?: string;
+  cuisines?: string[];
   type: 'manual' | 'spoonacular' | 'saved';
+  ready_in_minutes?: number;
+  cooking_instructions?: string;
+  reviewCount?: number;
+}
+
+export interface ExtendedRecipe extends Omit<Recipe, 'cuisines'> {
+  title?: string;
+  imageUrl?: string;
+  cuisines?: string | string[];
+  cuisine?: string;
+  diets?: string[];
+  source?: string;
+  ready_in_minutes?: number;
+  rating?: number | Array<{ score: number; count: number }>;
+  ratings?: number | Array<{ score: number; count: number }> | number[];
+  reviewCount?: number;
+  nutritionalInfo?: {
+    carbs?: number;
+    [key: string]: any;
+  };
 }
 
 export interface Comment {

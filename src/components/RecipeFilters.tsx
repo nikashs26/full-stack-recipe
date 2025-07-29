@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Plus, X, Search, Filter, ChefHat, Leaf } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Plus, X, Filter, ChefHat, Leaf } from 'lucide-react';
+import SearchInput from './SearchInput';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 type FilterOption = {
@@ -54,8 +55,9 @@ export const RecipeFilters = ({
 
   const handleAddCustomCuisine = (e: React.FormEvent) => {
     e.preventDefault();
-    if (customCuisine.trim() && !selectedCuisines.includes(customCuisine)) {
-      onCuisineToggle(customCuisine.trim());
+    const trimmedCuisine = customCuisine.trim();
+    if (trimmedCuisine && !selectedCuisines.includes(trimmedCuisine)) {
+      onCuisineToggle(trimmedCuisine);
       setCustomCuisine('');
     }
   };
@@ -129,15 +131,11 @@ export const RecipeFilters = ({
   return (
     <div className="space-y-4">
       {/* Search Bar */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Search recipes..."
-          value={searchQuery}
-          onChange={(e) => onSearchChange(e.target.value)}
-          className="pl-10 h-11 text-base"
-        />
-      </div>
+      <SearchInput
+        value={searchQuery}
+        onChange={onSearchChange}
+        placeholder="Search recipes..."
+      />
 
       {/* Cuisines Filter */}
       <FilterSection 
@@ -158,16 +156,33 @@ export const RecipeFilters = ({
             ))}
           </div>
           
-          <form onSubmit={handleAddCustomCuisine} className="flex gap-2">
+          <div className="flex gap-2">
             <Input
               type="text"
               value={customCuisine}
               onChange={(e) => setCustomCuisine(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  const trimmedCuisine = customCuisine.trim();
+                  if (trimmedCuisine && !selectedCuisines.includes(trimmedCuisine)) {
+                    onCuisineToggle(trimmedCuisine);
+                    setCustomCuisine('');
+                  }
+                }
+              }}
               placeholder="Add custom cuisine..."
               className="flex-1 h-9 text-sm"
             />
             <Button 
-              type="submit" 
+              onClick={(e) => {
+                e.preventDefault();
+                const trimmedCuisine = customCuisine.trim();
+                if (trimmedCuisine && !selectedCuisines.includes(trimmedCuisine)) {
+                  onCuisineToggle(trimmedCuisine);
+                  setCustomCuisine('');
+                }
+              }}
               size="sm" 
               variant="outline"
               disabled={!customCuisine.trim()}
@@ -175,7 +190,7 @@ export const RecipeFilters = ({
             >
               <Plus className="h-4 w-4" />
             </Button>
-          </form>
+          </div>
         </div>
       </FilterSection>
 

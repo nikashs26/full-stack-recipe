@@ -287,6 +287,278 @@ class LLMMealPlannerAgent:
         
         return self._generate_fallback_meal_plan(preferences)
     
+    def _generate_fallback_meal_plan(self, preferences: Dict[str, Any]) -> Dict[str, Any]:
+        """Generate a comprehensive fallback meal plan with detailed nutrition"""
+        logger.warning("Generating enhanced fallback meal plan")
+        
+        # Get preferences with fallbacks and validation
+        dietary_restrictions = preferences.get('dietary_restrictions', [])
+        favorite_cuisines = preferences.get('favorite_cuisines', ['Mediterranean'])
+        if not isinstance(favorite_cuisines, list) or len(favorite_cuisines) == 0:
+            favorite_cuisines = ['Mediterranean']  # Default to Mediterranean if none specified
+            
+        # Ensure we have valid cuisine data
+        cuisine_meals = {
+            'mediterranean': {
+                'breakfast': [
+                    'Greek Yogurt with Honey and Nuts',
+                    'Mediterranean Omelet with Feta and Spinach',
+                    'Whole Grain Toast with Avocado and Poached Eggs'
+                ],
+                'lunch': [
+                    'Greek Salad with Grilled Chicken',
+                    'Mediterranean Quinoa Bowl',
+                    'Grilled Fish with Lemon and Herbs'
+                ],
+                'dinner': [
+                    'Grilled Salmon with Roasted Vegetables',
+                    'Chicken Souvlaki with Tzatziki',
+                    'Stuffed Bell Peppers with Quinoa and Feta'
+                ]
+            },
+            'asian': {
+                'breakfast': [
+                    'Congee with Scallions and Ginger',
+                    'Tofu Scramble with Vegetables',
+                    'Miso Soup with Tofu and Seaweed'
+                ],
+                'lunch': [
+                    'Buddha Bowl with Rice and Vegetables',
+                    'Stir-fried Noodles with Chicken',
+                    'Sushi Bowl with Tuna and Avocado'
+                ],
+                'dinner': [
+                    'Teriyaki Salmon with Stir-fried Vegetables',
+                    'Beef and Broccoli with Brown Rice',
+                    'Vegetable Curry with Tofu'
+                ]
+            },
+            'mexican': {
+                'breakfast': [
+                    'Huevos Rancheros',
+                    'Breakfast Burrito with Black Beans',
+                    'Chilaquiles with Eggs'
+                ],
+                'lunch': [
+                    'Chicken Fajita Bowl',
+                    'Fish Tacos with Cabbage Slaw',
+                    'Quinoa and Black Bean Salad'
+                ],
+                'dinner': [
+                    'Grilled Chicken with Mole Sauce',
+                    'Shrimp Fajitas with Peppers and Onions',
+                    'Vegetable Enchiladas'
+                ]
+            }
+        }
+        target_calories = max(1500, int(preferences.get('target_calories', 2000)))  # Ensure minimum 1500 calories
+        target_protein = max(100, int(preferences.get('target_protein', 150)))  # Ensure minimum 100g protein
+        target_carbs = int(preferences.get('target_carbs', 200))
+        target_fat = int(preferences.get('target_fat', 65))
+        
+        # Ensure minimum protein intake (1.6g per kg of body weight if weight is provided)
+        weight_kg = preferences.get('weight_kg')
+        if weight_kg and isinstance(weight_kg, (int, float)):
+            min_protein = int(weight_kg * 1.6)
+            target_protein = max(target_protein, min_protein)
+            
+        # Ensure minimum calories based on protein needs (at least 10 calories per gram of protein)
+        min_calories = target_protein * 10
+        target_calories = max(target_calories, min_calories)
+        
+        # Calculate macros with distribution across meals
+        macros = {
+            'daily': {
+                'calories': target_calories,
+                'protein': target_protein,
+                'carbs': target_carbs,
+                'fat': target_fat
+            },
+            'breakfast': {
+                'calories': int(target_calories * 0.25),
+                'protein': int(target_protein * 0.3),  # Higher protein at breakfast
+                'carbs': int(target_carbs * 0.25),
+                'fat': int(target_fat * 0.2)
+            },
+            'lunch': {
+                'calories': int(target_calories * 0.35),
+                'protein': int(target_protein * 0.35),
+                'carbs': int(target_carbs * 0.35),
+                'fat': int(target_fat * 0.35)
+            },
+            'dinner': {
+                'calories': int(target_calories * 0.3),
+                'protein': int(target_protein * 0.35),
+                'carbs': int(target_carbs * 0.25),
+                'fat': int(target_fat * 0.35)
+            },
+            'snack': {
+                'calories': int(target_calories * 0.1),
+                'protein': int(target_protein * 0.1),
+                'carbs': int(target_carbs * 0.15),
+                'fat': int(target_fat * 0.1)
+            }
+        }
+            
+            # Initialize daily macro totals
+        daily_macro_totals = []
+        full_days = []
+        today = datetime.now()
+            
+            # Ensure we have exactly 7 days
+        for i in range(7):
+            day_name = f'Day {i+1}'
+            day_date = (today + timedelta(days=i)).strftime("%Y-%m-%d")
+            
+            # Initialize daily macros
+            daily_macros = {
+                'calories': 0,
+                'protein': 0,
+                'carbs': 0,
+                'fat': 0
+            }
+                
+                # Process each meal type
+            meals = {}
+            
+            # Define meal types based on preferences
+            meal_types = ['breakfast', 'lunch', 'dinner']
+            
+            for meal_type in meal_types:
+                # Use target macros if not provided
+                meal_macros = macros.get(meal_type, macros['snack'])
+                
+                # Extract nutritional info with fallbacks to target macros
+                meal_calories = meal_macros['calories']
+                meal_protein = meal_macros['protein']
+                meal_carbs = meal_macros['carbs']
+                meal_fat = meal_macros['fat']
+                    
+                # Update daily macros
+                daily_macros['calories'] += meal_calories
+                daily_macros['protein'] += meal_protein
+                daily_macros['carbs'] += meal_carbs
+                daily_macros['fat'] += meal_fat
+                
+                # Select a cuisine-based meal based on day and meal type
+                cuisine_idx = (i + meal_types.index(meal_type)) % len(favorite_cuisines)
+                cuisine = favorite_cuisines[cuisine_idx].lower()
+                available_meals = cuisine_meals.get(cuisine, cuisine_meals['mediterranean'])
+                meal_options = available_meals.get(meal_type, [f"{cuisine.title()} {meal_type.title()}"])
+                meal_idx = (i + meal_types.index(meal_type)) % len(meal_options)
+                meal_name = meal_options[meal_idx]
+                
+                # Ensure meal name is properly formatted and includes cuisine
+                meal_name = f"{cuisine.title()} {meal_name}" if not meal_name.startswith(cuisine.title()) else meal_name
+                
+                # Create the meal object with detailed nutrition
+                meal_obj = {
+                    "name": meal_name,
+                    "cuisine": cuisine.title(),
+                    "prep_time": "15-20 minutes",
+                    "cook_time": "20-30 minutes",
+                    "difficulty": "Medium",
+                    "servings": 2,
+                    "ingredients": [
+                        {"name": "Protein source", "amount": "150-200g", "notes": "chicken, fish, tofu, or legumes"},
+                        {"name": "Vegetables", "amount": "2 cups", "notes": "mixed seasonal vegetables"},
+                        {"name": "Healthy fat", "amount": "1-2 tbsp", "notes": "olive oil, avocado, or nuts"},
+                        {"name": "Complex carbs", "amount": "1/2 - 1 cup", "notes": "quinoa, brown rice, or sweet potato"},
+                        {"name": "Seasonings", "amount": "to taste", "notes": "herbs, spices, salt, pepper"}
+                    ],
+                    "instructions": [
+                        "1. Prepare all ingredients as needed (chop vegetables, cook grains, etc.)",
+                        "2. Cook protein source with preferred method (grill, bake, or pan-fry)",
+                        "3. Prepare vegetables by steaming, roasting, or sautéing",
+                        "4. Combine all components and season to taste",
+                        "5. Serve hot with your choice of sauce or dressing"
+                    ],
+                    "nutritional_info": {
+                        "calories": int(meal_calories),
+                        "protein": {
+                            "amount": int(meal_protein),
+                            "unit": "g",
+                            "calories": int(meal_protein * 4),
+                            "percentage": int((meal_protein * 4) / meal_calories * 100)
+                        },
+                        "carbs": {
+                            "amount": int(meal_carbs),
+                            "unit": "g",
+                            "calories": int(meal_carbs * 4),
+                            "percentage": int((meal_carbs * 4) / meal_calories * 100)
+                        },
+                        "fat": {
+                            "amount": int(meal_fat),
+                            "unit": "g",
+                            "calories": int(meal_fat * 9),
+                            "percentage": int((meal_fat * 9) / meal_calories * 100)
+                        },
+                        "fiber": {
+                            "amount": int(meal_carbs * 0.2),
+                            "unit": "g"
+                        }
+                    },
+                    "tags": [cuisine.lower(), "balanced", "high-protein", "nutrient-dense"]
+                }
+                
+                meals[meal_type] = meal_obj
+                
+                # Add day to the list
+                full_days.append({
+                    "day": day_name,
+                    "date": day_date,
+                    "meals": meals,
+                    "daily_notes": f"LLM-generated meal plan for {day_name}",
+                    "daily_macros": daily_macros
+                })
+                
+                # Add to weekly totals
+                daily_macro_totals.append(daily_macros)
+            
+            # Enhanced meal plan structure with detailed recipes
+            meal_plan = {
+                'week': full_days,
+                'nutrition_summary': {
+                    'daily_average': {
+                        'calories': target_calories,
+                        'protein': target_protein,
+                        'carbs': target_carbs,
+                        'fat': target_fat,
+                        'fiber': 35  # Increased fiber for better digestion
+                    },
+                    'weekly_totals': {
+                        'calories': target_calories * 7,
+                        'protein': target_protein * 7,
+                        'carbs': target_carbs * 7,
+                        'fat': target_fat * 7,
+                        'fiber': 35 * 7
+                    }
+                },
+                'shopping_list': {
+                    'produce': [
+                        'Mixed greens (4 cups)', 'Broccoli (2 heads)', 'Bell peppers (6)', 
+                        'Carrots (1 lb)', 'Cucumbers (2)', 'Cherry tomatoes (1 pint)',
+                        'Avocados (4)', 'Lemons (4)', 'Garlic (1 bulb)', 'Ginger (1 knob)'
+                    ],
+                    'proteins': [
+                        'Chicken breast (2 lbs)', 'Salmon fillets (4)', 'Eggs (1 dozen)',
+                        'Greek yogurt (32 oz)', 'Cottage cheese (16 oz)', 'Tofu (14 oz)'
+                    ],
+                    'dairy': [
+                        'Milk (1/2 gallon)', 'Cheese (cheddar, feta)', 'Butter (1/2 lb)'
+                    ],
+                    'pantry': [
+                        'Quinoa (2 lbs)', 'Brown rice (2 lbs)', 'Oats (1 lb)', 'Whole wheat bread',
+                        'Almonds (1 cup)', 'Peanut butter (1 jar)', 'Olive oil', 'Honey'
+                    ],
+                    'spices': [
+                        'Salt', 'Pepper', 'Cumin', 'Paprika', 'Oregano', 'Cinnamon', 'Turmeric'
+                    ]
+                }
+            }
+            
+            return meal_plan
+    
     def _build_meal_plan_prompt(self, preferences: Dict[str, Any]) -> str:
         """Build a comprehensive prompt for the LLM with detailed instructions"""
         try:
@@ -332,30 +604,92 @@ class LLMMealPlannerAgent:
                 }
             }
             
-            prompt = f"""You are a professional nutritionist and chef with expertise in creating diverse, macro-balanced meal plans. 
-            Create a detailed weekly meal plan with the following specifications:
+            prompt = f"""You are an expert nutritionist and chef with extensive experience in clinical nutrition and sports dietetics. 
+            Create a highly detailed and personalized weekly meal plan with the following specifications:
             
-            USER PREFERENCES:
+            USER PREFERENCES & REQUIREMENTS:
             - Dietary restrictions: {', '.join(dietary_restrictions) if dietary_restrictions else 'None'}
             - Favorite cuisines: {', '.join(favorite_cuisines) if favorite_cuisines else 'Any'}
-            - Daily calorie target: {target_calories} calories
-            - Daily macronutrient targets: {target_protein}g protein, {target_carbs}g carbs, {target_fat}g fat
+            - Daily calorie target: {target_calories} calories (±5%)
+            - Daily macronutrient targets: 
+              * Protein: {target_protein}g (±5g)
+              * Carbs: {target_carbs}g (±10g)
+              * Fat: {target_fat}g (±5g)
             
             MEAL PLAN REQUIREMENTS:
-            1. Include 3 main meals (breakfast, lunch, dinner) and 2 snacks per day
-            2. Each meal must include detailed nutrition information (calories, protein, carbs, fat)
-            3. Ensure variety in protein sources, vegetables, and preparation methods
-            4. Include 1-2 vegetarian days if no dietary restrictions prevent it
-            5. Provide detailed recipes with ingredients and instructions
-            6. Ensure meals are nutritionally balanced and satisfying
-            7. Include a variety of colors, textures, and flavors
-            8. Consider food combinations that optimize nutrient absorption
+            1. Include 3 main meals (breakfast, lunch, dinner) and 2-3 snacks per day
+            2. Each meal must include detailed nutrition information (calories, protein, carbs, fat, fiber)
+            3. Ensure macronutrient distribution aligns with these targets per meal:
+               - Protein: 25-40g per main meal, 10-20g per snack
+               - Carbs: 30-60g per meal (adjust based on activity level)
+               - Healthy fats: 10-20g per meal
+            4. Include a variety of protein sources (animal and plant-based)
+            5. Ensure each meal contains at least 2 servings of vegetables
+            6. Include complex carbohydrates with each meal
+            7. Incorporate healthy fats in appropriate amounts
+            8. Ensure adequate fiber intake (25-35g daily)
+            9. Include hydration recommendations
             
             NUTRITIONAL GUIDELINES:
-            - Breakfast: ~{macros['breakfast']['calories']} kcal, ~{macros['breakfast']['protein']}g protein
-            - Lunch: ~{macros['lunch']['calories']} kcal, ~{macros['lunch']['protein']}g protein
-            - Dinner: ~{macros['dinner']['calories']} kcal, ~{macros['dinner']['protein']}g protein
-            - Snacks: ~{macros['snack']['calories']} kcal each
+            - Breakfast (~{macros['breakfast']['calories']} kcal): 
+              * Focus on protein and complex carbs
+              * Include healthy fats and fiber
+              * Example: 30-40g protein, 40-60g carbs, 10-15g fat
+            
+            - Lunch (~{macros['lunch']['calories']} kcal):
+              * Balanced macronutrients
+              * Include lean protein, complex carbs, and vegetables
+              * Example: 35-45g protein, 45-65g carbs, 15-20g fat
+            
+            - Dinner (~{macros['dinner']['calories']} kcal):
+              * Slightly higher protein, moderate fats, lower carbs
+              * Include slow-digesting proteins and healthy fats
+              * Example: 40-50g protein, 30-50g carbs, 15-25g fat
+            
+            - Snacks (~{macros['snack']['calories']} kcal each):
+              * Combine protein with fiber or healthy fats
+              * Focus on nutrient density
+              * Example: 10-20g protein, 15-30g carbs, 5-10g fat
+            
+            MEAL COMPOSITION RULES:
+            1. Every meal must include:
+               - A high-quality protein source (20-40g)
+               - Complex carbohydrates (1-2 servings)
+               - Healthy fats (1-2 servings)
+               - Non-starchy vegetables (1-2 cups)
+               - Fiber-rich foods (5g+ per meal)
+            
+            2. Protein Sources (rotate daily):
+               - Lean meats (chicken, turkey, lean beef)
+               - Fish and seafood (salmon, cod, shrimp)
+               - Eggs and dairy (Greek yogurt, cottage cheese)
+               - Plant-based (tofu, tempeh, legumes, lentils)
+            
+            3. Carbohydrate Sources:
+               - Whole grains (quinoa, brown rice, oats)
+               - Starchy vegetables (sweet potatoes, squash)
+               - Legumes and beans
+               - Fruits (in moderation)
+            
+            4. Healthy Fat Sources:
+               - Avocados, nuts, seeds
+               - Olive oil, coconut oil
+               - Fatty fish
+               - Nut butters
+            
+            5. Hydration:
+               - Recommend 8-12 cups of water daily
+               - Include herbal teas and infused waters
+               - Limit sugary beverages
+            
+            IMPORTANT NOTES:
+            - Ensure calorie and macronutrient targets are strictly followed
+            - Include detailed portion sizes for all ingredients
+            - Provide clear cooking instructions
+            - Note any meal prep or make-ahead tips
+            - Include seasoning and spice recommendations
+            - Consider food combinations that enhance nutrient absorption
+            - Account for cooking methods that preserve nutrients
             
             FORMAT REQUIREMENTS:
             Return a JSON object with the following structure:
@@ -468,33 +802,51 @@ class LLMMealPlannerAgent:
             target_carbs = int(preferences.get('targetCarbs', 225))
             target_fat = int(preferences.get('targetFat', 66))
             
-            # Calculate macros per meal type based on preferences
-            macros_per_meal = {
-                'breakfast': {
-                    'calories': int(target_calories * 0.25) if include_breakfast else 0,
-                    'protein': int(target_protein * 0.25) if include_breakfast else 0,
-                    'carbs': int(target_carbs * 0.25) if include_breakfast else 0,
-                    'fat': int(target_fat * 0.25) if include_breakfast else 0
-                },
-                'lunch': {
-                    'calories': int(target_calories * 0.35) if include_lunch else 0,
-                    'protein': int(target_protein * 0.35) if include_lunch else 0,
-                    'carbs': int(target_carbs * 0.35) if include_lunch else 0,
-                    'fat': int(target_fat * 0.35) if include_lunch else 0
-                },
-                'dinner': {
-                    'calories': int(target_calories * 0.4) if include_dinner else 0,
-                    'protein': int(target_protein * 0.4) if include_dinner else 0,
-                    'carbs': int(target_carbs * 0.4) if include_dinner else 0,
-                    'fat': int(target_fat * 0.4) if include_dinner else 0
-                },
-                'snack': {
-                    'calories': int(target_calories * 0.15) if include_snacks else 0,
-                    'protein': int(target_protein * 0.15) if include_snacks else 0,
-                    'carbs': int(target_carbs * 0.15) if include_snacks else 0,
-                    'fat': int(target_fat * 0.15) if include_snacks else 0
+            # Calculate macros per meal type based on preferences with better distribution
+            # Ensure we distribute calories and macros more accurately based on meal inclusion
+            total_meals = sum([include_breakfast, include_lunch, include_dinner])
+            snack_factor = 0.15 if include_snacks else 0
+            
+            # Calculate base distribution for main meals
+            if total_meals > 0:
+                base_meal_ratio = (1.0 - snack_factor) / total_meals
+            else:
+                base_meal_ratio = 0.25  # fallback if no meals are selected
+            
+            # Define meal distribution with better balance
+            macros_per_meal = {}
+            
+            if include_breakfast:
+                macros_per_meal['breakfast'] = {
+                    'calories': max(300, int(target_calories * base_meal_ratio * 0.9)),  # Slightly lighter breakfast
+                    'protein': max(20, int(target_protein * base_meal_ratio * 0.9)),
+                    'carbs': int(target_carbs * base_meal_ratio * 1.1),  # More carbs in the morning
+                    'fat': int(target_fat * base_meal_ratio * 0.8)  # Less fat in the morning
                 }
-            }
+            
+            if include_lunch:
+                macros_per_meal['lunch'] = {
+                    'calories': max(400, int(target_calories * base_meal_ratio)),
+                    'protein': max(25, int(target_protein * base_meal_ratio)),
+                    'carbs': int(target_carbs * base_meal_ratio),
+                    'fat': int(target_fat * base_meal_ratio)
+                }
+            
+            if include_dinner:
+                macros_per_meal['dinner'] = {
+                    'calories': max(400, int(target_calories * base_meal_ratio * 1.1)),  # Slightly heavier dinner
+                    'protein': max(30, int(target_protein * base_meal_ratio * 1.1)),  # More protein for dinner
+                    'carbs': int(target_carbs * base_meal_ratio * 0.9),  # Fewer carbs at night
+                    'fat': int(target_fat * base_meal_ratio * 1.2)  # More healthy fats at night
+                }
+            
+            if include_snacks:
+                macros_per_meal['snack'] = {
+                    'calories': max(150, int(target_calories * snack_factor)),
+                    'protein': max(10, int(target_protein * snack_factor)),
+                    'carbs': int(target_carbs * snack_factor * 0.7),  # Fewer carbs in snacks
+                    'fat': int(target_fat * snack_factor * 1.3)  # More healthy fats in snacks
+                }
             
             # Initialize daily macro totals
             daily_macro_totals = []

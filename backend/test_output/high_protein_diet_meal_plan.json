@@ -6,15 +6,15 @@
       "meals": [
         {
           "meal_type": "breakfast",
-          "name": "Cappuccino with Croissant",
-          "cuisine": "Italian",
+          "name": "Avocado Toast with Poached Eggs",
+          "cuisine": "American",
           "is_vegetarian": true,
           "is_vegan": false,
           "nutrition": {
-            "calories": 380,
-            "protein": 10,
-            "carbs": 45,
-            "fat": 18
+            "calories": 420,
+            "protein": 20,
+            "carbs": 35,
+            "fat": 22
           },
           "ingredients": [
             {
@@ -38,15 +38,15 @@
         },
         {
           "meal_type": "lunch",
-          "name": "Caprese Salad with Bread",
-          "cuisine": "Italian",
+          "name": "Quinoa Buddha Bowl with Tahini Dressing",
+          "cuisine": "American",
           "is_vegetarian": true,
-          "is_vegan": false,
+          "is_vegan": true,
           "nutrition": {
-            "calories": 450,
-            "protein": 18,
-            "carbs": 40,
-            "fat": 25
+            "calories": 500,
+            "protein": 22,
+            "carbs": 65,
+            "fat": 18
           },
           "ingredients": [
             {
@@ -70,15 +70,15 @@
         },
         {
           "meal_type": "dinner",
-          "name": "Eggplant Parmesan",
-          "cuisine": "Italian",
+          "name": "Grilled Portobello Mushroom with Quinoa",
+          "cuisine": "American",
           "is_vegetarian": true,
-          "is_vegan": false,
+          "is_vegan": true,
           "nutrition": {
-            "calories": 550,
-            "protein": 22,
-            "carbs": 45,
-            "fat": 30
+            "calories": 450,
+            "protein": 20,
+            "carbs": 60,
+            "fat": 15
           },
           "ingredients": [
             {
@@ -108,15 +108,15 @@
       "meals": [
         {
           "meal_type": "breakfast",
-          "name": "Frittata with Vegetables",
-          "cuisine": "Italian",
+          "name": "Overnight Oats with Berries",
+          "cuisine": "American",
           "is_vegetarian": true,
-          "is_vegan": false,
+          "is_vegan": true,
           "nutrition": {
-            "calories": 320,
-            "protein": 22,
-            "carbs": 10,
-            "fat": 20
+            "calories": 380,
+            "protein": 15,
+            "carbs": 60,
+            "fat": 10
           },
           "ingredients": [
             {
@@ -140,15 +140,15 @@
         },
         {
           "meal_type": "lunch",
-          "name": "Margherita Pizza",
-          "cuisine": "Italian",
+          "name": "Grilled Cheese with Tomato Soup",
+          "cuisine": "American",
           "is_vegetarian": true,
           "is_vegan": false,
           "nutrition": {
-            "calories": 600,
-            "protein": 25,
-            "carbs": 80,
-            "fat": 20
+            "calories": 550,
+            "protein": 18,
+            "carbs": 60,
+            "fat": 25
           },
           "ingredients": [
             {
@@ -172,15 +172,15 @@
         },
         {
           "meal_type": "dinner",
-          "name": "Risotto ai Funghi",
-          "cuisine": "Italian",
+          "name": "Mac and Cheese with Broccoli",
+          "cuisine": "American",
           "is_vegetarian": true,
           "is_vegan": false,
           "nutrition": {
-            "calories": 500,
-            "protein": 15,
-            "carbs": 65,
-            "fat": 18
+            "calories": 650,
+            "protein": 25,
+            "carbs": 75,
+            "fat": 30
           },
           "ingredients": [
             {
@@ -210,15 +210,15 @@
       "meals": [
         {
           "meal_type": "breakfast",
-          "name": "Biscotti with Espresso",
-          "cuisine": "Italian",
+          "name": "Smoothie Bowl with Granola",
+          "cuisine": "American",
           "is_vegetarian": true,
           "is_vegan": true,
           "nutrition": {
-            "calories": 280,
-            "protein": 5,
-            "carbs": 50,
-            "fat": 8
+            "calories": 350,
+            "protein": 12,
+            "carbs": 55,
+            "fat": 12
           },
           "ingredients": [
             {
@@ -242,15 +242,15 @@
         },
         {
           "meal_type": "lunch",
-          "name": "Pasta Primavera",
-          "cuisine": "Italian",
-          "is_vegetarian": true,
-          "is_vegan": true,
+          "name": "Caesar Salad with Grilled Chicken",
+          "cuisine": "American",
+          "is_vegetarian": false,
+          "is_vegan": false,
           "nutrition": {
             "calories": 480,
-            "protein": 15,
-            "carbs": 75,
-            "fat": 12
+            "protein": 40,
+            "carbs": 20,
+            "fat": 25
           },
           "ingredients": [
             {
@@ -274,15 +274,15 @@
         },
         {
           "meal_type": "dinner",
-          "name": "Pasta e Fagioli",
-          "cuisine": "Italian",
+          "name": "BBQ Jackfruit Sandwich with Coleslaw",
+          "cuisine": "American",
           "is_vegetarian": true,
           "is_vegan": true,
           "nutrition": {
-            "calories": 450,
-            "protein": 20,
-            "carbs": 70,
-            "fat": 10
+            "calories": 500,
+            "protein": 15,
+            "carbs": 85,
+            "fat": 15
           },
           "ingredients": [
             {
@@ -312,15 +312,15 @@
       "meals": [
         {
           "meal_type": "breakfast",
-          "name": "Yogurt with Honey and Nuts",
-          "cuisine": "Italian",
+          "name": "Veggie Breakfast Burrito",
+          "cuisine": "American",
           "is_vegetarian": true,
           "is_vegan": false,
           "nutrition": {
-            "calories": 300,
-            "protein": 12,
-            "carbs": 35,
-            "fat": 14
+            "calories": 450,
+            "protein": 25,
+            "carbs": 50,
+            "fat": 18
           },
           "ingredients": [
             {
@@ -344,15 +344,15 @@
         },
         {
           "meal_type": "lunch",
-          "name": "Minestrone Soup",
-          "cuisine": "Italian",
+          "name": "Veggie Burger with Sweet Potato Fries",
+          "cuisine": "American",
           "is_vegetarian": true,
           "is_vegan": true,
           "nutrition": {
-            "calories": 350,
-            "protein": 12,
-            "carbs": 50,
-            "fat": 8
+            "calories": 600,
+            "protein": 25,
+            "carbs": 80,
+            "fat": 20
           },
           "ingredients": [
             {
@@ -376,15 +376,15 @@
         },
         {
           "meal_type": "dinner",
-          "name": "Bruschetta with Tomato and Basil",
-          "cuisine": "Italian",
+          "name": "Stuffed Sweet Potato with Black Beans",
+          "cuisine": "American",
           "is_vegetarian": true,
           "is_vegan": true,
           "nutrition": {
-            "calories": 350,
-            "protein": 10,
-            "carbs": 45,
-            "fat": 15
+            "calories": 480,
+            "protein": 18,
+            "carbs": 80,
+            "fat": 12
           },
           "ingredients": [
             {
@@ -414,15 +414,15 @@
       "meals": [
         {
           "meal_type": "breakfast",
-          "name": "Cappuccino with Croissant",
-          "cuisine": "Italian",
+          "name": "Avocado Toast with Poached Eggs",
+          "cuisine": "American",
           "is_vegetarian": true,
           "is_vegan": false,
           "nutrition": {
-            "calories": 380,
-            "protein": 10,
-            "carbs": 45,
-            "fat": 18
+            "calories": 420,
+            "protein": 20,
+            "carbs": 35,
+            "fat": 22
           },
           "ingredients": [
             {
@@ -446,15 +446,15 @@
         },
         {
           "meal_type": "lunch",
-          "name": "Caprese Salad with Bread",
-          "cuisine": "Italian",
+          "name": "Quinoa Buddha Bowl with Tahini Dressing",
+          "cuisine": "American",
           "is_vegetarian": true,
-          "is_vegan": false,
+          "is_vegan": true,
           "nutrition": {
-            "calories": 450,
-            "protein": 18,
-            "carbs": 40,
-            "fat": 25
+            "calories": 500,
+            "protein": 22,
+            "carbs": 65,
+            "fat": 18
           },
           "ingredients": [
             {
@@ -478,15 +478,15 @@
         },
         {
           "meal_type": "dinner",
-          "name": "Eggplant Parmesan",
-          "cuisine": "Italian",
+          "name": "Grilled Portobello Mushroom with Quinoa",
+          "cuisine": "American",
           "is_vegetarian": true,
-          "is_vegan": false,
+          "is_vegan": true,
           "nutrition": {
-            "calories": 550,
-            "protein": 22,
-            "carbs": 45,
-            "fat": 30
+            "calories": 450,
+            "protein": 20,
+            "carbs": 60,
+            "fat": 15
           },
           "ingredients": [
             {
@@ -516,15 +516,15 @@
       "meals": [
         {
           "meal_type": "breakfast",
-          "name": "Frittata with Vegetables",
-          "cuisine": "Italian",
+          "name": "Overnight Oats with Berries",
+          "cuisine": "American",
           "is_vegetarian": true,
-          "is_vegan": false,
+          "is_vegan": true,
           "nutrition": {
-            "calories": 320,
-            "protein": 22,
-            "carbs": 10,
-            "fat": 20
+            "calories": 380,
+            "protein": 15,
+            "carbs": 60,
+            "fat": 10
           },
           "ingredients": [
             {
@@ -548,15 +548,15 @@
         },
         {
           "meal_type": "lunch",
-          "name": "Margherita Pizza",
-          "cuisine": "Italian",
+          "name": "Grilled Cheese with Tomato Soup",
+          "cuisine": "American",
           "is_vegetarian": true,
           "is_vegan": false,
           "nutrition": {
-            "calories": 600,
-            "protein": 25,
-            "carbs": 80,
-            "fat": 20
+            "calories": 550,
+            "protein": 18,
+            "carbs": 60,
+            "fat": 25
           },
           "ingredients": [
             {
@@ -580,15 +580,15 @@
         },
         {
           "meal_type": "dinner",
-          "name": "Risotto ai Funghi",
-          "cuisine": "Italian",
+          "name": "Mac and Cheese with Broccoli",
+          "cuisine": "American",
           "is_vegetarian": true,
           "is_vegan": false,
           "nutrition": {
-            "calories": 500,
-            "protein": 15,
-            "carbs": 65,
-            "fat": 18
+            "calories": 650,
+            "protein": 25,
+            "carbs": 75,
+            "fat": 30
           },
           "ingredients": [
             {
@@ -618,15 +618,15 @@
       "meals": [
         {
           "meal_type": "breakfast",
-          "name": "Biscotti with Espresso",
-          "cuisine": "Italian",
+          "name": "Smoothie Bowl with Granola",
+          "cuisine": "American",
           "is_vegetarian": true,
           "is_vegan": true,
           "nutrition": {
-            "calories": 280,
-            "protein": 5,
-            "carbs": 50,
-            "fat": 8
+            "calories": 350,
+            "protein": 12,
+            "carbs": 55,
+            "fat": 12
           },
           "ingredients": [
             {
@@ -650,15 +650,15 @@
         },
         {
           "meal_type": "lunch",
-          "name": "Pasta Primavera",
-          "cuisine": "Italian",
-          "is_vegetarian": true,
-          "is_vegan": true,
+          "name": "Caesar Salad with Grilled Chicken",
+          "cuisine": "American",
+          "is_vegetarian": false,
+          "is_vegan": false,
           "nutrition": {
             "calories": 480,
-            "protein": 15,
-            "carbs": 75,
-            "fat": 12
+            "protein": 40,
+            "carbs": 20,
+            "fat": 25
           },
           "ingredients": [
             {
@@ -682,15 +682,15 @@
         },
         {
           "meal_type": "dinner",
-          "name": "Pasta e Fagioli",
-          "cuisine": "Italian",
+          "name": "BBQ Jackfruit Sandwich with Coleslaw",
+          "cuisine": "American",
           "is_vegetarian": true,
           "is_vegan": true,
           "nutrition": {
-            "calories": 450,
-            "protein": 20,
-            "carbs": 70,
-            "fat": 10
+            "calories": 500,
+            "protein": 15,
+            "carbs": 85,
+            "fat": 15
           },
           "ingredients": [
             {
@@ -718,80 +718,80 @@
   "shopping_list": {
     "ingredients": [
       {
-        "item": "Pasta (Various)",
+        "item": "Quinoa",
         "category": "Grains",
         "estimated_cost": 4.0
       },
       {
-        "item": "Arborio Rice",
+        "item": "Brown Rice",
+        "category": "Grains",
+        "estimated_cost": 3.0
+      },
+      {
+        "item": "Oats",
         "category": "Grains",
         "estimated_cost": 3.5
       },
       {
-        "item": "Canned Tomatoes",
-        "category": "Canned Goods",
+        "item": "Black Beans",
+        "category": "Legumes",
+        "estimated_cost": 2.0
+      },
+      {
+        "item": "Avocados",
+        "category": "Vegetables",
+        "estimated_cost": 4.0
+      },
+      {
+        "item": "Sweet Potatoes",
+        "category": "Vegetables",
         "estimated_cost": 2.5
       },
       {
-        "item": "Olive Oil",
-        "category": "Oils",
-        "estimated_cost": 5.0
+        "item": "Spinach",
+        "category": "Vegetables",
+        "estimated_cost": 2.0
       },
       {
-        "item": "Parmesan Cheese",
-        "category": "Dairy",
-        "estimated_cost": 6.0
+        "item": "Broccoli",
+        "category": "Vegetables",
+        "estimated_cost": 2.5
       },
       {
-        "item": "Mozzarella",
+        "item": "Carrots",
+        "category": "Vegetables",
+        "estimated_cost": 1.5
+      },
+      {
+        "item": "Cheese",
         "category": "Dairy",
         "estimated_cost": 4.0
       },
       {
-        "item": "Fresh Basil",
-        "category": "Herbs",
-        "estimated_cost": 2.5
+        "item": "Almond Milk",
+        "category": "Dairy Alternatives",
+        "estimated_cost": 3.5
       },
       {
-        "item": "Garlic",
-        "category": "Vegetables",
-        "estimated_cost": 1.0
-      },
-      {
-        "item": "Onions",
-        "category": "Vegetables",
-        "estimated_cost": 2.0
-      },
-      {
-        "item": "Mushrooms",
-        "category": "Vegetables",
-        "estimated_cost": 3.0
-      },
-      {
-        "item": "Eggplant",
-        "category": "Vegetables",
-        "estimated_cost": 2.5
-      },
-      {
-        "item": "Zucchini",
-        "category": "Vegetables",
-        "estimated_cost": 2.0
+        "item": "Nuts & Seeds",
+        "category": "Snacks",
+        "estimated_cost": 5.0
       }
     ],
-    "estimated_cost": 38.0
+    "estimated_cost": 37.5
   },
   "nutrition_summary": {
     "daily_average": {
-      "calories": 1289,
-      "protein": "48.3g",
-      "carbs": "155.7g",
-      "fat": "51.3g"
+      "calories": 1441,
+      "protein": "63.1g",
+      "carbs": "177.1g",
+      "fat": "56.3g"
     },
     "weekly_totals": {
-      "calories": 9020,
-      "protein": "338g",
-      "carbs": "1090g",
-      "fat": "359g"
+      "calories": 10090,
+      "protein": "442g",
+      "carbs": "1240g",
+      "fat": "394g"
     },
     "targets": {
       "calories": 2000,
@@ -799,7 +799,9 @@
       "carbs": "200g",
       "fat": "65g"
     },
-    "dietary_considerations": [],
+    "dietary_considerations": [
+      "gluten-free"
+    ],
     "meal_inclusions": {
       "breakfast": true,
       "lunch": true,
@@ -807,100 +809,38 @@
       "snacks": false
     }
   },
-  "generated_at": "2025-07-28T21:31:05.215934",
+  "generated_at": "2025-07-28T21:57:06.014669",
   "preferences_used": {
-    "dietary_restrictions": [],
+    "dietary_restrictions": [
+      "gluten-free"
+    ],
     "favorite_cuisines": [
-      "Italian",
-      "Mexican",
-      "Indian",
-      "Thai",
-      "Japanese",
-      "Greek",
-      "Middle Eastern",
-      "Chinese",
-      "Vietnamese",
-      "French"
+      "American",
+      "Mexican"
     ],
-    "target_calories": 2200,
-    "target_protein": 180,
-    "target_carbs": 200,
-    "target_fat": 70,
-    "include_breakfast": true,
-    "include_lunch": true,
-    "include_dinner": true,
-    "include_snacks": true,
     "preferred_protein_sources": [
-      "chicken",
-      "fish",
-      "tofu",
+      "chicken breast",
+      "turkey",
       "eggs",
-      "beans",
-      "lentils",
-      "beef",
-      "pork",
-      "seafood"
-    ],
-    "preferred_carb_sources": [
-      "rice",
-      "quinoa",
-      "potatoes",
-      "whole wheat bread",
-      "oats",
-      "pasta",
-      "couscous"
+      "greek yogurt"
     ],
     "preferred_vegetables": [
       "broccoli",
-      "spinach",
-      "kale",
-      "bell peppers",
-      "carrots",
-      "zucchini",
-      "eggplant",
-      "mushrooms",
       "asparagus",
-      "brussels sprouts"
+      "zucchini"
     ],
-    "preferred_fruits": [
-      "berries",
-      "apples",
-      "bananas",
-      "oranges",
-      "grapes",
-      "mango",
-      "pineapple"
+    "preferred_carb_sources": [
+      "sweet potatoes",
+      "quinoa",
+      "brown rice"
     ],
-    "cooking_equipment": [
-      "oven",
-      "stove",
-      "blender",
-      "food processor",
-      "slow cooker",
-      "air fryer"
-    ],
-    "cooking_skill_level": "intermediate",
-    "meal_prep_time": 60,
-    "cooking_time_per_meal": 45,
-    "leftovers": 2,
-    "budget_level": "medium",
-    "spice_level": "medium",
-    "food_allergies": [],
-    "disliked_foods": [],
-    "preferred_cooking_methods": [
-      "grilling",
-      "baking",
-      "stir-frying",
-      "roasting",
-      "steaming",
-      "slow cooking"
-    ],
-    "special_occasions": [],
-    "nutrition_goals": [
-      "muscle_gain",
-      "balanced_diet",
-      "variety"
-    ]
+    "target_calories": 2500,
+    "target_protein": 220,
+    "target_carbs": 200,
+    "target_fat": 80,
+    "cooking_skill_level": "advanced",
+    "meals_per_day": 4,
+    "cooking_time_preference": "30-60 minutes"
   },
   "plan_type": "fallback"
 }

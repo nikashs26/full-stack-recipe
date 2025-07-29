@@ -108,14 +108,23 @@ const RecipesPage: React.FC = () => {
     refetchOnWindowFocus: false,
   });
 
-  // Debounce search input
-  useEffect(() => {
+  // Handle search input changes with debounce
+  const handleSearchChange = useCallback((value: string) => {
+    setSearchTerm(value);
+    
+    // Update searchQuery after a delay
     const timer = setTimeout(() => {
-      setSearchQuery(searchTerm);
-    }, 500);
-
+      setSearchQuery(value);
+      
+      // Scroll to results after a short delay to allow re-render
+      const resultsSection = document.getElementById('recipe-results');
+      if (resultsSection) {
+        resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 300);
+    
     return () => clearTimeout(timer);
-  }, [searchTerm]);
+  }, []);
 
   // Normalize recipes to a common format
   const normalizedRecipes = useMemo<NormalizedRecipe[]>(() => {
@@ -197,19 +206,8 @@ const RecipesPage: React.FC = () => {
   const displayRecipes = useMemo(() => filteredRecipes, [filteredRecipes]);
 
   const handleSearch = useCallback((term: string) => {
-    setSearchTerm(term);
-    setShowRecommendedSearches(false);
-    
-    // Scroll to results after a short delay to allow re-render
-    const timer = setTimeout(() => {
-      const resultsSection = document.getElementById('recipe-results');
-      if (resultsSection) {
-        resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
-    }, 100);
-    
-    return () => clearTimeout(timer);
-  }, []);
+    handleSearchChange(term);
+  }, [handleSearchChange]);
 
   const handleCuisineToggle = useCallback((cuisine: string) => {
     setSelectedCuisines(prev => 

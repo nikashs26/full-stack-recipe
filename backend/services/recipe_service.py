@@ -1,5 +1,6 @@
 import logging
 from typing import List, Dict, Any, Optional
+from datetime import datetime
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -42,13 +43,321 @@ class RecipeService:
                 
         return cached_recipe
 
-    def _matches_query(self, recipe: Dict[str, Any], query: str) -> bool:
-        """Check if a recipe matches the search query."""
-        if not query:
-            return True
-            
-        query = query.lower()
+    def _normalize_spoonacular_recipe(self, recipe_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Normalize recipe data from Spoonacular API to our standard format.
         
+        Args:
+            recipe_data: Raw recipe data from Spoonacular API
+            
+        Returns:
+            Normalized recipe dictionary in our standard format
+        """
+        try:
+            # Extract basic recipe information
+            recipe = {
+                'id': str(recipe_data.get('id', '')),
+                'title': recipe_data.get('title', '').strip(),
+                'summary': recipe_data.get('summary', '').strip(),
+                'readyInMinutes': recipe_data.get('readyInMinutes', 0),
+                'servings': recipe_data.get('servings', 1),
+                'sourceUrl': recipe_data.get('sourceUrl', ''),
+                'image': recipe_data.get('image', ''),
+                'imageType': 'jpg',
+                'sourceName': 'Spoonacular',
+                'spoonacularSourceUrl': recipe_data.get('spoonacularSourceUrl', ''),
+                'analyzedInstructions': recipe_data.get('analyzedInstructions', []),
+                'cuisines': [c.strip() for c in recipe_data.get('cuisines', []) if c.strip()],
+                'diets': [d.strip() for d in recipe_data.get('diets', []) if d.strip()],
+                'dietary_restrictions': self._extract_dietary_restrictions(recipe_data),
+                'dishTypes': [dt.strip() for dt in recipe_data.get('dishTypes', []) if dt.strip()],
+                'occasions': [o.strip() for o in recipe_data.get('occasions', []) if o.strip()],
+                'winePairing': recipe_data.get('winePairing', {}),
+                'createdAt': datetime.utcnow().isoformat(),
+                'updatedAt': datetime.utcnow().isoformat()
+            }
+            
+            # Extract and format instructions
+            instructions = []
+            for instruction in recipe_data.get('analyzedInstructions', []):
+                for step in instruction.get('steps', []):
+                    if step.get('step'):
+                        instructions.append(step['step'].strip())
+            
+            if not instructions and 'instructions' in recipe_data and recipe_data['instructions']:
+                # Fallback to plain instructions if no analyzed steps
+                instructions = [s.strip() for s in recipe_data['instructions'].split('\n') if s.strip()]
+            
+            recipe['instructions'] = instructions or ['No instructions provided.']
+            
+            # Extract and format ingredients
+            ingredients = []
+            for ing in recipe_data.get('extendedIngredients', []):
+                try:
+                    amount = ing.get('amount', 0)
+                    unit = ing.get('unit', '').strip()
+                    name = ing.get('name', '').strip()
+                    
+                    if not name:
+                        continue
+                        
+                    ingredient = {
+                        'id': str(ing.get('id', '')),
+                        'name': name,
+                        'amount': amount,
+                        'unit': unit,
+                        'original': ing.get('original', '').strip(),
+                        'measures': {
+                            'us': {
+                                'amount': ing.get('measures', {}).get('us', {}).get('amount', amount),
+                                'unitShort': ing.get('measures', {}).get('us', {}).get('unitShort', unit),
+                                'unitLong': ing.get('measures', {}).get('us', {}).get('unitLong', unit)
+                            },
+                            'metric': {
+                                'amount': ing.get('measures', {}).get('metric', {}).get('amount', amount),
+                                'unitShort': ing.get('measures', {}).get('metric', {}).get('unitShort', unit),
+                                'unitLong': ing.get('measures', {}).get('metric', {}).get('unitLong', unit)
+                            }
+                        }
+                    }
+                    ingredients.append(ingredient)
+                except Exception as e:
+                    logger.error(f"Error processing ingredient {ing.get('name', 'unknown')}: {e}")
+            
+            recipe['ingredients'] = ingredients
+            
+            # Add nutrition information if available
+            if 'nutrition' in recipe_data:
+                recipe['nutrition'] = recipe_data['nutrition']
+            
+            return recipe
+            
+        except Exception as e:
+            logger.error(f"Error normalizing Spoonacular recipe: {e}", exc_info=True)
+            return None
+            
+    def _extract_dietary_restrictions(self, recipe_data: Dict[str, Any]) -> List[str]:
+        """
+        Extract dietary restrictions from recipe data.
+        
+        Args:
+            recipe_data: Raw recipe data from API
+            
+        Returns:
+            List of dietary restriction tags
+        """
+        restrictions = set()
+        
+        # Check for vegetarian/vegan
+        if recipe_data.get('vegetarian', False):
+            restrictions.add('vegetarian')
+        if recipe_data.get('vegan', False):
+            restrictions.add('vegan')
+            
+        # Check for common allergens and dietary preferences
+        if 'dairyFree' in recipe_data and recipe_data['dairyFree']:
+            restrictions.add('dairy-free')
+            
+        if 'glutenFree' in recipe_data and recipe_data['glutenFree']:
+            restrictions.add('gluten-free')
+            
+        # Check for nuts in ingredients
+        ingredients_text = ' '.join([
+            ing.get('name', '').lower() + ' ' + ing.get('original', '').lower() 
+            for ing in recipe_data.get('extendedIngredients', [])
+        ])
+        
+        nut_keywords = ['nut', 'almond', 'cashew', 'pistachio', 'walnut', 'pecan', 'hazelnut', 'peanut']
+        if any(keyword in ingredients_text for keyword in nut_keywords):
+            restrictions.add('contains-nuts')
+        else:
+            restrictions.add('nut-free')
+            
+        # Check for eggs
+        egg_keywords = ['egg', 'eggs', 'mayonnaise', 'mayo']
+        if any(keyword in ingredients_text for keyword in egg_keywords):
+            restrictions.add('contains-eggs')
+        else:
+            restrictions.add('egg-free')
+            
+        # Add any diets from the recipe data
+        for diet in recipe_data.get('diets', []):
+            if diet and isinstance(diet, str):
+                diet = diet.lower().replace(' ', '-')
+                restrictions.add(diet)
+                
+        # Add any intolerances if present
+        for intolerance in recipe_data.get('intolerances', []):
+            if intolerance and isinstance(intolerance, str):
+                restrictions.add(intolerance.lower().replace(' ', '-'))
+                
+        return sorted(list(restrictions))
+        
+    def _extract_mealdb_dietary_restrictions(self, recipe_data: Dict[str, Any], ingredients: List[Dict[str, str]]) -> List[str]:
+        """
+        Extract dietary restrictions from TheMealDB recipe data.
+        
+        Args:
+            recipe_data: Raw recipe data from TheMealDB
+            ingredients: List of normalized ingredients
+            
+        Returns:
+            List of dietary restriction tags
+        """
+        restrictions = set()
+        
+        # Convert ingredients to text for searching
+        ingredients_text = ' '.join([
+            f"{ing.get('name', '').lower()} {ing.get('measure', '').lower()}" 
+            for ing in ingredients
+        ])
+        
+        # Define food categories
+        meat_keywords = ['chicken', 'beef', 'pork', 'lamb', 'bacon', 'sausage', 'meat', 'fish', 'seafood', 'shrimp', 'prawn']
+        dairy_keywords = ['milk', 'cheese', 'butter', 'cream', 'yogurt', 'whey', 'casein']
+        egg_keywords = ['egg', 'eggs', 'mayonnaise', 'mayo']
+        nut_keywords = ['nut', 'almond', 'cashew', 'pistachio', 'walnut', 'pecan', 'hazelnut', 'peanut']
+        
+        # Check for vegetarian/vegan
+        if not any(meat in ingredients_text for meat in meat_keywords):
+            restrictions.add('vegetarian')
+            # Check for vegan (no animal products)
+            if not any(dairy in ingredients_text for dairy in dairy_keywords) and \
+               not any(egg in ingredients_text for egg in egg_keywords):
+                restrictions.add('vegan')
+        
+        # Check for dairy
+        if not any(dairy in ingredients_text for dairy in dairy_keywords):
+            restrictions.add('dairy-free')
+            
+        # Check for nuts
+        if any(nut in ingredients_text for nut in nut_keywords):
+            restrictions.add('contains-nuts')
+        else:
+            restrictions.add('nut-free')
+            
+        # Check for eggs
+        if any(egg in ingredients_text for egg in egg_keywords):
+            restrictions.add('contains-eggs')
+        else:
+            restrictions.add('egg-free')
+            
+        # Check for gluten (common in TheMealDB recipes)
+        gluten_keywords = ['wheat', 'flour', 'bread', 'pasta', 'noodle', 'dough', 'crust', 'cake', 'biscuit', 'cracker']
+        if not any(gluten in ingredients_text for gluten in gluten_keywords):
+            restrictions.add('gluten-free')
+            
+        # Add category as a tag if available
+        if recipe_data.get('strCategory'):
+            category = str(recipe_data['strCategory'] or '').strip().lower()
+            if category:
+                restrictions.add(category.replace(' ', '-'))
+                
+        return sorted(list(restrictions))
+
+    def _normalize_mealdb_recipe(self, recipe_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Normalize recipe data from TheMealDB API to our standard format.
+        
+        Args:
+            recipe_data: Raw recipe data from TheMealDB API
+            
+        Returns:
+            Normalized recipe dictionary or None if recipe is invalid
+        """
+        if not recipe_data or not isinstance(recipe_data, dict) or 'idMeal' not in recipe_data:
+            logger.warning("Invalid recipe data received")
+            return None
+            
+        try:
+            # Extract ingredients and measurements
+            # Extract ingredients and measurements
+            ingredients = []
+            for i in range(1, 21):  # TheMealDB has up to 20 ingredients
+                # Safely get and clean ingredient and measure
+                ingredient = str(recipe_data.get(f'strIngredient{i}', '') or '').strip()
+                measure = str(recipe_data.get(f'strMeasure{i}', '') or '').strip()
+                
+                # Skip empty ingredients or placeholders
+                if not ingredient or ingredient.lower() in ('', 'null', 'none'):
+                    continue
+                    
+                ingredients.append({
+                    'name': ingredient,
+                    'measure': measure if measure and measure.lower() not in ('', 'null', 'none') else 'to taste',
+                    'original': f"{measure} {ingredient}".strip()
+                })
+        
+            # Handle instructions - split into steps if they're numbered
+            instructions = recipe_data.get('strInstructions', '')
+            if instructions:
+                # Split by newlines and filter out empty lines
+                steps = [step.strip() for step in str(instructions).split('\n') if step.strip()]
+                # If there's only one step, try splitting by numbers or bullet points
+                if len(steps) == 1:
+                    import re
+                    # Split by numbers followed by a dot or parenthesis
+                    steps = re.split(r'\d+[\.\)]\s*', steps[0])
+                    # Filter out empty steps
+                    steps = [step.strip() for step in steps if step.strip()]
+            else:
+                steps = ['No instructions provided.']
+            
+            # Safely get ID and title
+            recipe_id = str(recipe_data.get('idMeal', '')).strip()
+            if not recipe_id:
+                logger.warning("Recipe missing ID, skipping")
+                return None
+                
+            title = str(recipe_data.get('strMeal', 'Untitled Recipe') or 'Untitled Recipe').strip()
+            
+            # Extract dietary restrictions
+            dietary_restrictions = self._extract_mealdb_dietary_restrictions(recipe_data, ingredients)
+            
+            # Build the normalized recipe
+            normalized = {
+                'id': f"mealdb_{recipe_id}",
+                'title': title,
+                'image': str(recipe_data.get('strMealThumb', '') or ''),
+                'source': 'TheMealDB',
+                'source_url': str(recipe_data.get('strSource', '') or ''),
+                'ingredients': ingredients,
+                'instructions': steps,
+                'prep_time': None,
+                'cook_time': None,
+                'dietary_restrictions': dietary_restrictions,
+                'diets': dietary_restrictions,  # Also add to diets for filtering
+                'cuisines': [],
+                'tags': [],
+                'nutrition': {},
+                'created_at': datetime.utcnow().isoformat(),
+                'updated_at': datetime.utcnow().isoformat(),
+                'metadata': {
+                    'source_id': recipe_id,
+                    'source': 'TheMealDB',
+                    'original_data': recipe_data
+                }
+            }
+            
+            # Add category and area as tags if available
+            if recipe_data.get('strCategory'):
+                category = str(recipe_data['strCategory'] or '').strip()
+                if category:
+                    normalized['tags'].append(category)
+                    
+            if recipe_data.get('strArea'):
+                area = str(recipe_data['strArea'] or '').strip()
+                if area:
+                    normalized['cuisines'].append(area)
+            
+            return normalized
+            
+        except Exception as e:
+            logger.error(f"Error normalizing recipe data: {str(e)}")
+            import traceback
+            logger.debug(f"Error details: {traceback.format_exc()}")
+            return None
+            
         # Check title
         if 'title' in recipe and query in recipe['title'].lower():
             return True
@@ -263,6 +572,65 @@ class RecipeService:
         # Check if all required restrictions are met
         required_restrictions = set(r.lower() for r in restrictions if r)
         return required_restrictions.issubset(recipe_restrictions)
+        
+    def _matches_query(self, recipe: Dict[str, Any], query: str) -> bool:
+        """
+        Check if a recipe matches the search query.
+        
+        Args:
+            recipe: The recipe to check
+            query: The search query string
+            
+        Returns:
+            bool: True if the recipe matches the query, False otherwise
+        """
+        if not query:
+            return True
+            
+        query = query.lower().strip()
+        if not query:
+            return True
+            
+        # Check title
+        title = str(recipe.get('title', '')).lower()
+        if query in title:
+            return True
+            
+        # Check description if available
+        description = str(recipe.get('description', '')).lower()
+        if query in description:
+            return True
+            
+        # Check ingredients
+        if 'ingredients' in recipe and isinstance(recipe['ingredients'], list):
+            for ing in recipe['ingredients']:
+                if isinstance(ing, dict) and 'name' in ing:
+                    ing_name = str(ing['name']).lower()
+                    if query in ing_name:
+                        return True
+                elif isinstance(ing, str) and query in ing.lower():
+                    return True
+                    
+        # Check instructions if available
+        instructions = recipe.get('instructions', '')
+        if isinstance(instructions, list):
+            instructions = ' '.join(str(step) for step in instructions)
+        if query in str(instructions).lower():
+            return True
+            
+        # Check tags if available
+        if 'tags' in recipe and isinstance(recipe['tags'], list):
+            for tag in recipe['tags']:
+                if query in str(tag).lower():
+                    return True
+                    
+        # Check cuisines if available
+        if 'cuisines' in recipe and isinstance(recipe['cuisines'], list):
+            for cuisine in recipe['cuisines']:
+                if query in str(cuisine).lower():
+                    return True
+                    
+        return False
 
     async def search_recipes(self, query: str = "", ingredient: str = "", 
                        offset: int = 0, limit: int = 1000,

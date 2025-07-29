@@ -5,24 +5,14 @@ import { Edit, Trash2, Star, Clock, Heart, Utensils, Clock3, Users, BarChart2 } 
 import { Recipe } from '../types/recipe';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from './ui/hover-card';
 
-// Extended recipe type to handle various sources
-type ExtendedRecipe = Recipe & {
-  title?: string;
-  imageUrl?: string;
-  cuisines?: string | string[];
-  cuisine?: string;
-  diets?: string[];
-  source?: string;
-  ready_in_minutes?: number;
-  rating?: number | Array<{ score: number; count: number }>;
-  ratings?: number | Array<{ score: number; count: number }>;
-};
+// Use the ExtendedRecipe type from recipe types
+import type { ExtendedRecipe } from '../types/recipe';
 
 interface RecipeCardProps {
-  recipe: ExtendedRecipe;
+  recipe: ExtendedRecipe | Recipe;
   isExternal?: boolean;
-  onDelete?: (id: string) => void;
-  onClick?: (recipe: ExtendedRecipe) => void;
+  onDelete?: (id: string | number) => void;
+  onClick?: (recipe: ExtendedRecipe | Recipe) => void;
 }
 
 const RecipeCard: React.FC<RecipeCardProps> = React.memo(({ 
@@ -32,10 +22,11 @@ const RecipeCard: React.FC<RecipeCardProps> = React.memo(({
   onClick 
 }) => {
   // Handle recipe name from various sources
-  const recipeName = React.useMemo(() => 
-    recipe.name || recipe.title || "Untitled Recipe", 
-    [recipe.name, recipe.title]
-  );
+  const recipeName = React.useMemo(() => {
+    if ('title' in recipe && recipe.title) return recipe.title;
+    if ('name' in recipe && recipe.name) return recipe.name;
+    return "Untitled Recipe";
+  }, [recipe]);
   
   // Debug log the recipe data
   React.useEffect(() => {
@@ -55,7 +46,7 @@ const RecipeCard: React.FC<RecipeCardProps> = React.memo(({
       // Handle array case
       if (Array.isArray(recipe.cuisines)) {
         return recipe.cuisines
-          .filter((c): c is string | number | boolean => c != null)
+          .filter((c): c is NonNullable<typeof c> => c != null)
           .map(c => String(c).trim())
           .filter(c => c.length > 0);
       }
@@ -69,21 +60,20 @@ const RecipeCard: React.FC<RecipeCardProps> = React.memo(({
       }
       
       // Handle single cuisine field
-      if (recipe.cuisine) {
-        const cuisine = String(recipe.cuisine).trim();
-        return cuisine ? [cuisine] : [];
+      const cuisine = 'cuisine' in recipe ? recipe.cuisine : undefined;
+      if (cuisine) {
+        const cuisineStr = String(cuisine).trim();
+        return cuisineStr ? [cuisineStr] : [];
       }
       
-      // Try to extract from other potential fields
+      // Handle cuisines from other potential fields
       const potentialCuisineFields = [
-        recipe.cuisine,
-        recipe.cuisineType?.[0],
-        recipe.categories?.[0],
-        recipe.tags?.find(t => typeof t === 'string' && t.length > 0)
-      ];
+        'cuisineType' in recipe ? (recipe as any).cuisineType?.[0] : undefined,
+        'categories' in recipe ? (recipe as any).categories?.[0] : undefined,
+        'tags' in recipe ? (recipe as any).tags?.find((t: any) => typeof t === 'string' && t.length > 0) : undefined
+      ].filter(Boolean);
       
       const foundCuisine = potentialCuisineFields
-        .filter(Boolean)
         .map(String)
         .find(c => c.trim().length > 0);
         
@@ -126,16 +116,19 @@ const RecipeCard: React.FC<RecipeCardProps> = React.memo(({
       // Check all possible fields that might contain dietary info
       addRestrictions(recipe.dietaryRestrictions);
       addRestrictions(recipe.diets);
-      addRestrictions(recipe.diets);
-      addRestrictions(recipe.tags);
+      
+      // Handle tags if they exist
+      if ('tags' in recipe && recipe.tags) {
+        addRestrictions(Array.isArray(recipe.tags) ? recipe.tags : [recipe.tags]);
+      }
       
       // Also check healthLabels if it exists (common in some APIs)
-      if (recipe.healthLabels && Array.isArray(recipe.healthLabels)) {
-        const healthLabels = recipe.healthLabels
+      if ('healthLabels' in recipe && Array.isArray((recipe as any).healthLabels)) {
+        const healthLabels = (recipe as any).healthLabels
           .map(String)
-          .map(s => s.toLowerCase())
-          .filter(s => s.includes('free') || s.includes('diet') || s.includes('vegan') || s.includes('vegetarian'));
-        healthLabels.forEach(label => restrictions.add(label));
+          .map((s: string) => s.toLowerCase())
+          .filter((s: string) => s.includes('free') || s.includes('diet') || s.includes('vegan') || s.includes('vegetarian'));
+        healthLabels.forEach((label: string) => restrictions.add(label));
       }
       
       // Normalize the values
@@ -183,20 +176,27 @@ const RecipeCard: React.FC<RecipeCardProps> = React.memo(({
   
   // Handle image from various sources
   const imageUrl = React.useMemo((): string => {
-    if (recipe.image) return recipe.image;
-    if (recipe.imageUrl) return recipe.imageUrl;
-    if (recipe.source === 'TheMealDB' && recipe.id) {
+    if ('image' in recipe && recipe.image) return recipe.image;
+    if ('imageUrl' in recipe && recipe.imageUrl) return recipe.imageUrl;
+    if ('source' in recipe && recipe.source === 'TheMealDB' && recipe.id) {
       const ingredientName = typeof recipe.id === 'string' ? recipe.id.split('_').pop() : '';
       return `https://www.themealdb.com/images/ingredients/${ingredientName || 'placeholder'}.jpg`;
     }
     return '/placeholder.svg';
-  }, [recipe.image, recipe.imageUrl, recipe.source, recipe.id]);
+  }, [recipe]);
   
   // Handle ID from various sources
   const recipeId = React.useMemo((): string => {
     if (recipe.id === null || recipe.id === undefined) return '';
     return String(recipe.id).replace('mealdb_', '');
   }, [recipe.id]);
+  
+  // Safely get readyInMinutes from either readyInMinutes or ready_in_minutes
+  const readyInMinutes = React.useMemo(() => {
+    if ('readyInMinutes' in recipe) return recipe.readyInMinutes;
+    if ('ready_in_minutes' in recipe) return recipe.ready_in_minutes;
+    return undefined;
+  }, [recipe]);
   
   // Calculate average rating if ratings is an array
   const averageRating = React.useMemo(() => {
@@ -206,6 +206,13 @@ const RecipeCard: React.FC<RecipeCardProps> = React.memo(({
       }
       
       if (Array.isArray(value)) {
+        // Handle array of numbers
+        if (value.length > 0 && typeof value[0] === 'number') {
+          const sum = (value as number[]).reduce((acc, score) => acc + score, 0);
+          return sum / value.length;
+        }
+        
+        // Handle array of rating objects
         const validRatings = value
           .filter((r): r is { score: number } => 
             r !== null && 
@@ -223,8 +230,10 @@ const RecipeCard: React.FC<RecipeCardProps> = React.memo(({
       return undefined;
     };
     
-    return getAverage(recipe.rating) ?? getAverage(recipe.ratings);
-  }, [recipe.rating, recipe.ratings]);
+    // Try both rating and ratings properties
+    const ratingValue = 'rating' in recipe ? recipe.rating : 'ratings' in recipe ? recipe.ratings : undefined;
+    return getAverage(ratingValue);
+  }, [recipe]);
   
   // Handle ingredients from various formats
   const ingredients = React.useMemo(() => {
@@ -368,7 +377,7 @@ const RecipeCard: React.FC<RecipeCardProps> = React.memo(({
           <div className="mt-3 flex items-center justify-between text-sm text-gray-500">
             <div className="flex items-center">
               <Clock className="w-4 h-4 mr-1" />
-              <span>{recipe.ready_in_minutes ? `${recipe.ready_in_minutes} min` : 'N/A'}</span>
+              <span>{readyInMinutes ? `${readyInMinutes} min` : 'N/A'}</span>
             </div>
             <div className="flex items-center">
               <Star className="w-4 h-4 text-yellow-400 mr-1" />
@@ -411,11 +420,11 @@ const RecipeCard: React.FC<RecipeCardProps> = React.memo(({
           <div className="space-y-2 text-sm">
             <div className="flex items-center text-gray-700">
               <Clock3 className="w-4 h-4 mr-2 text-gray-500" />
-              <span>Prep: {recipe.prep_time || 'N/A'}</span>
+              <span>Prep: {'prepTime' in recipe ? recipe.prepTime : 'prep_time' in recipe ? (recipe as any).prep_time : 'N/A'}</span>
             </div>
             <div className="flex items-center text-gray-700">
               <Utensils className="w-4 h-4 mr-2 text-gray-500" />
-              <span>Cook: {recipe.cook_time || 'N/A'}</span>
+              <span>Cook: {'cookTime' in recipe ? recipe.cookTime : 'cook_time' in recipe ? (recipe as any).cook_time : 'N/A'}</span>
             </div>
             <div className="flex items-center text-gray-700">
               <Users className="w-4 h-4 mr-2 text-gray-500" />

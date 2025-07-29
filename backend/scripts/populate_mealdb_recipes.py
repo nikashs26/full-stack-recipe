@@ -107,6 +107,77 @@ async def fetch_all_meals():
     logger.info(f"Total meals fetched: {len(all_meals)}")
     return all_meals
 
+def parse_instructions(instructions: str) -> Dict[str, Any]:
+    """Parse recipe instructions into structured format with steps and description."""
+    if not instructions:
+        return {'description': '', 'steps': []}
+    
+    # Clean up the instructions
+    instructions = ' '.join(instructions.split())  # Normalize whitespace
+    
+    # First, try to split by numbered steps (e.g., "1.", "1)", "Step 1:")
+    import re
+    
+    # Pattern to match numbered steps with optional dots/parentheses
+    step_pattern = r'(?:\b(?:Step\s*)?\d+[.)]|\d+\s*[.)]|\*\s*|\n\s*\n)'
+    
+    # Split by the step pattern
+    raw_steps = re.split(f'({step_pattern})', instructions, flags=re.IGNORECASE)
+    
+    # Clean up the split results
+    steps = []
+    current_step = ''
+    
+    for i, part in enumerate(raw_steps):
+        part = part.strip()
+        if not part:
+            continue
+            
+        # If this part is a step number/indicator
+        if re.match(f'^{step_pattern}$', part, flags=re.IGNORECASE):
+            if current_step:  # Save the previous step if exists
+                steps.append(current_step.strip())
+            current_step = part + ' '  # Start new step with the number
+        else:
+            current_step += part + ' '
+    
+    # Add the last step if it exists
+    if current_step.strip():
+        steps.append(current_step.strip())
+    
+    # If we couldn't split by numbers, try other methods
+    if len(steps) <= 1:
+        # Try splitting by double newlines first
+        steps = [s.strip() for s in instructions.split('\n\n') if s.strip()]
+        
+        # If that doesn't work, try splitting by periods that end a sentence
+        if len(steps) <= 1:
+            sentences = re.split(r'(?<=[.!?])\s+(?=[A-Z])', instructions)
+            steps = [s for s in sentences if s.strip()]
+    
+    # Clean up each step
+    steps = [re.sub(r'^\s*\d+[.)]?\s*', '', s).strip() for s in steps if s.strip()]
+    
+    # Number the steps properly
+    steps = [f"{i+1}. {step}" for i, step in enumerate(steps)]
+    
+    # If we have multiple steps, use the first one as description if it's short enough
+    description = ''
+    if steps:
+        if len(steps) > 1 and len(steps[0].split()) < 30:  # First step is short
+            description = steps[0]
+            steps = steps[1:]
+        elif len(steps[0].split()) > 50:  # First step is too long, split it
+            words = steps[0].split()
+            split_point = len(words) // 2
+            description = ' '.join(words[:split_point]).strip()
+            steps[0] = ' '.join(words[split_point:]).strip()
+    
+    return {
+        'description': description,
+        'steps': steps
+    }
+
 def enhance_recipe(recipe: Dict[str, Any]) -> Dict[str, Any]:
     """Enhance recipe with additional metadata"""
     if not recipe or not isinstance(recipe, dict):
@@ -211,6 +282,23 @@ def enhance_recipe(recipe: Dict[str, Any]) -> Dict[str, Any]:
             # Add some randomness to the cooking time
             base_time = base_times.get(category, 45)
             recipe['readyInMinutes'] = max(15, min(180, base_time + random.randint(-15, 30)))
+        
+        # Process instructions
+        instructions = recipe.get('strInstructions', '')
+        parsed_instructions = parse_instructions(instructions)
+        
+        # Add structured instructions to recipe
+        recipe['description'] = parsed_instructions['description']
+        recipe['steps'] = parsed_instructions['steps']
+        
+        # If no description was extracted, use the first 2 steps as description
+        if not recipe['description'] and recipe['steps']:
+            recipe['description'] = ' '.join(recipe['steps'][:2])
+            recipe['steps'] = recipe['steps'][2:] if len(recipe['steps']) > 2 else []
+        
+        # Ensure we have at least one step
+        if not recipe['steps'] and instructions:
+            recipe['steps'] = [f"1. {instructions}"]
         
         # Add metadata
         recipe['cuisine'] = cuisine

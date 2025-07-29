@@ -18,12 +18,20 @@ export interface MealPlanOptions {
   };
 }
 
+export interface NutritionValue {
+  amount: number | string;
+  unit?: string;
+  name?: string;
+}
+
+export type NutritionField = number | string | NutritionValue;
+
 export interface NutritionInfo {
-  calories: number;
-  protein: string | number;
-  carbs: string | number;
-  fat: string | number;
-  [key: string]: string | number;
+  calories: NutritionField;
+  protein: NutritionField;
+  carbs: NutritionField;
+  fat: NutritionField;
+  [key: string]: NutritionField;
 }
 
 export interface Meal {
@@ -64,29 +72,33 @@ export interface ShoppingList {
 
 export interface NutritionSummary {
   daily_average: {
-    calories: number;
-    protein: string;
-    carbs: string;
-    fat: string;
+    calories: NutritionField;
+    protein: NutritionField;
+    carbs: NutritionField;
+    fat: NutritionField;
+    [key: string]: NutritionField;
   };
   weekly_totals: {
-    calories: number;
-    protein: string;
-    carbs: string;
-    fat: string;
+    calories: NutritionField;
+    protein: NutritionField;
+    carbs: NutritionField;
+    fat: NutritionField;
+    [key: string]: NutritionField;
   };
-  targets: {
-    calories: number;
-    protein: string;
-    carbs: string;
-    fat: string;
+  targets?: {
+    calories: NutritionField;
+    protein: NutritionField;
+    carbs: NutritionField;
+    fat: NutritionField;
+    [key: string]: NutritionField;
   };
-  dietary_considerations: string[];
-  meal_inclusions: {
+  dietary_considerations?: string[];
+  meal_inclusions?: {
     breakfast: boolean;
     lunch: boolean;
     dinner: boolean;
     snacks: boolean;
+    [key: string]: boolean;
   };
 }
 
