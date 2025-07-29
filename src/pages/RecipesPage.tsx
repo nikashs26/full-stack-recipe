@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { fetchManualRecipes } from '../lib/manualRecipes';
 import { DietaryRestriction, Recipe as RecipeType } from '../types/recipe';
-import { Loader2, Search, Filter, X, ChefHat } from 'lucide-react';
+import { Loader2, Search, Filter, X, ChefHat, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import RecipeCard from '@/components/RecipeCard';
@@ -78,26 +78,37 @@ const RecipesPage: React.FC = () => {
   const [selectedDiets, setSelectedDiets] = useState<string[]>([]);
   const [showMobileFilters, setShowMobileFilters] = useState(false);
   const [showLoading, setShowLoading] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const recipesPerPage = 20;
   
   const isDesktop = useMediaQuery("(min-width: 1024px)");
   const debouncedSearchQuery = useDebounce(searchQuery, 500);
 
-  // Fetch all recipes from ChromaDB with search and filters
+  // Fetch paginated recipes from ChromaDB with search and filters
   const { 
-    data: recipes = [], 
+    data: recipesData = { recipes: [], total: 0 }, 
     isLoading: isLoadingRecipes, 
     isFetching 
-  } = useQuery<Recipe[]>({
-    queryKey: ['recipes', debouncedSearchQuery, selectedCuisines, selectedDiets],
+  } = useQuery<{ recipes: Recipe[], total: number }>({
+    queryKey: ['recipes', debouncedSearchQuery, selectedCuisines, selectedDiets, currentPage],
     queryFn: async () => {
       try {
         const result = await fetchManualRecipes(debouncedSearchQuery, '', {
-          page: 1,
-          pageSize: 1000,
+          page: currentPage,
+          pageSize: recipesPerPage,
           cuisines: selectedCuisines,
           diets: selectedDiets
         });
-        return result as unknown as Recipe[];
+        
+        // Update total pages based on the response
+        const totalRecipes = result.total || 0;
+        setTotalPages(Math.ceil(totalRecipes / recipesPerPage));
+        
+        return {
+          recipes: result.recipes as unknown as Recipe[],
+          total: totalRecipes
+        };
       } catch (error) {
         console.error('Error fetching recipes:', error);
         throw error;
@@ -108,29 +119,18 @@ const RecipesPage: React.FC = () => {
     refetchOnWindowFocus: false,
   });
 
-  // Handle search input changes with debounce
-  const handleSearchChange = useCallback((value: string) => {
-    setSearchTerm(value);
-    
-    // Update searchQuery after a delay
-    const timer = setTimeout(() => {
-      setSearchQuery(value);
-      
-      // Scroll to results after a short delay to allow re-render
-      const resultsSection = document.getElementById('recipe-results');
-      if (resultsSection) {
-        resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
-    }, 300);
-    
-    return () => clearTimeout(timer);
-  }, []);
+  // Handle search input change with debounce and reset to first page
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchTerm(e.target.value);
+    setSearchQuery(e.target.value);
+    setCurrentPage(1);
+  };
 
   // Normalize recipes to a common format
   const normalizedRecipes = useMemo<NormalizedRecipe[]>(() => {
-    if (!Array.isArray(recipes)) return [];
+    if (!Array.isArray(recipesData.recipes)) return [];
     
-    return recipes.map(recipe => {
+    return recipesData.recipes.map(recipe => {
       // Helper to ensure we always return an array of strings
       const normalizeList = (items: any): string[] => {
         if (!items) return [];
@@ -160,7 +160,10 @@ const RecipesPage: React.FC = () => {
         ...normalizeList(recipe.diets),
         ...normalizeList(recipe.dietaryRestrictions),
         ...(recipe.type === 'manual' && 'diets' in recipe ? normalizeList(recipe.diets) : []),
-        ...(recipe.type === 'spoonacular' && 'diets' in recipe ? normalizeList(recipe.diets) : [])
+        ...(recipe.type === 'spoonacular' && 'diets' in recipe ? normalizeList(recipe.diets) : []),
+        // Add vegetarian/vegan flags if present in the recipe
+        ...(recipe.vegetarian ? ['vegetarian'] : []),
+        ...(recipe.vegan ? ['vegan'] : [])
       ].filter((value, index, self) => self.indexOf(value) === index); // Remove duplicates
 
       return {
@@ -195,7 +198,7 @@ const RecipesPage: React.FC = () => {
           : []
       };
     });
-  }, [recipes]);
+  }, [recipesData.recipes]);
 
   // All recipes are now loaded at once
   const filteredRecipes = useMemo(() => {
@@ -209,21 +212,25 @@ const RecipesPage: React.FC = () => {
     handleSearchChange(term);
   }, [handleSearchChange]);
 
-  const handleCuisineToggle = useCallback((cuisine: string) => {
+  // Toggle cuisine filter and reset to first page
+  const toggleCuisine = (cuisine: string) => {
     setSelectedCuisines(prev => 
-      prev.includes(cuisine)
-        ? prev.filter(c => c !== cuisine)
+      prev.includes(cuisine) 
+        ? prev.filter(c => c !== cuisine) 
         : [...prev, cuisine]
     );
-  }, []);
+    setCurrentPage(1);
+  };
 
-  const handleDietToggle = useCallback((diet: string) => {
+  // Toggle diet filter and reset to first page
+  const toggleDiet = (diet: string) => {
     setSelectedDiets(prev => 
-      prev.includes(diet)
-        ? prev.filter(d => d !== diet)
+      prev.includes(diet) 
+        ? prev.filter(d => d !== diet) 
         : [...prev, diet]
     );
-  }, []);
+    setCurrentPage(1);
+  };
 
   const clearAllFilters = useCallback(() => {
     setSelectedCuisines([]);
@@ -254,12 +261,12 @@ const RecipesPage: React.FC = () => {
         selectedCuisines={selectedCuisines}
         selectedDiets={selectedDiets}
         onSearchChange={setSearchQuery}
-        onCuisineToggle={handleCuisineToggle}
-        onDietToggle={handleDietToggle}
+        onCuisineToggle={toggleCuisine}
+        onDietToggle={toggleDiet}
         onClearFilters={clearAllFilters}
       />
     </div>
-  ), [searchQuery, selectedCuisines, selectedDiets, handleCuisineToggle, handleDietToggle, clearAllFilters]);
+  ), [searchQuery, selectedCuisines, selectedDiets, toggleCuisine, toggleDiet, clearAllFilters]);
 
   const renderMobileFilters = useCallback(() => (
     <Drawer open={showMobileFilters} onOpenChange={setShowMobileFilters}>
@@ -453,10 +460,87 @@ const RecipesPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Showing all results at once */}
-        {filteredRecipes.length > 0 && (
-          <div className="text-center text-sm text-muted-foreground mt-4">
-            Showing all {filteredRecipes.length} recipes
+        {/* Pagination Controls */}
+        {totalPages > 1 && (
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-8">
+            <div className="text-sm text-gray-500 dark:text-gray-400">
+              Page {currentPage} of {totalPages}
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(1)}
+                disabled={currentPage === 1 || isLoadingRecipes}
+              >
+                <ChevronsLeft className="h-4 w-4 mr-1" />
+                First
+              </Button>
+              
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage === 1 || isLoadingRecipes}
+              >
+                <ChevronLeft className="h-4 w-4 mr-1" />
+                Previous
+              </Button>
+              
+              <div className="flex items-center gap-1">
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  // Calculate which page numbers to show (up to 5 at a time)
+                  let pageNum;
+                  if (totalPages <= 5) {
+                    pageNum = i + 1;
+                  } else if (currentPage <= 3) {
+                    pageNum = i + 1;
+                  } else if (currentPage >= totalPages - 2) {
+                    pageNum = totalPages - 4 + i;
+                  } else {
+                    pageNum = currentPage - 2 + i;
+                  }
+                  
+                  return (
+                    <Button
+                      key={pageNum}
+                      variant={currentPage === pageNum ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setCurrentPage(pageNum)}
+                      disabled={isLoadingRecipes}
+                      className={`min-w-[40px] ${currentPage === pageNum ? 'font-bold' : ''}`}
+                    >
+                      {pageNum}
+                    </Button>
+                  );
+                })}
+              </div>
+              
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                disabled={currentPage === totalPages || isLoadingRecipes}
+              >
+                Next
+                <ChevronRight className="h-4 w-4 ml-1" />
+              </Button>
+              
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(totalPages)}
+                disabled={currentPage === totalPages || isLoadingRecipes}
+              >
+                Last
+                <ChevronsRight className="h-4 w-4 ml-1" />
+              </Button>
+            </div>
+            
+            <div className="text-sm text-gray-500 dark:text-gray-400">
+              {recipesData.total} {recipesData.total === 1 ? 'recipe' : 'recipes'} total
+            </div>
           </div>
         )}
       </main>

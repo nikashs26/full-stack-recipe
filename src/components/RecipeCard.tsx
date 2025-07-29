@@ -122,6 +122,14 @@ const RecipeCard: React.FC<RecipeCardProps> = React.memo(({
         addRestrictions(Array.isArray(recipe.tags) ? recipe.tags : [recipe.tags]);
       }
       
+      // Check for direct boolean flags
+      if (recipe.vegetarian === true) {
+        restrictions.add('vegetarian');
+      }
+      if (recipe.vegan === true) {
+        restrictions.add('vegan');
+      }
+      
       // Also check healthLabels if it exists (common in some APIs)
       if ('healthLabels' in recipe && Array.isArray((recipe as any).healthLabels)) {
         const healthLabels = (recipe as any).healthLabels

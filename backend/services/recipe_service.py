@@ -67,7 +67,14 @@ class RecipeService:
                 'sourceName': 'Spoonacular',
                 'spoonacularSourceUrl': recipe_data.get('spoonacularSourceUrl', ''),
                 'analyzedInstructions': recipe_data.get('analyzedInstructions', []),
-                'cuisines': [c.strip() for c in recipe_data.get('cuisines', []) if c.strip()],
+                'cuisines': [c.strip() for c in recipe_data.get('cuisines', []) 
+                                if c.strip() and c.strip().lower() in [
+                                    'american', 'british', 'canadian', 'chinese', 'croatian', 'dutch',
+                                    'egyptian', 'french', 'greek', 'indian', 'irish', 'italian',
+                                    'jamaican', 'japanese', 'kenyan', 'malaysian', 'mexican',
+                                    'moroccan', 'russian', 'spanish', 'thai', 'tunisian',
+                                    'turkish', 'vietnamese'
+                                ]],
                 'diets': [d.strip() for d in recipe_data.get('diets', []) if d.strip()],
                 'dietary_restrictions': self._extract_dietary_restrictions(recipe_data),
                 'dishTypes': [dt.strip() for dt in recipe_data.get('dishTypes', []) if dt.strip()],
@@ -213,38 +220,60 @@ class RecipeService:
         ])
         
         # Define food categories
-        meat_keywords = ['chicken', 'beef', 'pork', 'lamb', 'bacon', 'sausage', 'meat', 'fish', 'seafood', 'shrimp', 'prawn']
-        dairy_keywords = ['milk', 'cheese', 'butter', 'cream', 'yogurt', 'whey', 'casein']
-        egg_keywords = ['egg', 'eggs', 'mayonnaise', 'mayo']
-        nut_keywords = ['nut', 'almond', 'cashew', 'pistachio', 'walnut', 'pecan', 'hazelnut', 'peanut']
+        meat_keywords = ['chicken', 'beef', 'pork', 'lamb', 'bacon', 'sausage', 'meat', 'fish', 'seafood', 'shrimp', 'prawn', 'ham', 'bacon', 'salami', 'pepperoni', 'prosciutto', 'poultry', 'venison', 'duck', 'goose', 'turkey']
+        dairy_keywords = ['milk', 'cheese', 'butter', 'cream', 'yogurt', 'whey', 'casein', 'ghee', 'yoghurt', 'sour cream', 'heavy cream', 'whipping cream', 'half-and-half', 'buttermilk']
+        egg_keywords = ['egg', 'eggs', 'mayonnaise', 'mayo', 'albumen']
+        nut_keywords = ['nut', 'almond', 'cashew', 'pistachio', 'walnut', 'pecan', 'hazelnut', 'peanut', 'macadamia', 'brazil nut', 'chestnut', 'pinenut', 'pine nut', 'pistachio']
         
-        # Check for vegetarian/vegan
-        if not any(meat in ingredients_text for meat in meat_keywords):
+        # Check for meat/fish/poultry (non-vegetarian)
+        has_meat = any(meat in ingredients_text for meat in meat_keywords)
+        has_dairy = any(dairy in ingredients_text for dairy in dairy_keywords)
+        has_eggs = any(egg in ingredients_text for egg in egg_keywords)
+        
+        # Set vegetarian/vegan status
+        if not has_meat:
             restrictions.add('vegetarian')
-            # Check for vegan (no animal products)
-            if not any(dairy in ingredients_text for dairy in dairy_keywords) and \
-               not any(egg in ingredients_text for egg in egg_keywords):
+            recipe_data['vegetarian'] = True  # Set the vegetarian flag
+            if not has_dairy and not has_eggs:
                 restrictions.add('vegan')
+                recipe_data['vegan'] = True  # Set the vegan flag
         
-        # Check for dairy
-        if not any(dairy in ingredients_text for dairy in dairy_keywords):
+        # Set dairy status
+        if not has_dairy:
             restrictions.add('dairy-free')
+        else:
+            recipe_data['dairy'] = True
             
-        # Check for nuts
-        if any(nut in ingredients_text for nut in nut_keywords):
+        # Ensure vegetarian/vegan tags are in the recipe's tags if not already present
+        if recipe_data.get('vegetarian', False) and 'vegetarian' not in recipe_data.get('tags', []):
+            if 'tags' not in recipe_data:
+                recipe_data['tags'] = []
+            recipe_data['tags'].append('vegetarian')
+            
+        if recipe_data.get('vegan', False) and 'vegan' not in recipe_data.get('tags', []):
+            if 'tags' not in recipe_data:
+                recipe_data['tags'] = []
+            recipe_data['tags'].append('vegan')
+            
+        # Set nut status
+        has_nuts = any(nut in ingredients_text for nut in nut_keywords)
+        if has_nuts:
             restrictions.add('contains-nuts')
+            recipe_data['containsNuts'] = True
         else:
             restrictions.add('nut-free')
             
-        # Check for eggs
-        if any(egg in ingredients_text for egg in egg_keywords):
+        # Set egg status
+        if has_eggs:
             restrictions.add('contains-eggs')
+            recipe_data['containsEggs'] = True
         else:
             restrictions.add('egg-free')
             
         # Check for gluten (common in TheMealDB recipes)
-        gluten_keywords = ['wheat', 'flour', 'bread', 'pasta', 'noodle', 'dough', 'crust', 'cake', 'biscuit', 'cracker']
-        if not any(gluten in ingredients_text for gluten in gluten_keywords):
+        gluten_keywords = ['wheat', 'flour', 'bread', 'pasta', 'noodle', 'dough', 'crust', 'cake', 'biscuit', 'cracker', 'barley', 'rye', 'triticale', 'malt', 'brewer\'s yeast']
+        has_gluten = any(gluten in ingredients_text for gluten in gluten_keywords)
+        if not has_gluten:
             restrictions.add('gluten-free')
             
         # Add category as a tag if available
@@ -252,6 +281,11 @@ class RecipeService:
             category = str(recipe_data['strCategory'] or '').strip().lower()
             if category:
                 restrictions.add(category.replace(' ', '-'))
+        
+        # Log the restrictions for debugging
+        logger.debug(f"Recipe: {recipe_data.get('strMeal', 'Unknown')}")
+        logger.debug(f"Ingredients text: {ingredients_text}")
+        logger.debug(f"Detected restrictions: {restrictions}")
                 
         return sorted(list(restrictions))
 
@@ -339,16 +373,85 @@ class RecipeService:
                 }
             }
             
-            # Add category and area as tags if available
+            # Map of TheMealDB areas to standard cuisine names
+            CUISINE_MAPPING = {
+                'american': 'american',
+                'british': 'british',
+                'canadian': 'canadian',
+                'chinese': 'chinese',
+                'croatian': 'croatian',
+                'dutch': 'dutch',
+                'egyptian': 'egyptian',
+                'french': 'french',
+                'greek': 'greek',
+                'indian': 'indian',
+                'irish': 'irish',
+                'italian': 'italian',  # Italian is not automatically Mediterranean
+                'jamaican': 'jamaican',
+                'japanese': 'japanese',
+                'kenyan': 'kenyan',
+                'malaysian': 'malaysian',
+                'mexican': 'mexican',
+                'moroccan': 'moroccan',
+                'russian': 'russian',
+                'spanish': 'spanish',
+                'thai': 'thai',
+                'tunisian': 'tunisian',
+                'turkish': 'turkish',
+                'vietnamese': 'vietnamese'
+            }
+            
+            # List of specific dishes that are considered Mediterranean
+            MEDITERRANEAN_DISHES = {
+                'greek': ['moussaka', 'tzatziki', 'dolmades', 'souvlaki', 'spanakopita', 'baklava', 'gyro', 'feta salad'],
+                'spanish': ['paella', 'gazpacho', 'patatas bravas', 'tortilla española', 'chorizo', 'pisto', 'albondigas'],
+                'italian': ['caprese salad', 'bruschetta', 'minestrone', 'risotto alla milanese', 'insalata caprese'],
+                'turkish': ['kebab', 'baklava', 'dolma', 'lahmacun', 'menemen', 'imam bayildi'],
+                'lebanese': ['falafel', 'hummus', 'tabbouleh', 'baba ganoush', 'fattoush', 'shawarma'],
+                'moroccan': ['tagine', 'couscous', 'harira', 'pastilla', 'zaalouk', 'kefta']
+            }
+            
+            # Add category as a tag if available
             if recipe_data.get('strCategory'):
-                category = str(recipe_data['strCategory'] or '').strip()
+                category = str(recipe_data['strCategory'] or '').strip().lower()
                 if category:
                     normalized['tags'].append(category)
-                    
+            
+            # Handle cuisine/area with validation and mapping
             if recipe_data.get('strArea'):
-                area = str(recipe_data['strArea'] or '').strip()
-                if area:
-                    normalized['cuisines'].append(area)
+                area = str(recipe_data['strArea'] or '').strip().lower()
+                
+                # Only add if it's a known cuisine from our mapping
+                if area in CUISINE_MAPPING:
+                    normalized_cuisine = CUISINE_MAPPING[area]
+                    normalized['cuisines'].append(normalized_cuisine)
+                    
+                    # Check if this is a Mediterranean dish
+                    title_lower = normalized['title'].lower()
+                    is_mediterranean = False
+                    
+                    # Check if this is a specifically Mediterranean dish
+                    if area in MEDITERRANEAN_DISHES:
+                        for dish in MEDITERRANEAN_DISHES[area]:
+                            if dish in title_lower:
+                                is_mediterranean = True
+                                break
+                    
+                    # For Italian dishes, be more strict about what's considered Mediterranean
+                    if area == 'italian' and not is_mediterranean:
+                        # Common Italian dishes that aren't necessarily Mediterranean
+                        common_italian = ['pizza', 'pasta', 'ravioli', 'spaghetti', 'fettuccine', 'lasagna', 'risotto',
+                                       'carbonara', 'bolognese', 'pesto', 'tiramisu', 'cannoli', 'bruschetta']
+                        if any(dish in title_lower for dish in common_italian):
+                            is_mediterranean = False
+                    
+                    if is_mediterranean:
+                        normalized['tags'].append('mediterranean')
+                        logger.debug(f"Marked '{normalized['title']}' as Mediterranean")
+                    
+                    logger.debug(f"Added cuisine '{normalized_cuisine}' for area '{area}' in recipe: {normalized['title']}")
+                else:
+                    logger.debug(f"Skipping unknown cuisine area: {area} for recipe: {normalized['title']}")
             
             return normalized
             
@@ -533,44 +636,51 @@ class RecipeService:
         return False
         
     def _matches_dietary_restrictions(self, recipe: Dict[str, Any], restrictions: List[str]) -> bool:
-        """Check if a recipe matches all the specified dietary restrictions."""
+        """Check if a recipe matches all the specified dietary restrictions.
+        
+        This method checks the recipe's dietary restriction tags for matches.
+        """
         if not restrictions:
             return True
             
         # Get dietary restrictions from various possible fields
         recipe_restrictions = set()
         
+        # Check diets field (common in Spoonacular data)
         if 'diets' in recipe and isinstance(recipe['diets'], list):
-            recipe_restrictions.update(d.lower() for d in recipe['diets'] if isinstance(d, str))
+            recipe_restrictions.update(d.lower() for d in recipe['diets'] if isinstance(d, str) and d.strip())
+            
+        # Check dietary_restrictions field (our normalized field)
         if 'dietary_restrictions' in recipe and isinstance(recipe['dietary_restrictions'], list):
-            recipe_restrictions.update(d.lower() for d in recipe['dietary_restrictions'] if isinstance(d, str))
+            recipe_restrictions.update(d.lower() for d in recipe['dietary_restrictions'] 
+                                     if isinstance(d, str) and d.strip())
+        
+        # Check for vegetarian/vegan flags directly in the recipe
+        if recipe.get('vegetarian', False):
+            recipe_restrictions.add('vegetarian')
+        if recipe.get('vegan', False):
+            recipe_restrictions.add('vegan')
+        
+        # If no restrictions found in the recipe, assume it's not restricted
+        if not recipe_restrictions:
+            return False
             
-        # For vegetarian/vegan, also check ingredients
-        if 'vegetarian' in restrictions or 'vegan' in restrictions:
-            ingredients = []
-            if 'ingredients' in recipe and isinstance(recipe['ingredients'], list):
-                ingredients = [
-                    ing['name'].lower() if isinstance(ing, dict) and 'name' in ing 
-                    else ing.lower() if isinstance(ing, str) 
-                    else str(ing).lower() 
-                    for ing in recipe['ingredients']
-                ]
-            
-            non_veg_ingredients = ['meat', 'chicken', 'beef', 'pork', 'fish', 'shrimp', 'bacon', 'sausage', 
-                                 'steak', 'ham', 'turkey', 'duck', 'goose', 'venison', 'lamb']
-            
-            if any(ing in ' '.join(ingredients) for ing in non_veg_ingredients):
-                recipe_restrictions.discard('vegetarian')
-                recipe_restrictions.discard('vegan')
-                
-        # For vegan, also check for dairy/eggs
-        if 'vegan' in restrictions:
-            non_vegan_ingredients = ['egg', 'cheese', 'milk', 'butter', 'yogurt', 'honey', 'gelatin']
-            if any(ing in ' '.join(ingredients) for ing in non_vegan_ingredients):
-                recipe_restrictions.discard('vegan')
+        # Debug logging
+        logger.debug(f"Recipe '{recipe.get('title', 'unknown')}' has restrictions: {recipe_restrictions}")
         
         # Check if all required restrictions are met
-        required_restrictions = set(r.lower() for r in restrictions if r)
+        required_restrictions = {r.lower().strip() for r in restrictions if r and r.strip()}
+        
+        # If no valid restrictions to check, return True
+        if not required_restrictions:
+            return True
+            
+        # Special case: if 'vegetarian' is required but recipe is marked as 'vegan', that's also acceptable
+        if 'vegetarian' in required_restrictions and 'vegan' in recipe_restrictions:
+            required_restrictions.discard('vegetarian')
+            required_restrictions.add('vegan')
+        
+        # Check if all required restrictions are present in the recipe
         return required_restrictions.issubset(recipe_restrictions)
         
     def _matches_query(self, recipe: Dict[str, Any], query: str) -> bool:
@@ -584,21 +694,28 @@ class RecipeService:
         Returns:
             bool: True if the recipe matches the query, False otherwise
         """
-        if not query:
+        if not query or not query.strip():
             return True
             
         query = query.lower().strip()
         if not query:
             return True
             
+        # Split query into individual words for more flexible matching
+        query_terms = [term for term in query.split() if len(term) > 2]  # Ignore very short terms
+        
+        # If no valid terms after splitting, return False
+        if not query_terms and query:
+            query_terms = [query]  # Use the original query if all terms were too short
+            
         # Check title
         title = str(recipe.get('title', '')).lower()
-        if query in title:
+        if any(term in title for term in query_terms):
             return True
             
         # Check description if available
         description = str(recipe.get('description', '')).lower()
-        if query in description:
+        if any(term in description for term in query_terms):
             return True
             
         # Check ingredients
@@ -606,28 +723,31 @@ class RecipeService:
             for ing in recipe['ingredients']:
                 if isinstance(ing, dict) and 'name' in ing:
                     ing_name = str(ing['name']).lower()
-                    if query in ing_name:
+                    if any(term in ing_name for term in query_terms):
                         return True
-                elif isinstance(ing, str) and query in ing.lower():
+                elif isinstance(ing, str) and any(term in ing.lower() for term in query_terms):
                     return True
                     
         # Check instructions if available
         instructions = recipe.get('instructions', '')
         if isinstance(instructions, list):
             instructions = ' '.join(str(step) for step in instructions)
-        if query in str(instructions).lower():
+        instructions = str(instructions).lower()
+        if any(term in instructions for term in query_terms):
             return True
             
         # Check tags if available
         if 'tags' in recipe and isinstance(recipe['tags'], list):
             for tag in recipe['tags']:
-                if query in str(tag).lower():
+                tag_str = str(tag).lower()
+                if any(term in tag_str for term in query_terms):
                     return True
                     
         # Check cuisines if available
         if 'cuisines' in recipe and isinstance(recipe['cuisines'], list):
             for cuisine in recipe['cuisines']:
-                if query in str(cuisine).lower():
+                cuisine_str = str(cuisine).lower()
+                if any(term in cuisine_str for term in query_terms):
                     return True
                     
         return False
@@ -711,6 +831,11 @@ class RecipeService:
         
         logger.info(f"\n=== Starting recipe filtering ===")
         logger.info(f"Total recipes to process: {total_recipes}")
+        logger.info(f"Search query: '{query}'")
+        logger.info(f"Ingredient filter: '{ingredient}'")
+        logger.info(f"Cuisines: {cuisines}")
+        logger.info(f"Dietary restrictions: {dietary_restrictions}")
+        logger.info(f"Foods to avoid: {foods_to_avoid}")
         
         for idx, recipe in enumerate(all_recipes, 1):
             if not isinstance(recipe, dict) or 'id' not in recipe:
@@ -722,6 +847,30 @@ class RecipeService:
             
             logger.debug(f"\n[{idx}/{total_recipes}] Processing: {recipe_name} (ID: {recipe_id})")
             
+            # Get recipe's dietary restrictions for logging
+            recipe_restrictions = set()
+            if 'diets' in recipe and isinstance(recipe['diets'], list):
+                recipe_restrictions.update(d.lower() for d in recipe['diets'] if isinstance(d, str) and d.strip())
+            if 'dietary_restrictions' in recipe and isinstance(recipe['dietary_restrictions'], list):
+                recipe_restrictions.update(d.lower() for d in recipe['dietary_restrictions'] 
+                                         if isinstance(d, str) and d.strip())
+            if recipe.get('vegetarian', False):
+                recipe_restrictions.add('vegetarian')
+            if recipe.get('vegan', False):
+                recipe_restrictions.add('vegan')
+            
+            logger.debug(f"Recipe restrictions: {recipe_restrictions}")
+            
+            # Apply search query filter if provided
+            if query and not self._matches_query(recipe, query):
+                logger.debug("Skipping - doesn't match search query")
+                continue
+                
+            # Apply ingredient filter if provided
+            if ingredient and not self._contains_ingredient(recipe, ingredient):
+                logger.debug("Skipping - doesn't contain required ingredient")
+                continue
+                
             # Skip if recipe contains any foods to avoid
             if foods_to_avoid:
                 contains_bad_food = self._contains_foods_to_avoid(recipe, foods_to_avoid)
@@ -730,21 +879,25 @@ class RecipeService:
                     continue
             
             # Check other criteria
-            matches_query = self._matches_query(recipe, query)
-            has_ingredient = self._contains_ingredient(recipe, ingredient)
-            matches_cuisine = self._matches_cuisine(recipe, cuisines)
-            matches_diet = self._matches_dietary_restrictions(recipe, dietary_restrictions)
+            matches_query = self._matches_query(recipe, query) if query else True
+            has_ingredient = self._contains_ingredient(recipe, ingredient) if ingredient else True
+            matches_cuisine = self._matches_cuisine(recipe, cuisines) if cuisines else True
+            matches_diet = self._matches_dietary_restrictions(recipe, dietary_restrictions) if dietary_restrictions else True
             
             # Include recipe only if it matches all criteria
             if all([matches_query, has_ingredient, matches_cuisine, matches_diet]):
-                logger.debug(f"✅ Including recipe: {recipe_name}")
+                logger.info(f"✅ Including recipe: {recipe_name}")
                 filtered_recipes.append(recipe)
             else:
                 logger.debug(f"❌ Excluding recipe - Criteria not met: {recipe_name}")
-                logger.debug(f"  - Matches query: {matches_query}")
-                logger.debug(f"  - Has ingredient: {has_ingredient}")
-                logger.debug(f"  - Matches cuisine: {matches_cuisine}")
-                logger.debug(f"  - Matches diet: {matches_diet}")
+                if query:
+                    logger.debug(f"  - Matches query '{query}': {matches_query}")
+                if ingredient:
+                    logger.debug(f"  - Has ingredient '{ingredient}': {has_ingredient}")
+                if cuisines:
+                    logger.debug(f"  - Matches cuisine {cuisines}: {matches_cuisine}")
+                if dietary_restrictions:
+                    logger.debug(f"  - Matches diet {dietary_restrictions}: {matches_diet}")
         
         logger.info(f"\n=== Filtering complete ===")
         logger.info(f"Total recipes processed: {total_recipes}")
@@ -756,4 +909,7 @@ class RecipeService:
         paginated_recipes = filtered_recipes[start_idx:end_idx]
         
         logger.info(f"Returning {len(paginated_recipes)} of {len(filtered_recipes)} matching recipes")
-        return paginated_recipes
+        return {
+            "results": paginated_recipes,
+            "total": len(filtered_recipes)
+        }

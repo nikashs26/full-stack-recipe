@@ -89,6 +89,12 @@ def register_recipe_routes(app, recipe_cache):
         print(f"\n=== Recipe Search Request ===")
         print(f"Query: '{query}'")
         print(f"Ingredient: '{ingredient}'")
+        print(f"Cuisines: {cuisines}")
+        print(f"Dietary Restrictions: {dietary_restrictions}")
+        print(f"Offset: {offset}, Limit: {limit}")
+        print(f"Foods to avoid: {foods_to_avoid}")
+        print(f"Favorite foods: {favorite_foods}")
+        print(f"Ingredient: '{ingredient}'")
         print(f"Foods to avoid: {foods_to_avoid}")
         print(f"Favorite foods: {favorite_foods}")
         print(f"Offset: {offset}")
@@ -98,7 +104,7 @@ def register_recipe_routes(app, recipe_cache):
         
         try:
             # Search recipes from all sources with pagination and filters
-            recipes = await recipe_service.search_recipes(
+            result = await recipe_service.search_recipes(
                 query=query,
                 ingredient=ingredient,
                 offset=offset,
@@ -109,8 +115,8 @@ def register_recipe_routes(app, recipe_cache):
                 favorite_foods=favorite_foods
             )
             
-            print(f"Found {len(recipes)} recipes in {time.time() - start_time:.2f}s")
-            return jsonify({"results": recipes}), 200
+            print(f"Found {result['total']} recipes in {time.time() - start_time:.2f}s")
+            return jsonify(result), 200
             
         except Exception as e:
             print(f"Error searching recipes: {e}")
