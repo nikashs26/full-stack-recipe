@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Heart, Folder, ShoppingCart, Star, ArrowLeft, Loader2 } from 'lucide-react';
+import { Heart, Folder, ShoppingCart, Star, ArrowLeft, Loader2, FolderPlus } from 'lucide-react';
 import Header from '../components/Header';
 import { Button } from '@/components/ui/button';
 import { updateRecipe, loadRecipes } from '../utils/storage';
 import { useToast } from '@/hooks/use-toast';
-import FolderAssignmentModal from '../components/FolderAssignmentModal';
-import { Folder as FolderType, ShoppingListItem } from '../types/recipe';
+import { RecipeFolderActions } from '../components/RecipeFolderActions';
+import { ShoppingListItem } from '../types/recipe';
 import { v4 as uuidv4 } from 'uuid';
 import RecipeReviews, { Review } from '../components/RecipeReviews';
 import { getReviewsByRecipeId, addReview } from '../utils/chromaReviewUtils';
@@ -19,8 +19,7 @@ const RecipeDetailPage: React.FC = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { isAuthenticated } = useAuth();
-  const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);
-  const [folders, setFolders] = useState<FolderType[]>([]);
+  // Removed unused folder modal state
   const [reviews, setReviews] = useState<Review[]>([]);
   
   // Fetch the recipe from the backend
@@ -81,21 +80,6 @@ const RecipeDetailPage: React.FC = () => {
     loadReviews();
   }, [id, toast]);
   
-  // Load folders from localStorage
-  React.useEffect(() => {
-    const loadFolders = () => {
-      try {
-        const storedFolders = localStorage.getItem('recipe-folders');
-        return storedFolders ? JSON.parse(storedFolders) : [];
-      } catch (error) {
-        console.error('Failed to load folders:', error);
-        return [];
-      }
-    };
-    
-    setFolders(loadFolders());
-  }, []);
-
   // Handle loading and error states
   if (isLoading) {
     return (
@@ -160,16 +144,6 @@ const RecipeDetailPage: React.FC = () => {
     queryClient.invalidateQueries({ queryKey: ['recipes'] });
   };
 
-  const handleAssignFolder = (recipeId: string, folderId: string | undefined) => {
-    const updatedRecipe = {
-      ...recipe,
-      folderId
-    };
-    
-    updateRecipe(updatedRecipe);
-    queryClient.invalidateQueries({ queryKey: ['recipes'] });
-  };
-  
   // Handler for submitting reviews
   const handleReviewSubmit = async (reviewData: { text: string, rating: number, author: string }) => {
     if (!id) return;
@@ -206,8 +180,6 @@ const RecipeDetailPage: React.FC = () => {
       });
     }
   };
-
-  const currentFolder = folders.find(folder => folder.id === recipe.folderId);
 
   // Add to shopping list functionality
   const addToShoppingList = () => {
@@ -294,14 +266,11 @@ const RecipeDetailPage: React.FC = () => {
                 {recipe.isFavorite ? "Remove from Favorites" : "Add to Favorites"}
               </Button>
               
-              <Button 
-                variant="outline"
-                onClick={() => setIsFolderModalOpen(true)}
-                className="flex items-center gap-2"
-              >
-                <Folder className="h-4 w-4" />
-                {currentFolder ? `In: ${currentFolder.name}` : "Add to Folder"}
-              </Button>
+              <RecipeFolderActions 
+                recipeId={recipe.id}
+                recipeType="local"
+                recipeData={recipe}
+              />
               
               <Button
                 variant="outline"
@@ -495,14 +464,6 @@ const RecipeDetailPage: React.FC = () => {
           </div>
         </div>
       </main>
-      
-      <FolderAssignmentModal
-        isOpen={isFolderModalOpen}
-        onClose={() => setIsFolderModalOpen(false)}
-        recipe={recipe}
-        folders={folders}
-        onAssignFolder={handleAssignFolder}
-      />
     </div>
   );
 };

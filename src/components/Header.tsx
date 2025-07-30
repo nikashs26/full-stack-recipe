@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { UtensilsCrossed, Menu, X, Plus } from 'lucide-react';
+import { UtensilsCrossed, Menu, X, Plus, Folder } from 'lucide-react';
 import UserMenu from './UserMenu';
 
 const Header: React.FC = () => {
@@ -86,6 +86,15 @@ const Header: React.FC = () => {
               </Link>
             </li>
             <li>
+              <Link 
+                to="/folders" 
+                className="flex items-center text-gray-600 hover:text-recipe-primary transition-colors"
+              >
+                <Folder className="mr-1 h-4 w-4" />
+                My Folders
+              </Link>
+            </li>
+            <li>
               <UserMenu />
             </li>
           </ul>
@@ -125,11 +134,19 @@ const Header: React.FC = () => {
               Shopping List
             </Link>
             <Link 
-              to="/preferences"
-              className="block text-gray-600 hover:text-recipe-primary"
+              to="/preferences" 
+              className="block px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-md"
               onClick={() => setMobileMenuOpen(false)}
             >
               Preferences
+            </Link>
+            <Link 
+              to="/folders" 
+              className="flex items-center px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-md"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              <Folder className="mr-2 h-4 w-4" />
+              My Folders
             </Link>
           </div>
         </div>
