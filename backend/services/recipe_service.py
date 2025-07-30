@@ -685,14 +685,16 @@ class RecipeService:
         
     def _matches_query(self, recipe: Dict[str, Any], query: str) -> bool:
         """
-        Check if a recipe matches the search query.
+        Check if a recipe's title matches the search query.
+        Only matches against the recipe title, not ingredients or other fields.
         
         Args:
             recipe: The recipe to check
             query: The search query string
             
         Returns:
-            bool: True if the recipe matches the query, False otherwise
+            bool: True if the recipe title contains the query (case-insensitive), 
+                  False otherwise. Returns True if query is empty.
         """
         if not query or not query.strip():
             return True
@@ -701,22 +703,9 @@ class RecipeService:
         if not query:
             return True
             
-        # Split query into individual words for more flexible matching
-        query_terms = [term for term in query.split() if len(term) > 2]  # Ignore very short terms
-        
-        # If no valid terms after splitting, return False
-        if not query_terms and query:
-            query_terms = [query]  # Use the original query if all terms were too short
-            
-        # Check title
+        # Only search in the recipe title
         title = str(recipe.get('title', '')).lower()
-        if any(term in title for term in query_terms):
-            return True
-            
-        # Check description if available
-        description = str(recipe.get('description', '')).lower()
-        if any(term in description for term in query_terms):
-            return True
+        return query in title
             
         # Check ingredients
         if 'ingredients' in recipe and isinstance(recipe['ingredients'], list):
@@ -858,6 +847,25 @@ class RecipeService:
                 recipe_restrictions.add('vegetarian')
             if recipe.get('vegan', False):
                 recipe_restrictions.add('vegan')
+                
+            # Check if recipe contains the required ingredient
+            if ingredient:
+                ingredient_found = False
+                recipe_ingredients = recipe.get('ingredients', [])
+                if isinstance(recipe_ingredients, list):
+                    for ing in recipe_ingredients:
+                        if isinstance(ing, dict) and 'name' in ing:
+                            ing_name = str(ing['name']).lower()
+                            if ingredient.lower() in ing_name:
+                                ingredient_found = True
+                                break
+                        elif isinstance(ing, str) and ingredient.lower() in ing.lower():
+                            ingredient_found = True
+                            break
+                
+                if not ingredient_found:
+                    logger.debug(f"  - Recipe does not contain ingredient: {ingredient}")
+                    continue
             
             logger.debug(f"Recipe restrictions: {recipe_restrictions}")
             

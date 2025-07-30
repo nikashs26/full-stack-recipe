@@ -29,6 +29,7 @@ import ManualRecipeDetailPage from "./pages/ManualRecipeDetailPage";
 
 import { FolderDetail } from './components/folders/FolderDetail';
 import MealPlannerPage from './pages/MealPlannerPage';
+import Header from './components/Header';
 
 
 const queryClient = new QueryClient();
@@ -38,7 +39,30 @@ const App = () => (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <AuthProvider>
-          <div className="flex flex-col min-h-screen">
+          <div className="flex flex-col min-h-screen bg-white">
+            <Header />
+            <div className="pt-16">
+              <Routes>
+                <Route path="/" element={<HomePage />} />
+                <Route path="/recipes" element={<RecipesPage />} />
+                <Route path="/themealdb" element={<MealDBRecipesPage />} />
+                <Route path="/recipes/:id" element={<RecipeDetailPage />} />
+                <Route path="/external-recipe/:id" element={<ExternalRecipeDetailPage />} />
+                <Route path="/manual-recipe/:id" element={<ManualRecipeDetailPage />} />
+                <Route path="/add-recipe" element={<AddRecipePage />} />
+                <Route path="/edit-recipe/:id" element={<EditRecipePage />} />
+                <Route path="/folders" element={<FoldersPage />} />
+                <Route path="/folders/:folderId" element={<FolderDetail />} />
+                <Route path="/favorites" element={<FavoritesPage />} />
+                <Route path="/shopping-list" element={<ShoppingListPage />} />
+                <Route path="/signin" element={<SignInPage />} />
+                <Route path="/signup" element={<SignUpPage />} />
+                <Route path="/verify-email" element={<VerifyEmailPage />} />
+                <Route path="/preferences" element={<UserPreferencesPage />} />
+                <Route path="/meal-planner" element={<MealPlannerPage />} />
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </div>
             {/* Development Tools - For easy access during development */}
             <div className="fixed bottom-20 right-4 z-50 flex flex-col gap-2">
               <Link 
@@ -56,27 +80,6 @@ const App = () => (
                 TheMealDB
               </Link>
             </div>
-            <Routes>
-              <Route path="/" element={<HomePage />} />
-              <Route path="/recipes" element={<RecipesPage />} />
-              <Route path="/themealdb" element={<MealDBRecipesPage />} />
-              <Route path="/recipes/:id" element={<RecipeDetailPage />} />
-              <Route path="/external-recipe/:id" element={<ExternalRecipeDetailPage />} />
-              <Route path="/manual-recipe/:id" element={<ManualRecipeDetailPage />} />
-              <Route path="/add-recipe" element={<AddRecipePage />} />
-              <Route path="/edit-recipe/:id" element={<EditRecipePage />} />
-              <Route path="/folders" element={<FoldersPage />} />
-              <Route path="/folders/:folderId" element={<FolderDetail />} />
-              <Route path="/favorites" element={<FavoritesPage />} />
-              <Route path="/shopping-list" element={<ShoppingListPage />} />
-              <Route path="/signin" element={<SignInPage />} />
-              <Route path="/signup" element={<SignUpPage />} />
-              <Route path="/verify-email" element={<VerifyEmailPage />} />
-              <Route path="/preferences" element={<UserPreferencesPage />} />
-              <Route path="/meal-planner" element={<MealPlannerPage />} />
-
-              <Route path="*" element={<NotFound />} />
-            </Routes>
             <Footer />
           </div>
           <Toaster />

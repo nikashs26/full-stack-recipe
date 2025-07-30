@@ -201,10 +201,25 @@ const RecipeCard: React.FC<RecipeCardProps> = React.memo(({
   
   // Safely get readyInMinutes from either readyInMinutes or ready_in_minutes
   const readyInMinutes = React.useMemo(() => {
-    if ('readyInMinutes' in recipe) return recipe.readyInMinutes;
-    if ('ready_in_minutes' in recipe) return recipe.ready_in_minutes;
+    if (recipe === null || typeof recipe !== 'object') return undefined;
+    if ('readyInMinutes' in recipe && recipe.readyInMinutes !== undefined) return recipe.readyInMinutes;
+    if ('ready_in_minutes' in recipe && recipe.ready_in_minutes !== undefined) return recipe.ready_in_minutes;
     return undefined;
   }, [recipe]);
+  
+  // Debug log for recipe data
+  React.useEffect(() => {
+    console.log('Recipe data in RecipeCard:', {
+      id: recipe.id,
+      title: recipeName,
+      readyInMinutes,
+      description: recipe.description,
+      hasSummary: 'summary' in recipe,
+      recipeType: recipe.type,
+      readyInMinutesDirect: 'readyInMinutes' in recipe ? recipe.readyInMinutes : undefined,
+      ready_in_minutesDirect: 'ready_in_minutes' in recipe ? (recipe as any).ready_in_minutes : undefined
+    });
+  }, [recipe, recipeName, readyInMinutes]);
   
   // Calculate average rating if ratings is an array
   const averageRating = React.useMemo(() => {
@@ -385,7 +400,7 @@ const RecipeCard: React.FC<RecipeCardProps> = React.memo(({
           <div className="mt-3 flex items-center justify-between text-sm text-gray-500">
             <div className="flex items-center">
               <Clock className="w-4 h-4 mr-1" />
-              <span>{readyInMinutes ? `${readyInMinutes} min` : 'N/A'}</span>
+              <span>{readyInMinutes !== undefined ? `${readyInMinutes} min` : 'N/A'}</span>
             </div>
             <div className="flex items-center">
               <Star className="w-4 h-4 text-yellow-400 mr-1" />
@@ -418,9 +433,9 @@ const RecipeCard: React.FC<RecipeCardProps> = React.memo(({
           <h4 className="font-semibold text-lg mb-2">{recipeName}</h4>
           
           {/* Description */}
-          {recipe.description && (
+          {(recipe.description || ('summary' in recipe && (recipe as any).summary)) && (
             <p className="text-sm text-gray-600 mb-3 line-clamp-3">
-              {recipe.description}
+              {recipe.description || (recipe as any).summary}
             </p>
           )}
           

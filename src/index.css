@@ -3,6 +3,32 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Custom Styles */
+@layer components {
+  .bg-kitchen {
+    background-image: url('https://png.pngtree.com/thumb_back/fh260/background/20230512/pngtree-kitchen-cupboard-cartoon-image_2466073.jpg');
+    background-size: cover;
+    background-position: center center;
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: -10;
+    background-color: #f5f5f5; /* Fallback color */
+  }
+  
+  .search-input {
+    @apply pl-10 pr-4 py-6 text-base rounded-xl shadow-sm focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 w-full border-0 bg-white/90 hover:bg-white transition-colors duration-200;
+  }
+  
+  .search-container {
+    @apply bg-white/90 backdrop-blur-sm rounded-2xl p-6 shadow-xl border border-white/20 w-full max-w-4xl mx-auto;
+  }
+}
+
 @layer base {
   :root {
     --background: 60 33% 99%;

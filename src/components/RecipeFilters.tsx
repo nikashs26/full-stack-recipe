@@ -13,32 +13,49 @@ type FilterOption = {
   count?: number;
 };
 
-const CUISINE_OPTIONS: FilterOption[] = [
-  { value: 'american', label: 'American', icon: <ChefHat className="w-4 h-4" /> },
-  { value: 'british', label: 'British', icon: <ChefHat className="w-4 h-4" /> },
-  { value: 'canadian', label: 'Canadian', icon: <ChefHat className="w-4 h-4" /> },
-  { value: 'chinese', label: 'Chinese', icon: <ChefHat className="w-4 h-4" /> },
-  { value: 'croatian', label: 'Croatian', icon: <ChefHat className="w-4 h-4" /> },
-  { value: 'dutch', label: 'Dutch', icon: <ChefHat className="w-4 h-4" /> },
-  { value: 'egyptian', label: 'Egyptian', icon: <ChefHat className="w-4 h-4" /> },
-  { value: 'french', label: 'French', icon: <ChefHat className="w-4 h-4" /> },
-  { value: 'greek', label: 'Greek', icon: <ChefHat className="w-4 h-4" /> },
-  { value: 'indian', label: 'Indian', icon: <ChefHat className="w-4 h-4" /> },
-  { value: 'irish', label: 'Irish', icon: <ChefHat className="w-4 h-4" /> },
-  { value: 'italian', label: 'Italian', icon: <ChefHat className="w-4 h-4" /> },
-  { value: 'jamaican', label: 'Jamaican', icon: <ChefHat className="w-4 h-4" /> },
-  { value: 'japanese', label: 'Japanese', icon: <ChefHat className="w-4 h-4" /> },
-  { value: 'kenyan', label: 'Kenyan', icon: <ChefHat className="w-4 h-4" /> },
-  { value: 'malaysian', label: 'Malaysian', icon: <ChefHat className="w-4 h-4" /> },
-  { value: 'mexican', label: 'Mexican', icon: <ChefHat className="w-4 h-4" /> },
-  { value: 'moroccan', label: 'Moroccan', icon: <ChefHat className="w-4 h-4" /> },
-  { value: 'russian', label: 'Russian', icon: <ChefHat className="w-4 h-4" /> },
-  { value: 'spanish', label: 'Spanish', icon: <ChefHat className="w-4 h-4" /> },
-  { value: 'thai', label: 'Thai', icon: <ChefHat className="w-4 h-4" /> },
-  { value: 'tunisian', label: 'Tunisian', icon: <ChefHat className="w-4 h-4" /> },
-  { value: 'turkish', label: 'Turkish', icon: <ChefHat className="w-4 h-4" /> },
-  { value: 'vietnamese', label: 'Vietnamese', icon: <ChefHat className="w-4 h-4" /> },
+// Common cuisines that are actually used in the app
+const COMMON_CUISINES = [
+  'american', 'british', 'chinese', 'french', 'greek', 'indian', 'italian', 
+  'japanese', 'mexican', 'spanish', 'thai', 'vietnamese'
 ];
+
+// Helper function to find similar cuisines
+const findSimilarCuisine = (cuisine: string): string | null => {
+  const normalizedInput = cuisine.toLowerCase().trim();
+  
+  // Direct match
+  if (COMMON_CUISINES.includes(normalizedInput)) {
+    return normalizedInput;
+  }
+  
+  // Common misspellings and variations
+  const variations: Record<string, string> = {
+    'america': 'american',
+    'britan': 'british',
+    'england': 'british',
+    'uk': 'british',
+    'china': 'chinese',
+    'france': 'french',
+    'greece': 'greek',
+    'india': 'indian',
+    'italy': 'italian',
+    'japan': 'japanese',
+    'mexico': 'mexican',
+    'spain': 'spanish',
+    'thailand': 'thai',
+    'vietnam': 'vietnamese',
+  };
+  
+  // Check for variations
+  return variations[normalizedInput] || null;
+};
+
+// Create CUISINE_OPTIONS from common cuisines
+const CUISINE_OPTIONS: FilterOption[] = COMMON_CUISINES.map(cuisine => ({
+  value: cuisine,
+  label: cuisine.charAt(0).toUpperCase() + cuisine.slice(1),
+  icon: <ChefHat className="w-4 h-4" />
+}));
 
 const DIET_OPTIONS: FilterOption[] = [
   { value: 'vegetarian', label: 'Vegetarian', icon: <Leaf className="w-4 h-4" /> },
@@ -75,6 +92,23 @@ export const RecipeFilters = ({
       onCuisineToggle(trimmedCuisine);
       setCustomCuisine('');
     }
+  };
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    
+    // If the search term matches a cuisine or variation, select it
+    const matchedCuisine = findSimilarCuisine(value);
+    if (matchedCuisine && !selectedCuisines.includes(matchedCuisine)) {
+      onCuisineToggle(matchedCuisine);
+      // Clear the input after matching
+      e.target.value = '';
+      onSearchChange({ target: { value: '' } } as React.ChangeEvent<HTMLInputElement>);
+      return;
+    }
+    
+    // Otherwise, proceed with normal search
+    onSearchChange(e);
   };
 
   const FilterSection = ({ 
