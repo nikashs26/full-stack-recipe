@@ -6,9 +6,9 @@
 /* Custom Styles */
 @layer components {
   .bg-kitchen {
-    background-image: url('https://png.pngtree.com/thumb_back/fh260/background/20230512/pngtree-kitchen-cupboard-cartoon-image_2466073.jpg');
+    background-image: url('https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80');
     background-size: cover;
-    background-position: center center;
+    background-position: center;
     background-repeat: no-repeat;
     background-attachment: fixed;
     position: fixed;
@@ -17,7 +17,21 @@
     width: 100vw;
     height: 100vh;
     z-index: -10;
-    background-color: #f5f5f5; /* Fallback color */
+  }
+  
+  /* Alternative kitchen background if the main one doesn't load */
+  .bg-kitchen-alt {
+    background-image: url('https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: -10;
   }
   
   .search-input {

@@ -275,165 +275,116 @@ class RecipeSearchService:
     def get_recipe_recommendations(self, user_preferences: Dict[str, Any], limit: int = 8) -> List[Dict[str, Any]]:
         """
         Get personalized recipe recommendations based on user preferences.
-        Balances favorite foods, cuisines, and other preferences in search results.
-        
-        Args:
-            user_preferences: Dictionary containing user preferences including:
-                - favoriteFoods: List of favorite foods/ingredients
-                - favoriteCuisines: List of preferred cuisines
-                - dietaryRestrictions: List of dietary restrictions
-                - healthGoals: List of health goals
-                - mealTypes: List of preferred meal types
-                - cookingSkillLevel: Preferred cooking difficulty level
-            limit: Maximum number of recommendations to return
-            
-        Returns:
-            List of recommended recipes with metadata
+        Prioritizes recipes matching both favorite cuisine and favorite food, then fills with favorite food (any cuisine), then favorite cuisine (any food), then others. Always includes at least one favorite food recipe if possible.
         """
-        # Extract preferences
-        favorite_foods = user_preferences.get("favoriteFoods", [])
+        favorite_foods = [f.lower() for f in user_preferences.get("favoriteFoods", [])]
+        favorite_cuisines = set(self._normalize_cuisine(c).lower() for c in user_preferences.get("favoriteCuisines", []))
+        dietary_restrictions = [d.lower() for d in user_preferences.get("dietaryRestrictions", [])]
         health_goals = user_preferences.get("healthGoals", [])
-        
-        # Start with a base query that includes all user preferences
+        meal_types = user_preferences.get("mealTypes", [])
+        skill_level = user_preferences.get("cookingSkillLevel", None)
+
+        # Build a broad query to get a large pool of candidates
         query_parts = []
-        
-        # 1. Add favorite foods (if any) with high priority
         if favorite_foods:
-            food_terms = [f'"{food}"' for food in favorite_foods]  # Exact match
+            food_terms = [f'"{food}"' for food in favorite_foods]
             query_parts.append(f"({' OR '.join(food_terms)})")
-        
-        # 2. Add dietary restrictions (high priority)
-        dietary_restrictions = user_preferences.get("dietaryRestrictions", [])
         if dietary_restrictions:
             query_parts.append(" AND ".join(dietary_restrictions))
-        
-        # 3. Add health goals
         if health_goals:
             query_parts.append(" ".join(health_goals))
-        
-        # 4. Add meal type preferences
-        meal_types = user_preferences.get("mealTypes", [])
         if meal_types:
             query_parts.append(f"({' OR '.join(meal_types)})")
-        
-        # 5. Add favorite cuisines (as a filter, not in query to avoid over-prioritization)
-        cuisine_filter = None
-        if user_preferences.get("favoriteCuisines"):
-            favorite_cuisines = {
-                self._normalize_cuisine(cuisine).lower()
-                for cuisine in user_preferences["favoriteCuisines"]
-                if self._normalize_cuisine(cuisine)  # Only include valid cuisines
-            }
-            if favorite_cuisines:
-                cuisine_filter = {"cuisine": {"$in": list(favorite_cuisines)}}
-        
-        # 6. Add cooking skill level
-        if user_preferences.get("cookingSkillLevel"):
-            skill_level = user_preferences["cookingSkillLevel"].lower()
-            query_parts.append(f"difficulty: {skill_level}")
-        
-        # Create the final query
+        if skill_level:
+            query_parts.append(f"difficulty: {skill_level.lower()}")
         query = " ".join(query_parts) if query_parts else "popular delicious recipes"
-        
-        # Build filters with strict dietary requirements
+
+        # Build filters
         filters = {}
-        if "vegetarian" in [d.lower() for d in user_preferences.get("dietaryRestrictions", [])]:
+        if "vegetarian" in dietary_restrictions:
             filters["is_vegetarian"] = True
-        if "vegan" in [d.lower() for d in user_preferences.get("dietaryRestrictions", [])]:
+        if "vegan" in dietary_restrictions:
             filters["is_vegan"] = True
-        if "gluten-free" in [d.lower() for d in user_preferences.get("dietaryRestrictions", [])]:
+        if "gluten-free" in dietary_restrictions:
             filters["is_gluten_free"] = True
-        
-        # Apply cuisine filter if present
-        if cuisine_filter:
-            filters = {**filters, **cuisine_filter}
-        
-        # Perform initial semantic search
-        results = self.semantic_search(query, filters, limit * 3)
-        
-        # If no results with cuisine filter but we have favorite foods, try without cuisine filter
-        if not results and favorite_foods and cuisine_filter:
-            filters = {k: v for k, v in filters.items() if k not in cuisine_filter}
-            results = self.semantic_search(query, filters, limit * 3)
-        
-        if not results:
+        # Don't filter by cuisine yet; we'll do that in post-processing
+
+        # Get a large pool of candidates (broad query)
+        candidates = self.semantic_search(query, filters, limit * 10)
+
+        # If favorite foods are present, also get candidates with just favorite food(s) as the query (no cuisine restriction)
+        food_candidates = []
+        if favorite_foods:
+            for food in favorite_foods:
+                food_results = self.semantic_search(food, filters, limit * 5)
+                food_candidates.extend(food_results)
+
+        # Merge and deduplicate candidates by recipe_id
+        seen_ids = set()
+        all_candidates = []
+        for r in candidates + food_candidates:
+            rid = r.get('recipe_id') or r.get('id')
+            if rid and rid not in seen_ids:
+                all_candidates.append(r)
+                seen_ids.add(rid)
+
+        if not all_candidates:
             return []
-            
-        # Score and sort results based on multiple factors
-        scored_results = []
-        for recipe in results:
-            score = 0.0
-            
-            # 1. Score based on favorite foods match (highest priority)
-            if favorite_foods:
-                recipe_text = ' '.join([
-                    str(recipe.get('name', '')),
-                    str(recipe.get('description', '')),
-                    ' '.join(recipe.get('ingredients', [])),
-                    str(recipe.get('instructions', ''))
-                ]).lower()
-                
-                for food in favorite_foods:
-                    if food.lower() in recipe_text:
-                        score += 0.5  # Higher weight for food matches
-                        break  # Only count each food once
-            
-            # 2. Normalize cuisine and score cuisine matches (moderate priority)
-            recipe_cuisine = self._normalize_cuisine(recipe.get('cuisine', ''), recipe)
-            if recipe_cuisine:
-                recipe['cuisine'] = recipe_cuisine
-                if recipe_cuisine.lower() in favorite_cuisines:
-                    score += 0.3  # Moderate weight for cuisine matches
-            
-            # 3. Score based on meal type match (lower priority)
-            if 'meal_type' in recipe and 'mealTypes' in user_preferences:
-                if any(mt.lower() in recipe.get('meal_type', '').lower() 
-                      for mt in user_preferences['mealTypes'] if recipe.get('meal_type')):
-                    score += 0.2
-            
-            # 4. Score based on cooking time (prefer shorter times)
-            if 'cooking_time' in recipe and isinstance(recipe['cooking_time'], (int, float)):
-                if recipe['cooking_time'] <= 30:
-                    score += 0.1
-                elif recipe['cooking_time'] <= 60:
-                    score += 0.05
-            
-            # 5. Score based on rating if available (small boost)
-            if 'avg_rating' in recipe and isinstance(recipe['avg_rating'], (int, float)):
-                score += recipe['avg_rating'] * 0.05  # Small weight for ratings
-            
-            scored_results.append((recipe, score))
-        
-        # Sort by score (descending) and take top results
-        scored_results.sort(key=lambda x: x[1], reverse=True)
-        
-        # If we don't have enough results, try a more relaxed search
-        if len(scored_results) < limit:
-            # Try again without any filters except dietary restrictions
-            relaxed_filters = {}
-            if "vegetarian" in [d.lower() for d in dietary_restrictions]:
-                relaxed_filters["is_vegetarian"] = True
-            if "vegan" in [d.lower() for d in dietary_restrictions]:
-                relaxed_filters["is_vegan"] = True
-            if "gluten-free" in [d.lower() for d in dietary_restrictions]:
-                relaxed_filters["is_gluten_free"] = True
-                
-            # Only search again if we have different filters
-            if relaxed_filters != filters:
-                relaxed_results = self.semantic_search(query, relaxed_filters, limit * 3)
-                
-                # Add any new results with lower priority
-                if relaxed_results:
-                    for recipe in relaxed_results:
-                        if not any(r[0]['id'] == recipe.get('id') for r in scored_results):
-                            # Give relaxed results a lower base score
-                            scored_results.append((recipe, -0.5))
-                    
-                    # Re-sort all results
-                    scored_results.sort(key=lambda x: x[1], reverse=True)
-        
-        # Return top results with their scores (remove scores from final output)
-        return [r[0] for r in scored_results[:limit]]
+
+        # Helper to check for favorite food in a recipe
+        def has_fav_food(recipe):
+            text = ' '.join([
+                str(recipe.get('name', '')),
+                str(recipe.get('description', '')),
+                ' '.join([ing['name'] if isinstance(ing, dict) and 'name' in ing else str(ing) for ing in recipe.get('ingredients', [])]),
+                str(recipe.get('instructions', ''))
+            ]).lower()
+            return any(food in text for food in favorite_foods)
+
+        # Helper to check for favorite cuisine in a recipe
+        def has_fav_cuisine(recipe):
+            cuisine = self._normalize_cuisine(recipe.get('cuisine', ''), recipe).lower()
+            return cuisine in favorite_cuisines
+
+        # Partition candidates
+        both = []  # Matches both favorite food and cuisine
+        food_only = []  # Matches favorite food (any cuisine)
+        cuisine_only = []  # Matches favorite cuisine (any food)
+        others = []
+        for recipe in all_candidates:
+            food = has_fav_food(recipe)
+            cuisine = has_fav_cuisine(recipe)
+            if food and cuisine:
+                both.append(recipe)
+            elif food:
+                food_only.append(recipe)
+            elif cuisine:
+                cuisine_only.append(recipe)
+            else:
+                others.append(recipe)
+
+        # Build recommendations
+        recommendations = []
+        # 1. Fill with both-matches
+        recommendations.extend(both[:limit])
+        # 2. Fill with food-only matches
+        if len(recommendations) < limit:
+            needed = limit - len(recommendations)
+            recommendations.extend(food_only[:needed])
+        # 3. Fill with cuisine-only matches
+        if len(recommendations) < limit:
+            needed = limit - len(recommendations)
+            recommendations.extend(cuisine_only[:needed])
+        # 4. Fill with others
+        if len(recommendations) < limit:
+            needed = limit - len(recommendations)
+            recommendations.extend(others[:needed])
+        # 5. Guarantee at least one favorite food recipe if possible
+        if favorite_foods:
+            if not any(has_fav_food(r) for r in recommendations) and (food_only or both):
+                # Replace last with a favorite food recipe
+                recommendations[-1] = (food_only or both)[0]
+        return recommendations[:limit]
 
     def _build_recipe_query(self, user_preferences: Dict[str, Any]) -> tuple[str, dict]:
         """

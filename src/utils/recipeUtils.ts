@@ -180,10 +180,17 @@ export const filterRecipes = (
     // Handle cuisine from both formats
     const recipeCuisines = Array.isArray(recipe?.cuisines) ? recipe.cuisines : [recipe?.cuisine].filter(Boolean);
     const cuisineFilterLower = cuisineFilter ? cuisineFilter.toLowerCase() : "";
+    
     const matchesCuisine = cuisineFilter ? 
-      recipeCuisines.some(cuisine => 
-        (typeof cuisine === 'string' && cuisine.toLowerCase() === cuisineFilterLower)
-      ) : true;
+      recipeCuisines.some(cuisine => {
+        const cuisineLower = typeof cuisine === 'string' ? cuisine.toLowerCase() : '';
+        // If American is selected, also match Southern and Creole cuisines
+        if (cuisineFilterLower === 'american') {
+          return ['american', 'southern', 'creole', 'cajun'].includes(cuisineLower);
+        }
+        // Normal cuisine matching for other cases
+        return cuisineLower === cuisineFilterLower;
+      }) : true;
     
     // Handle ingredients from both formats
     const ingredients = recipe?.ingredients || [];

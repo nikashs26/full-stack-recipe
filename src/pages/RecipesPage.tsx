@@ -29,7 +29,11 @@ type ManualRecipe = BaseRecipe & {
   type: 'manual';
   ready_in_minutes?: number;
   cuisine?: string[];
+  cuisines?: string[];
   diets?: string[];
+  dietaryRestrictions?: string[];
+  vegetarian?: boolean;
+  vegan?: boolean;
   ingredients?: Array<{ name: string; amount?: string | number; unit?: string }>;
 };
 
@@ -41,7 +45,11 @@ type SpoonacularRecipe = BaseRecipe & {
   summary?: string;
   analyzedInstructions?: any[];
   cuisines?: string[];
+  cuisine?: string[];
   diets?: string[];
+  dietaryRestrictions?: string[];
+  vegetarian?: boolean;
+  vegan?: boolean;
   extendedIngredients?: Array<{
     id: number;
     name: string;
@@ -168,10 +176,11 @@ const RecipesPage: React.FC = () => {
         ...normalizeList(recipe.dietaryRestrictions),
         ...(recipe.type === 'manual' && 'diets' in recipe ? normalizeList(recipe.diets) : []),
         ...(recipe.type === 'spoonacular' && 'diets' in recipe ? normalizeList(recipe.diets) : []),
-        // Add vegetarian/vegan flags if present in the recipe
         ...(recipe.vegetarian ? ['vegetarian'] : []),
         ...(recipe.vegan ? ['vegan'] : [])
-      ].filter((value, index, self) => self.indexOf(value) === index); // Remove duplicates
+      ]
+        .map(d => d.trim().toLowerCase())
+        .filter((value, index, self) => self.indexOf(value) === index && value.length > 0);
 
       return {
         id: String(recipe.id || Math.random().toString(36).substr(2, 9)),
@@ -349,6 +358,67 @@ const RecipesPage: React.FC = () => {
   ), [showMobileFilters, renderFilters]);
 
   const renderRecipeCard = useCallback((recipe: NormalizedRecipe, index: number) => {
+    // Helper function to convert string to DietaryRestriction enum
+    const convertToDietaryRestriction = (diet: string): DietaryRestriction | null => {
+      const normalized = diet.toLowerCase().replace(/[-\s]/g, '');
+      switch (normalized) {
+        case 'vegetarian':
+          return DietaryRestriction.VEGETARIAN;
+        case 'vegan':
+          return DietaryRestriction.VEGAN;
+        case 'glutenfree':
+        case 'gluten-free':
+          return DietaryRestriction.GLUTEN_FREE;
+        case 'dairyfree':
+        case 'dairy-free':
+          return DietaryRestriction.DAIRY_FREE;
+        case 'nutfree':
+        case 'nut-free':
+          return DietaryRestriction.NUT_FREE;
+        case 'keto':
+          return DietaryRestriction.KETO;
+        case 'paleo':
+          return DietaryRestriction.PALEO;
+        case 'lowcarb':
+        case 'low-carb':
+          return DietaryRestriction.LOW_CARB;
+        case 'lowcalorie':
+        case 'low-calorie':
+          return DietaryRestriction.LOW_CALORIE;
+        case 'lowsodium':
+        case 'low-sodium':
+          return DietaryRestriction.LOW_SODIUM;
+        case 'highprotein':
+        case 'high-protein':
+          return DietaryRestriction.HIGH_PROTEIN;
+        case 'pescetarian':
+          return DietaryRestriction.PESCETARIAN;
+        default:
+          return null;
+      }
+    };
+
+    // Debug logging
+    console.log('Processing recipe dietary restrictions:', {
+      recipeId: recipe.id,
+      recipeTitle: recipe.title,
+      originalDietaryRestrictions: recipe.dietaryRestrictions,
+      convertedDietaryRestrictions: (recipe.dietaryRestrictions || [])
+        .map(convertToDietaryRestriction)
+        .filter((d): d is DietaryRestriction => d !== null),
+      hasTags: (recipe.dietaryRestrictions || []).length > 0
+    });
+
+    const convertedRestrictions = (recipe.dietaryRestrictions || [])
+      .map(convertToDietaryRestriction)
+      .filter((d): d is DietaryRestriction => d !== null);
+
+    console.log('Final dietary restrictions for card:', {
+      recipeTitle: recipe.title,
+      convertedRestrictions,
+      restrictionCount: convertedRestrictions.length
+    });
+
     const recipeForCard: RecipeType = {
       id: recipe.id.toString(),
       title: recipe.title,
@@ -357,12 +427,10 @@ const RecipesPage: React.FC = () => {
       imageUrl: recipe.imageUrl || '/placeholder-recipe.jpg',
       cuisines: Array.isArray(recipe.cuisines) ? recipe.cuisines : [],
       cuisine: Array.isArray(recipe.cuisines) && recipe.cuisines.length > 0 ? recipe.cuisines[0] : '',
-      dietaryRestrictions: (recipe.dietaryRestrictions || []).filter((d): d is DietaryRestriction => 
-        ['vegetarian', 'vegan', 'gluten-free', 'dairy-free', 'keto', 'paleo'].includes(d)
-      ),
-      diets: (recipe.dietaryRestrictions || []).filter(d => 
-        ['vegetarian', 'vegan', 'gluten-free', 'dairy-free', 'keto', 'paleo'].includes(d)
-      ),
+      dietaryRestrictions: (recipe.dietaryRestrictions || [])
+        .map(convertToDietaryRestriction)
+        .filter((d): d is DietaryRestriction => d !== null),
+      diets: recipe.dietaryRestrictions || [],
       ingredients: Array.isArray(recipe.ingredients) ? recipe.ingredients : [],
       instructions: Array.isArray(recipe.instructions) 
         ? recipe.instructions 
@@ -407,16 +475,16 @@ const RecipesPage: React.FC = () => {
       {/* Content Container */}
       <div className="relative z-10">
         {/* Hero Section with Overlay */}
-        <div className="relative h-[500px] w-full bg-black/20">
+        <div className="relative h-[500px] w-full bg-black/30">
           <div className="absolute inset-0 flex flex-col items-center justify-center px-4">
             <div className="text-center mb-8">
-              <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-4">Discover Amazing Recipes</h1>
-              <p className="text-xl text-gray-100 max-w-2xl mx-auto">Find the perfect recipe for any occasion, ingredient, or cuisine</p>
+              <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-4 drop-shadow-lg">Discover Amazing Recipes</h1>
+              <p className="text-xl text-gray-100 max-w-2xl mx-auto drop-shadow-md">Find the perfect recipe for any occasion, ingredient, or cuisine</p>
             </div>
             
             {/* Search Container */}
             <div className="w-full max-w-4xl mx-auto">
-              <div className="bg-white/90 backdrop-blur-sm rounded-2xl p-6 shadow-xl border border-white/20">
+              <div className="bg-white/95 backdrop-blur-sm rounded-2xl p-6 shadow-xl border border-white/30">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
@@ -455,7 +523,7 @@ const RecipesPage: React.FC = () => {
       </div>
       
       <main className="container mx-auto px-4 pb-12 relative z-10 -mt-16">
-        <div className="bg-white rounded-3xl shadow-xl px-6 py-8">
+        <div className="bg-white/95 backdrop-blur-sm rounded-3xl shadow-xl px-6 py-8 border border-white/30">
           {/* Main Content Area */}
           <div className="flex flex-col lg:flex-row gap-8">
             {/* Filters - Left Sidebar */}
@@ -492,8 +560,8 @@ const RecipesPage: React.FC = () => {
                     {searchTerm ? `Search Results for "${searchTerm}"` : 'All Recipes'}
                   </h2>
                   <p className="text-gray-600">
-                    {filteredRecipes && filteredRecipes.length > 0 ? (
-                      `Showing ${((currentPage - 1) * recipesPerPage) + 1}-${Math.min(currentPage * recipesPerPage, filteredRecipes.length)} of ${filteredRecipes.length} ${filteredRecipes.length === 1 ? 'recipe' : 'recipes'}`
+                    {recipesData.total > 0 ? (
+                      `Showing ${((currentPage - 1) * recipesPerPage) + 1}-${Math.min(currentPage * recipesPerPage, recipesData.total)} of ${recipesData.total} ${recipesData.total === 1 ? 'recipe' : 'recipes'}`
                     ) : 'No recipes found'}
                   </p>
                 </div>
