@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { Edit, Trash2, Star, Clock, Heart, Utensils, Clock3, Users, BarChart2 } from 'lucide-react';
 import { Recipe } from '../types/recipe';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from './ui/hover-card';
+import { useRecipeClickTracking } from '../utils/clickTracking';
 
 // Use the ExtendedRecipe type from recipe types
 import type { ExtendedRecipe } from '../types/recipe';
@@ -21,6 +22,8 @@ const RecipeCard: React.FC<RecipeCardProps> = React.memo(({
   onDelete,
   onClick 
 }) => {
+  const { trackClick } = useRecipeClickTracking();
+
   // Handle recipe name from various sources
   const recipeName = React.useMemo(() => {
     if ('title' in recipe && recipe.title) return recipe.title;
@@ -98,89 +101,39 @@ const RecipeCard: React.FC<RecipeCardProps> = React.memo(({
           items.forEach(item => {
             if (item != null) {
               const str = String(item).trim().toLowerCase();
-              if (str) restrictions.add(str);
+              if (str.length > 0) {
+                restrictions.add(str);
+              }
             }
           });
-          return;
         }
-        
-        // Handle string case (comma-separated)
-        if (typeof items === 'string') {
-          items.split(',')
-            .map(s => s.trim().toLowerCase())
-            .filter(Boolean)
-            .forEach(s => restrictions.add(s));
+        // Handle string case
+        else if (typeof items === 'string') {
+          const str = items.trim().toLowerCase();
+          if (str.length > 0) {
+            restrictions.add(str);
+          }
         }
       };
       
-      // Check all possible fields that might contain dietary info
+      // Add restrictions from various possible fields
       addRestrictions(recipe.dietaryRestrictions);
       addRestrictions(recipe.diets);
       
-      // Handle tags if they exist
-      if ('tags' in recipe && recipe.tags) {
-        addRestrictions(Array.isArray(recipe.tags) ? recipe.tags : [recipe.tags]);
-      }
-      
-      // Check for direct boolean flags
-      if (recipe.vegetarian === true) {
+      // Check for vegetarian/vegan flags in the recipe object
+      if ('vegetarian' in recipe && (recipe as any).vegetarian) {
         restrictions.add('vegetarian');
       }
-      if (recipe.vegan === true) {
+      if ('vegan' in recipe && (recipe as any).vegan) {
         restrictions.add('vegan');
       }
       
-      // Also check healthLabels if it exists (common in some APIs)
-      if ('healthLabels' in recipe && Array.isArray((recipe as any).healthLabels)) {
-        const healthLabels = (recipe as any).healthLabels
-          .map(String)
-          .map((s: string) => s.toLowerCase())
-          .filter((s: string) => s.includes('free') || s.includes('diet') || s.includes('vegan') || s.includes('vegetarian'));
-        healthLabels.forEach((label: string) => restrictions.add(label));
-      }
-      
-      // Normalize the values
-      return Array.from(restrictions)
-        .map(normalized => {
-          // Map common variations to standard values
-          switch(normalized) {
-            case 'vegetarian':
-            case 'veg':
-              return 'vegetarian';
-            case 'vegan':
-            case 'vegan friendly':
-              return 'vegan';
-            case 'gluten free':
-            case 'gluten-free':
-            case 'gf':
-              return 'gluten-free';
-            case 'dairy free':
-            case 'dairy-free':
-            case 'lactose free':
-              return 'dairy-free';
-            case 'keto':
-            case 'ketogenic':
-              return 'keto';
-            case 'paleo':
-            case 'paleolithic':
-              return 'paleo';
-            case 'low carb':
-            case 'low-carb':
-              return 'low-carb';
-            case 'high protein':
-            case 'high-protein':
-              return 'high-protein';
-            default:
-              return normalized;
-          }
-        })
-        .filter(Boolean) // Remove any empty strings
-        .filter((value, index, self) => self.indexOf(value) === index); // Remove duplicates
+      return Array.from(restrictions);
     } catch (error) {
       console.error('Error processing dietary restrictions:', error, recipe);
       return [];
     }
-  }, [recipe.dietaryRestrictions, recipe.diets]);
+  }, [recipe]);
   
   // Handle image from various sources
   const imageUrl = React.useMemo((): string => {
@@ -309,7 +262,16 @@ const RecipeCard: React.FC<RecipeCardProps> = React.memo(({
           className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-300 cursor-pointer h-full flex flex-col"
           onClick={handleClick}
         >
-          <Link to={getRecipePath()} onClick={(e) => e.stopPropagation()} className="flex flex-col h-full">
+          <Link 
+            to={getRecipePath()} 
+            onClick={(e) => {
+              e.stopPropagation();
+              // Track the recipe click
+              const recipeType = isExternal ? 'external' : 'manual';
+              trackClick(String(recipe.id), recipeType);
+            }} 
+            className="flex flex-col h-full"
+          >
         <div className="relative h-48 overflow-hidden">
           <img
             src={imageUrl}

@@ -1,14 +1,15 @@
 import os
 import json
+import re
 import requests
 import sys
 import time
-import re
 import logging
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Optional, Any, Callable
+from typing import Dict, List, Optional, Any, Callable, Union
 from functools import wraps
+import random
 
 # Add the backend directory to the Python path
 backend_dir = str(Path(__file__).parent.parent)
@@ -37,9 +38,30 @@ if not logger.handlers:
 # Constants
 MAX_RETRIES = 3
 REQUEST_TIMEOUT = 30  # seconds
+DEFAULT_MEALS_PER_DAY = 3
+DEFAULT_DAYS = 7
 
 # Initialize cache
 llm_cache = get_llm_cache()
+
+# Simple in-memory cache for fallback meal templates
+FALLBACK_MEAL_TEMPLATES = {
+    'breakfast': [
+        'Oatmeal with fruits and nuts',
+        'Scrambled eggs with whole wheat toast',
+        'Greek yogurt with honey and granola'
+    ],
+    'lunch': [
+        'Grilled chicken salad with vinaigrette',
+        'Vegetable stir-fry with tofu',
+        'Quinoa bowl with roasted vegetables'
+    ],
+    'dinner': [
+        'Baked salmon with sweet potato and greens',
+        'Vegetable curry with rice',
+        'Grilled chicken with roasted vegetables'
+    ]
+}
 
 def retry_on_failure(max_retries: int = 3, delay: float = 1.0):
     """Decorator to retry a function on failure."""
@@ -50,13 +72,13 @@ def retry_on_failure(max_retries: int = 3, delay: float = 1.0):
             for attempt in range(max_retries):
                 try:
                     return func(*args, **kwargs)
-                except requests.exceptions.RequestException as e:
+                except Exception as e:  # Catch all exceptions, not just RequestException
                     last_exception = e
                     logger.warning(f"Attempt {attempt + 1} failed: {str(e)}")
                     if attempt < max_retries - 1:
                         time.sleep(delay * (2 ** attempt))  # Exponential backoff
-            logger.error(f"All {max_retries} attempts failed")
-            raise last_exception or Exception("Unknown error occurred")
+            logger.error(f"All {max_retries} attempts failed: {str(last_exception) if last_exception else 'Unknown error'}")
+            return None  # Return None instead of raising to allow fallback
         return wrapper
     return decorator
 
@@ -66,32 +88,286 @@ class LLMMealPlannerAgent:
         self.huggingface_api_key = os.getenv('HUGGINGFACE_API_KEY', '')
         self.ollama_url = os.getenv('OLLAMA_URL', 'http://localhost:11434')
         
-        # Model options
-        self.hf_model = "microsoft/phi-2"  # Better free Hugging Face model
-        self.ollama_model = "llama3:8b"  # Smaller, faster model that works well on most systems
+        # Model options - using smaller, faster models
+        self.hf_model = "microsoft/phi-2"
+        self.ollama_model = "llama3:8b"  # or mistral:7b for lower resource usage
         
         # Determine which service to use
         self.service = self._determine_service()
         logger.info(f"Using LLM service: {self.service}")
         
+        # Simple in-memory cache for generated meal plans
+        self.meal_plan_cache = {}
+        
     def _determine_service(self) -> str:
         """Determine which free LLM service to use"""
-        # Try Ollama first (completely free, runs locally)
+        # Try Ollama first (runs locally)
         try:
             response = requests.get(f"{self.ollama_url}/api/tags", timeout=5)
             if response.status_code == 200:
                 models = response.json().get('models', [])
-                if any(model['name'].startswith('llama') for model in models):
+                if any(model['name'].startswith(('llama', 'mistral')) for model in models):
                     return 'ollama'
-        except:
-            pass
+        except Exception as e:
+            logger.warning(f"Ollama not available: {str(e)}")
         
-        # Try Hugging Face (free tier available)
+        # Try Hugging Face (needs API key)
         if self.huggingface_api_key:
             return 'huggingface'
-        
-        # Fallback to rule-based
+            
+        # Fallback to simple rule-based
         return 'fallback'
+        
+    @retry_on_failure()
+    def _generate_with_ollama(self, prompt: str, max_tokens: int = 1000) -> Optional[Dict]:
+        """Generate text using Ollama API"""
+        try:
+            response = requests.post(
+                f"{self.ollama_url}/api/generate",
+                json={
+                    "model": self.ollama_model,
+                    "prompt": prompt,
+                    "stream": False,
+                    "options": {
+                        "temperature": 0.7,
+                        "max_tokens": max_tokens,
+                    }
+                },
+                timeout=REQUEST_TIMEOUT
+            )
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            logger.error(f"Error generating with Ollama: {str(e)}")
+            return None
+
+    @retry_on_failure()
+    def _generate_with_huggingface(self, prompt: str, max_tokens: int = 1000) -> Optional[Dict]:
+        """Generate text using Hugging Face API"""
+        try:
+            headers = {
+                "Authorization": f"Bearer {self.huggingface_api_key}",
+                "Content-Type": "application/json"
+            }
+            
+            response = requests.post(
+                f"https://api-inference.huggingface.co/models/{self.hf_model}",
+                headers=headers,
+                json={
+                    "inputs": prompt,
+                    "parameters": {
+                        "max_length": max_tokens,
+                        "temperature": 0.7,
+                        "do_sample": True
+                    }
+                },
+                timeout=REQUEST_TIMEOUT
+            )
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            logger.error(f"Error generating with Hugging Face: {str(e)}")
+            return None
+
+    def _generate_fallback_plan(self, preferences: Dict) -> Dict:
+        """Generate a simple meal plan with nutritional information"""
+        days = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+        meal_plan = {}
+        
+        # Sample nutritional values for each meal type
+        MEAL_NUTRITION = {
+            'breakfast': {
+                'calories': 400,
+                'protein_g': 15,
+                'carbs_g': 50,
+                'fat_g': 15,
+                'fiber_g': 5
+            },
+            'lunch': {
+                'calories': 600,
+                'protein_g': 30,
+                'carbs_g': 70,
+                'fat_g': 20,
+                'fiber_g': 8
+            },
+            'dinner': {
+                'calories': 700,
+                'protein_g': 35,
+                'carbs_g': 60,
+                'fat_g': 30,
+                'fiber_g': 10
+            }
+        }
+        
+        # Create diverse meal templates based on preferences
+        dietary_restrictions = preferences.get('dietaryRestrictions', [])
+        favorite_cuisines = preferences.get('favoriteCuisines', ['International'])
+        
+        # Adjust meal templates based on dietary restrictions
+        if 'vegetarian' in dietary_restrictions:
+            FALLBACK_MEAL_TEMPLATES['breakfast'] = [
+                'Vegetarian omelette with spinach and mushrooms',
+                'Greek yogurt with honey and granola',
+                'Avocado toast with cherry tomatoes'
+            ]
+            FALLBACK_MEAL_TEMPLATES['lunch'] = [
+                'Mediterranean quinoa salad',
+                'Vegetable stir-fry with tofu',
+                'Caprese salad with fresh mozzarella'
+            ]
+            FALLBACK_MEAL_TEMPLATES['dinner'] = [
+                'Vegetarian lasagna with spinach',
+                'Stuffed bell peppers with quinoa',
+                'Vegetable curry with rice'
+            ]
+        
+        if 'vegan' in dietary_restrictions:
+            FALLBACK_MEAL_TEMPLATES['breakfast'] = [
+                'Oatmeal with almond milk and berries',
+                'Smoothie bowl with granola',
+                'Avocado toast with nutritional yeast'
+            ]
+            FALLBACK_MEAL_TEMPLATES['lunch'] = [
+                'Chickpea salad with tahini dressing',
+                'Vegan Buddha bowl with quinoa',
+                'Lentil soup with vegetables'
+            ]
+            FALLBACK_MEAL_TEMPLATES['dinner'] = [
+                'Vegan chili with beans',
+                'Stir-fried vegetables with tofu',
+                'Vegan pasta with tomato sauce'
+            ]
+        
+        # Adjust for Italian cuisine preference
+        if 'Italian' in favorite_cuisines:
+            FALLBACK_MEAL_TEMPLATES['breakfast'] = [
+                'Italian frittata with herbs',
+                'Cappuccino with biscotti',
+                'Ricotta pancakes with berries'
+            ]
+            FALLBACK_MEAL_TEMPLATES['lunch'] = [
+                'Caprese salad with balsamic',
+                'Pasta primavera with vegetables',
+                'Italian minestrone soup'
+            ]
+            FALLBACK_MEAL_TEMPLATES['dinner'] = [
+                'Margherita pizza with fresh basil',
+                'Risotto with mushrooms',
+                'Chicken piccata with pasta'
+            ]
+        
+        for day in days:
+            daily_meals = {}
+            
+            for meal_type in ['breakfast', 'lunch', 'dinner']:
+                meal_name = random.choice(FALLBACK_MEAL_TEMPLATES[meal_type])
+                nutrition = MEAL_NUTRITION[meal_type].copy()
+                
+                # Add some variation
+                for key in nutrition:
+                    if key != 'calories':
+                        nutrition[key] = int(nutrition[key] * random.uniform(0.8, 1.2))
+                nutrition['calories'] = int(nutrition['calories'] * random.uniform(0.9, 1.1))
+                
+                daily_meals[meal_type] = {
+                    'name': meal_name,
+                    'title': meal_name,
+                    'cuisine': random.choice(favorite_cuisines) if favorite_cuisines else 'International',
+                    'is_vegetarian': 'vegetarian' in dietary_restrictions,
+                    'is_vegan': 'vegan' in dietary_restrictions,
+                    'ingredients': [f'Ingredient {i+1}' for i in range(5)],
+                    'instructions': [f'Step {i+1}: Prepare the {meal_name.lower()}' for i in range(3)],
+                    'nutrition': nutrition,
+                    'calories': nutrition['calories'],
+                    'protein': f"{nutrition['protein_g']}g",
+                    'carbs': f"{nutrition['carbs_g']}g",
+                    'fat': f"{nutrition['fat_g']}g",
+                    'prep_time': '15 minutes',
+                    'cook_time': '20 minutes',
+                    'servings': 2,
+                    'difficulty': 'beginner'
+                }
+            
+            meal_plan[day] = daily_meals
+        
+        return {
+            "success": True,
+            "plan": meal_plan,
+            "nutrition_summary": {
+                "daily_average": {
+                    "calories": 1700,
+                    "protein": "80g",
+                    "carbs": "180g",
+                    "fat": "65g"
+                },
+                "weekly_totals": {
+                    "calories": 11900,
+                    "protein": "560g",
+                    "carbs": "1260g",
+                    "fat": "455g"
+                },
+                "dietary_considerations": dietary_restrictions,
+                "meal_inclusions": {
+                    "breakfast": True,
+                    "lunch": True,
+                    "dinner": True,
+                    "snacks": False
+                }
+            },
+            "metadata": {
+                "generated_at": datetime.utcnow().isoformat(),
+                "model": "fallback",
+                "warning": "Using fallback meal plan - no LLM service available"
+            }
+        }
+
+    def _parse_llm_response(self, response: Dict) -> Dict:
+        """Parse the LLM response into a structured format"""
+        try:
+            # Try to extract JSON from the response
+            text = response.get('response', '') if 'response' in response else ''
+            if not text and 'generated_text' in response:
+                text = response['generated_text']
+            
+            # Try to find JSON in the response
+            json_match = re.search(r'```json\n(.*?)\n```', text, re.DOTALL)
+            if json_match:
+                text = json_match.group(1)
+            
+            # Parse the JSON
+            return json.loads(text)
+        except Exception as e:
+            logger.error(f"Error parsing LLM response: {str(e)}")
+            raise ValueError("Failed to parse LLM response") from e
+
+    def _build_meal_plan_prompt(self, preferences: Dict) -> str:
+        """Build a prompt for generating a meal plan"""
+        dietary_restrictions = preferences.get('dietary_restrictions', [])
+        cuisine_preferences = preferences.get('cuisine_preferences', [])
+        health_goals = preferences.get('health_goals', [])
+        
+        prompt = f"""Generate a weekly meal plan with the following preferences:
+        - Dietary restrictions: {', '.join(dietary_restrictions) or 'None'}
+        - Cuisine preferences: {', '.join(cuisine_preferences) or 'Any'}
+        - Health goals: {', '.join(health_goals) or 'None'}
+        
+        Please respond with a JSON object containing a meal plan for each day of the week.
+        Each day should have breakfast, lunch, and dinner.
+        
+        Example format:
+        ```json
+        {{
+          "monday": {{
+            "breakfast": "...",
+            "lunch": "...",
+            "dinner": "..."
+          }},
+          "tuesday": {{...}},
+          ...
+        }}
+        ```
+        """
+        return prompt
     
     @cached_llm_response(llm_cache)
     def generate_weekly_meal_plan(self, preferences: Dict[str, Any]) -> Dict[str, Any]:
@@ -99,57 +375,67 @@ class LLMMealPlannerAgent:
         Generate a comprehensive weekly meal plan using free LLM
         
         Args:
-            preferences: User dietary preferences and restrictions
-            
+            preferences: Dictionary containing user preferences like dietary restrictions,
+                        cuisine preferences, health goals, etc.
+                        
         Returns:
-            Dict containing the weekly meal plan with recipes and details
+            Dict containing the meal plan and metadata
         """
-        logger.info('Generate weekly meal plan called with preferences')
-        logger.debug(f'Preferences: {json.dumps(preferences, indent=2)}')
-        
-        start_time = time.time()
-        
         try:
-            # Select the appropriate generation method based on available services
+            # Build the prompt
+            prompt = self._build_meal_plan_prompt(preferences)
+            logger.info(f"Generated prompt: {prompt[:200]}...")  # Log first 200 chars
+            
+            # Try to generate with the selected service
+            response = None
             if self.service == 'ollama':
-                logger.info("Using Ollama for meal plan generation")
-                plan = self._generate_with_ollama(preferences)
+                logger.info("Attempting to generate with Ollama...")
+                response = self._generate_with_ollama(prompt)
             elif self.service == 'huggingface':
-                logger.info("Using Hugging Face for meal plan generation")
-                plan = self._generate_with_huggingface(preferences)
-            else:
-                logger.warning("No LLM service available, using fallback meal plan")
-                plan = self._generate_fallback_meal_plan(preferences)
+                logger.info("Attempting to generate with Hugging Face...")
+                response = self._generate_with_huggingface(prompt)
             
-            # Log performance metrics
-            duration = time.time() - start_time
-            logger.info(f"Meal plan generated in {duration:.2f} seconds")
+            # Parse the response if we got one
+            if response:
+                try:
+                    meal_plan = self._parse_llm_response(response)
+                    if meal_plan and isinstance(meal_plan, dict):
+                        return {
+                            "success": True,
+                            "plan": meal_plan,
+                            "metadata": {
+                                "generated_at": datetime.utcnow().isoformat(),
+                                "model": self.ollama_model if self.service == 'ollama' else self.hf_model,
+                                "service": self.service
+                            }
+                        }
+                except Exception as e:
+                    logger.error(f"Error parsing LLM response: {str(e)}")
             
-            return plan
+            # If we get here, LLM generation failed - use fallback
+            logger.warning("Falling back to rule-based meal plan")
+            fallback_plan = self._generate_fallback_plan(preferences)
+            fallback_plan["metadata"]["warning"] = "LLM generation failed - using fallback meal plan"
+            return fallback_plan
             
         except Exception as e:
-            logger.error(f"Error generating meal plan: {str(e)}", exc_info=True)
-            logger.info("Falling back to default meal plan")
-            return self._generate_fallback_meal_plan(preferences)
-    
-    @retry_on_failure(max_retries=MAX_RETRIES)
-    def _generate_with_ollama(self, preferences: Dict[str, Any]) -> Dict[str, Any]:
-        """Generate meal plan using free Ollama LLM"""
-        logger.info("Building meal plan prompt...")
-        prompt = self._build_meal_plan_prompt(preferences)
-        logger.debug(f"Prompt length: {len(prompt)} characters")
-        
-        request_data = {
-            "model": self.ollama_model,
-            "prompt": prompt,
-            "stream": False,
-            "options": {
-                "temperature": 0.7,
-                "top_p": 0.9,
-                "max_tokens": 2000,
-                "num_ctx": 4096
+            logger.error(f"Error generating meal plan: {str(e)}")
+            # Return a basic fallback plan in case of complete failure
+            return {
+                "success": False,
+                "error": str(e),
+                "plan": self._generate_fallback_plan(preferences),
+                "metadata": {
+                    "generated_at": datetime.utcnow().isoformat(),
+                    "model": "fallback",
+                    "error": str(e)
+                }
             }
-        }
+    
+    def clear_cache(self) -> None:
+        """Clear the meal plan cache"""
+        self.meal_plan_cache.clear()
+        logger.info("Meal plan cache cleared")
         
         try:
             logger.info(f"Sending request to Ollama at {self.ollama_url}")

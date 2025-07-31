@@ -35,6 +35,30 @@ export const checkAndSeedInitialRecipes = async () => {
         image: '/placeholder.svg'
       },
       {
+        title: 'Jambalaya',
+        description: 'A hearty Louisiana Creole dish with rice, shrimp, chicken, and andouille sausage, seasoned with the holy trinity of onions, celery, and bell peppers.',
+        ready_in_minutes: 60,
+        cuisine: ['American', 'Creole', 'Louisiana'],
+        diets: ['None'],
+        image: '/placeholder.svg'
+      },
+      {
+        title: 'Shrimp and Grits',
+        description: 'Classic Southern comfort food featuring creamy stone-ground grits topped with sautéed shrimp, bacon, and a rich gravy made with the shrimp shells.',
+        ready_in_minutes: 40,
+        cuisine: ['American', 'Southern', 'Soul Food'],
+        diets: ['None'],
+        image: '/placeholder.svg'
+      },
+      {
+        title: 'Gumbo',
+        description: 'Rich and flavorful Louisiana stew with a dark roux, the holy trinity of vegetables, and your choice of seafood, chicken, or sausage. Served over rice.',
+        ready_in_minutes: 90,
+        cuisine: ['American', 'Creole', 'Cajun'],
+        diets: ['None'],
+        image: '/placeholder.svg'
+      },
+      {
         title: 'Authentic Pasta Carbonara',
         description: 'Classic Italian pasta dish with eggs, cheese, pancetta, and black pepper. Simple yet elegant, this Roman specialty is creamy without using cream.',
         ready_in_minutes: 20,

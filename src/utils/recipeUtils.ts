@@ -186,7 +186,7 @@ export const filterRecipes = (
         const cuisineLower = typeof cuisine === 'string' ? cuisine.toLowerCase() : '';
         // If American is selected, also match Southern and Creole cuisines
         if (cuisineFilterLower === 'american') {
-          return ['american', 'southern', 'creole', 'cajun'].includes(cuisineLower);
+          return ['american', 'southern', 'creole', 'cajun', 'soul food', 'southwestern', 'louisiana', 'tex-mex', 'new orleans'].includes(cuisineLower);
         }
         // Normal cuisine matching for other cases
         return cuisineLower === cuisineFilterLower;

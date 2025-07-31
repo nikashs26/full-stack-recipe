@@ -554,11 +554,23 @@ class RecipeService:
         logger.debug(f"- Looking for: {cuisines}")
         logger.debug(f"- Recipe has: {recipe_cuisines}")
             
-        # Only allow exact matches for cuisines
+        # Special handling for American cuisine to include regional American cuisines
         for cuisine in cuisines:
-            if cuisine in recipe_cuisines:
-                logger.debug(f"✓ Exact match found: {cuisine}")
-                return True
+            cuisine_lower = cuisine.lower()
+            if cuisine_lower == 'american':
+                # For American cuisine, also match Southern, Creole, and other American regional cuisines
+                american_regional_cuisines = {
+                    'american', 'southern', 'creole', 'cajun', 'soul food', 'southwestern', 
+                    'louisiana', 'tex-mex', 'new orleans', 'deep south', 'gulf coast'
+                }
+                if recipe_cuisines.intersection(american_regional_cuisines):
+                    logger.debug(f"✓ American regional cuisine match found: {recipe_cuisines.intersection(american_regional_cuisines)}")
+                    return True
+            else:
+                # Normal exact match for other cuisines
+                if cuisine_lower in recipe_cuisines:
+                    logger.debug(f"✓ Exact match found: {cuisine}")
+                    return True
         
         logger.debug(f"✗ No cuisine matches found for {recipe.get('title', 'Unknown')}")
         return False

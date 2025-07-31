@@ -119,21 +119,12 @@ export interface MealPlanResponse {
 
 export const generateMealPlan = async (options?: MealPlanOptions): Promise<MealPlanData> => {
   try {
-    // Call the actual backend endpoint
-    const requestBody: any = {
-      budget: options?.budget,
-      dietary_goals: options?.dietaryGoals,
-      currency: options?.currency || '$',
-      meal_preferences: options?.mealPreferences,
-      nutrition_targets: options?.nutritionTargets
-    };
-
-    // Remove undefined values
-    Object.keys(requestBody).forEach(key => requestBody[key] === undefined && delete requestBody[key]);
-
-    const response = await apiCall('/api/ai/meal_plan', {
+    console.log('🚀 Generating meal plan...');
+    
+    // Use the simple meal planner endpoint (no complex macro/nutrition logic)
+    const response = await apiCall('/api/ai/simple_meal_plan', {
       method: 'POST',
-      body: JSON.stringify(requestBody)
+      body: JSON.stringify({}) // No complex options needed
     });
 
     if (!response.ok) {
@@ -145,24 +136,141 @@ export const generateMealPlan = async (options?: MealPlanOptions): Promise<MealP
     }
 
     const data = await response.json();
+    console.log('📦 Received response:', data);
     
-    // Handle the response format from the backend
-    if (data.success && data.data) {
-      return data.data;  // The plan is in the data field
+    // Handle the response format from the simple LLM meal planner
+    if (data.success && data.plan) {
+      console.log('✅ Converting plan data:', data.plan);
+      // Convert the simple plan format to our expected format
+      return convertSimplePlanToMealPlanData(data.plan);
     } else if (data.error) {
       throw new Error(data.error);
-    } else if (data.plan) {
-      // Fallback to the old format
-      return data.plan;
     }
     
-    console.error('Invalid response format:', data);
+    console.error('❌ Invalid response format:', data);
     throw new Error('Invalid response format from server');
   } catch (error) {
-    console.error('Error generating meal plan:', error);
+    console.error('❌ Error generating meal plan:', error);
     throw error;
   }
 };
+
+/**
+ * Convert the simple LLM meal plan format to our expected MealPlanData format
+ */
+function convertSimplePlanToMealPlanData(simplePlan: any): MealPlanData {
+  const days: MealDay[] = [];
+  const today = new Date();
+  
+  // Handle different response formats from free LLM agent
+  let planData = simplePlan;
+  
+  // If the response has a 'plan' property, use that
+  if (simplePlan.plan) {
+    planData = simplePlan.plan;
+  }
+  
+  // If the response has a 'days' property, use that
+  if (simplePlan.days) {
+    planData = simplePlan.days;
+  }
+  
+  // If the response has a 'meal_plan' property, use that
+  if (simplePlan.meal_plan) {
+    planData = simplePlan.meal_plan;
+  }
+  
+  console.log('Converting plan data:', planData);
+  
+  // Convert the simple plan format to our expected format
+  const dayNames = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+  
+  dayNames.forEach((dayName, index) => {
+    const date = new Date(today);
+    date.setDate(today.getDate() + index);
+    
+    const dayData = planData[dayName] || {};
+    const meals: Meal[] = [];
+    
+    console.log(`Processing ${dayName}:`, dayData);
+    
+    // Convert breakfast, lunch, dinner to our format
+    ['breakfast', 'lunch', 'dinner'].forEach(mealType => {
+      const mealData = dayData[mealType];
+      if (mealData) {
+        console.log(`Processing ${mealType}:`, mealData);
+        
+        meals.push({
+          name: mealData.name || mealData.title || `Unknown ${mealType}`,
+          meal_type: mealType,
+          cuisine: mealData.cuisine || 'Unknown',
+          is_vegetarian: mealData.is_vegetarian || false,
+          is_vegan: mealData.is_vegan || false,
+          ingredients: Array.isArray(mealData.ingredients) ? mealData.ingredients : [],
+          instructions: Array.isArray(mealData.instructions) 
+            ? mealData.instructions 
+            : [mealData.instructions || 'No instructions provided'],
+          nutrition: {
+            calories: mealData.calories || mealData.nutrition?.calories || 0,
+            protein: mealData.protein || mealData.nutrition?.protein || '0g',
+            carbs: mealData.carbs || mealData.nutrition?.carbs || '0g',
+            fat: mealData.fat || mealData.nutrition?.fat || '0g'
+          },
+          prep_time: mealData.prep_time || mealData.cookingTime || '30 minutes',
+          cook_time: mealData.cook_time || mealData.cookingTime || '30 minutes',
+          servings: mealData.servings || 2,
+          difficulty: mealData.difficulty || 'beginner'
+        });
+      }
+    });
+    
+    days.push({
+      day: dayName.charAt(0).toUpperCase() + dayName.slice(1),
+      date: date.toISOString().split('T')[0],
+      meals
+    });
+  });
+  
+  console.log('Converted days:', days);
+  
+  // Create a default shopping list
+  const shopping_list: ShoppingList = {
+    ingredients: [],
+    estimated_cost: 0
+  };
+  
+  // Create a default nutrition summary
+  const nutrition_summary: NutritionSummary = {
+    daily_average: {
+      calories: 0,
+      protein: '0g',
+      carbs: '0g',
+      fat: '0g'
+    },
+    weekly_totals: {
+      calories: 0,
+      protein: '0g',
+      carbs: '0g',
+      fat: '0g'
+    },
+    dietary_considerations: [],
+    meal_inclusions: {
+      breakfast: true,
+      lunch: true,
+      dinner: true,
+      snacks: false
+    }
+  };
+  
+  return {
+    days,
+    shopping_list,
+    nutrition_summary,
+    generated_at: new Date().toISOString(),
+    preferences_used: {},
+    plan_type: 'weekly'
+  };
+}
 
 export const regenerateMeal = async (day: string, mealType: string): Promise<void> => {
   const response = await apiCall('/meal-plan/regenerate', {

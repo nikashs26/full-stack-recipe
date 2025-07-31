@@ -12,12 +12,17 @@ import { loadRecipes } from '../utils/storage';
 import { fetchManualRecipes } from '../lib/manualRecipes';
 import { fetchRecipes } from '../lib/spoonacular';
 import { useAuth } from '../context/AuthContext';
+import { getHomepagePopularRecipes } from '../services/popularRecipesService';
+import { addSampleClicks } from '../utils/testClickTracking';
 
 const HomePage: React.FC = () => {
   const { isAuthenticated, user } = useAuth();
 
   // Load user preferences separately (since AuthContext User doesn't include preferences)
   const [userPreferences, setUserPreferences] = useState<any>(null);
+  
+  // State for popular recipes toggle
+  const [showPersonalPopular, setShowPersonalPopular] = useState(false);
 
   // Load user preferences when authenticated
   useEffect(() => {
@@ -92,6 +97,23 @@ const HomePage: React.FC = () => {
     staleTime: 5 * 60 * 1000, // 5 minutes
     retry: 1, // Only retry once on failure
     enabled: false, // Disable this for now to avoid duplication since it calls same endpoint
+  });
+
+  // Query for popular recipes based on clicks and reviews
+  const { data: popularRecipesData = [], isLoading: isLoadingPopular } = useQuery({
+    queryKey: ['popular-recipes', user?.id],
+    queryFn: () => getHomepagePopularRecipes(user?.id),
+    staleTime: 10 * 60 * 1000, // 10 minutes (popular recipes don't change as frequently)
+    retry: 1,
+  });
+
+  // Query for personal popular recipes
+  const { data: personalPopularRecipesData = [], isLoading: isLoadingPersonalPopular } = useQuery({
+    queryKey: ['personal-popular-recipes', user?.id],
+    queryFn: () => getHomepagePopularRecipes(user?.id),
+    staleTime: 10 * 60 * 1000,
+    retry: 1,
+    enabled: !!user?.id && showPersonalPopular, // Only fetch when user is logged in and toggle is on
   });
 
   // Log any query errors
@@ -532,8 +554,23 @@ const HomePage: React.FC = () => {
         !recommendedRecipes.find(r => (r.id || r._id) === (recipe.id || recipe._id) && r.type === recipe.type)
       );
       
-      // Popular recipes = shuffle remaining recipes
-      popularRecipes = [...remainingRecipes].sort(() => Math.random() - 0.5);
+      // Use real popular recipes data if available, otherwise fall back to random selection
+      if (showPersonalPopular && isAuthenticated && user?.id) {
+        // Use personal popular recipes
+        if (personalPopularRecipesData && personalPopularRecipesData.length > 0) {
+          console.log('👤 Using personal popular recipes data:', personalPopularRecipesData.length);
+          popularRecipes = personalPopularRecipesData.map(recipe => ({ ...recipe, type: 'external' as const }));
+        } else {
+          console.log('🔄 No personal popular recipes data, using random selection');
+          popularRecipes = [...remainingRecipes].sort(() => Math.random() - 0.5);
+        }
+      } else if (popularRecipesData && popularRecipesData.length > 0) {
+        console.log('🎯 Using global popular recipes data:', popularRecipesData.length);
+        popularRecipes = popularRecipesData.map(recipe => ({ ...recipe, type: 'external' as const }));
+      } else {
+        console.log('🔄 No popular recipes data, using random selection');
+        popularRecipes = [...remainingRecipes].sort(() => Math.random() - 0.5);
+      }
       
       // Newest recipes = reverse order of remaining
       newestRecipes = [...remainingRecipes].reverse();
@@ -543,7 +580,15 @@ const HomePage: React.FC = () => {
       console.log('🔄 No preferences found, showing default recipes');
       const shuffled = [...allCombined].sort(() => Math.random() - 0.5);
       recommendedRecipes = shuffled.slice(0, 8); // Keep 8 recipes in the shuffled list
-      popularRecipes = shuffled.slice(4, 8);
+      
+      // Use real popular recipes data if available, otherwise use random selection
+      if (popularRecipesData && popularRecipesData.length > 0) {
+        console.log('🎯 Using real popular recipes for non-authenticated user:', popularRecipesData.length);
+        popularRecipes = popularRecipesData.map(recipe => ({ ...recipe, type: 'external' as const }));
+      } else {
+        popularRecipes = shuffled.slice(4, 8);
+      }
+      
       newestRecipes = shuffled.slice(8, 12);
     }
 
@@ -552,9 +597,9 @@ const HomePage: React.FC = () => {
       popular: popularRecipes.slice(0, 4),
       newest: newestRecipes.slice(0, 4)
     };
-  }, [spoonacularRecipes, manualRecipes, savedRecipes, isAuthenticated, userPreferences]);
+  }, [spoonacularRecipes, manualRecipes, savedRecipes, popularRecipesData, isAuthenticated, userPreferences, showPersonalPopular, personalPopularRecipesData]);
 
-  const isLoading = isLoadingBackend || isLoadingManual;
+  const isLoading = isLoadingBackend || isLoadingManual || isLoadingPopular || (showPersonalPopular && isLoadingPersonalPopular);
 
   // Welcome message based on authentication status
   const getWelcomeMessage = () => {
@@ -745,15 +790,33 @@ const HomePage: React.FC = () => {
             <div className="mb-16">
               <div className="flex justify-between items-center mb-8">
                 <div>
-                  <h2 className="text-3xl font-bold text-gray-900 mb-2">Popular Recipes</h2>
-                  <p className="text-gray-600">Most loved recipes by our community</p>
+                  <h2 className="text-3xl font-bold text-gray-900 mb-2">
+                    {showPersonalPopular ? 'Your Popular Recipes' : 'Popular Recipes'}
+                  </h2>
+                  <p className="text-gray-600">
+                    {showPersonalPopular 
+                      ? 'Recipes you\'ve clicked and reviewed the most' 
+                      : 'Most loved recipes by our community'
+                    }
+                  </p>
                 </div>
-                <Link to="/recipes">
-                  <Button variant="outline">
-                    <ThumbsUp className="mr-2 h-4 w-4" />
-                    View All Popular
-                  </Button>
-                </Link>
+                <div className="flex items-center gap-4">
+                  {isAuthenticated && (
+                    <Button
+                      variant={showPersonalPopular ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setShowPersonalPopular(!showPersonalPopular)}
+                    >
+                      {showPersonalPopular ? 'Show Global' : 'Show Personal'}
+                    </Button>
+                  )}
+                  <Link to="/recipes">
+                    <Button variant="outline">
+                      <ThumbsUp className="mr-2 h-4 w-4" />
+                      View All Popular
+                    </Button>
+                  </Link>
+                </div>
               </div>
 
               {isLoading ? (
