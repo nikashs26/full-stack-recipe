@@ -135,13 +135,19 @@ export interface FetchRecipesOptions {
   pageSize?: number;
   cuisines?: string[];
   diets?: string[];
+  favoriteFoods?: string[];
+}
+
+export interface PaginatedRecipes {
+  recipes: ManualRecipe[];
+  total: number;
 }
 
 export const fetchManualRecipes = async (
   query: any = '', 
   ingredient: any = '',
   options: FetchRecipesOptions = {}
-): Promise<ManualRecipe[]> => {
+): Promise<PaginatedRecipes> => {
   try {
     const params = new URLSearchParams();
     
@@ -151,16 +157,21 @@ export const fetchManualRecipes = async (
     if (queryStr) params.append('query', queryStr);
     if (ingredientStr) params.append('ingredient', ingredientStr);
     
-    // Fetch all matching recipes by setting a high limit
-    // The backend handles pagination and will return all available results
-    const page = 1; // Always fetch first page
-    const pageSize = 1000; // Set a high limit to get all results
-    params.append('offset', '0'); // Start from the beginning
+    // Handle pagination
+    const page = options.page || 1;
+    const pageSize = options.pageSize || 20;
+    const offset = (page - 1) * pageSize;
+    params.append('offset', String(offset));
     params.append('limit', String(pageSize));
     
     // Handle cuisines filter
     if (options.cuisines?.length) {
       params.append('cuisine', options.cuisines.join(','));
+    }
+    
+    // Handle favorite foods
+    if (options.favoriteFoods?.length) {
+      params.append('favorite_foods', options.favoriteFoods.join(','));
     }
     
     // Handle diets filter - ensure consistent naming with backend
@@ -183,7 +194,8 @@ export const fetchManualRecipes = async (
       }
     }
     
-    const url = `${API_BASE_URL}/get_recipes${params.toString() ? `?${params.toString()}` : ''}`;
+    const queryString = params.toString();
+    const url = `${API_BASE_URL}/get_recipes${queryString ? `?${queryString}` : ''}`;
     console.log('Fetching recipes from:', url);
     
     // Get the authentication token from localStorage
@@ -209,10 +221,10 @@ export const fetchManualRecipes = async (
         error: errorText
       });
       
-      // Don't throw for 404, just return empty array
+      // Don't throw for 404, just return empty result
       if (response.status === 404) {
         console.log('No recipes found for query');
-        return [];
+        return { recipes: [], total: 0 };
       }
       
       throw new Error(`Error ${response.status}: ${response.statusText}`);
@@ -227,17 +239,29 @@ export const fetchManualRecipes = async (
     
     // Handle both array response and object with results key
     let recipes: any[] = [];
-    if (Array.isArray(data)) {
-      recipes = data; // Direct array response
+    let total = 0;
+    
+    if (data && data.results && data.total !== undefined) {
+      // New format with results and total
+      recipes = data.results;
+      total = data.total;
+    } else if (Array.isArray(data)) {
+      // Fallback: Direct array response
+      recipes = data;
+      total = data.length;
     } else if (data && Array.isArray(data.results)) {
-      recipes = data.results; // Object with results array
+      // Fallback: Object with results array
+      recipes = data.results;
+      total = data.total || data.results.length;
     } else if (data && data.recipes && Array.isArray(data.recipes)) {
-      recipes = data.recipes; // Some APIs use 'recipes' key
+      // Fallback: Some APIs use 'recipes' key
+      recipes = data.recipes;
+      total = data.total || data.recipes.length;
     }
     
     if (recipes.length > 0) {
       // Transform the response to match ManualRecipe format with enhanced dietary info
-      return recipes.map((recipe: any) => {
+      const transformedRecipes = recipes.map((recipe: any) => {
         // Normalize dietary restrictions
         let diets: string[] = [];
         if (Array.isArray(recipe.diets)) {
@@ -287,16 +311,27 @@ export const fetchManualRecipes = async (
           source: recipe.source || 'unknown'
         };
       });
+      
+      return {
+        recipes: transformedRecipes,
+        total: total || transformedRecipes.length
+      };
     } else {
-      // If no recipes found, return sample recipes
-      console.log('No recipes found, using sample data');
-      return SAMPLE_RECIPES;
+      // If no recipes found, return empty array with 0 total
+      console.log('No recipes found');
+      return {
+        recipes: [],
+        total: 0
+      };
     }
   } catch (error) {
     console.error('Error in fetchManualRecipes:', error);
-    // Return sample recipes when backend fails
-    console.log('Backend failed, using sample recipes');
-    return SAMPLE_RECIPES;
+    // Return empty result when backend fails
+    console.log('Backend failed');
+    return {
+      recipes: [],
+      total: 0
+    };
   }
 };
 

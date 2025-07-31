@@ -449,8 +449,12 @@ const UserPreferencesPage: React.FC = () => {
       
       // Clean up the data before sending
       const cleanedData: UserPreferences = {
+        // Ensure dietary restrictions is an array and handle the case where it might be undefined
         dietaryRestrictions: Array.isArray(currentValues.dietaryRestrictions) 
-          ? currentValues.dietaryRestrictions.filter(Boolean) 
+          ? [...new Set(currentValues.dietaryRestrictions
+              .filter(Boolean)
+              .map((r: string) => r.trim())
+              .filter(Boolean))]
           : [],
         favoriteCuisines: Array.isArray(currentValues.favoriteCuisines) 
           ? [...new Set(currentValues.favoriteCuisines
@@ -458,9 +462,8 @@ const UserPreferencesPage: React.FC = () => {
               .map((c: string) => c.trim())
               .filter(Boolean))]
           : [],
-        // Preserve foodsToAvoid exactly as is
         foodsToAvoid: Array.isArray(currentValues.foodsToAvoid) 
-          ? currentValues.foodsToAvoid
+          ? currentValues.foodsToAvoid.filter(Boolean)
           : [],
         cookingSkillLevel: (currentValues.cookingSkillLevel as 'beginner' | 'intermediate' | 'advanced') || 'beginner',
         favoriteFoods: Array.isArray(currentValues.favoriteFoods)
@@ -485,14 +488,8 @@ const UserPreferencesPage: React.FC = () => {
       // Save with proper structure that backend expects
       await saveUserPreferences(cleanedData);
       
-      // Update the form without resetting the entire form state
-      form.setValue('foodsToAvoid', cleanedData.foodsToAvoid || [], {
-        shouldDirty: false,
-        shouldValidate: true
-      });
-      
-      // Force a re-render to update the UI
-      form.trigger('foodsToAvoid');
+      // Update the form state to reflect the saved values
+      form.reset(cleanedData);
       
       toast({
         title: "Success",

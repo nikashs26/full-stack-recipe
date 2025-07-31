@@ -15,8 +15,8 @@ recipe_cache = RecipeCacheService()
 # TheMealDB API endpoints
 MEALDB_LOOKUP_URL = "https://www.themealdb.com/api/json/v1/1/lookup.php?i={id}"
 
-# Two specific recipe IDs from TheMealDB
-RECIPE_IDS = ["52772", "52959"]  # Teriyaki Chicken Casserole and Baked salmon with fennel & tomatoes
+# Recipe IDs from TheMealDB - mix of meat and vegetarian recipes
+RECIPE_IDS = ["52772", "52959", "53013", "53016", "53022", "53025", "53026", "53027", "53028", "53029"]
 
 @app.route('/recipes', methods=['GET'])
 def get_recipes():
@@ -69,6 +69,49 @@ def add_test_recipes():
                 'ingredients': ingredients,
                 'diets': []
             }
+            
+            # Infer dietary restrictions based on ingredients
+            ingredient_names = [ing['name'].lower() for ing in ingredients]
+            ingredient_text = ' '.join(ingredient_names)
+            diets = []
+            
+            # Check for vegetarian (no meat, fish, or poultry)
+            meat_indicators = ['chicken', 'beef', 'pork', 'lamb', 'fish', 'salmon', 'tuna', 'shrimp', 'prawn', 'meat', 'bacon', 'ham', 'sausage', 'turkey', 'duck', 'goose', 'venison', 'rabbit', 'quail', 'pheasant']
+            has_meat = any(meat in ingredient_text for meat in meat_indicators)
+            if not has_meat:
+                diets.append('vegetarian')
+                print(f"  ✅ Added vegetarian tag for: {recipe['title']}")
+            
+            # Check for vegan (no animal products)
+            animal_indicators = ['milk', 'cheese', 'butter', 'cream', 'egg', 'yogurt', 'honey', 'gelatin', 'lard', 'tallow', 'whey', 'casein']
+            has_animal_products = any(animal in ingredient_text for animal in animal_indicators)
+            if not has_meat and not has_animal_products:
+                diets.append('vegan')
+                print(f"  ✅ Added vegan tag for: {recipe['title']}")
+            
+            # Check for gluten-free
+            gluten_indicators = ['flour', 'bread', 'pasta', 'wheat', 'barley', 'rye', 'malt', 'semolina', 'couscous', 'bulgur']
+            has_gluten = any(gluten in ingredient_text for gluten in gluten_indicators)
+            if not has_gluten:
+                diets.append('gluten-free')
+                print(f"  ✅ Added gluten-free tag for: {recipe['title']}")
+            
+            # Check for dairy-free
+            dairy_indicators = ['milk', 'cheese', 'butter', 'cream', 'yogurt', 'whey', 'casein', 'lactose']
+            has_dairy = any(dairy in ingredient_text for dairy in dairy_indicators)
+            if not has_dairy:
+                diets.append('dairy-free')
+                print(f"  ✅ Added dairy-free tag for: {recipe['title']}")
+            
+            # Check for nut-free
+            nut_indicators = ['almond', 'peanut', 'walnut', 'cashew', 'pecan', 'hazelnut', 'pistachio', 'macadamia', 'brazil nut', 'pine nut']
+            has_nuts = any(nut in ingredient_text for nut in nut_indicators)
+            if not has_nuts:
+                diets.append('nut-free')
+                print(f"  ✅ Added nut-free tag for: {recipe['title']}")
+            
+            print(f"  📋 Dietary tags for {recipe['title']}: {diets}")
+            recipe['diets'] = diets
             
             # Store in ChromaDB
             recipe_id = str(recipe['id'])

@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { ManualRecipe } from '../types/manualRecipe';
 import { ChefHat, Clock } from 'lucide-react';
 import { getDietaryTags } from '../utils/recipeUtils';
+import { DietaryRestriction } from '../types/recipe';
 
 interface ManualRecipeCardProps {
   recipe: ManualRecipe;
@@ -30,22 +31,31 @@ const ManualRecipeCard: React.FC<ManualRecipeCardProps> = ({ recipe }) => {
     return title;
   })();
 
-  // Map diet strings to proper dietary restriction format
+  // Map diet strings to proper dietary restriction enum values
   const mappedDiets = (recipe.diets || [])
-    .filter(diet => diet && typeof diet === 'string')
+    .filter((diet): diet is string => Boolean(diet) && typeof diet === 'string')
     .map(diet => {
       const dietLower = diet.toLowerCase();
       // Map common diet names to our standard format
-      if (dietLower.includes('vegetarian')) return 'vegetarian';
-      if (dietLower.includes('vegan')) return 'vegan';
-      if (dietLower.includes('gluten') && dietLower.includes('free')) return 'gluten-free';
-      if (dietLower.includes('dairy') && dietLower.includes('free')) return 'dairy-free';
-      if (dietLower.includes('ketogenic') || dietLower.includes('keto')) return 'keto';
-      if (dietLower.includes('paleo')) return 'paleo';
-      return diet; // Keep original if no mapping found
-    });
+      if (dietLower.includes('vegetarian')) return DietaryRestriction.VEGETARIAN;
+      if (dietLower.includes('vegan')) return DietaryRestriction.VEGAN;
+      if (dietLower.includes('gluten') && dietLower.includes('free')) return DietaryRestriction.GLUTEN_FREE;
+      if (dietLower.includes('dairy') && dietLower.includes('free')) return DietaryRestriction.DAIRY_FREE;
+      if (dietLower.includes('ketogenic') || dietLower.includes('keto')) return DietaryRestriction.KETO;
+      if (dietLower.includes('paleo')) return DietaryRestriction.PALEO;
+      if (dietLower.includes('nut') && dietLower.includes('free')) return DietaryRestriction.NUT_FREE;
+      if (dietLower.includes('low') && dietLower.includes('carb')) return DietaryRestriction.LOW_CARB;
+      if (dietLower.includes('low') && dietLower.includes('calorie')) return DietaryRestriction.LOW_CALORIE;
+      if (dietLower.includes('low') && dietLower.includes('sodium')) return DietaryRestriction.LOW_SODIUM;
+      if (dietLower.includes('high') && dietLower.includes('protein')) return DietaryRestriction.HIGH_PROTEIN;
+      if (dietLower.includes('pescetarian')) return DietaryRestriction.PESCETARIAN;
+      return diet as DietaryRestriction;
+    })
+    .filter((diet): diet is DietaryRestriction => 
+      Object.values(DietaryRestriction).includes(diet as DietaryRestriction)
+    );
   
-  const dietaryTags = getDietaryTags(mappedDiets as any);
+  const dietaryTags = getDietaryTags(mappedDiets);
 
   // Enhanced cuisine display with proper type checking
   const displayCuisines = (() => {
@@ -66,7 +76,11 @@ const ManualRecipeCard: React.FC<ManualRecipeCardProps> = ({ recipe }) => {
         <img
           src={recipe.image || '/placeholder.svg'}
           alt={displayTitle}
-          className="w-full h-48 object-cover"
+          className="w-full h-48 object-cover rounded-t-lg"
+          onError={(e) => {
+            const target = e.target as HTMLImageElement;
+            target.src = '/placeholder.svg';
+          }}
         />
         <div className="absolute top-3 right-3">
           <div className="bg-blue-600 text-white px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1 shadow-md">

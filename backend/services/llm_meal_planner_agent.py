@@ -1,14 +1,15 @@
 import os
 import json
+import re
 import requests
 import sys
 import time
-import re
 import logging
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Optional, Any, Callable
+from typing import Dict, List, Optional, Any, Callable, Union
 from functools import wraps
+import random
 
 # Add the backend directory to the Python path
 backend_dir = str(Path(__file__).parent.parent)
@@ -37,9 +38,30 @@ if not logger.handlers:
 # Constants
 MAX_RETRIES = 3
 REQUEST_TIMEOUT = 30  # seconds
+DEFAULT_MEALS_PER_DAY = 3
+DEFAULT_DAYS = 7
 
 # Initialize cache
 llm_cache = get_llm_cache()
+
+# Simple in-memory cache for fallback meal templates
+FALLBACK_MEAL_TEMPLATES = {
+    'breakfast': [
+        'Oatmeal with fruits and nuts',
+        'Scrambled eggs with whole wheat toast',
+        'Greek yogurt with honey and granola'
+    ],
+    'lunch': [
+        'Grilled chicken salad with vinaigrette',
+        'Vegetable stir-fry with tofu',
+        'Quinoa bowl with roasted vegetables'
+    ],
+    'dinner': [
+        'Baked salmon with sweet potato and greens',
+        'Vegetable curry with rice',
+        'Grilled chicken with roasted vegetables'
+    ]
+}
 
 def retry_on_failure(max_retries: int = 3, delay: float = 1.0):
     """Decorator to retry a function on failure."""
@@ -50,13 +72,13 @@ def retry_on_failure(max_retries: int = 3, delay: float = 1.0):
             for attempt in range(max_retries):
                 try:
                     return func(*args, **kwargs)
-                except requests.exceptions.RequestException as e:
+                except Exception as e:  # Catch all exceptions, not just RequestException
                     last_exception = e
                     logger.warning(f"Attempt {attempt + 1} failed: {str(e)}")
                     if attempt < max_retries - 1:
                         time.sleep(delay * (2 ** attempt))  # Exponential backoff
-            logger.error(f"All {max_retries} attempts failed")
-            raise last_exception or Exception("Unknown error occurred")
+            logger.error(f"All {max_retries} attempts failed: {str(last_exception) if last_exception else 'Unknown error'}")
+            return None  # Return None instead of raising to allow fallback
         return wrapper
     return decorator
 
@@ -66,32 +88,286 @@ class LLMMealPlannerAgent:
         self.huggingface_api_key = os.getenv('HUGGINGFACE_API_KEY', '')
         self.ollama_url = os.getenv('OLLAMA_URL', 'http://localhost:11434')
         
-        # Model options
-        self.hf_model = "microsoft/phi-2"  # Better free Hugging Face model
-        self.ollama_model = "llama3:8b"  # Smaller, faster model that works well on most systems
+        # Model options - using smaller, faster models
+        self.hf_model = "microsoft/phi-2"
+        self.ollama_model = "llama3:8b"  # or mistral:7b for lower resource usage
         
         # Determine which service to use
         self.service = self._determine_service()
         logger.info(f"Using LLM service: {self.service}")
         
+        # Simple in-memory cache for generated meal plans
+        self.meal_plan_cache = {}
+        
     def _determine_service(self) -> str:
         """Determine which free LLM service to use"""
-        # Try Ollama first (completely free, runs locally)
+        # Try Ollama first (runs locally)
         try:
             response = requests.get(f"{self.ollama_url}/api/tags", timeout=5)
             if response.status_code == 200:
                 models = response.json().get('models', [])
-                if any(model['name'].startswith('llama') for model in models):
+                if any(model['name'].startswith(('llama', 'mistral')) for model in models):
                     return 'ollama'
-        except:
-            pass
+        except Exception as e:
+            logger.warning(f"Ollama not available: {str(e)}")
         
-        # Try Hugging Face (free tier available)
+        # Try Hugging Face (needs API key)
         if self.huggingface_api_key:
             return 'huggingface'
-        
-        # Fallback to rule-based
+            
+        # Fallback to simple rule-based
         return 'fallback'
+        
+    @retry_on_failure()
+    def _generate_with_ollama(self, prompt: str, max_tokens: int = 1000) -> Optional[Dict]:
+        """Generate text using Ollama API"""
+        try:
+            response = requests.post(
+                f"{self.ollama_url}/api/generate",
+                json={
+                    "model": self.ollama_model,
+                    "prompt": prompt,
+                    "stream": False,
+                    "options": {
+                        "temperature": 0.7,
+                        "max_tokens": max_tokens,
+                    }
+                },
+                timeout=REQUEST_TIMEOUT
+            )
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            logger.error(f"Error generating with Ollama: {str(e)}")
+            return None
+
+    @retry_on_failure()
+    def _generate_with_huggingface(self, prompt: str, max_tokens: int = 1000) -> Optional[Dict]:
+        """Generate text using Hugging Face API"""
+        try:
+            headers = {
+                "Authorization": f"Bearer {self.huggingface_api_key}",
+                "Content-Type": "application/json"
+            }
+            
+            response = requests.post(
+                f"https://api-inference.huggingface.co/models/{self.hf_model}",
+                headers=headers,
+                json={
+                    "inputs": prompt,
+                    "parameters": {
+                        "max_length": max_tokens,
+                        "temperature": 0.7,
+                        "do_sample": True
+                    }
+                },
+                timeout=REQUEST_TIMEOUT
+            )
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            logger.error(f"Error generating with Hugging Face: {str(e)}")
+            return None
+
+    def _generate_fallback_plan(self, preferences: Dict) -> Dict:
+        """Generate a simple meal plan with nutritional information"""
+        days = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+        meal_plan = {}
+        
+        # Sample nutritional values for each meal type
+        MEAL_NUTRITION = {
+            'breakfast': {
+                'calories': 400,
+                'protein_g': 15,
+                'carbs_g': 50,
+                'fat_g': 15,
+                'fiber_g': 5
+            },
+            'lunch': {
+                'calories': 600,
+                'protein_g': 30,
+                'carbs_g': 70,
+                'fat_g': 20,
+                'fiber_g': 8
+            },
+            'dinner': {
+                'calories': 700,
+                'protein_g': 35,
+                'carbs_g': 60,
+                'fat_g': 30,
+                'fiber_g': 10
+            }
+        }
+        
+        # Create diverse meal templates based on preferences
+        dietary_restrictions = preferences.get('dietaryRestrictions', [])
+        favorite_cuisines = preferences.get('favoriteCuisines', ['International'])
+        
+        # Adjust meal templates based on dietary restrictions
+        if 'vegetarian' in dietary_restrictions:
+            FALLBACK_MEAL_TEMPLATES['breakfast'] = [
+                'Vegetarian omelette with spinach and mushrooms',
+                'Greek yogurt with honey and granola',
+                'Avocado toast with cherry tomatoes'
+            ]
+            FALLBACK_MEAL_TEMPLATES['lunch'] = [
+                'Mediterranean quinoa salad',
+                'Vegetable stir-fry with tofu',
+                'Caprese salad with fresh mozzarella'
+            ]
+            FALLBACK_MEAL_TEMPLATES['dinner'] = [
+                'Vegetarian lasagna with spinach',
+                'Stuffed bell peppers with quinoa',
+                'Vegetable curry with rice'
+            ]
+        
+        if 'vegan' in dietary_restrictions:
+            FALLBACK_MEAL_TEMPLATES['breakfast'] = [
+                'Oatmeal with almond milk and berries',
+                'Smoothie bowl with granola',
+                'Avocado toast with nutritional yeast'
+            ]
+            FALLBACK_MEAL_TEMPLATES['lunch'] = [
+                'Chickpea salad with tahini dressing',
+                'Vegan Buddha bowl with quinoa',
+                'Lentil soup with vegetables'
+            ]
+            FALLBACK_MEAL_TEMPLATES['dinner'] = [
+                'Vegan chili with beans',
+                'Stir-fried vegetables with tofu',
+                'Vegan pasta with tomato sauce'
+            ]
+        
+        # Adjust for Italian cuisine preference
+        if 'Italian' in favorite_cuisines:
+            FALLBACK_MEAL_TEMPLATES['breakfast'] = [
+                'Italian frittata with herbs',
+                'Cappuccino with biscotti',
+                'Ricotta pancakes with berries'
+            ]
+            FALLBACK_MEAL_TEMPLATES['lunch'] = [
+                'Caprese salad with balsamic',
+                'Pasta primavera with vegetables',
+                'Italian minestrone soup'
+            ]
+            FALLBACK_MEAL_TEMPLATES['dinner'] = [
+                'Margherita pizza with fresh basil',
+                'Risotto with mushrooms',
+                'Chicken piccata with pasta'
+            ]
+        
+        for day in days:
+            daily_meals = {}
+            
+            for meal_type in ['breakfast', 'lunch', 'dinner']:
+                meal_name = random.choice(FALLBACK_MEAL_TEMPLATES[meal_type])
+                nutrition = MEAL_NUTRITION[meal_type].copy()
+                
+                # Add some variation
+                for key in nutrition:
+                    if key != 'calories':
+                        nutrition[key] = int(nutrition[key] * random.uniform(0.8, 1.2))
+                nutrition['calories'] = int(nutrition['calories'] * random.uniform(0.9, 1.1))
+                
+                daily_meals[meal_type] = {
+                    'name': meal_name,
+                    'title': meal_name,
+                    'cuisine': random.choice(favorite_cuisines) if favorite_cuisines else 'International',
+                    'is_vegetarian': 'vegetarian' in dietary_restrictions,
+                    'is_vegan': 'vegan' in dietary_restrictions,
+                    'ingredients': [f'Ingredient {i+1}' for i in range(5)],
+                    'instructions': [f'Step {i+1}: Prepare the {meal_name.lower()}' for i in range(3)],
+                    'nutrition': nutrition,
+                    'calories': nutrition['calories'],
+                    'protein': f"{nutrition['protein_g']}g",
+                    'carbs': f"{nutrition['carbs_g']}g",
+                    'fat': f"{nutrition['fat_g']}g",
+                    'prep_time': '15 minutes',
+                    'cook_time': '20 minutes',
+                    'servings': 2,
+                    'difficulty': 'beginner'
+                }
+            
+            meal_plan[day] = daily_meals
+        
+        return {
+            "success": True,
+            "plan": meal_plan,
+            "nutrition_summary": {
+                "daily_average": {
+                    "calories": 1700,
+                    "protein": "80g",
+                    "carbs": "180g",
+                    "fat": "65g"
+                },
+                "weekly_totals": {
+                    "calories": 11900,
+                    "protein": "560g",
+                    "carbs": "1260g",
+                    "fat": "455g"
+                },
+                "dietary_considerations": dietary_restrictions,
+                "meal_inclusions": {
+                    "breakfast": True,
+                    "lunch": True,
+                    "dinner": True,
+                    "snacks": False
+                }
+            },
+            "metadata": {
+                "generated_at": datetime.utcnow().isoformat(),
+                "model": "fallback",
+                "warning": "Using fallback meal plan - no LLM service available"
+            }
+        }
+
+    def _parse_llm_response(self, response: Dict) -> Dict:
+        """Parse the LLM response into a structured format"""
+        try:
+            # Try to extract JSON from the response
+            text = response.get('response', '') if 'response' in response else ''
+            if not text and 'generated_text' in response:
+                text = response['generated_text']
+            
+            # Try to find JSON in the response
+            json_match = re.search(r'```json\n(.*?)\n```', text, re.DOTALL)
+            if json_match:
+                text = json_match.group(1)
+            
+            # Parse the JSON
+            return json.loads(text)
+        except Exception as e:
+            logger.error(f"Error parsing LLM response: {str(e)}")
+            raise ValueError("Failed to parse LLM response") from e
+
+    def _build_meal_plan_prompt(self, preferences: Dict) -> str:
+        """Build a prompt for generating a meal plan"""
+        dietary_restrictions = preferences.get('dietary_restrictions', [])
+        cuisine_preferences = preferences.get('cuisine_preferences', [])
+        health_goals = preferences.get('health_goals', [])
+        
+        prompt = f"""Generate a weekly meal plan with the following preferences:
+        - Dietary restrictions: {', '.join(dietary_restrictions) or 'None'}
+        - Cuisine preferences: {', '.join(cuisine_preferences) or 'Any'}
+        - Health goals: {', '.join(health_goals) or 'None'}
+        
+        Please respond with a JSON object containing a meal plan for each day of the week.
+        Each day should have breakfast, lunch, and dinner.
+        
+        Example format:
+        ```json
+        {{
+          "monday": {{
+            "breakfast": "...",
+            "lunch": "...",
+            "dinner": "..."
+          }},
+          "tuesday": {{...}},
+          ...
+        }}
+        ```
+        """
+        return prompt
     
     @cached_llm_response(llm_cache)
     def generate_weekly_meal_plan(self, preferences: Dict[str, Any]) -> Dict[str, Any]:
@@ -99,57 +375,67 @@ class LLMMealPlannerAgent:
         Generate a comprehensive weekly meal plan using free LLM
         
         Args:
-            preferences: User dietary preferences and restrictions
-            
+            preferences: Dictionary containing user preferences like dietary restrictions,
+                        cuisine preferences, health goals, etc.
+                        
         Returns:
-            Dict containing the weekly meal plan with recipes and details
+            Dict containing the meal plan and metadata
         """
-        logger.info('Generate weekly meal plan called with preferences')
-        logger.debug(f'Preferences: {json.dumps(preferences, indent=2)}')
-        
-        start_time = time.time()
-        
         try:
-            # Select the appropriate generation method based on available services
+            # Build the prompt
+            prompt = self._build_meal_plan_prompt(preferences)
+            logger.info(f"Generated prompt: {prompt[:200]}...")  # Log first 200 chars
+            
+            # Try to generate with the selected service
+            response = None
             if self.service == 'ollama':
-                logger.info("Using Ollama for meal plan generation")
-                plan = self._generate_with_ollama(preferences)
+                logger.info("Attempting to generate with Ollama...")
+                response = self._generate_with_ollama(prompt)
             elif self.service == 'huggingface':
-                logger.info("Using Hugging Face for meal plan generation")
-                plan = self._generate_with_huggingface(preferences)
-            else:
-                logger.warning("No LLM service available, using fallback meal plan")
-                plan = self._generate_fallback_meal_plan(preferences)
+                logger.info("Attempting to generate with Hugging Face...")
+                response = self._generate_with_huggingface(prompt)
             
-            # Log performance metrics
-            duration = time.time() - start_time
-            logger.info(f"Meal plan generated in {duration:.2f} seconds")
+            # Parse the response if we got one
+            if response:
+                try:
+                    meal_plan = self._parse_llm_response(response)
+                    if meal_plan and isinstance(meal_plan, dict):
+                        return {
+                            "success": True,
+                            "plan": meal_plan,
+                            "metadata": {
+                                "generated_at": datetime.utcnow().isoformat(),
+                                "model": self.ollama_model if self.service == 'ollama' else self.hf_model,
+                                "service": self.service
+                            }
+                        }
+                except Exception as e:
+                    logger.error(f"Error parsing LLM response: {str(e)}")
             
-            return plan
+            # If we get here, LLM generation failed - use fallback
+            logger.warning("Falling back to rule-based meal plan")
+            fallback_plan = self._generate_fallback_plan(preferences)
+            fallback_plan["metadata"]["warning"] = "LLM generation failed - using fallback meal plan"
+            return fallback_plan
             
         except Exception as e:
-            logger.error(f"Error generating meal plan: {str(e)}", exc_info=True)
-            logger.info("Falling back to default meal plan")
-            return self._generate_fallback_meal_plan(preferences)
-    
-    @retry_on_failure(max_retries=MAX_RETRIES)
-    def _generate_with_ollama(self, preferences: Dict[str, Any]) -> Dict[str, Any]:
-        """Generate meal plan using free Ollama LLM"""
-        logger.info("Building meal plan prompt...")
-        prompt = self._build_meal_plan_prompt(preferences)
-        logger.debug(f"Prompt length: {len(prompt)} characters")
-        
-        request_data = {
-            "model": self.ollama_model,
-            "prompt": prompt,
-            "stream": False,
-            "options": {
-                "temperature": 0.7,
-                "top_p": 0.9,
-                "max_tokens": 2000,
-                "num_ctx": 4096
+            logger.error(f"Error generating meal plan: {str(e)}")
+            # Return a basic fallback plan in case of complete failure
+            return {
+                "success": False,
+                "error": str(e),
+                "plan": self._generate_fallback_plan(preferences),
+                "metadata": {
+                    "generated_at": datetime.utcnow().isoformat(),
+                    "model": "fallback",
+                    "error": str(e)
+                }
             }
-        }
+    
+    def clear_cache(self) -> None:
+        """Clear the meal plan cache"""
+        self.meal_plan_cache.clear()
+        logger.info("Meal plan cache cleared")
         
         try:
             logger.info(f"Sending request to Ollama at {self.ollama_url}")
@@ -287,6 +573,278 @@ class LLMMealPlannerAgent:
         
         return self._generate_fallback_meal_plan(preferences)
     
+    def _generate_fallback_meal_plan(self, preferences: Dict[str, Any]) -> Dict[str, Any]:
+        """Generate a comprehensive fallback meal plan with detailed nutrition"""
+        logger.warning("Generating enhanced fallback meal plan")
+        
+        # Get preferences with fallbacks and validation
+        dietary_restrictions = preferences.get('dietary_restrictions', [])
+        favorite_cuisines = preferences.get('favorite_cuisines', ['Mediterranean'])
+        if not isinstance(favorite_cuisines, list) or len(favorite_cuisines) == 0:
+            favorite_cuisines = ['Mediterranean']  # Default to Mediterranean if none specified
+            
+        # Ensure we have valid cuisine data
+        cuisine_meals = {
+            'mediterranean': {
+                'breakfast': [
+                    'Greek Yogurt with Honey and Nuts',
+                    'Mediterranean Omelet with Feta and Spinach',
+                    'Whole Grain Toast with Avocado and Poached Eggs'
+                ],
+                'lunch': [
+                    'Greek Salad with Grilled Chicken',
+                    'Mediterranean Quinoa Bowl',
+                    'Grilled Fish with Lemon and Herbs'
+                ],
+                'dinner': [
+                    'Grilled Salmon with Roasted Vegetables',
+                    'Chicken Souvlaki with Tzatziki',
+                    'Stuffed Bell Peppers with Quinoa and Feta'
+                ]
+            },
+            'asian': {
+                'breakfast': [
+                    'Congee with Scallions and Ginger',
+                    'Tofu Scramble with Vegetables',
+                    'Miso Soup with Tofu and Seaweed'
+                ],
+                'lunch': [
+                    'Buddha Bowl with Rice and Vegetables',
+                    'Stir-fried Noodles with Chicken',
+                    'Sushi Bowl with Tuna and Avocado'
+                ],
+                'dinner': [
+                    'Teriyaki Salmon with Stir-fried Vegetables',
+                    'Beef and Broccoli with Brown Rice',
+                    'Vegetable Curry with Tofu'
+                ]
+            },
+            'mexican': {
+                'breakfast': [
+                    'Huevos Rancheros',
+                    'Breakfast Burrito with Black Beans',
+                    'Chilaquiles with Eggs'
+                ],
+                'lunch': [
+                    'Chicken Fajita Bowl',
+                    'Fish Tacos with Cabbage Slaw',
+                    'Quinoa and Black Bean Salad'
+                ],
+                'dinner': [
+                    'Grilled Chicken with Mole Sauce',
+                    'Shrimp Fajitas with Peppers and Onions',
+                    'Vegetable Enchiladas'
+                ]
+            }
+        }
+        target_calories = max(1500, int(preferences.get('target_calories', 2000)))  # Ensure minimum 1500 calories
+        target_protein = max(100, int(preferences.get('target_protein', 150)))  # Ensure minimum 100g protein
+        target_carbs = int(preferences.get('target_carbs', 200))
+        target_fat = int(preferences.get('target_fat', 65))
+        
+        # Ensure minimum protein intake (1.6g per kg of body weight if weight is provided)
+        weight_kg = preferences.get('weight_kg')
+        if weight_kg and isinstance(weight_kg, (int, float)):
+            min_protein = int(weight_kg * 1.6)
+            target_protein = max(target_protein, min_protein)
+            
+        # Ensure minimum calories based on protein needs (at least 10 calories per gram of protein)
+        min_calories = target_protein * 10
+        target_calories = max(target_calories, min_calories)
+        
+        # Calculate macros with distribution across meals
+        macros = {
+            'daily': {
+                'calories': target_calories,
+                'protein': target_protein,
+                'carbs': target_carbs,
+                'fat': target_fat
+            },
+            'breakfast': {
+                'calories': int(target_calories * 0.25),
+                'protein': int(target_protein * 0.3),  # Higher protein at breakfast
+                'carbs': int(target_carbs * 0.25),
+                'fat': int(target_fat * 0.2)
+            },
+            'lunch': {
+                'calories': int(target_calories * 0.35),
+                'protein': int(target_protein * 0.35),
+                'carbs': int(target_carbs * 0.35),
+                'fat': int(target_fat * 0.35)
+            },
+            'dinner': {
+                'calories': int(target_calories * 0.3),
+                'protein': int(target_protein * 0.35),
+                'carbs': int(target_carbs * 0.25),
+                'fat': int(target_fat * 0.35)
+            },
+            'snack': {
+                'calories': int(target_calories * 0.1),
+                'protein': int(target_protein * 0.1),
+                'carbs': int(target_carbs * 0.15),
+                'fat': int(target_fat * 0.1)
+            }
+        }
+            
+            # Initialize daily macro totals
+        daily_macro_totals = []
+        full_days = []
+        today = datetime.now()
+            
+            # Ensure we have exactly 7 days
+        for i in range(7):
+            day_name = f'Day {i+1}'
+            day_date = (today + timedelta(days=i)).strftime("%Y-%m-%d")
+            
+            # Initialize daily macros
+            daily_macros = {
+                'calories': 0,
+                'protein': 0,
+                'carbs': 0,
+                'fat': 0
+            }
+                
+                # Process each meal type
+            meals = {}
+            
+            # Define meal types based on preferences
+            meal_types = ['breakfast', 'lunch', 'dinner']
+            
+            for meal_type in meal_types:
+                # Use target macros if not provided
+                meal_macros = macros.get(meal_type, macros['snack'])
+                
+                # Extract nutritional info with fallbacks to target macros
+                meal_calories = meal_macros['calories']
+                meal_protein = meal_macros['protein']
+                meal_carbs = meal_macros['carbs']
+                meal_fat = meal_macros['fat']
+                    
+                # Update daily macros
+                daily_macros['calories'] += meal_calories
+                daily_macros['protein'] += meal_protein
+                daily_macros['carbs'] += meal_carbs
+                daily_macros['fat'] += meal_fat
+                
+                # Select a cuisine-based meal based on day and meal type
+                cuisine_idx = (i + meal_types.index(meal_type)) % len(favorite_cuisines)
+                cuisine = favorite_cuisines[cuisine_idx].lower()
+                available_meals = cuisine_meals.get(cuisine, cuisine_meals['mediterranean'])
+                meal_options = available_meals.get(meal_type, [f"{cuisine.title()} {meal_type.title()}"])
+                meal_idx = (i + meal_types.index(meal_type)) % len(meal_options)
+                meal_name = meal_options[meal_idx]
+                
+                # Ensure meal name is properly formatted and includes cuisine
+                meal_name = f"{cuisine.title()} {meal_name}" if not meal_name.startswith(cuisine.title()) else meal_name
+                
+                # Create the meal object with detailed nutrition
+                meal_obj = {
+                    "name": meal_name,
+                    "cuisine": cuisine.title(),
+                    "prep_time": "15-20 minutes",
+                    "cook_time": "20-30 minutes",
+                    "difficulty": "Medium",
+                    "servings": 2,
+                    "ingredients": [
+                        {"name": "Protein source", "amount": "150-200g", "notes": "chicken, fish, tofu, or legumes"},
+                        {"name": "Vegetables", "amount": "2 cups", "notes": "mixed seasonal vegetables"},
+                        {"name": "Healthy fat", "amount": "1-2 tbsp", "notes": "olive oil, avocado, or nuts"},
+                        {"name": "Complex carbs", "amount": "1/2 - 1 cup", "notes": "quinoa, brown rice, or sweet potato"},
+                        {"name": "Seasonings", "amount": "to taste", "notes": "herbs, spices, salt, pepper"}
+                    ],
+                    "instructions": [
+                        "1. Prepare all ingredients as needed (chop vegetables, cook grains, etc.)",
+                        "2. Cook protein source with preferred method (grill, bake, or pan-fry)",
+                        "3. Prepare vegetables by steaming, roasting, or sautéing",
+                        "4. Combine all components and season to taste",
+                        "5. Serve hot with your choice of sauce or dressing"
+                    ],
+                    "nutritional_info": {
+                        "calories": int(meal_calories),
+                        "protein": {
+                            "amount": int(meal_protein),
+                            "unit": "g",
+                            "calories": int(meal_protein * 4),
+                            "percentage": int((meal_protein * 4) / meal_calories * 100)
+                        },
+                        "carbs": {
+                            "amount": int(meal_carbs),
+                            "unit": "g",
+                            "calories": int(meal_carbs * 4),
+                            "percentage": int((meal_carbs * 4) / meal_calories * 100)
+                        },
+                        "fat": {
+                            "amount": int(meal_fat),
+                            "unit": "g",
+                            "calories": int(meal_fat * 9),
+                            "percentage": int((meal_fat * 9) / meal_calories * 100)
+                        },
+                        "fiber": {
+                            "amount": int(meal_carbs * 0.2),
+                            "unit": "g"
+                        }
+                    },
+                    "tags": [cuisine.lower(), "balanced", "high-protein", "nutrient-dense"]
+                }
+                
+                meals[meal_type] = meal_obj
+                
+                # Add day to the list
+                full_days.append({
+                    "day": day_name,
+                    "date": day_date,
+                    "meals": meals,
+                    "daily_notes": f"LLM-generated meal plan for {day_name}",
+                    "daily_macros": daily_macros
+                })
+                
+                # Add to weekly totals
+                daily_macro_totals.append(daily_macros)
+            
+            # Enhanced meal plan structure with detailed recipes
+            meal_plan = {
+                'week': full_days,
+                'nutrition_summary': {
+                    'daily_average': {
+                        'calories': target_calories,
+                        'protein': target_protein,
+                        'carbs': target_carbs,
+                        'fat': target_fat,
+                        'fiber': 35  # Increased fiber for better digestion
+                    },
+                    'weekly_totals': {
+                        'calories': target_calories * 7,
+                        'protein': target_protein * 7,
+                        'carbs': target_carbs * 7,
+                        'fat': target_fat * 7,
+                        'fiber': 35 * 7
+                    }
+                },
+                'shopping_list': {
+                    'produce': [
+                        'Mixed greens (4 cups)', 'Broccoli (2 heads)', 'Bell peppers (6)', 
+                        'Carrots (1 lb)', 'Cucumbers (2)', 'Cherry tomatoes (1 pint)',
+                        'Avocados (4)', 'Lemons (4)', 'Garlic (1 bulb)', 'Ginger (1 knob)'
+                    ],
+                    'proteins': [
+                        'Chicken breast (2 lbs)', 'Salmon fillets (4)', 'Eggs (1 dozen)',
+                        'Greek yogurt (32 oz)', 'Cottage cheese (16 oz)', 'Tofu (14 oz)'
+                    ],
+                    'dairy': [
+                        'Milk (1/2 gallon)', 'Cheese (cheddar, feta)', 'Butter (1/2 lb)'
+                    ],
+                    'pantry': [
+                        'Quinoa (2 lbs)', 'Brown rice (2 lbs)', 'Oats (1 lb)', 'Whole wheat bread',
+                        'Almonds (1 cup)', 'Peanut butter (1 jar)', 'Olive oil', 'Honey'
+                    ],
+                    'spices': [
+                        'Salt', 'Pepper', 'Cumin', 'Paprika', 'Oregano', 'Cinnamon', 'Turmeric'
+                    ]
+                }
+            }
+            
+            return meal_plan
+    
     def _build_meal_plan_prompt(self, preferences: Dict[str, Any]) -> str:
         """Build a comprehensive prompt for the LLM with detailed instructions"""
         try:
@@ -332,30 +890,92 @@ class LLMMealPlannerAgent:
                 }
             }
             
-            prompt = f"""You are a professional nutritionist and chef with expertise in creating diverse, macro-balanced meal plans. 
-            Create a detailed weekly meal plan with the following specifications:
+            prompt = f"""You are an expert nutritionist and chef with extensive experience in clinical nutrition and sports dietetics. 
+            Create a highly detailed and personalized weekly meal plan with the following specifications:
             
-            USER PREFERENCES:
+            USER PREFERENCES & REQUIREMENTS:
             - Dietary restrictions: {', '.join(dietary_restrictions) if dietary_restrictions else 'None'}
             - Favorite cuisines: {', '.join(favorite_cuisines) if favorite_cuisines else 'Any'}
-            - Daily calorie target: {target_calories} calories
-            - Daily macronutrient targets: {target_protein}g protein, {target_carbs}g carbs, {target_fat}g fat
+            - Daily calorie target: {target_calories} calories (±5%)
+            - Daily macronutrient targets: 
+              * Protein: {target_protein}g (±5g)
+              * Carbs: {target_carbs}g (±10g)
+              * Fat: {target_fat}g (±5g)
             
             MEAL PLAN REQUIREMENTS:
-            1. Include 3 main meals (breakfast, lunch, dinner) and 2 snacks per day
-            2. Each meal must include detailed nutrition information (calories, protein, carbs, fat)
-            3. Ensure variety in protein sources, vegetables, and preparation methods
-            4. Include 1-2 vegetarian days if no dietary restrictions prevent it
-            5. Provide detailed recipes with ingredients and instructions
-            6. Ensure meals are nutritionally balanced and satisfying
-            7. Include a variety of colors, textures, and flavors
-            8. Consider food combinations that optimize nutrient absorption
+            1. Include 3 main meals (breakfast, lunch, dinner) and 2-3 snacks per day
+            2. Each meal must include detailed nutrition information (calories, protein, carbs, fat, fiber)
+            3. Ensure macronutrient distribution aligns with these targets per meal:
+               - Protein: 25-40g per main meal, 10-20g per snack
+               - Carbs: 30-60g per meal (adjust based on activity level)
+               - Healthy fats: 10-20g per meal
+            4. Include a variety of protein sources (animal and plant-based)
+            5. Ensure each meal contains at least 2 servings of vegetables
+            6. Include complex carbohydrates with each meal
+            7. Incorporate healthy fats in appropriate amounts
+            8. Ensure adequate fiber intake (25-35g daily)
+            9. Include hydration recommendations
             
             NUTRITIONAL GUIDELINES:
-            - Breakfast: ~{macros['breakfast']['calories']} kcal, ~{macros['breakfast']['protein']}g protein
-            - Lunch: ~{macros['lunch']['calories']} kcal, ~{macros['lunch']['protein']}g protein
-            - Dinner: ~{macros['dinner']['calories']} kcal, ~{macros['dinner']['protein']}g protein
-            - Snacks: ~{macros['snack']['calories']} kcal each
+            - Breakfast (~{macros['breakfast']['calories']} kcal): 
+              * Focus on protein and complex carbs
+              * Include healthy fats and fiber
+              * Example: 30-40g protein, 40-60g carbs, 10-15g fat
+            
+            - Lunch (~{macros['lunch']['calories']} kcal):
+              * Balanced macronutrients
+              * Include lean protein, complex carbs, and vegetables
+              * Example: 35-45g protein, 45-65g carbs, 15-20g fat
+            
+            - Dinner (~{macros['dinner']['calories']} kcal):
+              * Slightly higher protein, moderate fats, lower carbs
+              * Include slow-digesting proteins and healthy fats
+              * Example: 40-50g protein, 30-50g carbs, 15-25g fat
+            
+            - Snacks (~{macros['snack']['calories']} kcal each):
+              * Combine protein with fiber or healthy fats
+              * Focus on nutrient density
+              * Example: 10-20g protein, 15-30g carbs, 5-10g fat
+            
+            MEAL COMPOSITION RULES:
+            1. Every meal must include:
+               - A high-quality protein source (20-40g)
+               - Complex carbohydrates (1-2 servings)
+               - Healthy fats (1-2 servings)
+               - Non-starchy vegetables (1-2 cups)
+               - Fiber-rich foods (5g+ per meal)
+            
+            2. Protein Sources (rotate daily):
+               - Lean meats (chicken, turkey, lean beef)
+               - Fish and seafood (salmon, cod, shrimp)
+               - Eggs and dairy (Greek yogurt, cottage cheese)
+               - Plant-based (tofu, tempeh, legumes, lentils)
+            
+            3. Carbohydrate Sources:
+               - Whole grains (quinoa, brown rice, oats)
+               - Starchy vegetables (sweet potatoes, squash)
+               - Legumes and beans
+               - Fruits (in moderation)
+            
+            4. Healthy Fat Sources:
+               - Avocados, nuts, seeds
+               - Olive oil, coconut oil
+               - Fatty fish
+               - Nut butters
+            
+            5. Hydration:
+               - Recommend 8-12 cups of water daily
+               - Include herbal teas and infused waters
+               - Limit sugary beverages
+            
+            IMPORTANT NOTES:
+            - Ensure calorie and macronutrient targets are strictly followed
+            - Include detailed portion sizes for all ingredients
+            - Provide clear cooking instructions
+            - Note any meal prep or make-ahead tips
+            - Include seasoning and spice recommendations
+            - Consider food combinations that enhance nutrient absorption
+            - Account for cooking methods that preserve nutrients
             
             FORMAT REQUIREMENTS:
             Return a JSON object with the following structure:
@@ -468,33 +1088,51 @@ class LLMMealPlannerAgent:
             target_carbs = int(preferences.get('targetCarbs', 225))
             target_fat = int(preferences.get('targetFat', 66))
             
-            # Calculate macros per meal type based on preferences
-            macros_per_meal = {
-                'breakfast': {
-                    'calories': int(target_calories * 0.25) if include_breakfast else 0,
-                    'protein': int(target_protein * 0.25) if include_breakfast else 0,
-                    'carbs': int(target_carbs * 0.25) if include_breakfast else 0,
-                    'fat': int(target_fat * 0.25) if include_breakfast else 0
-                },
-                'lunch': {
-                    'calories': int(target_calories * 0.35) if include_lunch else 0,
-                    'protein': int(target_protein * 0.35) if include_lunch else 0,
-                    'carbs': int(target_carbs * 0.35) if include_lunch else 0,
-                    'fat': int(target_fat * 0.35) if include_lunch else 0
-                },
-                'dinner': {
-                    'calories': int(target_calories * 0.4) if include_dinner else 0,
-                    'protein': int(target_protein * 0.4) if include_dinner else 0,
-                    'carbs': int(target_carbs * 0.4) if include_dinner else 0,
-                    'fat': int(target_fat * 0.4) if include_dinner else 0
-                },
-                'snack': {
-                    'calories': int(target_calories * 0.15) if include_snacks else 0,
-                    'protein': int(target_protein * 0.15) if include_snacks else 0,
-                    'carbs': int(target_carbs * 0.15) if include_snacks else 0,
-                    'fat': int(target_fat * 0.15) if include_snacks else 0
+            # Calculate macros per meal type based on preferences with better distribution
+            # Ensure we distribute calories and macros more accurately based on meal inclusion
+            total_meals = sum([include_breakfast, include_lunch, include_dinner])
+            snack_factor = 0.15 if include_snacks else 0
+            
+            # Calculate base distribution for main meals
+            if total_meals > 0:
+                base_meal_ratio = (1.0 - snack_factor) / total_meals
+            else:
+                base_meal_ratio = 0.25  # fallback if no meals are selected
+            
+            # Define meal distribution with better balance
+            macros_per_meal = {}
+            
+            if include_breakfast:
+                macros_per_meal['breakfast'] = {
+                    'calories': max(300, int(target_calories * base_meal_ratio * 0.9)),  # Slightly lighter breakfast
+                    'protein': max(20, int(target_protein * base_meal_ratio * 0.9)),
+                    'carbs': int(target_carbs * base_meal_ratio * 1.1),  # More carbs in the morning
+                    'fat': int(target_fat * base_meal_ratio * 0.8)  # Less fat in the morning
                 }
-            }
+            
+            if include_lunch:
+                macros_per_meal['lunch'] = {
+                    'calories': max(400, int(target_calories * base_meal_ratio)),
+                    'protein': max(25, int(target_protein * base_meal_ratio)),
+                    'carbs': int(target_carbs * base_meal_ratio),
+                    'fat': int(target_fat * base_meal_ratio)
+                }
+            
+            if include_dinner:
+                macros_per_meal['dinner'] = {
+                    'calories': max(400, int(target_calories * base_meal_ratio * 1.1)),  # Slightly heavier dinner
+                    'protein': max(30, int(target_protein * base_meal_ratio * 1.1)),  # More protein for dinner
+                    'carbs': int(target_carbs * base_meal_ratio * 0.9),  # Fewer carbs at night
+                    'fat': int(target_fat * base_meal_ratio * 1.2)  # More healthy fats at night
+                }
+            
+            if include_snacks:
+                macros_per_meal['snack'] = {
+                    'calories': max(150, int(target_calories * snack_factor)),
+                    'protein': max(10, int(target_protein * snack_factor)),
+                    'carbs': int(target_carbs * snack_factor * 0.7),  # Fewer carbs in snacks
+                    'fat': int(target_fat * snack_factor * 1.3)  # More healthy fats in snacks
+                }
             
             # Initialize daily macro totals
             daily_macro_totals = []

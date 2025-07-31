@@ -25,6 +25,22 @@ def register_recipe_routes(app, recipe_cache):
     recipe_service = RecipeService(recipe_cache)
     user_preferences_service = UserPreferencesService()
     
+    @app.route("/api/recipe-counts", methods=["GET"])
+    @cross_origin(origins=["http://localhost:5173"], supports_credentials=True)
+    def get_recipe_counts():
+        """Get the count of recipes in the cache"""
+        try:
+            counts = recipe_cache.get_recipe_count()
+            return jsonify({
+                "status": "success",
+                "data": counts
+            }), 200
+        except Exception as e:
+            return jsonify({
+                "status": "error",
+                "message": f"Failed to get recipe counts: {str(e)}"
+            }), 500
+    
     @app.route("/get_recipes", methods=["GET", "OPTIONS"])
     @cross_origin(origins=["http://localhost:8081"], 
                  supports_credentials=True)
@@ -50,22 +66,37 @@ def register_recipe_routes(app, recipe_cache):
         cuisines = [c.strip() for c in cuisine_param.split(",") if c.strip()] if cuisine_param else []
         dietary_restrictions = [d.strip() for d in diet_param.split(",") if d.strip()] if diet_param else []
         
-        # Get user's foods to avoid from preferences
+        # Get user's preferences
         foods_to_avoid = []
+        favorite_foods = []
         try:
             user_id = get_current_user_id()
             if user_id:
                 preferences = user_preferences_service.get_preferences(user_id)
-                if preferences and 'foodsToAvoid' in preferences:
-                    foods_to_avoid = [f.lower() for f in preferences['foodsToAvoid'] if f and isinstance(f, str)]
-                    print(f"Found {len(foods_to_avoid)} foods to avoid in user preferences")
+                if preferences:
+                    # Get foods to avoid
+                    if 'foodsToAvoid' in preferences:
+                        foods_to_avoid = [f.lower() for f in preferences['foodsToAvoid'] if f and isinstance(f, str)]
+                        print(f"Found {len(foods_to_avoid)} foods to avoid in user preferences")
+                    
+                    # Get favorite foods
+                    if 'favoriteFoods' in preferences:
+                        favorite_foods = [f.lower() for f in preferences['favoriteFoods'] if f and isinstance(f, str)]
+                        print(f"Found {len(favorite_foods)} favorite foods in user preferences")
         except Exception as e:
-            print(f"Error getting user preferences for foods to avoid: {e}")
+            print(f"Error getting user preferences: {e}")
         
         print(f"\n=== Recipe Search Request ===")
         print(f"Query: '{query}'")
         print(f"Ingredient: '{ingredient}'")
+        print(f"Cuisines: {cuisines}")
+        print(f"Dietary Restrictions: {dietary_restrictions}")
+        print(f"Offset: {offset}, Limit: {limit}")
         print(f"Foods to avoid: {foods_to_avoid}")
+        print(f"Favorite foods: {favorite_foods}")
+        print(f"Ingredient: '{ingredient}'")
+        print(f"Foods to avoid: {foods_to_avoid}")
+        print(f"Favorite foods: {favorite_foods}")
         print(f"Offset: {offset}")
         print(f"Limit: {limit}")
         print(f"Cuisines filter: {cuisines}")
@@ -73,18 +104,19 @@ def register_recipe_routes(app, recipe_cache):
         
         try:
             # Search recipes from all sources with pagination and filters
-            recipes = await recipe_service.search_recipes(
+            result = await recipe_service.search_recipes(
                 query=query,
                 ingredient=ingredient,
                 offset=offset,
                 limit=limit,
                 cuisines=cuisines,
                 dietary_restrictions=dietary_restrictions,
-                foods_to_avoid=foods_to_avoid
+                foods_to_avoid=foods_to_avoid,
+                favorite_foods=favorite_foods
             )
             
-            print(f"Found {len(recipes)} recipes in {time.time() - start_time:.2f}s")
-            return jsonify({"results": recipes}), 200
+            print(f"Found {result['total']} recipes in {time.time() - start_time:.2f}s")
+            return jsonify(result), 200
             
         except Exception as e:
             print(f"Error searching recipes: {e}")

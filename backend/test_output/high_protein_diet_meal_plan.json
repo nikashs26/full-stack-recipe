@@ -1,0 +1,846 @@
+{
+  "days": [
+    {
+      "day": "Monday",
+      "date": "2025-07-28",
+      "meals": [
+        {
+          "meal_type": "breakfast",
+          "name": "Avocado Toast with Poached Eggs",
+          "cuisine": "American",
+          "is_vegetarian": true,
+          "is_vegan": false,
+          "nutrition": {
+            "calories": 420,
+            "protein": 20,
+            "carbs": 35,
+            "fat": 22
+          },
+          "ingredients": [
+            {
+              "name": "Oats",
+              "amount": "1/2 cup"
+            },
+            {
+              "name": "Milk",
+              "amount": "1 cup"
+            },
+            {
+              "name": "Honey",
+              "amount": "1 tbsp"
+            },
+            {
+              "name": "Nuts",
+              "amount": "1/4 cup"
+            }
+          ],
+          "instructions": "Prepare according to package instructions or personal preference."
+        },
+        {
+          "meal_type": "lunch",
+          "name": "Quinoa Buddha Bowl with Tahini Dressing",
+          "cuisine": "American",
+          "is_vegetarian": true,
+          "is_vegan": true,
+          "nutrition": {
+            "calories": 500,
+            "protein": 22,
+            "carbs": 65,
+            "fat": 18
+          },
+          "ingredients": [
+            {
+              "name": "Chicken Breast",
+              "amount": "150g"
+            },
+            {
+              "name": "Brown Rice",
+              "amount": "1/2 cup"
+            },
+            {
+              "name": "Mixed Vegetables",
+              "amount": "1 cup"
+            },
+            {
+              "name": "Olive Oil",
+              "amount": "1 tbsp"
+            }
+          ],
+          "instructions": "Prepare according to package instructions or personal preference."
+        },
+        {
+          "meal_type": "dinner",
+          "name": "Grilled Portobello Mushroom with Quinoa",
+          "cuisine": "American",
+          "is_vegetarian": true,
+          "is_vegan": true,
+          "nutrition": {
+            "calories": 450,
+            "protein": 20,
+            "carbs": 60,
+            "fat": 15
+          },
+          "ingredients": [
+            {
+              "name": "Salmon Fillet",
+              "amount": "150g"
+            },
+            {
+              "name": "Quinoa",
+              "amount": "1/2 cup"
+            },
+            {
+              "name": "Steamed Vegetables",
+              "amount": "1.5 cups"
+            },
+            {
+              "name": "Lemon",
+              "amount": "1/2"
+            }
+          ],
+          "instructions": "Prepare according to package instructions or personal preference."
+        }
+      ]
+    },
+    {
+      "day": "Tuesday",
+      "date": "2025-07-29",
+      "meals": [
+        {
+          "meal_type": "breakfast",
+          "name": "Overnight Oats with Berries",
+          "cuisine": "American",
+          "is_vegetarian": true,
+          "is_vegan": true,
+          "nutrition": {
+            "calories": 380,
+            "protein": 15,
+            "carbs": 60,
+            "fat": 10
+          },
+          "ingredients": [
+            {
+              "name": "Oats",
+              "amount": "1/2 cup"
+            },
+            {
+              "name": "Milk",
+              "amount": "1 cup"
+            },
+            {
+              "name": "Honey",
+              "amount": "1 tbsp"
+            },
+            {
+              "name": "Nuts",
+              "amount": "1/4 cup"
+            }
+          ],
+          "instructions": "Prepare according to package instructions or personal preference."
+        },
+        {
+          "meal_type": "lunch",
+          "name": "Grilled Cheese with Tomato Soup",
+          "cuisine": "American",
+          "is_vegetarian": true,
+          "is_vegan": false,
+          "nutrition": {
+            "calories": 550,
+            "protein": 18,
+            "carbs": 60,
+            "fat": 25
+          },
+          "ingredients": [
+            {
+              "name": "Chicken Breast",
+              "amount": "150g"
+            },
+            {
+              "name": "Brown Rice",
+              "amount": "1/2 cup"
+            },
+            {
+              "name": "Mixed Vegetables",
+              "amount": "1 cup"
+            },
+            {
+              "name": "Olive Oil",
+              "amount": "1 tbsp"
+            }
+          ],
+          "instructions": "Prepare according to package instructions or personal preference."
+        },
+        {
+          "meal_type": "dinner",
+          "name": "Mac and Cheese with Broccoli",
+          "cuisine": "American",
+          "is_vegetarian": true,
+          "is_vegan": false,
+          "nutrition": {
+            "calories": 650,
+            "protein": 25,
+            "carbs": 75,
+            "fat": 30
+          },
+          "ingredients": [
+            {
+              "name": "Salmon Fillet",
+              "amount": "150g"
+            },
+            {
+              "name": "Quinoa",
+              "amount": "1/2 cup"
+            },
+            {
+              "name": "Steamed Vegetables",
+              "amount": "1.5 cups"
+            },
+            {
+              "name": "Lemon",
+              "amount": "1/2"
+            }
+          ],
+          "instructions": "Prepare according to package instructions or personal preference."
+        }
+      ]
+    },
+    {
+      "day": "Wednesday",
+      "date": "2025-07-30",
+      "meals": [
+        {
+          "meal_type": "breakfast",
+          "name": "Smoothie Bowl with Granola",
+          "cuisine": "American",
+          "is_vegetarian": true,
+          "is_vegan": true,
+          "nutrition": {
+            "calories": 350,
+            "protein": 12,
+            "carbs": 55,
+            "fat": 12
+          },
+          "ingredients": [
+            {
+              "name": "Oats",
+              "amount": "1/2 cup"
+            },
+            {
+              "name": "Milk",
+              "amount": "1 cup"
+            },
+            {
+              "name": "Honey",
+              "amount": "1 tbsp"
+            },
+            {
+              "name": "Nuts",
+              "amount": "1/4 cup"
+            }
+          ],
+          "instructions": "Prepare according to package instructions or personal preference."
+        },
+        {
+          "meal_type": "lunch",
+          "name": "Caesar Salad with Grilled Chicken",
+          "cuisine": "American",
+          "is_vegetarian": false,
+          "is_vegan": false,
+          "nutrition": {
+            "calories": 480,
+            "protein": 40,
+            "carbs": 20,
+            "fat": 25
+          },
+          "ingredients": [
+            {
+              "name": "Chicken Breast",
+              "amount": "150g"
+            },
+            {
+              "name": "Brown Rice",
+              "amount": "1/2 cup"
+            },
+            {
+              "name": "Mixed Vegetables",
+              "amount": "1 cup"
+            },
+            {
+              "name": "Olive Oil",
+              "amount": "1 tbsp"
+            }
+          ],
+          "instructions": "Prepare according to package instructions or personal preference."
+        },
+        {
+          "meal_type": "dinner",
+          "name": "BBQ Jackfruit Sandwich with Coleslaw",
+          "cuisine": "American",
+          "is_vegetarian": true,
+          "is_vegan": true,
+          "nutrition": {
+            "calories": 500,
+            "protein": 15,
+            "carbs": 85,
+            "fat": 15
+          },
+          "ingredients": [
+            {
+              "name": "Salmon Fillet",
+              "amount": "150g"
+            },
+            {
+              "name": "Quinoa",
+              "amount": "1/2 cup"
+            },
+            {
+              "name": "Steamed Vegetables",
+              "amount": "1.5 cups"
+            },
+            {
+              "name": "Lemon",
+              "amount": "1/2"
+            }
+          ],
+          "instructions": "Prepare according to package instructions or personal preference."
+        }
+      ]
+    },
+    {
+      "day": "Thursday",
+      "date": "2025-07-31",
+      "meals": [
+        {
+          "meal_type": "breakfast",
+          "name": "Veggie Breakfast Burrito",
+          "cuisine": "American",
+          "is_vegetarian": true,
+          "is_vegan": false,
+          "nutrition": {
+            "calories": 450,
+            "protein": 25,
+            "carbs": 50,
+            "fat": 18
+          },
+          "ingredients": [
+            {
+              "name": "Oats",
+              "amount": "1/2 cup"
+            },
+            {
+              "name": "Milk",
+              "amount": "1 cup"
+            },
+            {
+              "name": "Honey",
+              "amount": "1 tbsp"
+            },
+            {
+              "name": "Nuts",
+              "amount": "1/4 cup"
+            }
+          ],
+          "instructions": "Prepare according to package instructions or personal preference."
+        },
+        {
+          "meal_type": "lunch",
+          "name": "Veggie Burger with Sweet Potato Fries",
+          "cuisine": "American",
+          "is_vegetarian": true,
+          "is_vegan": true,
+          "nutrition": {
+            "calories": 600,
+            "protein": 25,
+            "carbs": 80,
+            "fat": 20
+          },
+          "ingredients": [
+            {
+              "name": "Chicken Breast",
+              "amount": "150g"
+            },
+            {
+              "name": "Brown Rice",
+              "amount": "1/2 cup"
+            },
+            {
+              "name": "Mixed Vegetables",
+              "amount": "1 cup"
+            },
+            {
+              "name": "Olive Oil",
+              "amount": "1 tbsp"
+            }
+          ],
+          "instructions": "Prepare according to package instructions or personal preference."
+        },
+        {
+          "meal_type": "dinner",
+          "name": "Stuffed Sweet Potato with Black Beans",
+          "cuisine": "American",
+          "is_vegetarian": true,
+          "is_vegan": true,
+          "nutrition": {
+            "calories": 480,
+            "protein": 18,
+            "carbs": 80,
+            "fat": 12
+          },
+          "ingredients": [
+            {
+              "name": "Salmon Fillet",
+              "amount": "150g"
+            },
+            {
+              "name": "Quinoa",
+              "amount": "1/2 cup"
+            },
+            {
+              "name": "Steamed Vegetables",
+              "amount": "1.5 cups"
+            },
+            {
+              "name": "Lemon",
+              "amount": "1/2"
+            }
+          ],
+          "instructions": "Prepare according to package instructions or personal preference."
+        }
+      ]
+    },
+    {
+      "day": "Friday",
+      "date": "2025-08-01",
+      "meals": [
+        {
+          "meal_type": "breakfast",
+          "name": "Avocado Toast with Poached Eggs",
+          "cuisine": "American",
+          "is_vegetarian": true,
+          "is_vegan": false,
+          "nutrition": {
+            "calories": 420,
+            "protein": 20,
+            "carbs": 35,
+            "fat": 22
+          },
+          "ingredients": [
+            {
+              "name": "Oats",
+              "amount": "1/2 cup"
+            },
+            {
+              "name": "Milk",
+              "amount": "1 cup"
+            },
+            {
+              "name": "Honey",
+              "amount": "1 tbsp"
+            },
+            {
+              "name": "Nuts",
+              "amount": "1/4 cup"
+            }
+          ],
+          "instructions": "Prepare according to package instructions or personal preference."
+        },
+        {
+          "meal_type": "lunch",
+          "name": "Quinoa Buddha Bowl with Tahini Dressing",
+          "cuisine": "American",
+          "is_vegetarian": true,
+          "is_vegan": true,
+          "nutrition": {
+            "calories": 500,
+            "protein": 22,
+            "carbs": 65,
+            "fat": 18
+          },
+          "ingredients": [
+            {
+              "name": "Chicken Breast",
+              "amount": "150g"
+            },
+            {
+              "name": "Brown Rice",
+              "amount": "1/2 cup"
+            },
+            {
+              "name": "Mixed Vegetables",
+              "amount": "1 cup"
+            },
+            {
+              "name": "Olive Oil",
+              "amount": "1 tbsp"
+            }
+          ],
+          "instructions": "Prepare according to package instructions or personal preference."
+        },
+        {
+          "meal_type": "dinner",
+          "name": "Grilled Portobello Mushroom with Quinoa",
+          "cuisine": "American",
+          "is_vegetarian": true,
+          "is_vegan": true,
+          "nutrition": {
+            "calories": 450,
+            "protein": 20,
+            "carbs": 60,
+            "fat": 15
+          },
+          "ingredients": [
+            {
+              "name": "Salmon Fillet",
+              "amount": "150g"
+            },
+            {
+              "name": "Quinoa",
+              "amount": "1/2 cup"
+            },
+            {
+              "name": "Steamed Vegetables",
+              "amount": "1.5 cups"
+            },
+            {
+              "name": "Lemon",
+              "amount": "1/2"
+            }
+          ],
+          "instructions": "Prepare according to package instructions or personal preference."
+        }
+      ]
+    },
+    {
+      "day": "Saturday",
+      "date": "2025-08-02",
+      "meals": [
+        {
+          "meal_type": "breakfast",
+          "name": "Overnight Oats with Berries",
+          "cuisine": "American",
+          "is_vegetarian": true,
+          "is_vegan": true,
+          "nutrition": {
+            "calories": 380,
+            "protein": 15,
+            "carbs": 60,
+            "fat": 10
+          },
+          "ingredients": [
+            {
+              "name": "Oats",
+              "amount": "1/2 cup"
+            },
+            {
+              "name": "Milk",
+              "amount": "1 cup"
+            },
+            {
+              "name": "Honey",
+              "amount": "1 tbsp"
+            },
+            {
+              "name": "Nuts",
+              "amount": "1/4 cup"
+            }
+          ],
+          "instructions": "Prepare according to package instructions or personal preference."
+        },
+        {
+          "meal_type": "lunch",
+          "name": "Grilled Cheese with Tomato Soup",
+          "cuisine": "American",
+          "is_vegetarian": true,
+          "is_vegan": false,
+          "nutrition": {
+            "calories": 550,
+            "protein": 18,
+            "carbs": 60,
+            "fat": 25
+          },
+          "ingredients": [
+            {
+              "name": "Chicken Breast",
+              "amount": "150g"
+            },
+            {
+              "name": "Brown Rice",
+              "amount": "1/2 cup"
+            },
+            {
+              "name": "Mixed Vegetables",
+              "amount": "1 cup"
+            },
+            {
+              "name": "Olive Oil",
+              "amount": "1 tbsp"
+            }
+          ],
+          "instructions": "Prepare according to package instructions or personal preference."
+        },
+        {
+          "meal_type": "dinner",
+          "name": "Mac and Cheese with Broccoli",
+          "cuisine": "American",
+          "is_vegetarian": true,
+          "is_vegan": false,
+          "nutrition": {
+            "calories": 650,
+            "protein": 25,
+            "carbs": 75,
+            "fat": 30
+          },
+          "ingredients": [
+            {
+              "name": "Salmon Fillet",
+              "amount": "150g"
+            },
+            {
+              "name": "Quinoa",
+              "amount": "1/2 cup"
+            },
+            {
+              "name": "Steamed Vegetables",
+              "amount": "1.5 cups"
+            },
+            {
+              "name": "Lemon",
+              "amount": "1/2"
+            }
+          ],
+          "instructions": "Prepare according to package instructions or personal preference."
+        }
+      ]
+    },
+    {
+      "day": "Sunday",
+      "date": "2025-08-03",
+      "meals": [
+        {
+          "meal_type": "breakfast",
+          "name": "Smoothie Bowl with Granola",
+          "cuisine": "American",
+          "is_vegetarian": true,
+          "is_vegan": true,
+          "nutrition": {
+            "calories": 350,
+            "protein": 12,
+            "carbs": 55,
+            "fat": 12
+          },
+          "ingredients": [
+            {
+              "name": "Oats",
+              "amount": "1/2 cup"
+            },
+            {
+              "name": "Milk",
+              "amount": "1 cup"
+            },
+            {
+              "name": "Honey",
+              "amount": "1 tbsp"
+            },
+            {
+              "name": "Nuts",
+              "amount": "1/4 cup"
+            }
+          ],
+          "instructions": "Prepare according to package instructions or personal preference."
+        },
+        {
+          "meal_type": "lunch",
+          "name": "Caesar Salad with Grilled Chicken",
+          "cuisine": "American",
+          "is_vegetarian": false,
+          "is_vegan": false,
+          "nutrition": {
+            "calories": 480,
+            "protein": 40,
+            "carbs": 20,
+            "fat": 25
+          },
+          "ingredients": [
+            {
+              "name": "Chicken Breast",
+              "amount": "150g"
+            },
+            {
+              "name": "Brown Rice",
+              "amount": "1/2 cup"
+            },
+            {
+              "name": "Mixed Vegetables",
+              "amount": "1 cup"
+            },
+            {
+              "name": "Olive Oil",
+              "amount": "1 tbsp"
+            }
+          ],
+          "instructions": "Prepare according to package instructions or personal preference."
+        },
+        {
+          "meal_type": "dinner",
+          "name": "BBQ Jackfruit Sandwich with Coleslaw",
+          "cuisine": "American",
+          "is_vegetarian": true,
+          "is_vegan": true,
+          "nutrition": {
+            "calories": 500,
+            "protein": 15,
+            "carbs": 85,
+            "fat": 15
+          },
+          "ingredients": [
+            {
+              "name": "Salmon Fillet",
+              "amount": "150g"
+            },
+            {
+              "name": "Quinoa",
+              "amount": "1/2 cup"
+            },
+            {
+              "name": "Steamed Vegetables",
+              "amount": "1.5 cups"
+            },
+            {
+              "name": "Lemon",
+              "amount": "1/2"
+            }
+          ],
+          "instructions": "Prepare according to package instructions or personal preference."
+        }
+      ]
+    }
+  ],
+  "shopping_list": {
+    "ingredients": [
+      {
+        "item": "Quinoa",
+        "category": "Grains",
+        "estimated_cost": 4.0
+      },
+      {
+        "item": "Brown Rice",
+        "category": "Grains",
+        "estimated_cost": 3.0
+      },
+      {
+        "item": "Oats",
+        "category": "Grains",
+        "estimated_cost": 3.5
+      },
+      {
+        "item": "Black Beans",
+        "category": "Legumes",
+        "estimated_cost": 2.0
+      },
+      {
+        "item": "Avocados",
+        "category": "Vegetables",
+        "estimated_cost": 4.0
+      },
+      {
+        "item": "Sweet Potatoes",
+        "category": "Vegetables",
+        "estimated_cost": 2.5
+      },
+      {
+        "item": "Spinach",
+        "category": "Vegetables",
+        "estimated_cost": 2.0
+      },
+      {
+        "item": "Broccoli",
+        "category": "Vegetables",
+        "estimated_cost": 2.5
+      },
+      {
+        "item": "Carrots",
+        "category": "Vegetables",
+        "estimated_cost": 1.5
+      },
+      {
+        "item": "Cheese",
+        "category": "Dairy",
+        "estimated_cost": 4.0
+      },
+      {
+        "item": "Almond Milk",
+        "category": "Dairy Alternatives",
+        "estimated_cost": 3.5
+      },
+      {
+        "item": "Nuts & Seeds",
+        "category": "Snacks",
+        "estimated_cost": 5.0
+      }
+    ],
+    "estimated_cost": 37.5
+  },
+  "nutrition_summary": {
+    "daily_average": {
+      "calories": 1441,
+      "protein": "63.1g",
+      "carbs": "177.1g",
+      "fat": "56.3g"
+    },
+    "weekly_totals": {
+      "calories": 10090,
+      "protein": "442g",
+      "carbs": "1240g",
+      "fat": "394g"
+    },
+    "targets": {
+      "calories": 2000,
+      "protein": "150g",
+      "carbs": "200g",
+      "fat": "65g"
+    },
+    "dietary_considerations": [
+      "gluten-free"
+    ],
+    "meal_inclusions": {
+      "breakfast": true,
+      "lunch": true,
+      "dinner": true,
+      "snacks": false
+    }
+  },
+  "generated_at": "2025-07-28T21:57:06.014669",
+  "preferences_used": {
+    "dietary_restrictions": [
+      "gluten-free"
+    ],
+    "favorite_cuisines": [
+      "American",
+      "Mexican"
+    ],
+    "preferred_protein_sources": [
+      "chicken breast",
+      "turkey",
+      "eggs",
+      "greek yogurt"
+    ],
+    "preferred_vegetables": [
+      "broccoli",
+      "asparagus",
+      "zucchini"
+    ],
+    "preferred_carb_sources": [
+      "sweet potatoes",
+      "quinoa",
+      "brown rice"
+    ],
+    "target_calories": 2500,
+    "target_protein": 220,
+    "target_carbs": 200,
+    "target_fat": 80,
+    "cooking_skill_level": "advanced",
+    "meals_per_day": 4,
+    "cooking_time_preference": "30-60 minutes"
+  },
+  "plan_type": "fallback"
+}

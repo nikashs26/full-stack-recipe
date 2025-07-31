@@ -4,25 +4,16 @@ import { Link } from 'react-router-dom';
 import { Edit, Trash2, Star, Clock, Heart, Utensils, Clock3, Users, BarChart2 } from 'lucide-react';
 import { Recipe } from '../types/recipe';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from './ui/hover-card';
+import { useRecipeClickTracking } from '../utils/clickTracking';
 
-// Extended recipe type to handle various sources
-type ExtendedRecipe = Recipe & {
-  title?: string;
-  imageUrl?: string;
-  cuisines?: string | string[];
-  cuisine?: string;
-  diets?: string[];
-  source?: string;
-  ready_in_minutes?: number;
-  rating?: number | Array<{ score: number; count: number }>;
-  ratings?: number | Array<{ score: number; count: number }>;
-};
+// Use the ExtendedRecipe type from recipe types
+import type { ExtendedRecipe } from '../types/recipe';
 
 interface RecipeCardProps {
-  recipe: ExtendedRecipe;
+  recipe: ExtendedRecipe | Recipe;
   isExternal?: boolean;
-  onDelete?: (id: string) => void;
-  onClick?: (recipe: ExtendedRecipe) => void;
+  onDelete?: (id: string | number) => void;
+  onClick?: (recipe: ExtendedRecipe | Recipe) => void;
 }
 
 const RecipeCard: React.FC<RecipeCardProps> = React.memo(({ 
@@ -31,11 +22,14 @@ const RecipeCard: React.FC<RecipeCardProps> = React.memo(({
   onDelete,
   onClick 
 }) => {
+  const { trackClick } = useRecipeClickTracking();
+
   // Handle recipe name from various sources
-  const recipeName = React.useMemo(() => 
-    recipe.name || recipe.title || "Untitled Recipe", 
-    [recipe.name, recipe.title]
-  );
+  const recipeName = React.useMemo(() => {
+    if ('title' in recipe && recipe.title) return recipe.title;
+    if ('name' in recipe && recipe.name) return recipe.name;
+    return "Untitled Recipe";
+  }, [recipe]);
   
   // Debug log the recipe data
   React.useEffect(() => {
@@ -55,7 +49,7 @@ const RecipeCard: React.FC<RecipeCardProps> = React.memo(({
       // Handle array case
       if (Array.isArray(recipe.cuisines)) {
         return recipe.cuisines
-          .filter((c): c is string | number | boolean => c != null)
+          .filter((c): c is NonNullable<typeof c> => c != null)
           .map(c => String(c).trim())
           .filter(c => c.length > 0);
       }
@@ -69,21 +63,20 @@ const RecipeCard: React.FC<RecipeCardProps> = React.memo(({
       }
       
       // Handle single cuisine field
-      if (recipe.cuisine) {
-        const cuisine = String(recipe.cuisine).trim();
-        return cuisine ? [cuisine] : [];
+      const cuisine = 'cuisine' in recipe ? recipe.cuisine : undefined;
+      if (cuisine) {
+        const cuisineStr = String(cuisine).trim();
+        return cuisineStr ? [cuisineStr] : [];
       }
       
-      // Try to extract from other potential fields
+      // Handle cuisines from other potential fields
       const potentialCuisineFields = [
-        recipe.cuisine,
-        recipe.cuisineType?.[0],
-        recipe.categories?.[0],
-        recipe.tags?.find(t => typeof t === 'string' && t.length > 0)
-      ];
+        'cuisineType' in recipe ? (recipe as any).cuisineType?.[0] : undefined,
+        'categories' in recipe ? (recipe as any).categories?.[0] : undefined,
+        'tags' in recipe ? (recipe as any).tags?.find((t: any) => typeof t === 'string' && t.length > 0) : undefined
+      ].filter(Boolean);
       
       const foundCuisine = potentialCuisineFields
-        .filter(Boolean)
         .map(String)
         .find(c => c.trim().length > 0);
         
@@ -108,95 +101,78 @@ const RecipeCard: React.FC<RecipeCardProps> = React.memo(({
           items.forEach(item => {
             if (item != null) {
               const str = String(item).trim().toLowerCase();
-              if (str) restrictions.add(str);
+              if (str.length > 0) {
+                restrictions.add(str);
+              }
             }
           });
-          return;
         }
-        
-        // Handle string case (comma-separated)
-        if (typeof items === 'string') {
-          items.split(',')
-            .map(s => s.trim().toLowerCase())
-            .filter(Boolean)
-            .forEach(s => restrictions.add(s));
+        // Handle string case
+        else if (typeof items === 'string') {
+          const str = items.trim().toLowerCase();
+          if (str.length > 0) {
+            restrictions.add(str);
+          }
         }
       };
       
-      // Check all possible fields that might contain dietary info
+      // Add restrictions from various possible fields
       addRestrictions(recipe.dietaryRestrictions);
       addRestrictions(recipe.diets);
-      addRestrictions(recipe.diets);
-      addRestrictions(recipe.tags);
       
-      // Also check healthLabels if it exists (common in some APIs)
-      if (recipe.healthLabels && Array.isArray(recipe.healthLabels)) {
-        const healthLabels = recipe.healthLabels
-          .map(String)
-          .map(s => s.toLowerCase())
-          .filter(s => s.includes('free') || s.includes('diet') || s.includes('vegan') || s.includes('vegetarian'));
-        healthLabels.forEach(label => restrictions.add(label));
+      // Check for vegetarian/vegan flags in the recipe object
+      if ('vegetarian' in recipe && (recipe as any).vegetarian) {
+        restrictions.add('vegetarian');
+      }
+      if ('vegan' in recipe && (recipe as any).vegan) {
+        restrictions.add('vegan');
       }
       
-      // Normalize the values
-      return Array.from(restrictions)
-        .map(normalized => {
-          // Map common variations to standard values
-          switch(normalized) {
-            case 'vegetarian':
-            case 'veg':
-              return 'vegetarian';
-            case 'vegan':
-            case 'vegan friendly':
-              return 'vegan';
-            case 'gluten free':
-            case 'gluten-free':
-            case 'gf':
-              return 'gluten-free';
-            case 'dairy free':
-            case 'dairy-free':
-            case 'lactose free':
-              return 'dairy-free';
-            case 'keto':
-            case 'ketogenic':
-              return 'keto';
-            case 'paleo':
-            case 'paleolithic':
-              return 'paleo';
-            case 'low carb':
-            case 'low-carb':
-              return 'low-carb';
-            case 'high protein':
-            case 'high-protein':
-              return 'high-protein';
-            default:
-              return normalized;
-          }
-        })
-        .filter(Boolean) // Remove any empty strings
-        .filter((value, index, self) => self.indexOf(value) === index); // Remove duplicates
+      return Array.from(restrictions);
     } catch (error) {
       console.error('Error processing dietary restrictions:', error, recipe);
       return [];
     }
-  }, [recipe.dietaryRestrictions, recipe.diets]);
+  }, [recipe]);
   
   // Handle image from various sources
   const imageUrl = React.useMemo((): string => {
-    if (recipe.image) return recipe.image;
-    if (recipe.imageUrl) return recipe.imageUrl;
-    if (recipe.source === 'TheMealDB' && recipe.id) {
+    if ('image' in recipe && recipe.image) return recipe.image;
+    if ('imageUrl' in recipe && recipe.imageUrl) return recipe.imageUrl;
+    if ('source' in recipe && recipe.source === 'TheMealDB' && recipe.id) {
       const ingredientName = typeof recipe.id === 'string' ? recipe.id.split('_').pop() : '';
       return `https://www.themealdb.com/images/ingredients/${ingredientName || 'placeholder'}.jpg`;
     }
     return '/placeholder.svg';
-  }, [recipe.image, recipe.imageUrl, recipe.source, recipe.id]);
+  }, [recipe]);
   
   // Handle ID from various sources
   const recipeId = React.useMemo((): string => {
     if (recipe.id === null || recipe.id === undefined) return '';
     return String(recipe.id).replace('mealdb_', '');
   }, [recipe.id]);
+  
+  // Safely get readyInMinutes from either readyInMinutes or ready_in_minutes
+  const readyInMinutes = React.useMemo(() => {
+    if (recipe === null || typeof recipe !== 'object') return undefined;
+    if ('readyInMinutes' in recipe && recipe.readyInMinutes !== undefined) return recipe.readyInMinutes;
+    if ('ready_in_minutes' in recipe && recipe.ready_in_minutes !== undefined) return recipe.ready_in_minutes;
+    return undefined;
+  }, [recipe]);
+  
+  // Debug log for recipe data
+  React.useEffect(() => {
+    console.log('Recipe data in RecipeCard:', {
+      id: recipe.id,
+      title: recipeName,
+      readyInMinutes,
+      description: recipe.description,
+      hasSummary: 'summary' in recipe,
+      recipeType: recipe.type,
+      readyInMinutesDirect: 'readyInMinutes' in recipe ? recipe.readyInMinutes : undefined,
+      ready_in_minutesDirect: 'ready_in_minutes' in recipe ? (recipe as any).ready_in_minutes : undefined
+    });
+  }, [recipe, recipeName, readyInMinutes]);
   
   // Calculate average rating if ratings is an array
   const averageRating = React.useMemo(() => {
@@ -206,6 +182,13 @@ const RecipeCard: React.FC<RecipeCardProps> = React.memo(({
       }
       
       if (Array.isArray(value)) {
+        // Handle array of numbers
+        if (value.length > 0 && typeof value[0] === 'number') {
+          const sum = (value as number[]).reduce((acc, score) => acc + score, 0);
+          return sum / value.length;
+        }
+        
+        // Handle array of rating objects
         const validRatings = value
           .filter((r): r is { score: number } => 
             r !== null && 
@@ -223,8 +206,10 @@ const RecipeCard: React.FC<RecipeCardProps> = React.memo(({
       return undefined;
     };
     
-    return getAverage(recipe.rating) ?? getAverage(recipe.ratings);
-  }, [recipe.rating, recipe.ratings]);
+    // Try both rating and ratings properties
+    const ratingValue = 'rating' in recipe ? recipe.rating : 'ratings' in recipe ? recipe.ratings : undefined;
+    return getAverage(ratingValue);
+  }, [recipe]);
   
   // Handle ingredients from various formats
   const ingredients = React.useMemo(() => {
@@ -277,7 +262,16 @@ const RecipeCard: React.FC<RecipeCardProps> = React.memo(({
           className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-300 cursor-pointer h-full flex flex-col"
           onClick={handleClick}
         >
-          <Link to={getRecipePath()} onClick={(e) => e.stopPropagation()} className="flex flex-col h-full">
+          <Link 
+            to={getRecipePath()} 
+            onClick={(e) => {
+              e.stopPropagation();
+              // Track the recipe click
+              const recipeType = isExternal ? 'external' : 'manual';
+              trackClick(String(recipe.id), recipeType);
+            }} 
+            className="flex flex-col h-full"
+          >
         <div className="relative h-48 overflow-hidden">
           <img
             src={imageUrl}
@@ -368,7 +362,7 @@ const RecipeCard: React.FC<RecipeCardProps> = React.memo(({
           <div className="mt-3 flex items-center justify-between text-sm text-gray-500">
             <div className="flex items-center">
               <Clock className="w-4 h-4 mr-1" />
-              <span>{recipe.ready_in_minutes ? `${recipe.ready_in_minutes} min` : 'N/A'}</span>
+              <span>{readyInMinutes !== undefined ? `${readyInMinutes} min` : 'N/A'}</span>
             </div>
             <div className="flex items-center">
               <Star className="w-4 h-4 text-yellow-400 mr-1" />
@@ -401,9 +395,9 @@ const RecipeCard: React.FC<RecipeCardProps> = React.memo(({
           <h4 className="font-semibold text-lg mb-2">{recipeName}</h4>
           
           {/* Description */}
-          {recipe.description && (
+          {(recipe.description || ('summary' in recipe && (recipe as any).summary)) && (
             <p className="text-sm text-gray-600 mb-3 line-clamp-3">
-              {recipe.description}
+              {recipe.description || (recipe as any).summary}
             </p>
           )}
           
@@ -411,11 +405,11 @@ const RecipeCard: React.FC<RecipeCardProps> = React.memo(({
           <div className="space-y-2 text-sm">
             <div className="flex items-center text-gray-700">
               <Clock3 className="w-4 h-4 mr-2 text-gray-500" />
-              <span>Prep: {recipe.prep_time || 'N/A'}</span>
+              <span>Prep: {'prepTime' in recipe ? recipe.prepTime : 'prep_time' in recipe ? (recipe as any).prep_time : 'N/A'}</span>
             </div>
             <div className="flex items-center text-gray-700">
               <Utensils className="w-4 h-4 mr-2 text-gray-500" />
-              <span>Cook: {recipe.cook_time || 'N/A'}</span>
+              <span>Cook: {'cookTime' in recipe ? recipe.cookTime : 'cook_time' in recipe ? (recipe as any).cook_time : 'N/A'}</span>
             </div>
             <div className="flex items-center text-gray-700">
               <Users className="w-4 h-4 mr-2 text-gray-500" />

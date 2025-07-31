@@ -1,0 +1,417 @@
+{
+  "plan_name": "Mexican-Inspired Weekly Meal Plan",
+  "duration_days": 7,
+  "total_nutrition": {
+    "calories": 15400,
+    "protein": 1260,
+    "carbs": 1400,
+    "fat": 490
+  },
+  "daily_meals": {
+    "Monday": {
+      "breakfast": {
+        "name": "Breakfast burrito with chicken, eggs, and broccoli",
+        "ingredients": [
+          "chicken",
+          "broccoli",
+          "quinoa"
+        ],
+        "cuisine": "Mexican",
+        "nutrition": {
+          "calories": 550,
+          "protein": 45,
+          "carbs": 50,
+          "fat": 18
+        }
+      },
+      "lunch": {
+        "name": "Tacos with chicken, broccoli, and salsa",
+        "ingredients": [
+          "chicken",
+          "broccoli",
+          "quinoa"
+        ],
+        "cuisine": "Mexican",
+        "nutrition": {
+          "calories": 550,
+          "protein": 45,
+          "carbs": 50,
+          "fat": 18
+        }
+      },
+      "dinner": {
+        "name": "Fajitas with chicken, broccoli, and quinoa",
+        "ingredients": [
+          "chicken",
+          "broccoli",
+          "quinoa"
+        ],
+        "cuisine": "Mexican",
+        "nutrition": {
+          "calories": 660,
+          "protein": 54,
+          "carbs": 60,
+          "fat": 21
+        }
+      }
+    },
+    "Tuesday": {
+      "breakfast": {
+        "name": "Huevos rancheros with quinoa",
+        "ingredients": [
+          "fish",
+          "bell peppers",
+          "quinoa"
+        ],
+        "cuisine": "Mexican",
+        "nutrition": {
+          "calories": 550,
+          "protein": 45,
+          "carbs": 50,
+          "fat": 18
+        }
+      },
+      "lunch": {
+        "name": "Burrito bowl with fish, quinoa, and bell peppers",
+        "ingredients": [
+          "fish",
+          "bell peppers",
+          "quinoa"
+        ],
+        "cuisine": "Mexican",
+        "nutrition": {
+          "calories": 550,
+          "protein": 45,
+          "carbs": 50,
+          "fat": 18
+        }
+      },
+      "dinner": {
+        "name": "Chili with fish and quinoa",
+        "ingredients": [
+          "fish",
+          "bell peppers",
+          "quinoa"
+        ],
+        "cuisine": "Mexican",
+        "nutrition": {
+          "calories": 660,
+          "protein": 54,
+          "carbs": 60,
+          "fat": 21
+        }
+      }
+    },
+    "Wednesday": {
+      "breakfast": {
+        "name": "Rice porridge with lentils and scallions",
+        "ingredients": [
+          "lentils",
+          "spinach",
+          "sweet potatoes"
+        ],
+        "cuisine": "Asian",
+        "nutrition": {
+          "calories": 550,
+          "protein": 45,
+          "carbs": 50,
+          "fat": 18
+        }
+      },
+      "lunch": {
+        "name": "Noodle soup with lentils and vegetables",
+        "ingredients": [
+          "lentils",
+          "spinach",
+          "sweet potatoes"
+        ],
+        "cuisine": "Asian",
+        "nutrition": {
+          "calories": 550,
+          "protein": 45,
+          "carbs": 50,
+          "fat": 18
+        }
+      },
+      "dinner": {
+        "name": "Teriyaki lentils with spinach and sweet potatoes",
+        "ingredients": [
+          "lentils",
+          "spinach",
+          "sweet potatoes"
+        ],
+        "cuisine": "Asian",
+        "nutrition": {
+          "calories": 660,
+          "protein": 54,
+          "carbs": 60,
+          "fat": 21
+        }
+      }
+    },
+    "Thursday": {
+      "breakfast": {
+        "name": "Breakfast burrito with chicken, eggs, and broccoli",
+        "ingredients": [
+          "chicken",
+          "broccoli",
+          "quinoa"
+        ],
+        "cuisine": "Mexican",
+        "nutrition": {
+          "calories": 550,
+          "protein": 45,
+          "carbs": 50,
+          "fat": 18
+        }
+      },
+      "lunch": {
+        "name": "Tacos with chicken, broccoli, and salsa",
+        "ingredients": [
+          "chicken",
+          "broccoli",
+          "quinoa"
+        ],
+        "cuisine": "Mexican",
+        "nutrition": {
+          "calories": 550,
+          "protein": 45,
+          "carbs": 50,
+          "fat": 18
+        }
+      },
+      "dinner": {
+        "name": "Chili with chicken and quinoa",
+        "ingredients": [
+          "chicken",
+          "broccoli",
+          "quinoa"
+        ],
+        "cuisine": "Mexican",
+        "nutrition": {
+          "calories": 660,
+          "protein": 54,
+          "carbs": 60,
+          "fat": 21
+        }
+      }
+    },
+    "Friday": {
+      "breakfast": {
+        "name": "Yogurt with honey and nuts",
+        "ingredients": [
+          "tofu",
+          "broccoli",
+          "quinoa"
+        ],
+        "cuisine": "Italian",
+        "nutrition": {
+          "calories": 550,
+          "protein": 45,
+          "carbs": 50,
+          "fat": 18
+        }
+      },
+      "lunch": {
+        "name": "Caprese salad with tofu",
+        "ingredients": [
+          "tofu",
+          "broccoli",
+          "quinoa"
+        ],
+        "cuisine": "Italian",
+        "nutrition": {
+          "calories": 550,
+          "protein": 45,
+          "carbs": 50,
+          "fat": 18
+        }
+      },
+      "dinner": {
+        "name": "Pasta with tofu and broccoli in tomato sauce",
+        "ingredients": [
+          "tofu",
+          "broccoli",
+          "quinoa"
+        ],
+        "cuisine": "Italian",
+        "nutrition": {
+          "calories": 660,
+          "protein": 54,
+          "carbs": 60,
+          "fat": 21
+        }
+      }
+    },
+    "Saturday": {
+      "breakfast": {
+        "name": "Frittata with spinach and chicken",
+        "ingredients": [
+          "chicken",
+          "spinach",
+          "sweet potatoes"
+        ],
+        "cuisine": "Italian",
+        "nutrition": {
+          "calories": 550,
+          "protein": 45,
+          "carbs": 50,
+          "fat": 18
+        }
+      },
+      "lunch": {
+        "name": "Minestrone soup with sweet potatoes",
+        "ingredients": [
+          "chicken",
+          "spinach",
+          "sweet potatoes"
+        ],
+        "cuisine": "Italian",
+        "nutrition": {
+          "calories": 550,
+          "protein": 45,
+          "carbs": 50,
+          "fat": 18
+        }
+      },
+      "dinner": {
+        "name": "Risotto with chicken and spinach",
+        "ingredients": [
+          "chicken",
+          "spinach",
+          "sweet potatoes"
+        ],
+        "cuisine": "Italian",
+        "nutrition": {
+          "calories": 660,
+          "protein": 54,
+          "carbs": 60,
+          "fat": 21
+        }
+      }
+    },
+    "Sunday": {
+      "breakfast": {
+        "name": "Huevos rancheros with quinoa",
+        "ingredients": [
+          "tofu",
+          "broccoli",
+          "quinoa"
+        ],
+        "cuisine": "Mexican",
+        "nutrition": {
+          "calories": 550,
+          "protein": 45,
+          "carbs": 50,
+          "fat": 18
+        }
+      },
+      "lunch": {
+        "name": "Tacos with tofu, broccoli, and salsa",
+        "ingredients": [
+          "tofu",
+          "broccoli",
+          "quinoa"
+        ],
+        "cuisine": "Mexican",
+        "nutrition": {
+          "calories": 550,
+          "protein": 45,
+          "carbs": 50,
+          "fat": 18
+        }
+      },
+      "dinner": {
+        "name": "Chili with tofu and quinoa",
+        "ingredients": [
+          "tofu",
+          "broccoli",
+          "quinoa"
+        ],
+        "cuisine": "Mexican",
+        "nutrition": {
+          "calories": 660,
+          "protein": 54,
+          "carbs": 60,
+          "fat": 21
+        }
+      }
+    }
+  },
+  "shopping_list": {
+    "ingredients": [
+      {
+        "name": "quinoa",
+        "quantity": 15,
+        "category": "Carbs/Grains"
+      },
+      {
+        "name": "sweet potatoes",
+        "quantity": 6,
+        "category": "Carbs/Grains"
+      },
+      {
+        "name": "chicken",
+        "quantity": 9,
+        "category": "Proteins"
+      },
+      {
+        "name": "fish",
+        "quantity": 3,
+        "category": "Proteins"
+      },
+      {
+        "name": "lentils",
+        "quantity": 3,
+        "category": "Proteins"
+      },
+      {
+        "name": "tofu",
+        "quantity": 6,
+        "category": "Proteins"
+      },
+      {
+        "name": "broccoli",
+        "quantity": 12,
+        "category": "Vegetables"
+      },
+      {
+        "name": "bell peppers",
+        "quantity": 3,
+        "category": "Vegetables"
+      },
+      {
+        "name": "spinach",
+        "quantity": 6,
+        "category": "Vegetables"
+      }
+    ],
+    "total_items": 9
+  },
+  "preferences_used": {
+    "dietary_restrictions": [],
+    "favorite_cuisines": [
+      "italian",
+      "asian",
+      "mexican"
+    ],
+    "preferred_proteins": [
+      "chicken",
+      "fish",
+      "tofu",
+      "lentils"
+    ],
+    "preferred_vegetables": [
+      "broccoli",
+      "spinach",
+      "bell peppers"
+    ],
+    "preferred_carbs": [
+      "brown rice",
+      "quinoa",
+      "sweet potatoes"
+    ]
+  },
+  "generated_at": "2025-07-28T22:31:46.269646",
+  "is_fallback": true
+}

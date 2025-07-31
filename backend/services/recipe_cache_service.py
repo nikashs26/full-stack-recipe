@@ -209,7 +209,13 @@ class RecipeCacheService:
         terms.extend(ingredients)
         
         # Add cooking method keywords from instructions
-        instructions = recipe.get('instructions', '').lower()
+        instructions = recipe.get('instructions', '')
+        # Handle case where instructions is a list
+        if isinstance(instructions, list):
+            instructions = ' '.join(str(step) for step in instructions)
+        # Ensure instructions is a string
+        instructions = str(instructions or '').lower()
+        
         cooking_methods = ['bake', 'fry', 'grill', 'roast', 'boil', 'steam', 'saute']
         for method in cooking_methods:
             if method in instructions:
@@ -329,25 +335,44 @@ class RecipeCacheService:
                 
                 for i, doc in enumerate(recipe_results['documents']):
                     try:
-                        recipe = json.loads(doc) if isinstance(doc, str) else doc
-                        if not isinstance(recipe, dict):
-                            logger.warning(f"Invalid recipe format: {type(recipe)}")
+                        # Skip empty or invalid documents
+                        if not doc or not isinstance(doc, (str, dict)):
+                            logger.debug(f"Skipping invalid document at index {i}")
+                            continue
+                            
+                        # Parse JSON if needed
+                        if isinstance(doc, str):
+                            try:
+                                doc = doc.strip()
+                                if not doc:  # Skip empty strings
+                                    continue
+                                recipe = json.loads(doc)
+                            except json.JSONDecodeError as e:
+                                logger.error(f"Error decoding recipe JSON at index {i}: {e}")
+                                continue
+                        else:
+                            recipe = doc
+                            
+                        # Validate recipe structure
+                        if not isinstance(recipe, dict) or not recipe.get('id'):
+                            logger.debug(f"Skipping invalid recipe at index {i}")
                             continue
                             
                         metadata = recipe_results['metadatas'][i] if i < len(recipe_results['metadatas']) else {}
-                        recipe_id = metadata.get('id')
                         
+                        recipe_id = recipe.get('id')
                         if not recipe_id or recipe_id in seen_ids or not self._is_cache_valid(metadata.get('cached_at')):
+                            logger.debug(f"Skipping recipe {recipe_id}: already seen or expired")
                             continue
-                        
-                        # Get base score from search results
-                        score = recipe_scores.get(recipe_id, 1.0)
-                        
-                        # Boost score based on metadata
+                            
+                        # Calculate relevance score
                         try:
+                            score = recipe_scores.get(recipe_id, 0.5)  # Default score if not found
+                            # Apply additional scoring logic
                             score = self._calculate_relevance_score(score, recipe, query, ingredient)
+                            recipe['relevance_score'] = score
                         except Exception as e:
-                            logger.error(f"Error calculating relevance score: {e}")
+                            logger.error(f"Error calculating relevance score for recipe {recipe_id}: {e}")
                             score = 1.0
                         
                         # Add score to recipe
@@ -355,11 +380,8 @@ class RecipeCacheService:
                         all_recipes.append(recipe)
                         seen_ids.add(recipe_id)
                         
-                    except json.JSONDecodeError as e:
-                        logger.error(f"Error decoding recipe JSON: {e}")
-                        continue
                     except Exception as e:
-                        logger.error(f"Error processing recipe result: {e}")
+                        logger.error(f"Unexpected error processing recipe at index {i}: {e}", exc_info=True)
                         continue
                 
                 # Sort by relevance score
@@ -391,24 +413,41 @@ class RecipeCacheService:
                 
                 for i, doc in enumerate(recipe_results['documents']):
                     try:
-                        recipe = json.loads(doc) if isinstance(doc, str) else doc
-                        if not isinstance(recipe, dict):
+                        # Skip empty or invalid documents
+                        if not doc or not isinstance(doc, (str, dict)):
+                            logger.debug(f"Skipping invalid document at index {i}")
+                            continue
+                            
+                        # Parse JSON if needed
+                        if isinstance(doc, str):
+                            try:
+                                doc = doc.strip()
+                                if not doc:  # Skip empty strings
+                                    continue
+                                recipe = json.loads(doc)
+                            except json.JSONDecodeError as e:
+                                logger.error(f"Error decoding recipe JSON at index {i}: {e}")
+                                continue
+                        else:
+                            recipe = doc
+                            
+                        # Validate recipe structure
+                        if not isinstance(recipe, dict) or not recipe.get('id'):
+                            logger.debug(f"Skipping invalid recipe at index {i}")
                             continue
                             
                         metadata = recipe_results['metadatas'][i] if i < len(recipe_results['metadatas']) else {}
                         
                         recipe_id = recipe.get('id')
                         if not recipe_id or recipe_id in seen_ids or not self._is_cache_valid(metadata.get('cached_at')):
+                            logger.debug(f"Skipping recipe {recipe_id}: already seen or expired")
                             continue
                         
                         all_recipes.append(recipe)
                         seen_ids.add(recipe_id)
                         
-                    except json.JSONDecodeError as e:
-                        logger.error(f"Error decoding recipe JSON: {e}")
-                        continue
                     except Exception as e:
-                        logger.error(f"Error processing recipe result: {e}")
+                        logger.error(f"Unexpected error processing recipe at index {i}: {e}", exc_info=True)
                         continue
                 
                 logger.info(f"Found {len(all_recipes)} matching recipes")
@@ -519,31 +558,85 @@ class RecipeCacheService:
             recipe_ids: List of recipe IDs to retrieve
             
         Returns:
-            List of recipe dictionaries (or None for missing recipes)
+            List of recipe dictionaries (or None for missing/invalid recipes)
         """
         if not self.recipe_collection or not recipe_ids:
-            return []
+            logger.debug("No recipe collection or empty IDs list provided")
+            return [None] * len(recipe_ids) if recipe_ids else []
             
         try:
+            # Get all requested recipes in one batch
             results = self.recipe_collection.get(
                 ids=recipe_ids,
                 include=['documents', 'metadatas']
             )
             
-            recipes = []
-            for doc, meta in zip(results['documents'], results['metadatas']):
+            if not results or 'documents' not in results:
+                logger.warning(f"No documents found in cache for recipe IDs: {recipe_ids}")
+                return [None] * len(recipe_ids)
+            
+            # Create a mapping of ID to document/metadata for easier lookup
+            id_to_recipe = {}
+            for i, recipe_id in enumerate(recipe_ids):
                 try:
-                    recipe = json.loads(doc)
-                    recipes.append(recipe)
-                except json.JSONDecodeError:
-                    logger.warning(f"Failed to parse cached recipe: {doc[:100]}...")
-                    recipes.append(None)
+                    # Skip if we've already processed this ID
+                    if recipe_id in id_to_recipe:
+                        continue
+                        
+                    # Get the document and metadata (if available)
+                    doc = results['documents'][i] if i < len(results['documents']) else None
+                    meta = results['metadatas'][i] if (results.get('metadatas') and i < len(results['metadatas'])) else {}
                     
-            return recipes
+                    # Skip if document is missing or empty
+                    if not doc or not isinstance(doc, str):
+                        logger.debug(f"Missing or invalid document for recipe ID: {recipe_id}")
+                        id_to_recipe[recipe_id] = None
+                        continue
+                    
+                    # Try to parse the document as JSON
+                    try:
+                        recipe = json.loads(doc)
+                        if not isinstance(recipe, dict):
+                            raise ValueError("Recipe is not a dictionary")
+                            
+                        # Check if cache is still valid
+                        if not self._is_cache_valid(meta.get('cached_at')):
+                            logger.debug(f"Cache entry expired for recipe ID: {recipe_id}")
+                            # Schedule for cleanup
+                            asyncio.create_task(self._async_cleanup_recipe(recipe_id))
+                            id_to_recipe[recipe_id] = None
+                            continue
+                            
+                        id_to_recipe[recipe_id] = recipe
+                        
+                    except (json.JSONDecodeError, ValueError) as e:
+                        logger.error(f"Invalid JSON in cache for recipe {recipe_id}: {str(e)}")
+                        # Schedule for cleanup
+                        asyncio.create_task(self._async_cleanup_recipe(recipe_id))
+                        id_to_recipe[recipe_id] = None
+                        
+                except Exception as e:
+                    logger.error(f"Error processing recipe {recipe_id}: {str(e)}", exc_info=True)
+                    id_to_recipe[recipe_id] = None
+            
+            # Return results in the same order as requested
+            return [id_to_recipe.get(rid) for rid in recipe_ids]
             
         except Exception as e:
-            logger.error(f"Error getting recipes by IDs: {e}")
-            return []
+            logger.error(f"Error getting recipes by IDs: {str(e)}", exc_info=True)
+            return [None] * len(recipe_ids) if recipe_ids else []
+            
+    async def _async_cleanup_recipe(self, recipe_id: str) -> None:
+        """Helper method to asynchronously clean up a recipe from the cache"""
+        try:
+            if self.recipe_collection:
+                await asyncio.get_event_loop().run_in_executor(
+                    None,
+                    lambda: self.recipe_collection.delete(ids=[recipe_id])
+                )
+                logger.debug(f"Cleaned up invalid/expired recipe: {recipe_id}")
+        except Exception as e:
+            logger.error(f"Error cleaning up recipe {recipe_id}: {str(e)}")
             
     def cache_recipe(self, recipe: Dict[Any, Any]) -> bool:
         """Cache a single recipe in ChromaDB with TTL support"""
@@ -577,32 +670,68 @@ class RecipeCacheService:
             return False
 
     def get_recipe_by_id(self, recipe_id: str) -> Optional[Dict[Any, Any]]:
-        """Get a recipe by ID from cache with TTL support"""
+        """
+        Get a recipe by ID from cache with TTL support.
+        
+        Args:
+            recipe_id: The ID of the recipe to retrieve
+            
+        Returns:
+            The recipe dictionary if found and valid, None otherwise
+        """
         if not self.recipe_collection:
+            logger.warning("Recipe collection not initialized")
             return None
         
         try:
+            # Get the document and metadata from the collection
             results = self.recipe_collection.get(
                 ids=[recipe_id],
                 include=["documents", "metadatas"]
             )
             
-            if results['documents']:
-                metadata = results['metadatas'][0]
-                # Check if cache is still valid
-                if self._is_cache_valid(metadata.get('cached_at')):
-                    recipe = json.loads(results['documents'][0])
-                    logger.info(f"Found valid cached recipe: {recipe.get('title', 'Untitled')}")
-                    return recipe
-                else:
-                    # Remove expired recipe from cache
-                    self.recipe_collection.delete(ids=[recipe_id])
-                    logger.info(f"Removed expired cache entry for recipe ID: {recipe_id}")
+            # Check if we got any results
+            if not results or 'documents' not in results or not results['documents']:
+                logger.debug(f"No cache entry found for recipe ID: {recipe_id}")
+                return None
+                
+            # Get the first document and its metadata
+            document = results['documents'][0]
+            metadata = results['metadatas'][0] if results.get('metadatas') else {}
             
-            return None
+            # Check if the document is empty or None
+            if not document or not isinstance(document, str):
+                logger.warning(f"Empty or invalid document for recipe ID: {recipe_id}")
+                self.recipe_collection.delete(ids=[recipe_id])
+                return None
+                
+            # Try to parse the document as JSON
+            try:
+                recipe = json.loads(document)
+                if not isinstance(recipe, dict):
+                    raise ValueError("Recipe is not a dictionary")
+            except (json.JSONDecodeError, ValueError) as e:
+                logger.error(f"Invalid JSON in cache for recipe {recipe_id}: {str(e)}")
+                # Remove the invalid entry
+                self.recipe_collection.delete(ids=[recipe_id])
+                return None
+                
+            # Check if cache is still valid
+            if not self._is_cache_valid(metadata.get('cached_at')):
+                logger.info(f"Cache entry expired for recipe ID: {recipe_id}")
+                self.recipe_collection.delete(ids=[recipe_id])
+                return None
+                
+            logger.debug(f"Successfully retrieved recipe from cache: {recipe.get('title', 'Untitled')} (ID: {recipe_id})")
+            return recipe
             
         except Exception as e:
-            logger.error(f"Error retrieving recipe by ID: {e}")
+            logger.error(f"Error retrieving recipe {recipe_id} from cache: {str(e)}", exc_info=True)
+            try:
+                # Attempt to clean up the problematic entry
+                self.recipe_collection.delete(ids=[recipe_id])
+            except Exception as cleanup_error:
+                logger.error(f"Failed to clean up invalid cache entry {recipe_id}: {str(cleanup_error)}")
             return None
 
     def clear_expired_cache(self) -> int:

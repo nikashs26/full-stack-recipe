@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Plus, X, Search, Filter, ChefHat, Leaf } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Plus, X, Filter, ChefHat, Leaf } from 'lucide-react';
+import SearchInput from './SearchInput';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 type FilterOption = {
@@ -12,17 +13,49 @@ type FilterOption = {
   count?: number;
 };
 
-const CUISINE_OPTIONS: FilterOption[] = [
-  { value: 'American', label: 'American', icon: <ChefHat className="w-4 h-4" /> },
-  { value: 'Italian', label: 'Italian', icon: <ChefHat className="w-4 h-4" /> },
-  { value: 'Chinese', label: 'Chinese', icon: <ChefHat className="w-4 h-4" /> },
-  { value: 'Japanese', label: 'Japanese', icon: <ChefHat className="w-4 h-4" /> },
-  { value: 'Mexican', label: 'Mexican', icon: <ChefHat className="w-4 h-4" /> },
-  { value: 'Indian', label: 'Indian', icon: <ChefHat className="w-4 h-4" /> },
-  { value: 'Thai', label: 'Thai', icon: <ChefHat className="w-4 h-4" /> },
-  { value: 'French', label: 'French', icon: <ChefHat className="w-4 h-4" /> },
-  { value: 'Mediterranean', label: 'Mediterranean', icon: <ChefHat className="w-4 h-4" /> },
+// Common cuisines that are actually used in the app
+const COMMON_CUISINES = [
+  'american', 'british', 'chinese', 'french', 'greek', 'indian', 'italian', 
+  'japanese', 'mexican', 'spanish', 'thai', 'vietnamese'
 ];
+
+// Helper function to find similar cuisines
+const findSimilarCuisine = (cuisine: string): string | null => {
+  const normalizedInput = cuisine.toLowerCase().trim();
+  
+  // Direct match
+  if (COMMON_CUISINES.includes(normalizedInput)) {
+    return normalizedInput;
+  }
+  
+  // Common misspellings and variations
+  const variations: Record<string, string> = {
+    'america': 'american',
+    'britan': 'british',
+    'england': 'british',
+    'uk': 'british',
+    'china': 'chinese',
+    'france': 'french',
+    'greece': 'greek',
+    'india': 'indian',
+    'italy': 'italian',
+    'japan': 'japanese',
+    'mexico': 'mexican',
+    'spain': 'spanish',
+    'thailand': 'thai',
+    'vietnam': 'vietnamese',
+  };
+  
+  // Check for variations
+  return variations[normalizedInput] || null;
+};
+
+// Create CUISINE_OPTIONS from common cuisines
+const CUISINE_OPTIONS: FilterOption[] = COMMON_CUISINES.map(cuisine => ({
+  value: cuisine,
+  label: cuisine.charAt(0).toUpperCase() + cuisine.slice(1),
+  icon: <ChefHat className="w-4 h-4" />
+}));
 
 const DIET_OPTIONS: FilterOption[] = [
   { value: 'vegetarian', label: 'Vegetarian', icon: <Leaf className="w-4 h-4" /> },
@@ -54,10 +87,28 @@ export const RecipeFilters = ({
 
   const handleAddCustomCuisine = (e: React.FormEvent) => {
     e.preventDefault();
-    if (customCuisine.trim() && !selectedCuisines.includes(customCuisine)) {
-      onCuisineToggle(customCuisine.trim());
+    const trimmedCuisine = customCuisine.trim();
+    if (trimmedCuisine && !selectedCuisines.includes(trimmedCuisine)) {
+      onCuisineToggle(trimmedCuisine);
       setCustomCuisine('');
     }
+  };
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    
+    // If the search term matches a cuisine or variation, select it
+    const matchedCuisine = findSimilarCuisine(value);
+    if (matchedCuisine && !selectedCuisines.includes(matchedCuisine)) {
+      onCuisineToggle(matchedCuisine);
+      // Clear the input after matching
+      e.target.value = '';
+      onSearchChange({ target: { value: '' } } as React.ChangeEvent<HTMLInputElement>);
+      return;
+    }
+    
+    // Otherwise, proceed with normal search
+    onSearchChange(e);
   };
 
   const FilterSection = ({ 
@@ -129,15 +180,11 @@ export const RecipeFilters = ({
   return (
     <div className="space-y-4">
       {/* Search Bar */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Search recipes..."
-          value={searchQuery}
-          onChange={(e) => onSearchChange(e.target.value)}
-          className="pl-10 h-11 text-base"
-        />
-      </div>
+      <SearchInput
+        value={searchQuery}
+        onChange={onSearchChange}
+        placeholder="Search recipes..."
+      />
 
       {/* Cuisines Filter */}
       <FilterSection 
@@ -158,16 +205,33 @@ export const RecipeFilters = ({
             ))}
           </div>
           
-          <form onSubmit={handleAddCustomCuisine} className="flex gap-2">
+          <div className="flex gap-2">
             <Input
               type="text"
               value={customCuisine}
               onChange={(e) => setCustomCuisine(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  const trimmedCuisine = customCuisine.trim();
+                  if (trimmedCuisine && !selectedCuisines.includes(trimmedCuisine)) {
+                    onCuisineToggle(trimmedCuisine);
+                    setCustomCuisine('');
+                  }
+                }
+              }}
               placeholder="Add custom cuisine..."
               className="flex-1 h-9 text-sm"
             />
             <Button 
-              type="submit" 
+              onClick={(e) => {
+                e.preventDefault();
+                const trimmedCuisine = customCuisine.trim();
+                if (trimmedCuisine && !selectedCuisines.includes(trimmedCuisine)) {
+                  onCuisineToggle(trimmedCuisine);
+                  setCustomCuisine('');
+                }
+              }}
               size="sm" 
               variant="outline"
               disabled={!customCuisine.trim()}
@@ -175,7 +239,7 @@ export const RecipeFilters = ({
             >
               <Plus className="h-4 w-4" />
             </Button>
-          </form>
+          </div>
         </div>
       </FilterSection>
 

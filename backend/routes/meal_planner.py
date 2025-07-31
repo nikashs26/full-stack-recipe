@@ -651,6 +651,68 @@ def ai_meal_plan():
             'note': 'Please check the server logs for more information.'
         }), 500
 
+@meal_planner_bp.route('/ai/simple_meal_plan', methods=['POST', 'OPTIONS'])
+@cross_origin(origins=['http://localhost:8081'], 
+             methods=['POST', 'OPTIONS'],
+             allow_headers=['Content-Type', 'Authorization', 'X-Requested-With'],
+             supports_credentials=True)
+@require_auth
+def simple_ai_meal_plan():
+    """Generate a simple meal plan using the free LLM agent"""
+    try:
+        if request.method == "OPTIONS":
+            return jsonify({'status': 'ok'}), 200
+            
+        logger.info("Received simple meal plan generation request")
+        
+        # Get user from session
+        user_id = get_current_user_id()
+        logger.info(f"Current user ID: {user_id}")
+        
+        if not user_id:
+            logger.error('User not logged in')
+            return jsonify({'error': 'Not logged in'}), 401
+
+        # Get preferences from user profile
+        preferences = user_preferences_service.get_preferences(user_id)
+        logger.info(f"Retrieved preferences for user {user_id}: {preferences}")
+        
+        if not preferences:
+            logger.error(f'No preferences found for user {user_id}')
+            # Return a more helpful error message
+            return jsonify({
+                'error': 'No preferences found for user',
+                'user_id': user_id,
+                'message': 'Please set your preferences first. The system cannot find any saved preferences for your account.'
+            }), 404
+    
+        logger.debug(f"User preferences: {preferences}")
+        
+        # Use the free LLM meal planner agent
+        result = llm_meal_planner_agent.generate_weekly_meal_plan(preferences)
+        
+        if not result or result.get('error'):
+            error_msg = result.get('error', 'Unknown error') if result else 'No response from AI service'
+            logger.error(f"Failed to generate meal plan: {error_msg}")
+            return jsonify({
+                'error': 'Failed to generate meal plan',
+                'details': error_msg
+            }), 500
+            
+        logger.info("Successfully generated meal plan with free LLM")
+        return jsonify({
+            "success": True,
+            "plan": result.get('plan', result),  # Use result.plan if it exists, otherwise use result
+            "preferences_used": preferences
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error in simple meal plan generation: {str(e)}", exc_info=True)
+        return jsonify({
+            'error': 'Failed to generate meal plan',
+            'details': str(e)
+        }), 500
+
 @meal_planner_bp.route('/meal-plan/generate', methods=['GET', 'POST'])
 @require_auth
 def generate_meal_plan():
@@ -1126,5 +1188,32 @@ def test_meal_plan():
         return jsonify({
             'success': False,
             'error': 'Failed to generate test meal plan',
+            'details': str(e)
+        }), 500
+
+@meal_planner_bp.route('/debug/user-preferences', methods=['GET'])
+@cross_origin(origins=['http://localhost:8081'])
+@require_auth
+def debug_user_preferences():
+    """Debug endpoint to check user ID and preferences"""
+    try:
+        user_id = get_current_user_id()
+        preferences = user_preferences_service.get_preferences(user_id)
+        
+        # Get all user IDs in the database
+        all_users = user_preferences_service.collection.get()
+        
+        return jsonify({
+            'current_user_id': user_id,
+            'current_user_preferences': preferences,
+            'all_user_ids': all_users.get('ids', []),
+            'total_users': len(all_users.get('ids', [])),
+            'message': 'Debug information retrieved successfully'
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error in debug endpoint: {str(e)}")
+        return jsonify({
+            'error': 'Debug endpoint failed',
             'details': str(e)
         }), 500

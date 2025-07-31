@@ -48,6 +48,36 @@ export type Database = {
         }
         Relationships: []
       }
+      recipe_clicks: {
+        Row: {
+          id: string
+          recipe_id: string
+          recipe_type: string
+          user_id: string | null
+          clicked_at: string
+          ip_address: string | null
+          user_agent: string | null
+        }
+        Insert: {
+          id?: string
+          recipe_id: string
+          recipe_type: string
+          user_id?: string | null
+          clicked_at?: string
+          ip_address?: string | null
+          user_agent?: string | null
+        }
+        Update: {
+          id?: string
+          recipe_id?: string
+          recipe_type?: string
+          user_id?: string | null
+          clicked_at?: string
+          ip_address?: string | null
+          user_agent?: string | null
+        }
+        Relationships: []
+      }
       reviews: {
         Row: {
           author: string

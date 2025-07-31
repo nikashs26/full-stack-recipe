@@ -3,6 +3,46 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Custom Styles */
+@layer components {
+  .bg-kitchen {
+    background-image: url('https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: -10;
+  }
+  
+  /* Alternative kitchen background if the main one doesn't load */
+  .bg-kitchen-alt {
+    background-image: url('https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: -10;
+  }
+  
+  .search-input {
+    @apply pl-10 pr-4 py-6 text-base rounded-xl shadow-sm focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 w-full border-0 bg-white/90 hover:bg-white transition-colors duration-200;
+  }
+  
+  .search-container {
+    @apply bg-white/90 backdrop-blur-sm rounded-2xl p-6 shadow-xl border border-white/20 w-full max-w-4xl mx-auto;
+  }
+}
+
 @layer base {
   :root {
     --background: 60 33% 99%;

@@ -2,18 +2,18 @@
   "days": [
     {
       "day": "Monday",
-      "date": "2025-07-26",
+      "date": "2025-07-28",
       "meals": [
         {
           "meal_type": "breakfast",
-          "name": "Greek Yogurt with Honey and Nuts",
-          "cuisine": "Mediterranean",
+          "name": "Cappuccino with Croissant",
+          "cuisine": "Italian",
           "is_vegetarian": true,
           "is_vegan": false,
           "nutrition": {
-            "calories": 350,
-            "protein": 18,
-            "carbs": 30,
+            "calories": 380,
+            "protein": 10,
+            "carbs": 45,
             "fat": 18
           },
           "ingredients": [
@@ -38,13 +38,13 @@
         },
         {
           "meal_type": "lunch",
-          "name": "Greek Salad with Pita",
-          "cuisine": "Mediterranean",
+          "name": "Caprese Salad with Bread",
+          "cuisine": "Italian",
           "is_vegetarian": true,
           "is_vegan": false,
           "nutrition": {
             "calories": 450,
-            "protein": 15,
+            "protein": 18,
             "carbs": 40,
             "fat": 25
           },
@@ -70,15 +70,15 @@
         },
         {
           "meal_type": "dinner",
-          "name": "Stuffed Bell Peppers with Rice",
-          "cuisine": "Mediterranean",
+          "name": "Eggplant Parmesan",
+          "cuisine": "Italian",
           "is_vegetarian": true,
-          "is_vegan": true,
+          "is_vegan": false,
           "nutrition": {
-            "calories": 480,
-            "protein": 18,
-            "carbs": 65,
-            "fat": 15
+            "calories": 550,
+            "protein": 22,
+            "carbs": 45,
+            "fat": 30
           },
           "ingredients": [
             {
@@ -104,221 +104,17 @@
     },
     {
       "day": "Tuesday",
-      "date": "2025-07-27",
-      "meals": [
-        {
-          "meal_type": "breakfast",
-          "name": "Shakshuka with Whole Wheat Bread",
-          "cuisine": "Mediterranean",
-          "is_vegetarian": true,
-          "is_vegan": false,
-          "nutrition": {
-            "calories": 400,
-            "protein": 22,
-            "carbs": 35,
-            "fat": 20
-          },
-          "ingredients": [
-            {
-              "name": "Oats",
-              "amount": "1/2 cup"
-            },
-            {
-              "name": "Milk",
-              "amount": "1 cup"
-            },
-            {
-              "name": "Honey",
-              "amount": "1 tbsp"
-            },
-            {
-              "name": "Nuts",
-              "amount": "1/4 cup"
-            }
-          ],
-          "instructions": "Prepare according to package instructions or personal preference."
-        },
-        {
-          "meal_type": "lunch",
-          "name": "Falafel Wrap with Tahini",
-          "cuisine": "Mediterranean",
-          "is_vegetarian": true,
-          "is_vegan": true,
-          "nutrition": {
-            "calories": 500,
-            "protein": 18,
-            "carbs": 60,
-            "fat": 20
-          },
-          "ingredients": [
-            {
-              "name": "Chicken Breast",
-              "amount": "150g"
-            },
-            {
-              "name": "Brown Rice",
-              "amount": "1/2 cup"
-            },
-            {
-              "name": "Mixed Vegetables",
-              "amount": "1 cup"
-            },
-            {
-              "name": "Olive Oil",
-              "amount": "1 tbsp"
-            }
-          ],
-          "instructions": "Prepare according to package instructions or personal preference."
-        },
-        {
-          "meal_type": "dinner",
-          "name": "Ratatouille with Quinoa",
-          "cuisine": "Mediterranean",
-          "is_vegetarian": true,
-          "is_vegan": true,
-          "nutrition": {
-            "calories": 420,
-            "protein": 15,
-            "carbs": 60,
-            "fat": 12
-          },
-          "ingredients": [
-            {
-              "name": "Salmon Fillet",
-              "amount": "150g"
-            },
-            {
-              "name": "Quinoa",
-              "amount": "1/2 cup"
-            },
-            {
-              "name": "Steamed Vegetables",
-              "amount": "1.5 cups"
-            },
-            {
-              "name": "Lemon",
-              "amount": "1/2"
-            }
-          ],
-          "instructions": "Prepare according to package instructions or personal preference."
-        }
-      ]
-    },
-    {
-      "day": "Wednesday",
-      "date": "2025-07-28",
-      "meals": [
-        {
-          "meal_type": "breakfast",
-          "name": "Avocado Toast with Feta",
-          "cuisine": "Mediterranean",
-          "is_vegetarian": true,
-          "is_vegan": false,
-          "nutrition": {
-            "calories": 380,
-            "protein": 15,
-            "carbs": 40,
-            "fat": 22
-          },
-          "ingredients": [
-            {
-              "name": "Oats",
-              "amount": "1/2 cup"
-            },
-            {
-              "name": "Milk",
-              "amount": "1 cup"
-            },
-            {
-              "name": "Honey",
-              "amount": "1 tbsp"
-            },
-            {
-              "name": "Nuts",
-              "amount": "1/4 cup"
-            }
-          ],
-          "instructions": "Prepare according to package instructions or personal preference."
-        },
-        {
-          "meal_type": "lunch",
-          "name": "Hummus and Vegetable Platter",
-          "cuisine": "Mediterranean",
-          "is_vegetarian": true,
-          "is_vegan": true,
-          "nutrition": {
-            "calories": 380,
-            "protein": 12,
-            "carbs": 45,
-            "fat": 18
-          },
-          "ingredients": [
-            {
-              "name": "Chicken Breast",
-              "amount": "150g"
-            },
-            {
-              "name": "Brown Rice",
-              "amount": "1/2 cup"
-            },
-            {
-              "name": "Mixed Vegetables",
-              "amount": "1 cup"
-            },
-            {
-              "name": "Olive Oil",
-              "amount": "1 tbsp"
-            }
-          ],
-          "instructions": "Prepare according to package instructions or personal preference."
-        },
-        {
-          "meal_type": "dinner",
-          "name": "Greek Moussaka",
-          "cuisine": "Mediterranean",
-          "is_vegetarian": true,
-          "is_vegan": false,
-          "nutrition": {
-            "calories": 550,
-            "protein": 25,
-            "carbs": 40,
-            "fat": 30
-          },
-          "ingredients": [
-            {
-              "name": "Salmon Fillet",
-              "amount": "150g"
-            },
-            {
-              "name": "Quinoa",
-              "amount": "1/2 cup"
-            },
-            {
-              "name": "Steamed Vegetables",
-              "amount": "1.5 cups"
-            },
-            {
-              "name": "Lemon",
-              "amount": "1/2"
-            }
-          ],
-          "instructions": "Prepare according to package instructions or personal preference."
-        }
-      ]
-    },
-    {
-      "day": "Thursday",
       "date": "2025-07-29",
       "meals": [
         {
           "meal_type": "breakfast",
-          "name": "Mediterranean Omelette",
-          "cuisine": "Mediterranean",
+          "name": "Frittata with Vegetables",
+          "cuisine": "Italian",
           "is_vegetarian": true,
           "is_vegan": false,
           "nutrition": {
             "calories": 320,
-            "protein": 25,
+            "protein": 22,
             "carbs": 10,
             "fat": 20
           },
@@ -344,15 +140,15 @@
         },
         {
           "meal_type": "lunch",
-          "name": "Lentil Soup with Whole Wheat Bread",
-          "cuisine": "Mediterranean",
+          "name": "Margherita Pizza",
+          "cuisine": "Italian",
           "is_vegetarian": true,
-          "is_vegan": true,
+          "is_vegan": false,
           "nutrition": {
-            "calories": 400,
-            "protein": 22,
-            "carbs": 55,
-            "fat": 10
+            "calories": 600,
+            "protein": 25,
+            "carbs": 80,
+            "fat": 20
           },
           "ingredients": [
             {
@@ -376,15 +172,15 @@
         },
         {
           "meal_type": "dinner",
-          "name": "Grilled Vegetable Platter with Tzatziki",
-          "cuisine": "Mediterranean",
+          "name": "Risotto ai Funghi",
+          "cuisine": "Italian",
           "is_vegetarian": true,
           "is_vegan": false,
           "nutrition": {
-            "calories": 400,
+            "calories": 500,
             "protein": 15,
-            "carbs": 45,
-            "fat": 20
+            "carbs": 65,
+            "fat": 18
           },
           "ingredients": [
             {
@@ -409,20 +205,20 @@
       ]
     },
     {
-      "day": "Friday",
+      "day": "Wednesday",
       "date": "2025-07-30",
       "meals": [
         {
           "meal_type": "breakfast",
-          "name": "Greek Yogurt with Honey and Nuts",
-          "cuisine": "Mediterranean",
+          "name": "Biscotti with Espresso",
+          "cuisine": "Italian",
           "is_vegetarian": true,
-          "is_vegan": false,
+          "is_vegan": true,
           "nutrition": {
-            "calories": 350,
-            "protein": 18,
-            "carbs": 30,
-            "fat": 18
+            "calories": 280,
+            "protein": 5,
+            "carbs": 50,
+            "fat": 8
           },
           "ingredients": [
             {
@@ -446,15 +242,15 @@
         },
         {
           "meal_type": "lunch",
-          "name": "Greek Salad with Pita",
-          "cuisine": "Mediterranean",
+          "name": "Pasta Primavera",
+          "cuisine": "Italian",
           "is_vegetarian": true,
-          "is_vegan": false,
+          "is_vegan": true,
           "nutrition": {
-            "calories": 450,
+            "calories": 480,
             "protein": 15,
-            "carbs": 40,
-            "fat": 25
+            "carbs": 75,
+            "fat": 12
           },
           "ingredients": [
             {
@@ -478,14 +274,116 @@
         },
         {
           "meal_type": "dinner",
-          "name": "Stuffed Bell Peppers with Rice",
-          "cuisine": "Mediterranean",
+          "name": "Pasta e Fagioli",
+          "cuisine": "Italian",
           "is_vegetarian": true,
           "is_vegan": true,
           "nutrition": {
-            "calories": 480,
-            "protein": 18,
-            "carbs": 65,
+            "calories": 450,
+            "protein": 20,
+            "carbs": 70,
+            "fat": 10
+          },
+          "ingredients": [
+            {
+              "name": "Salmon Fillet",
+              "amount": "150g"
+            },
+            {
+              "name": "Quinoa",
+              "amount": "1/2 cup"
+            },
+            {
+              "name": "Steamed Vegetables",
+              "amount": "1.5 cups"
+            },
+            {
+              "name": "Lemon",
+              "amount": "1/2"
+            }
+          ],
+          "instructions": "Prepare according to package instructions or personal preference."
+        }
+      ]
+    },
+    {
+      "day": "Thursday",
+      "date": "2025-07-31",
+      "meals": [
+        {
+          "meal_type": "breakfast",
+          "name": "Yogurt with Honey and Nuts",
+          "cuisine": "Italian",
+          "is_vegetarian": true,
+          "is_vegan": false,
+          "nutrition": {
+            "calories": 300,
+            "protein": 12,
+            "carbs": 35,
+            "fat": 14
+          },
+          "ingredients": [
+            {
+              "name": "Oats",
+              "amount": "1/2 cup"
+            },
+            {
+              "name": "Milk",
+              "amount": "1 cup"
+            },
+            {
+              "name": "Honey",
+              "amount": "1 tbsp"
+            },
+            {
+              "name": "Nuts",
+              "amount": "1/4 cup"
+            }
+          ],
+          "instructions": "Prepare according to package instructions or personal preference."
+        },
+        {
+          "meal_type": "lunch",
+          "name": "Minestrone Soup",
+          "cuisine": "Italian",
+          "is_vegetarian": true,
+          "is_vegan": true,
+          "nutrition": {
+            "calories": 350,
+            "protein": 12,
+            "carbs": 50,
+            "fat": 8
+          },
+          "ingredients": [
+            {
+              "name": "Chicken Breast",
+              "amount": "150g"
+            },
+            {
+              "name": "Brown Rice",
+              "amount": "1/2 cup"
+            },
+            {
+              "name": "Mixed Vegetables",
+              "amount": "1 cup"
+            },
+            {
+              "name": "Olive Oil",
+              "amount": "1 tbsp"
+            }
+          ],
+          "instructions": "Prepare according to package instructions or personal preference."
+        },
+        {
+          "meal_type": "dinner",
+          "name": "Bruschetta with Tomato and Basil",
+          "cuisine": "Italian",
+          "is_vegetarian": true,
+          "is_vegan": true,
+          "nutrition": {
+            "calories": 350,
+            "protein": 10,
+            "carbs": 45,
             "fat": 15
           },
           "ingredients": [
@@ -511,19 +409,121 @@
       ]
     },
     {
-      "day": "Saturday",
-      "date": "2025-07-31",
+      "day": "Friday",
+      "date": "2025-08-01",
       "meals": [
         {
           "meal_type": "breakfast",
-          "name": "Shakshuka with Whole Wheat Bread",
-          "cuisine": "Mediterranean",
+          "name": "Cappuccino with Croissant",
+          "cuisine": "Italian",
           "is_vegetarian": true,
           "is_vegan": false,
           "nutrition": {
-            "calories": 400,
+            "calories": 380,
+            "protein": 10,
+            "carbs": 45,
+            "fat": 18
+          },
+          "ingredients": [
+            {
+              "name": "Oats",
+              "amount": "1/2 cup"
+            },
+            {
+              "name": "Milk",
+              "amount": "1 cup"
+            },
+            {
+              "name": "Honey",
+              "amount": "1 tbsp"
+            },
+            {
+              "name": "Nuts",
+              "amount": "1/4 cup"
+            }
+          ],
+          "instructions": "Prepare according to package instructions or personal preference."
+        },
+        {
+          "meal_type": "lunch",
+          "name": "Caprese Salad with Bread",
+          "cuisine": "Italian",
+          "is_vegetarian": true,
+          "is_vegan": false,
+          "nutrition": {
+            "calories": 450,
+            "protein": 18,
+            "carbs": 40,
+            "fat": 25
+          },
+          "ingredients": [
+            {
+              "name": "Chicken Breast",
+              "amount": "150g"
+            },
+            {
+              "name": "Brown Rice",
+              "amount": "1/2 cup"
+            },
+            {
+              "name": "Mixed Vegetables",
+              "amount": "1 cup"
+            },
+            {
+              "name": "Olive Oil",
+              "amount": "1 tbsp"
+            }
+          ],
+          "instructions": "Prepare according to package instructions or personal preference."
+        },
+        {
+          "meal_type": "dinner",
+          "name": "Eggplant Parmesan",
+          "cuisine": "Italian",
+          "is_vegetarian": true,
+          "is_vegan": false,
+          "nutrition": {
+            "calories": 550,
             "protein": 22,
-            "carbs": 35,
+            "carbs": 45,
+            "fat": 30
+          },
+          "ingredients": [
+            {
+              "name": "Salmon Fillet",
+              "amount": "150g"
+            },
+            {
+              "name": "Quinoa",
+              "amount": "1/2 cup"
+            },
+            {
+              "name": "Steamed Vegetables",
+              "amount": "1.5 cups"
+            },
+            {
+              "name": "Lemon",
+              "amount": "1/2"
+            }
+          ],
+          "instructions": "Prepare according to package instructions or personal preference."
+        }
+      ]
+    },
+    {
+      "day": "Saturday",
+      "date": "2025-08-02",
+      "meals": [
+        {
+          "meal_type": "breakfast",
+          "name": "Frittata with Vegetables",
+          "cuisine": "Italian",
+          "is_vegetarian": true,
+          "is_vegan": false,
+          "nutrition": {
+            "calories": 320,
+            "protein": 22,
+            "carbs": 10,
             "fat": 20
           },
           "ingredients": [
@@ -548,14 +548,14 @@
         },
         {
           "meal_type": "lunch",
-          "name": "Falafel Wrap with Tahini",
-          "cuisine": "Mediterranean",
+          "name": "Margherita Pizza",
+          "cuisine": "Italian",
           "is_vegetarian": true,
-          "is_vegan": true,
+          "is_vegan": false,
           "nutrition": {
-            "calories": 500,
-            "protein": 18,
-            "carbs": 60,
+            "calories": 600,
+            "protein": 25,
+            "carbs": 80,
             "fat": 20
           },
           "ingredients": [
@@ -580,15 +580,15 @@
         },
         {
           "meal_type": "dinner",
-          "name": "Ratatouille with Quinoa",
-          "cuisine": "Mediterranean",
+          "name": "Risotto ai Funghi",
+          "cuisine": "Italian",
           "is_vegetarian": true,
-          "is_vegan": true,
+          "is_vegan": false,
           "nutrition": {
-            "calories": 420,
+            "calories": 500,
             "protein": 15,
-            "carbs": 60,
-            "fat": 12
+            "carbs": 65,
+            "fat": 18
           },
           "ingredients": [
             {
@@ -614,19 +614,19 @@
     },
     {
       "day": "Sunday",
-      "date": "2025-08-01",
+      "date": "2025-08-03",
       "meals": [
         {
           "meal_type": "breakfast",
-          "name": "Avocado Toast with Feta",
-          "cuisine": "Mediterranean",
+          "name": "Biscotti with Espresso",
+          "cuisine": "Italian",
           "is_vegetarian": true,
-          "is_vegan": false,
+          "is_vegan": true,
           "nutrition": {
-            "calories": 380,
-            "protein": 15,
-            "carbs": 40,
-            "fat": 22
+            "calories": 280,
+            "protein": 5,
+            "carbs": 50,
+            "fat": 8
           },
           "ingredients": [
             {
@@ -650,15 +650,15 @@
         },
         {
           "meal_type": "lunch",
-          "name": "Hummus and Vegetable Platter",
-          "cuisine": "Mediterranean",
+          "name": "Pasta Primavera",
+          "cuisine": "Italian",
           "is_vegetarian": true,
           "is_vegan": true,
           "nutrition": {
-            "calories": 380,
-            "protein": 12,
-            "carbs": 45,
-            "fat": 18
+            "calories": 480,
+            "protein": 15,
+            "carbs": 75,
+            "fat": 12
           },
           "ingredients": [
             {
@@ -682,15 +682,15 @@
         },
         {
           "meal_type": "dinner",
-          "name": "Greek Moussaka",
-          "cuisine": "Mediterranean",
+          "name": "Pasta e Fagioli",
+          "cuisine": "Italian",
           "is_vegetarian": true,
-          "is_vegan": false,
+          "is_vegan": true,
           "nutrition": {
-            "calories": 550,
-            "protein": 25,
-            "carbs": 40,
-            "fat": 30
+            "calories": 450,
+            "protein": 20,
+            "carbs": 70,
+            "fat": 10
           },
           "ingredients": [
             {
@@ -718,18 +718,18 @@
   "shopping_list": {
     "ingredients": [
       {
-        "item": "Quinoa",
+        "item": "Pasta (Various)",
         "category": "Grains",
         "estimated_cost": 4.0
       },
       {
-        "item": "Chickpeas",
-        "category": "Legumes",
-        "estimated_cost": 2.0
+        "item": "Arborio Rice",
+        "category": "Grains",
+        "estimated_cost": 3.5
       },
       {
-        "item": "Lentils",
-        "category": "Legumes",
+        "item": "Canned Tomatoes",
+        "category": "Canned Goods",
         "estimated_cost": 2.5
       },
       {
@@ -738,60 +738,60 @@
         "estimated_cost": 5.0
       },
       {
-        "item": "Feta Cheese",
+        "item": "Parmesan Cheese",
         "category": "Dairy",
-        "estimated_cost": 4.5
+        "estimated_cost": 6.0
       },
       {
-        "item": "Greek Yogurt",
+        "item": "Mozzarella",
         "category": "Dairy",
         "estimated_cost": 4.0
       },
       {
-        "item": "Cucumbers",
-        "category": "Vegetables",
-        "estimated_cost": 2.0
-      },
-      {
-        "item": "Tomatoes",
-        "category": "Vegetables",
-        "estimated_cost": 3.0
-      },
-      {
-        "item": "Bell Peppers",
-        "category": "Vegetables",
-        "estimated_cost": 3.5
-      },
-      {
-        "item": "Red Onions",
-        "category": "Vegetables",
-        "estimated_cost": 2.0
-      },
-      {
-        "item": "Fresh Herbs",
+        "item": "Fresh Basil",
         "category": "Herbs",
+        "estimated_cost": 2.5
+      },
+      {
+        "item": "Garlic",
+        "category": "Vegetables",
+        "estimated_cost": 1.0
+      },
+      {
+        "item": "Onions",
+        "category": "Vegetables",
+        "estimated_cost": 2.0
+      },
+      {
+        "item": "Mushrooms",
+        "category": "Vegetables",
         "estimated_cost": 3.0
       },
       {
-        "item": "Tahini",
-        "category": "Condiments",
-        "estimated_cost": 5.0
+        "item": "Eggplant",
+        "category": "Vegetables",
+        "estimated_cost": 2.5
+      },
+      {
+        "item": "Zucchini",
+        "category": "Vegetables",
+        "estimated_cost": 2.0
       }
     ],
-    "estimated_cost": 40.5
+    "estimated_cost": 38.0
   },
   "nutrition_summary": {
     "daily_average": {
-      "calories": 1277,
-      "protein": "54.0g",
-      "carbs": "134.3g",
-      "fat": "58.6g"
+      "calories": 1289,
+      "protein": "48.3g",
+      "carbs": "155.7g",
+      "fat": "51.3g"
     },
     "weekly_totals": {
-      "calories": 8940,
-      "protein": "378g",
-      "carbs": "940g",
-      "fat": "410g"
+      "calories": 9020,
+      "protein": "338g",
+      "carbs": "1090g",
+      "fat": "359g"
     },
     "targets": {
       "calories": 2000,
@@ -807,12 +807,20 @@
       "snacks": false
     }
   },
-  "generated_at": "2025-07-26T13:28:52.843136",
+  "generated_at": "2025-07-28T21:31:05.215934",
   "preferences_used": {
     "dietary_restrictions": [],
     "favorite_cuisines": [
-      "Mediterranean",
-      "Asian"
+      "Italian",
+      "Mexican",
+      "Indian",
+      "Thai",
+      "Japanese",
+      "Greek",
+      "Middle Eastern",
+      "Chinese",
+      "Vietnamese",
+      "French"
     ],
     "target_calories": 2200,
     "target_protein": 180,
@@ -821,7 +829,78 @@
     "include_breakfast": true,
     "include_lunch": true,
     "include_dinner": true,
-    "include_snacks": true
+    "include_snacks": true,
+    "preferred_protein_sources": [
+      "chicken",
+      "fish",
+      "tofu",
+      "eggs",
+      "beans",
+      "lentils",
+      "beef",
+      "pork",
+      "seafood"
+    ],
+    "preferred_carb_sources": [
+      "rice",
+      "quinoa",
+      "potatoes",
+      "whole wheat bread",
+      "oats",
+      "pasta",
+      "couscous"
+    ],
+    "preferred_vegetables": [
+      "broccoli",
+      "spinach",
+      "kale",
+      "bell peppers",
+      "carrots",
+      "zucchini",
+      "eggplant",
+      "mushrooms",
+      "asparagus",
+      "brussels sprouts"
+    ],
+    "preferred_fruits": [
+      "berries",
+      "apples",
+      "bananas",
+      "oranges",
+      "grapes",
+      "mango",
+      "pineapple"
+    ],
+    "cooking_equipment": [
+      "oven",
+      "stove",
+      "blender",
+      "food processor",
+      "slow cooker",
+      "air fryer"
+    ],
+    "cooking_skill_level": "intermediate",
+    "meal_prep_time": 60,
+    "cooking_time_per_meal": 45,
+    "leftovers": 2,
+    "budget_level": "medium",
+    "spice_level": "medium",
+    "food_allergies": [],
+    "disliked_foods": [],
+    "preferred_cooking_methods": [
+      "grilling",
+      "baking",
+      "stir-frying",
+      "roasting",
+      "steaming",
+      "slow cooking"
+    ],
+    "special_occasions": [],
+    "nutrition_goals": [
+      "muscle_gain",
+      "balanced_diet",
+      "variety"
+    ]
   },
   "plan_type": "fallback"
 }
