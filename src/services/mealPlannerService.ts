@@ -117,12 +117,17 @@ export interface MealPlanResponse {
   message: string;
 }
 
+// Update the API base URL for Netlify deployment
+const API_BASE_URL = process.env.NODE_ENV === 'production' 
+  ? '/.netlify/functions' 
+  : 'http://localhost:5003/api';
+
 export const generateMealPlan = async (options?: MealPlanOptions): Promise<MealPlanData> => {
   try {
     console.log('🚀 Generating meal plan...');
     
     // Use the simple meal planner endpoint (no complex macro/nutrition logic)
-    const response = await apiCall('/api/ai/simple_meal_plan', {
+    const response = await apiCall('/meal-planner', {
       method: 'POST',
       body: JSON.stringify({}) // No complex options needed
     });
