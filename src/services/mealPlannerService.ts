@@ -117,9 +117,9 @@ export interface MealPlanResponse {
   message: string;
 }
 
-// Update the API base URL for Netlify deployment
+// Update the API base URL for deployment
 const API_BASE_URL = process.env.NODE_ENV === 'production' 
-  ? '/.netlify/functions' 
+  ? (process.env.REACT_APP_API_URL || 'https://your-backend-url.railway.app/api')
   : 'http://localhost:5003/api';
 
 export const generateMealPlan = async (options?: MealPlanOptions): Promise<MealPlanData> => {
@@ -127,7 +127,7 @@ export const generateMealPlan = async (options?: MealPlanOptions): Promise<MealP
     console.log('🚀 Generating meal plan...');
     
     // Use the simple meal planner endpoint (no complex macro/nutrition logic)
-    const response = await apiCall('/meal-planner', {
+    const response = await apiCall('/ai/simple_meal_plan', {
       method: 'POST',
       body: JSON.stringify({}) // No complex options needed
     });
