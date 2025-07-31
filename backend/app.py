@@ -19,11 +19,18 @@ load_dotenv()
 # Initialize Flask app
 app = Flask(__name__)
 
-# Configure CORS for development
+# Configure CORS for development and production
+allowed_origins = [
+    "http://localhost:8081", 
+    "http://127.0.0.1:8081",
+    "https://*.netlify.app",  # Allow all Netlify domains
+    "https://*.netlify.com"   # Allow Netlify preview domains
+]
+
 cors = CORS(app, 
     resources={
         r"/*": {
-            "origins": ["http://localhost:8081", "http://127.0.0.1:8081"],
+            "origins": allowed_origins,
             "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
             "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"],
             "expose_headers": ["Content-Type", "Authorization"],
@@ -50,4 +57,4 @@ app.register_blueprint(test_meal_bp, url_prefix='/api')  # Test meal planner rou
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5003))
-    app.run(host="0.0.0.0", port=port, debug=True)
+    app.run(host="0.0.0.0", port=port, debug=False)
