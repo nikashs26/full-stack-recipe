@@ -122,7 +122,7 @@ export const generateMealPlan = async (options?: MealPlanOptions): Promise<MealP
     console.log('🚀 Generating meal plan...');
     
     // Use the simple meal planner endpoint (no complex macro/nutrition logic)
-    const response = await apiCall('/api/ai/simple_meal_plan', {
+    const response = await apiCall('/ai/simple_meal_plan', {
       method: 'POST',
       body: JSON.stringify({}) // No complex options needed
     });

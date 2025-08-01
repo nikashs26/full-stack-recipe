@@ -5,6 +5,7 @@ import re
 from typing import Dict, List, Any, Optional
 from services.user_preferences_service import UserPreferencesService
 from dotenv import load_dotenv
+from datetime import datetime
 
 load_dotenv()
 
@@ -23,15 +24,21 @@ class FreeLLMMealPlannerAgent:
     def generate_weekly_meal_plan(self, user_id: str) -> Dict[str, Any]:
         """Generate a weekly meal plan using free LLM options"""
         try:
+            print(f"🎯 Generating meal plan for user: {user_id}")
+            
             # Get user preferences
             preferences = self.user_preferences_service.get_preferences(user_id)
             if not preferences:
                 return {"error": "User preferences not found. Please set your preferences first."}
             
+            print(f"📋 User preferences loaded: {list(preferences.keys())}")
+            
             # Try Ollama first (local, completely free)
             try:
+                print("🤖 Trying Ollama (local LLM)...")
                 meal_plan = self._generate_with_ollama(preferences)
                 if meal_plan:
+                    print("✅ Successfully generated meal plan with Ollama!")
                     return {
                         "success": True,
                         "plan": meal_plan,
@@ -39,12 +46,14 @@ class FreeLLMMealPlannerAgent:
                         "llm_used": "Ollama (Local)"
                     }
             except Exception as e:
-                print(f"Ollama failed: {e}")
+                print(f"❌ Ollama failed: {e}")
             
             # Fallback to Hugging Face
             try:
+                print("🌐 Trying Hugging Face...")
                 meal_plan = self._generate_with_huggingface(preferences)
                 if meal_plan:
+                    print("✅ Successfully generated meal plan with Hugging Face!")
                     return {
                         "success": True,
                         "plan": meal_plan,
@@ -52,9 +61,10 @@ class FreeLLMMealPlannerAgent:
                         "llm_used": "Hugging Face"
                     }
             except Exception as e:
-                print(f"Hugging Face failed: {e}")
+                print(f"❌ Hugging Face failed: {e}")
             
             # If both fail, use rule-based fallback
+            print("📋 Using rule-based fallback...")
             meal_plan = self._generate_rule_based_plan(preferences)
             return {
                 "success": True,
@@ -64,23 +74,29 @@ class FreeLLMMealPlannerAgent:
             }
             
         except Exception as e:
+            print(f"💥 Unexpected error in meal plan generation: {e}")
             return {"error": f"Unexpected error: {str(e)}"}
     
     def _generate_with_ollama(self, preferences: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Generate meal plan using Ollama (local LLM)"""
+        
+        print("🤖 Attempting to generate meal plan with Ollama...")
         
         # Check if Ollama is available
         try:
             response = requests.get(f"{self.ollama_url}/api/tags", timeout=5)
             if response.status_code != 200:
                 raise Exception("Ollama not available")
-        except:
+            print("✅ Ollama server is running")
+        except Exception as e:
+            print(f"❌ Ollama server not running: {e}")
             raise Exception("Ollama server not running")
         
         prompt = self._create_meal_plan_prompt(preferences)
+        print(f"📝 Generated prompt length: {len(prompt)} characters")
         
         payload = {
-            "model": "llama3.2:3b",  # Free, lightweight model
+            "model": "llama3.2:latest",  # Use the available model
             "prompt": prompt,
             "stream": False,
             "options": {
@@ -90,18 +106,31 @@ class FreeLLMMealPlannerAgent:
             }
         }
         
+        print(f"🚀 Sending request to Ollama with model: {payload['model']}")
+        
         response = requests.post(
             f"{self.ollama_url}/api/generate",
             json=payload,
-            timeout=60
+            timeout=120  # Increased timeout for LLM generation
         )
         
         if response.status_code == 200:
             result = response.json()
             meal_plan_text = result.get('response', '')
-            return self._parse_meal_plan_response(meal_plan_text)
-        
-        return None
+            print(f"📄 Received response from Ollama ({len(meal_plan_text)} characters)")
+            print(f"📝 Response preview: {meal_plan_text[:200]}...")
+            
+            parsed_plan = self._parse_meal_plan_response(meal_plan_text)
+            if parsed_plan:
+                print("✅ Successfully parsed meal plan from Ollama response")
+                return parsed_plan
+            else:
+                print("❌ Failed to parse meal plan from Ollama response")
+                return None
+        else:
+            print(f"❌ Ollama request failed with status {response.status_code}")
+            print(f"Error response: {response.text}")
+            return None
     
     def _generate_with_huggingface(self, preferences: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Generate meal plan using Hugging Face Inference API"""
@@ -136,56 +165,73 @@ class FreeLLMMealPlannerAgent:
         return None
     
     def _generate_rule_based_plan(self, preferences: Dict[str, Any]) -> Dict[str, Any]:
-        """Generate a rule-based meal plan as fallback"""
+        """Generate a rule-based meal plan using user preferences"""
+        days = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+        meal_plan = {"days": {}}
         
-        dietary_restrictions = preferences.get("dietaryRestrictions", [])
-        favorite_cuisines = preferences.get("favoriteCuisines", [])
-        cooking_skill = preferences.get("cookingSkillLevel", "beginner")
+        # Get user preferences
+        dietary_restrictions = preferences.get('dietaryRestrictions', [])
+        favorite_cuisines = preferences.get('favoriteCuisines', ['International'])
+        favorite_foods = preferences.get('favoriteFoods', [])
+        cooking_skill = preferences.get('cookingSkillLevel', 'beginner')
+        include_breakfast = preferences.get('includeBreakfast', True)
+        include_lunch = preferences.get('includeLunch', True)
+        include_dinner = preferences.get('includeDinner', True)
+        include_snacks = preferences.get('includeSnacks', False)
         
-        # Define meal templates based on preferences
+        # Get meal templates based on preferences
         meal_templates = self._get_meal_templates(dietary_restrictions, favorite_cuisines, cooking_skill)
         
-        days = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
-        meal_types = ["breakfast", "lunch", "dinner"]
-        
-        plan = {}
-        meal_counter = 1
-        
         for day in days:
-            plan[day] = {}
-            for meal_type in meal_types:
-                # Select appropriate meal template
-                template = self._select_meal_template(meal_templates, meal_type, dietary_restrictions)
-                
-                plan[day][meal_type] = {
-                    "id": f"rule_based_{meal_counter}",
-                    "name": template["name"],
-                    "description": template["description"],
-                    "cuisine": template["cuisine"],
-                    "cookingTime": template["cookingTime"],
-                    "difficulty": cooking_skill,
-                    "ingredients": template["ingredients"],
-                    "instructions": template["instructions"]
-                }
-                meal_counter += 1
+            day_plan = {}
+            
+            if include_breakfast:
+                breakfast = self._select_meal_template(meal_templates, 'breakfast', dietary_restrictions)
+                day_plan['breakfast'] = breakfast
+            
+            if include_lunch:
+                lunch = self._select_meal_template(meal_templates, 'lunch', dietary_restrictions)
+                day_plan['lunch'] = lunch
+            
+            if include_dinner:
+                dinner = self._select_meal_template(meal_templates, 'dinner', dietary_restrictions)
+                day_plan['dinner'] = dinner
+            
+            if include_snacks:
+                snack = self._select_meal_template(meal_templates, 'snack', dietary_restrictions)
+                day_plan['snack'] = snack
+            
+            meal_plan["days"][day] = day_plan
         
-        return plan
+        # Add metadata
+        meal_plan["metadata"] = {
+            "generated_at": datetime.utcnow().isoformat(),
+            "preferences_used": preferences,
+            "method": "rule_based",
+            "total_meals": len(days) * (include_breakfast + include_lunch + include_dinner + include_snacks)
+        }
+        
+        return meal_plan
     
     def _create_meal_plan_prompt(self, preferences: Dict[str, Any]) -> str:
         """Create a detailed prompt for LLM meal planning"""
         
         dietary_restrictions = preferences.get("dietaryRestrictions", [])
         favorite_cuisines = preferences.get("favoriteCuisines", [])
+        favorite_foods = preferences.get("favoriteFoods", [])
         allergens = preferences.get("allergens", [])
         cooking_skill = preferences.get("cookingSkillLevel", "beginner")
+        max_cooking_time = preferences.get("maxCookingTime", "30 minutes")
         
         prompt = f"""You are a professional nutritionist and meal planning expert. Create a weekly meal plan with exactly 3 meals per day for 7 days.
 
 USER PREFERENCES:
 - Dietary Restrictions: {', '.join(dietary_restrictions) if dietary_restrictions else 'None'}
 - Favorite Cuisines: {', '.join(favorite_cuisines) if favorite_cuisines else 'Any'}
+- Favorite Foods: {', '.join(favorite_foods) if favorite_foods else 'Any'}
 - Allergens to Avoid: {', '.join(allergens) if allergens else 'None'}
 - Cooking Skill Level: {cooking_skill}
+- Max Cooking Time: {max_cooking_time}
 
 REQUIREMENTS:
 1. Provide exactly 21 meals (3 per day for 7 days)
@@ -193,18 +239,32 @@ REQUIREMENTS:
 3. Respect all dietary restrictions and allergens
 4. Match cooking complexity to skill level
 5. Include diverse cuisines and cooking methods
+6. Incorporate favorite foods when possible
+7. Keep cooking time within the specified limit
 
-FORMAT your response as a structured meal plan with:
-- Day of week
-- Meal type (breakfast/lunch/dinner)
-- Meal name
-- Brief description
-- Cuisine type
-- Cooking time
-- Ingredients list
-- Simple instructions
+FORMAT your response as a JSON object with this exact structure:
+{{
+  "monday": {{
+    "breakfast": {{
+      "name": "Meal Name",
+      "cuisine": "Cuisine Type",
+      "ingredients": ["ingredient1", "ingredient2"],
+      "instructions": ["step1", "step2"],
+      "cooking_time": "30 minutes",
+      "difficulty": "beginner"
+    }},
+    "lunch": {{ ... }},
+    "dinner": {{ ... }}
+  }},
+  "tuesday": {{ ... }},
+  "wednesday": {{ ... }},
+  "thursday": {{ ... }},
+  "friday": {{ ... }},
+  "saturday": {{ ... }},
+  "sunday": {{ ... }}
+}}
 
-Start with Monday breakfast and continue through Sunday dinner.
+Start with Monday and continue through Sunday. Each day should have breakfast, lunch, and dinner.
 """
         
         return prompt
@@ -228,17 +288,42 @@ List 21 meals with names and ingredients."""
     def _parse_meal_plan_response(self, response_text: str) -> Optional[Dict[str, Any]]:
         """Parse LLM response into structured meal plan"""
         
+        print(f"🔍 Parsing LLM response...")
+        print(f"📄 Response text length: {len(response_text)}")
+        
         try:
             # Try to extract JSON if present
             json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
             if json_match:
-                return json.loads(json_match.group())
+                json_str = json_match.group()
+                print(f"📋 Found JSON match: {json_str[:200]}...")
+                parsed_json = json.loads(json_str)
+                print(f"✅ Successfully parsed JSON with keys: {list(parsed_json.keys())}")
+                return parsed_json
             
-            # If no JSON, parse text format
-            return self._parse_text_meal_plan(response_text)
+            # If no JSON, try to parse as text format
+            print("📝 No JSON found, trying text parsing...")
+            parsed_text = self._parse_text_meal_plan(response_text)
+            if parsed_text:
+                print(f"✅ Successfully parsed text format")
+                return parsed_text
             
+            print("❌ Failed to parse response in any format")
+            return None
+            
+        except json.JSONDecodeError as e:
+            print(f"❌ JSON parsing failed: {e}")
+            # Try text parsing as fallback
+            try:
+                parsed_text = self._parse_text_meal_plan(response_text)
+                if parsed_text:
+                    print(f"✅ Fallback text parsing succeeded")
+                    return parsed_text
+            except Exception as e2:
+                print(f"❌ Text parsing also failed: {e2}")
+            return None
         except Exception as e:
-            print(f"Error parsing meal plan: {e}")
+            print(f"❌ General parsing error: {e}")
             return None
     
     def _parse_text_meal_plan(self, text: str) -> Dict[str, Any]:
@@ -404,24 +489,46 @@ List 21 meals with names and ingredients."""
         return templates
     
     def _select_meal_template(self, templates: Dict[str, List[Dict]], meal_type: str, dietary_restrictions: List[str]) -> Dict[str, Any]:
-        """Select appropriate meal template"""
+        """Select an appropriate meal template based on preferences"""
+        import random
         
         available_templates = templates.get(meal_type, [])
-        
         if not available_templates:
             # Fallback template
             return {
-                "name": f"Healthy {meal_type.title()}",
-                "description": f"Nutritious {meal_type} meal",
+                "id": f"fallback_{meal_type}",
+                "name": f"Simple {meal_type.title()}",
+                "description": f"A simple and nutritious {meal_type}",
                 "cuisine": "International",
-                "cookingTime": "20-30 minutes",
-                "ingredients": ["Fresh ingredients", "Seasonings"],
-                "instructions": f"Prepare a healthy {meal_type} according to your preferences"
+                "cookingTime": "20 minutes",
+                "difficulty": "beginner",
+                "ingredients": ["Basic ingredients"],
+                "instructions": ["Follow basic cooking instructions"],
+                "nutrition": {
+                    "calories": 400,
+                    "protein_g": 15,
+                    "carbs_g": 50,
+                    "fat_g": 15
+                }
             }
         
-        # Simple selection (could be enhanced with more logic)
-        import random
-        return random.choice(available_templates)
+        # Filter by dietary restrictions
+        suitable_templates = []
+        for template in available_templates:
+            template_dietary = template.get('dietaryRestrictions', [])
+            if not dietary_restrictions or all(restriction in template_dietary for restriction in dietary_restrictions):
+                suitable_templates.append(template)
+        
+        if not suitable_templates:
+            suitable_templates = available_templates  # Use any template if none match dietary restrictions
+        
+        # Select a random template
+        selected = random.choice(suitable_templates)
+        
+        # Add meal type to the template
+        selected['meal_type'] = meal_type
+        
+        return selected
     
     def regenerate_specific_meal(self, user_id: str, day: str, meal_type: str, current_plan: Dict[str, Any]) -> Dict[str, Any]:
         """Regenerate a specific meal in the plan"""
@@ -458,3 +565,33 @@ List 21 meals with names and ingredients."""
             
         except Exception as e:
             return {"error": f"Failed to regenerate meal: {str(e)}"} 
+
+    def get_recipe_suggestions(self, meal_type: str, preferences: Dict[str, Any], count: int = 5) -> List[Dict[str, Any]]:
+        """Get recipe suggestions for a specific meal type"""
+        try:
+            # Get meal templates based on preferences
+            dietary_restrictions = preferences.get('dietaryRestrictions', [])
+            favorite_cuisines = preferences.get('favoriteCuisines', ['International'])
+            cooking_skill = preferences.get('cookingSkillLevel', 'beginner')
+            
+            meal_templates = self._get_meal_templates(dietary_restrictions, favorite_cuisines, cooking_skill)
+            
+            # Get templates for the specific meal type
+            available_templates = meal_templates.get(meal_type, [])
+            
+            # Filter by dietary restrictions
+            suitable_templates = []
+            for template in available_templates:
+                template_dietary = template.get('dietaryRestrictions', [])
+                if not dietary_restrictions or all(restriction in template_dietary for restriction in dietary_restrictions):
+                    suitable_templates.append(template)
+            
+            if not suitable_templates:
+                suitable_templates = available_templates
+            
+            # Return up to the requested count
+            return suitable_templates[:count]
+            
+        except Exception as e:
+            print(f"Error getting recipe suggestions: {e}")
+            return [] 

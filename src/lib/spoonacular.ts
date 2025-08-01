@@ -1,6 +1,6 @@
 // URLs for API endpoints - fallback to mock data when not available
 // Using localhost for consistency with other API calls
-const API_BASE_URL = "http://localhost:5003";
+const API_BASE_URL = "http://localhost:5004";
 const API_URL = `${API_BASE_URL}/api/recipes`; // ChromaDB recipes endpoint
 const API_URL_RECIPE_BY_ID = `${API_BASE_URL}/api/recipes`;
 

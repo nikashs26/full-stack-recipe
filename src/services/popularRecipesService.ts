@@ -41,7 +41,7 @@ export async function fetchPopularRecipes(limit: number = 8, userId?: string): P
         switch (popularRecipe.recipe_type) {
           case 'manual':
             // Fetch from manual recipes table
-            const { data: manualData } = await fetch('/api/manual-recipes/' + popularRecipe.recipe_id);
+            const { data: manualData } = await fetch('/manual-recipes/' + popularRecipe.recipe_id);
             if (manualData) {
               recipeData = manualData;
             }

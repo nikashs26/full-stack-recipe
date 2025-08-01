@@ -4,6 +4,7 @@ from services.meal_history_service import MealHistoryService
 from services.smart_shopping_service import SmartShoppingService
 from services.user_preferences_service import UserPreferencesService
 import logging
+from middleware.auth_middleware import get_current_user_id
 
 logger = logging.getLogger(__name__)
 
@@ -124,20 +125,24 @@ def get_personalized_recommendations():
     Get personalized recipe recommendations based on user preferences
     """
     try:
-        # For demo purposes, use demo_user
-        user_id = "demo_user"
+        # Get the authenticated user's preferences
+        user_id = get_current_user_id()
+        if not user_id:
+            return jsonify({"error": "Authentication required"}), 401
+            
         limit = request.args.get('limit', 8, type=int)
         
-        # Get user preferences
+        # Get user preferences from the database
         preferences = user_preferences_service.get_preferences(user_id)
         if not preferences:
-            # Use default preferences
-            preferences = {
-                "favoriteCuisines": ["Mediterranean", "Asian"],
-                "cookingSkillLevel": "beginner",
-                "dietaryRestrictions": [],
-                "healthGoals": ["General wellness"]
-            }
+            return jsonify({
+                "success": True,
+                "recommendations": [],
+                "message": "No preferences found. Please set your preferences first."
+            }), 200
+        
+        # Log the preferences being used for debugging
+        print(f"Using preferences for user {user_id}: {preferences}")
         
         results = recipe_search_service.get_recipe_recommendations(preferences, limit)
         
@@ -149,6 +154,7 @@ def get_personalized_recommendations():
         }), 200
         
     except Exception as e:
+        print(f"Error in recommendations endpoint: {e}")
         return jsonify({"error": str(e)}), 500
 
 @smart_features_bp.route('/meal-history/log', methods=['POST'])
