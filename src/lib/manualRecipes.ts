@@ -1,6 +1,6 @@
 
 // Use the main backend API URL
-const API_BASE_URL = "http://localhost:5003";
+const API_BASE_URL = "http://localhost:5004";
 
 export interface ManualRecipe {
   id: string | number;
@@ -287,7 +287,8 @@ export const fetchManualRecipes = async (
           const recipeName = recipe.title ? recipe.title.replace(/\s+/g, '%20') : '';
           imageUrl = `https://www.themealdb.com/images/ingredients/${recipeName}.png`;
         } else {
-          imageUrl = '/placeholder.svg';
+          // Only use fallback if no image is available at all
+          imageUrl = 'https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?auto=format&fit=crop&w=400&h=300&q=80';
         }
         
         return {

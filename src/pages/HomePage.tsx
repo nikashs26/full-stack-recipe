@@ -214,7 +214,34 @@ const HomePage: React.FC = () => {
     console.log('🔍 Total recipes to filter:', allCombined.length);
     console.log('🎯 Backend recommendations available:', backendRecommendations.length);
     
-    if (isAuthenticated && userPreferences && Object.keys(userPreferences).length > 0) {
+    // Check if user has meaningful preferences (not just empty arrays/strings)
+    const hasMeaningfulPreferences = React.useMemo(() => {
+      if (!userPreferences) return false;
+      
+      // Check if any preference arrays have actual content
+      const hasFavoriteFoods = Array.isArray(userPreferences.favoriteFoods) && 
+        userPreferences.favoriteFoods.some(food => food && food.trim() !== '');
+      
+      const hasFavoriteCuisines = Array.isArray(userPreferences.favoriteCuisines) && 
+        userPreferences.favoriteCuisines.some(cuisine => cuisine && cuisine.trim() !== '');
+      
+      const hasDietaryRestrictions = Array.isArray(userPreferences.dietaryRestrictions) && 
+        userPreferences.dietaryRestrictions.length > 0;
+      
+      const hasFoodsToAvoid = Array.isArray(userPreferences.foodsToAvoid) && 
+        userPreferences.foodsToAvoid.some(food => food && food.trim() !== '');
+      
+      const hasCookingSkill = userPreferences.cookingSkillLevel && userPreferences.cookingSkillLevel !== 'beginner';
+      
+      const hasHealthGoals = Array.isArray(userPreferences.healthGoals) && 
+        userPreferences.healthGoals.length > 0;
+      
+      // Return true if any meaningful preference is set
+      return hasFavoriteFoods || hasFavoriteCuisines || hasDietaryRestrictions || 
+             hasFoodsToAvoid || hasCookingSkill || hasHealthGoals;
+    }, [userPreferences]);
+    
+    if (isAuthenticated && userPreferences && hasMeaningfulPreferences) {
       console.log('🎯 User preferences found:', userPreferences);
       
       // Use backend recommendations if available

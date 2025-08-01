@@ -4,7 +4,7 @@ from services.meal_history_service import MealHistoryService
 from services.smart_shopping_service import SmartShoppingService
 from services.user_preferences_service import UserPreferencesService
 import logging
-from middleware.auth_middleware import get_current_user_id
+from middleware.auth_middleware import get_current_user_id, require_auth
 
 logger = logging.getLogger(__name__)
 
@@ -120,6 +120,7 @@ def find_similar_recipes(recipe_id):
         return jsonify({"error": str(e)}), 500
 
 @smart_features_bp.route('/recommendations', methods=['GET'])
+@require_auth
 def get_personalized_recommendations():
     """
     Get personalized recipe recommendations based on user preferences
@@ -127,14 +128,21 @@ def get_personalized_recommendations():
     try:
         # Get the authenticated user's preferences
         user_id = get_current_user_id()
+        print(f"🔍 Recommendations endpoint - User ID: {user_id}")
+        
         if not user_id:
+            print("❌ No user ID found")
             return jsonify({"error": "Authentication required"}), 401
             
         limit = request.args.get('limit', 8, type=int)
+        print(f"📊 Requested limit: {limit}")
         
         # Get user preferences from the database
         preferences = user_preferences_service.get_preferences(user_id)
+        print(f"📋 Retrieved preferences: {preferences}")
+        
         if not preferences:
+            print("⚠️ No preferences found")
             return jsonify({
                 "success": True,
                 "recommendations": [],
@@ -142,9 +150,10 @@ def get_personalized_recommendations():
             }), 200
         
         # Log the preferences being used for debugging
-        print(f"Using preferences for user {user_id}: {preferences}")
+        print(f"✅ Using preferences for user {user_id}: {preferences}")
         
         results = recipe_search_service.get_recipe_recommendations(preferences, limit)
+        print(f"🎯 Generated {len(results)} recommendations")
         
         return jsonify({
             "success": True,
@@ -154,7 +163,7 @@ def get_personalized_recommendations():
         }), 200
         
     except Exception as e:
-        print(f"Error in recommendations endpoint: {e}")
+        print(f"❌ Error in recommendations endpoint: {e}")
         return jsonify({"error": str(e)}), 500
 
 @smart_features_bp.route('/meal-history/log', methods=['POST'])

@@ -1,13 +1,11 @@
 
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Edit, Trash2, Star, Clock, Heart, Utensils, Clock3, Users, BarChart2 } from 'lucide-react';
-import { Recipe } from '../types/recipe';
+import { Clock, Star, Trash2, Clock3, Utensils, Users, BarChart2 } from 'lucide-react';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from './ui/hover-card';
+import { ExtendedRecipe, Recipe } from '../types/recipe';
 import { useRecipeClickTracking } from '../utils/clickTracking';
-
-// Use the ExtendedRecipe type from recipe types
-import type { ExtendedRecipe } from '../types/recipe';
+import { getReliableImageUrl } from '../utils/recipeUtils';
 
 interface RecipeCardProps {
   recipe: ExtendedRecipe | Recipe;
@@ -135,15 +133,31 @@ const RecipeCard: React.FC<RecipeCardProps> = React.memo(({
     }
   }, [recipe]);
   
-  // Handle image from various sources
+  // Handle image from various sources with better fallback
   const imageUrl = React.useMemo((): string => {
-    if ('image' in recipe && recipe.image) return recipe.image;
-    if ('imageUrl' in recipe && recipe.imageUrl) return recipe.imageUrl;
+    // Try different image sources in order of preference
+    const imageSources = [
+      recipe.image,
+      recipe.imageUrl,
+      (recipe as any).strMealThumb, // TheMealDB format
+      (recipe as any).thumbnail
+    ];
+    
+    for (const source of imageSources) {
+      if (source) {
+        // Use the original URL if it's not a broken pattern
+        return getReliableImageUrl(source, 'medium');
+      }
+    }
+    
+    // Special handling for TheMealDB
     if ('source' in recipe && recipe.source === 'TheMealDB' && recipe.id) {
       const ingredientName = typeof recipe.id === 'string' ? recipe.id.split('_').pop() : '';
       return `https://www.themealdb.com/images/ingredients/${ingredientName || 'placeholder'}.jpg`;
     }
-    return '/placeholder.svg';
+    
+    // Return a reliable fallback image
+    return getReliableImageUrl(undefined, 'medium');
   }, [recipe]);
   
   // Handle ID from various sources
@@ -170,9 +184,15 @@ const RecipeCard: React.FC<RecipeCardProps> = React.memo(({
       hasSummary: 'summary' in recipe,
       recipeType: recipe.type,
       readyInMinutesDirect: 'readyInMinutes' in recipe ? recipe.readyInMinutes : undefined,
-      ready_in_minutesDirect: 'ready_in_minutes' in recipe ? (recipe as any).ready_in_minutes : undefined
+      ready_in_minutesDirect: 'ready_in_minutes' in recipe ? (recipe as any).ready_in_minutes : undefined,
+      // Add image debugging
+      originalImage: recipe.image,
+      originalImageUrl: (recipe as any).imageUrl,
+      finalImageUrl: imageUrl,
+      hasImage: !!recipe.image,
+      hasImageUrl: !!(recipe as any).imageUrl
     });
-  }, [recipe, recipeName, readyInMinutes]);
+  }, [recipe, recipeName, readyInMinutes, imageUrl]);
   
   // Calculate average rating if ratings is an array
   const averageRating = React.useMemo(() => {
@@ -279,8 +299,10 @@ const RecipeCard: React.FC<RecipeCardProps> = React.memo(({
             className="w-full h-full object-cover transform hover:scale-105 transition-transform duration-300"
             onError={(e) => {
               const target = e.target as HTMLImageElement;
-              if (target.src !== "/placeholder.svg") {
-                target.src = "/placeholder.svg";
+              // Use the utility function for fallback
+              const fallbackImage = getReliableImageUrl(undefined, 'medium');
+              if (target.src !== fallbackImage) {
+                target.src = fallbackImage;
               }
             }}
           />

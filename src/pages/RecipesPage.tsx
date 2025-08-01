@@ -186,7 +186,7 @@ const RecipesPage: React.FC = () => {
         id: String(recipe.id || Math.random().toString(36).substr(2, 9)),
         title: recipe.title || 'Untitled Recipe',
         description: recipe.description || '',
-        imageUrl: recipe.image || '/placeholder-recipe.jpg',
+        imageUrl: recipe.image || (recipe as any).imageUrl || 'https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?auto=format&fit=crop&w=400&h=300&q=80',
         type: recipe.type || 'manual',
         cuisines,
         dietaryRestrictions,
@@ -238,7 +238,11 @@ const RecipesPage: React.FC = () => {
       count: filteredRecipes.length,
       currentPage,
       totalPages,
-      recipes: filteredRecipes.map(r => r?.title || 'Untitled')
+      recipes: filteredRecipes.map(r => ({
+        title: r?.title || 'Untitled',
+        image: r?.imageUrl,
+        hasImage: !!r?.imageUrl
+      }))
     });
     
     return filteredRecipes;
@@ -423,8 +427,8 @@ const RecipesPage: React.FC = () => {
       id: recipe.id.toString(),
       title: recipe.title,
       name: recipe.title,
-      image: recipe.imageUrl || '/placeholder-recipe.jpg',
-      imageUrl: recipe.imageUrl || '/placeholder-recipe.jpg',
+      image: recipe.imageUrl || 'https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?auto=format&fit=crop&w=400&h=300&q=80',
+      imageUrl: recipe.imageUrl || 'https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?auto=format&fit=crop&w=400&h=300&q=80',
       cuisines: Array.isArray(recipe.cuisines) ? recipe.cuisines : [],
       cuisine: Array.isArray(recipe.cuisines) && recipe.cuisines.length > 0 ? recipe.cuisines[0] : '',
       dietaryRestrictions: (recipe.dietaryRestrictions || [])

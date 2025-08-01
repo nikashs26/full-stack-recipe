@@ -45,6 +45,15 @@ const RecommendedRecipes: React.FC = () => {
         return [];
       }
 
+      // Debug: Log the exact preferences being sent
+      console.log('🔍 Sending preferences to recommendation API:', {
+        favoriteFoods: user.preferences.favoriteFoods,
+        favoriteCuisines: user.preferences.favoriteCuisines,
+        dietaryRestrictions: user.preferences.dietaryRestrictions,
+        hasMeaningfulPreferences,
+        allPreferences: user.preferences
+      });
+
       try {
         console.log('Fetching recommendations from backend with preferences:', user.preferences);
         
@@ -70,7 +79,7 @@ const RecommendedRecipes: React.FC = () => {
         return [];
       }
     },
-    enabled: isAuthenticated && !!user?.preferences,
+    enabled: isAuthenticated && !!user?.preferences && hasMeaningfulPreferences,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
@@ -87,9 +96,38 @@ const RecommendedRecipes: React.FC = () => {
     saved: allRecipes.length
   });
 
-  // Don't show recommendations if no preferences are set
-  if (!isAuthenticated || !user?.preferences || Object.keys(user.preferences).length === 0) {
-    console.log('No preferences found, not showing recommendations');
+  // Check if user has meaningful preferences (not just empty arrays/strings)
+  const hasMeaningfulPreferences = React.useMemo(() => {
+    if (!user?.preferences) return false;
+    
+    const prefs = user.preferences;
+    
+    // Check if any preference arrays have actual content
+    const hasFavoriteFoods = Array.isArray(prefs.favoriteFoods) && 
+      prefs.favoriteFoods.some(food => food && food.trim() !== '');
+    
+    const hasFavoriteCuisines = Array.isArray(prefs.favoriteCuisines) && 
+      prefs.favoriteCuisines.some(cuisine => cuisine && cuisine.trim() !== '');
+    
+    const hasDietaryRestrictions = Array.isArray(prefs.dietaryRestrictions) && 
+      prefs.dietaryRestrictions.length > 0;
+    
+    const hasFoodsToAvoid = Array.isArray(prefs.foodsToAvoid) && 
+      prefs.foodsToAvoid.some(food => food && food.trim() !== '');
+    
+    const hasCookingSkill = prefs.cookingSkillLevel && prefs.cookingSkillLevel !== 'beginner';
+    
+    const hasHealthGoals = Array.isArray(prefs.healthGoals) && 
+      prefs.healthGoals.length > 0;
+    
+    // Return true if any meaningful preference is set
+    return hasFavoriteFoods || hasFavoriteCuisines || hasDietaryRestrictions || 
+           hasFoodsToAvoid || hasCookingSkill || hasHealthGoals;
+  }, [user?.preferences]);
+
+  // Don't show recommendations if no meaningful preferences are set
+  if (!isAuthenticated || !user?.preferences || !hasMeaningfulPreferences) {
+    console.log('No meaningful preferences found, not showing recommendations');
     return null;
   }
 
