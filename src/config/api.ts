@@ -5,16 +5,16 @@ export const API_CONFIG = {
     timeout: 30000
   },
   production: {
-    baseURL: process.env.REACT_APP_API_URL || 'https://your-backend-url.railway.app/api',
+    baseURL: import.meta.env.VITE_REACT_APP_API_URL || 'https://your-backend-url.railway.app/api',
     timeout: 30000
   }
 };
 
 export const getApiConfig = () => {
-  const env = process.env.NODE_ENV || 'development';
+  const env = import.meta.env.MODE || 'development';
   console.log('🌍 Environment:', env);
   console.log('🔗 API URL:', API_CONFIG[env as keyof typeof API_CONFIG].baseURL);
-  console.log('🔧 REACT_APP_API_URL:', process.env.REACT_APP_API_URL);
+  console.log('🔧 VITE_REACT_APP_API_URL:', import.meta.env.VITE_REACT_APP_API_URL || 'Not set');
   return API_CONFIG[env as keyof typeof API_CONFIG];
 };
 
