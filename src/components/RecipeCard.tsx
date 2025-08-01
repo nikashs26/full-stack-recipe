@@ -137,13 +137,35 @@ const RecipeCard: React.FC<RecipeCardProps> = React.memo(({
   
   // Handle image from various sources
   const imageUrl = React.useMemo((): string => {
-    if ('image' in recipe && recipe.image) return recipe.image;
-    if ('imageUrl' in recipe && recipe.imageUrl) return recipe.imageUrl;
-    if ('source' in recipe && recipe.source === 'TheMealDB' && recipe.id) {
-      const ingredientName = typeof recipe.id === 'string' ? recipe.id.split('_').pop() : '';
-      return `https://www.themealdb.com/images/ingredients/${ingredientName || 'placeholder'}.jpg`;
+    // Check for direct image properties first
+    if ('image' in recipe && recipe.image) {
+      const img = recipe.image;
+      // If it's a relative path, make it absolute
+      if (typeof img === 'string' && img.startsWith('/')) {
+        return img;
+      }
+      return img;
     }
-    return '/placeholder.svg';
+    
+    if ('imageUrl' in recipe && recipe.imageUrl) {
+      const img = recipe.imageUrl;
+      // If it's a relative path, make it absolute
+      if (typeof img === 'string' && img.startsWith('/')) {
+        return img;
+      }
+      return img;
+    }
+    
+    // For TheMealDB recipes, use a better image URL
+    if ('source' in recipe && recipe.source === 'TheMealDB' && recipe.id) {
+      const mealId = typeof recipe.id === 'string' ? recipe.id.split('_').pop() : '';
+      if (mealId) {
+        return `https://www.themealdb.com/images/media/meals/${mealId}.jpg`;
+      }
+    }
+    
+    // Use a better placeholder image
+    return 'https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?auto=format&fit=crop&w=800&q=80';
   }, [recipe]);
   
   // Handle ID from various sources
@@ -279,8 +301,8 @@ const RecipeCard: React.FC<RecipeCardProps> = React.memo(({
             className="w-full h-full object-cover transform hover:scale-105 transition-transform duration-300"
             onError={(e) => {
               const target = e.target as HTMLImageElement;
-              if (target.src !== "/placeholder.svg") {
-                target.src = "/placeholder.svg";
+              if (target.src !== "https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?auto=format&fit=crop&w=800&q=80") {
+                target.src = "https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?auto=format&fit=crop&w=800&q=80";
               }
             }}
           />

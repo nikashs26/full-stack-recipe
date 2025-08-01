@@ -12,6 +12,9 @@ export const API_CONFIG = {
 
 export const getApiConfig = () => {
   const env = process.env.NODE_ENV || 'development';
+  console.log('🌍 Environment:', env);
+  console.log('🔗 API URL:', API_CONFIG[env as keyof typeof API_CONFIG].baseURL);
+  console.log('🔧 REACT_APP_API_URL:', process.env.REACT_APP_API_URL);
   return API_CONFIG[env as keyof typeof API_CONFIG];
 };
 

@@ -1,4 +1,5 @@
 import { apiCall } from '../utils/apiUtils';
+import { API_BASE_URL } from '../config/api';
 
 export interface MealPlanOptions {
   budget?: number;
@@ -118,13 +119,12 @@ export interface MealPlanResponse {
 }
 
 // Update the API base URL for deployment
-const API_BASE_URL = process.env.NODE_ENV === 'production' 
-  ? (process.env.REACT_APP_API_URL || 'https://your-backend-url.railway.app/api')
-  : 'http://localhost:5003/api';
+const API_BASE_URL_FINAL = API_BASE_URL;
 
 export const generateMealPlan = async (options?: MealPlanOptions): Promise<MealPlanData> => {
   try {
     console.log('🚀 Generating meal plan...');
+    console.log('🔗 Using API URL:', API_BASE_URL_FINAL);
     
     // Use the simple meal planner endpoint (no complex macro/nutrition logic)
     const response = await apiCall('/ai/simple_meal_plan', {
