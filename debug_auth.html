@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Auth Debug</title>
+</head>
+<body>
+    <h1>Authentication Debug</h1>
+    <div id="output"></div>
+    
+    <script>
+        const output = document.getElementById('output');
+        
+        function log(message) {
+            output.innerHTML += '<p>' + message + '</p>';
+            console.log(message);
+        }
+        
+        // Check localStorage
+        const token = localStorage.getItem('auth_token');
+        log('Token from localStorage: ' + (token ? 'Present' : 'Not found'));
+        
+        if (token) {
+            log('Token value: ' + token.substring(0, 20) + '...');
+        }
+        
+        // Test auth/me endpoint
+        async function testAuth() {
+            try {
+                const response = await fetch('http://localhost:5003/api/auth/me', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'include'
+                });
+                
+                log('Auth/me response status: ' + response.status);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    log('Auth/me success: ' + JSON.stringify(data));
+                } else {
+                    const error = await response.json();
+                    log('Auth/me error: ' + JSON.stringify(error));
+                }
+            } catch (error) {
+                log('Auth/me request failed: ' + error.message);
+            }
+        }
+        
+        // Test preferences endpoint
+        async function testPreferences() {
+            try {
+                const response = await fetch('http://localhost:5003/api/preferences', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'include'
+                });
+                
+                log('Preferences response status: ' + response.status);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    log('Preferences success: ' + JSON.stringify(data));
+                } else {
+                    const error = await response.json();
+                    log('Preferences error: ' + JSON.stringify(error));
+                }
+            } catch (error) {
+                log('Preferences request failed: ' + error.message);
+            }
+        }
+        
+        // Run tests
+        testAuth();
+        testPreferences();
+    </script>
+</body>
+</html> 

@@ -279,116 +279,112 @@ class RecipeSearchService:
         """
         favorite_foods = [f.lower() for f in user_preferences.get("favoriteFoods", [])]
         favorite_cuisines = set(self._normalize_cuisine(c).lower() for c in user_preferences.get("favoriteCuisines", []))
-        dietary_restrictions = [d.lower() for d in user_preferences.get("dietaryRestrictions", [])]
-        health_goals = user_preferences.get("healthGoals", [])
-        meal_types = user_preferences.get("mealTypes", [])
-        skill_level = user_preferences.get("cookingSkillLevel", None)
 
-        # Build a broad query to get a large pool of candidates
-        query_parts = []
-        if favorite_foods:
-            food_terms = [f'"{food}"' for food in favorite_foods]
-            query_parts.append(f"({' OR '.join(food_terms)})")
-        if dietary_restrictions:
-            query_parts.append(" AND ".join(dietary_restrictions))
-        if health_goals:
-            query_parts.append(" ".join(health_goals))
-        if meal_types:
-            query_parts.append(f"({' OR '.join(meal_types)})")
-        if skill_level:
-            query_parts.append(f"difficulty: {skill_level.lower()}")
-        query = " ".join(query_parts) if query_parts else "popular delicious recipes"
+    # Build filters
+    filters = {}
+    if "vegetarian" in dietary_restrictions:
+        filters["is_vegetarian"] = True
+    if "vegan" in dietary_restrictions:
+        filters["is_vegan"] = True
+    if "gluten-free" in dietary_restrictions:
+        filters["is_gluten_free"] = True
 
-        # Build filters
-        filters = {}
-        if "vegetarian" in dietary_restrictions:
-            filters["is_vegetarian"] = True
-        if "vegan" in dietary_restrictions:
-            filters["is_vegan"] = True
-        if "gluten-free" in dietary_restrictions:
-            filters["is_gluten_free"] = True
-        # Don't filter by cuisine yet; we'll do that in post-processing
+    # Get a large pool of candidates (broad query)
+    candidates = self.semantic_search(query, filters, limit * 10)
 
-        # Get a large pool of candidates (broad query)
-        candidates = self.semantic_search(query, filters, limit * 10)
+    # If favorite foods are present, also get candidates with just favorite food(s) as the query (no cuisine restriction)
+    food_candidates = []
+    if favorite_foods:
+        for food in favorite_foods:
+            food_results = self.semantic_search(food, filters, limit * 5)
+            food_candidates.extend(food_results)
 
-        # If favorite foods are present, also get candidates with just favorite food(s) as the query (no cuisine restriction)
-        food_candidates = []
-        if favorite_foods:
-            for food in favorite_foods:
-                food_results = self.semantic_search(food, filters, limit * 5)
-                food_candidates.extend(food_results)
+    # Merge and deduplicate candidates by recipe_id
+    seen_ids = set()
+    all_candidates = []
+    for r in candidates + food_candidates:
+        rid = r.get('recipe_id') or r.get('id')
+        if rid and rid not in seen_ids:
+            all_candidates.append(r)
+            seen_ids.add(rid)
 
-        # Merge and deduplicate candidates by recipe_id
-        seen_ids = set()
-        all_candidates = []
-        for r in candidates + food_candidates:
-            rid = r.get('recipe_id') or r.get('id')
-            if rid and rid not in seen_ids:
-                all_candidates.append(r)
-                seen_ids.add(rid)
+    if not all_candidates:
+        return []
 
-        if not all_candidates:
-            return []
+    # Helper to check for favorite food in a recipe
+    def has_fav_food(recipe):
+        text = ' '.join([
+            str(recipe.get('name', '')),
+            str(recipe.get('description', '')),
+            ' '.join([ing['name'] if isinstance(ing, dict) and 'name' in ing else str(ing) for ing in recipe.get('ingredients', [])]),
+            str(recipe.get('instructions', ''))
+        ]).lower()
+        return any(food in text for food in favorite_foods)
 
-        # Helper to check for favorite food in a recipe
-        def has_fav_food(recipe):
-            text = ' '.join([
-                str(recipe.get('name', '')),
-                str(recipe.get('description', '')),
-                ' '.join([ing['name'] if isinstance(ing, dict) and 'name' in ing else str(ing) for ing in recipe.get('ingredients', [])]),
-                str(recipe.get('instructions', ''))
-            ]).lower()
-            return any(food in text for food in favorite_foods)
+    # Helper to check for favorite cuisine in a recipe with strict matching
+    def has_fav_cuisine(recipe):
+        # First check if cuisine is explicitly set in the recipe
+        recipe_cuisine = recipe.get('cuisine', '')
+        if not recipe_cuisine:
+            return False
+            
+        # Normalize the recipe's cuisine
+        normalized = self._normalize_cuisine(recipe_cuisine, recipe).lower()
+        if not normalized:
+            return False
+            
+        # Check for direct match with favorite cuisines
+        if normalized in favorite_cuisines:
+            return True
+            
+        # For compound cuisines (e.g., 'Italian-American'), check if any part matches
+        if '-' in normalized:
+            return any(cuisine in normalized.split('-') for cuisine in favorite_cuisines)
+            
+        return False
 
-        # Helper to check for favorite cuisine in a recipe
-        def has_fav_cuisine(recipe):
+    # Partition candidates
+    both = []  # Matches both favorite food and cuisine
+    food_only = []  # Matches favorite food (any cuisine)
+    cuisine_only = []  # Matches favorite cuisine (any food)
+    others = []
+    for recipe in all_candidates:
+        food = has_fav_food(recipe)
+        cuisine = has_fav_cuisine(recipe)
+        if food and cuisine:
+            both.append(recipe)
+        elif food:
+            food_only.append(recipe)
+        elif cuisine:
+            cuisine_only.append(recipe)
+        else:
+            others.append(recipe)
+
+    # Build recommendations with better balancing
+    recommendations = []
+    
+    # 1. Add up to 40% of limit from both-matches
+    max_both = max(1, min(len(both), int(limit * 0.4)))
+    recommendations.extend(both[:max_both])
+    
+    # 2. Add up to 40% from food-only matches
+    max_food = max(1, min(len(food_only), int(limit * 0.4)))
+    recommendations.extend(food_only[:max_food])
+    
+    # 3. Add remaining from cuisine-only, but only if we have space and not too many
+    if len(recommendations) < limit and cuisine_only:
+        max_cuisine = min(len(cuisine_only), limit - len(recommendations))
+        # Ensure we don't take too many from any single cuisine
+        cuisine_counts = {}
+        selected_cuisine = []
+        
+        for recipe in cuisine_only:
+            if len(selected_cuisine) >= max_cuisine:
+                break
+                
             cuisine = self._normalize_cuisine(recipe.get('cuisine', ''), recipe).lower()
-            return cuisine in favorite_cuisines
-
-        # Partition candidates
-        both = []  # Matches both favorite food and cuisine
-        food_only = []  # Matches favorite food (any cuisine)
-        cuisine_only = []  # Matches favorite cuisine (any food)
-        others = []
-        for recipe in all_candidates:
-            food = has_fav_food(recipe)
-            cuisine = has_fav_cuisine(recipe)
-            if food and cuisine:
-                both.append(recipe)
-            elif food:
-                food_only.append(recipe)
-            elif cuisine:
-                cuisine_only.append(recipe)
-            else:
-                others.append(recipe)
-
-        # Build recommendations
-        recommendations = []
-        # 1. Fill with both-matches
-        recommendations.extend(both[:limit])
-        # 2. Fill with food-only matches
-        if len(recommendations) < limit:
-            needed = limit - len(recommendations)
-            recommendations.extend(food_only[:needed])
-        # 3. Fill with cuisine-only matches
-        if len(recommendations) < limit:
-            needed = limit - len(recommendations)
-            recommendations.extend(cuisine_only[:needed])
-        # 4. Fill with others
-        if len(recommendations) < limit:
-            needed = limit - len(recommendations)
-            recommendations.extend(others[:needed])
-        # 5. Guarantee at least one favorite food recipe if possible
-        if favorite_foods:
-            if not any(has_fav_food(r) for r in recommendations) and (food_only or both):
-                # Replace last with a favorite food recipe
-                recommendations[-1] = (food_only or both)[0]
-        return recommendations[:limit]
-
-    def _build_recipe_query(self, user_preferences: Dict[str, Any]) -> tuple[str, dict]:
-        """
-        Build query parts from user preferences.
+            if not cuisine:
+                continue
         
         Returns:
             A tuple of (query_string, filters) where:
@@ -597,54 +593,91 @@ class RecipeSearchService:
             recipe: Optional recipe dictionary for additional context
             
         Returns:
-            Normalized cuisine string, always returns a specific country
+            Normalized cuisine string, or empty string if no specific cuisine can be determined
         """
-        # Map of non-country cuisines to their respective countries
+        # First, handle compound dish names that might contain multiple cuisines
+        if recipe and 'title' in recipe:
+            title = recipe['title'].lower()
+            
+            # Handle compound names like "Mexican Lasagna" - prioritize the first cuisine mentioned
+            if 'mexican' in title and 'lasagna' in title:
+                return 'mexican'
+                
+            # Other compound dish patterns
+            compound_patterns = {
+                'mexican': ['mexican', 'taco', 'enchilada', 'burrito', 'quesadilla', 'fajita', 'tamale', 'mole', 'carnitas', 'al pastor'],
+                'italian': ['italian', 'pasta', 'risotto', 'bruschetta', 'tiramisu', 'osso buco', 'gnocchi'],
+                'greek': ['greek', 'moussaka', 'souvlaki', 'tzatziki', 'dolmades', 'spanakopita'],
+                'indian': ['indian', 'tikka', 'masala', 'biryani', 'vindaloo', 'tandoori'],
+                'chinese': ['chinese', 'kung pao', 'peking', 'baozi', 'dim sum', 'lo mein'],
+                'thai': ['thai', 'pad thai', 'tom yum', 'green curry', 'massaman'],
+                'japanese': ['japanese', 'sushi', 'ramen', 'tempura', 'teriyaki', 'udon'],
+                'french': ['french', 'ratatouille', 'quiche', 'soufflé', 'coq au vin', 'bouillabaisse']
+            }
+            
+            # Check for compound names and prioritize the first match
+            for cuisine_type, patterns in compound_patterns.items():
+                if any(p in title for p in patterns[1:]):  # Skip the first item (the cuisine name)
+                    if cuisine_type in title:  # If the cuisine name is explicitly mentioned
+                        return cuisine_type
+                    # If we have a strong indicator but no explicit cuisine, still return it
+                    # but only if we don't have a conflicting cuisine in the title
+                    conflicting_cuisines = [c for c in compound_patterns.keys() 
+                                         if c != cuisine_type and c in title]
+                    if not conflicting_cuisines:
+                        return cuisine_type
+        # Map of general/regional cuisines to specific country cuisines
+        # This is used when we have a general cuisine that needs to be mapped to a specific country
         CUISINE_TO_COUNTRY = {
-            # Regional/Continental to Countries
-            'southern': 'American',
-            'soul food': 'American',
-            'cajun': 'American',
-            'creole': 'American',
-            'southwestern': 'American',
-            'mediterranean': 'Greek',  # Most representative country
-            'middle eastern': 'Lebanese',  # Most representative country
-            'scandinavian': 'Swedish',
-            'nordic': 'Swedish',
-            'caribbean': 'Jamaican',
-            'latin': 'Mexican',
-            'latin american': 'Mexican',
-            'central american': 'Mexican',
-            'south american': 'Brazilian',
-            'north american': 'American',
+            # European
             'eastern european': 'Polish',
             'western european': 'French',
             'northern european': 'German',
             'southern european': 'Italian',
-            'balkan': 'Greek',
+            'balkan': '',  # Be more specific, don't default to Greek
             'baltic': 'Lithuanian',
             'british isles': 'British',
             'british': 'British',
             'celtic': 'Irish',
-            'asian': 'Chinese',
+            'scandinavian': 'Swedish',
+            'nordic': 'Swedish',
+            
+            # Asian
+            'asian': '',  # Be more specific
             'southeast asian': 'Thai',
             'south asian': 'Indian',
             'east asian': 'Chinese',
             'central asian': 'Indian',
-            'african': 'Moroccan',
+            'middle eastern': 'Lebanese',
+            'levantine': 'Lebanese',
+            
+            # African
+            'african': '',  # Be more specific
             'north african': 'Moroccan',
             'west african': 'Nigerian',
             'east african': 'Ethiopian',
             'southern african': 'South African',
+            
+            # Americas
+            'latin': 'Mexican',
+            'latin american': 'Mexican',
+            'caribbean': 'Jamaican',
+            'north american': 'American',
+            'south american': 'Brazilian',
+            'central american': 'Mexican',
+            
+            # Other regions
             'oceanic': 'Australian',
             'polynesian': 'Hawaiian',
             'pacific islander': 'Hawaiian',
-            'middle eastern': 'Lebanese',
-            'international': 'American',  # Default to American for truly global dishes
-            'fusion': 'American',         # Default to American for fusion
-            'global': 'American',         # Default to American for global
+            
+            # General/other
+            'international': '',  # Don't default to American for international
+            'fusion': '',         # Don't default to American for fusion
+            'global': '',         # Don't default to American for global
             'western': 'American',
-            'other': 'American',
+            'other': '',          # Don't default to American for unknown
+            'mediterranean': '',  # Don't default to Greek, be more specific
         }
         
         # Common dish to cuisine mappings (checked first)
@@ -685,50 +718,78 @@ class RecipeSearchService:
         }
         
         # Common ingredient to cuisine mappings
+        # These are very specific ingredients that strongly indicate a particular cuisine
         INGREDIENT_CUISINE_MAP = {
-            # Italian
+            # Italian - very specific to Italian cuisine
             'pasta': 'Italian', 'risotto': 'Italian', 'pesto': 'Italian', 'pancetta': 'Italian',
-            'prosciutto': 'Italian', 'mozzarella': 'Italian', 'parmesan': 'Italian',
-            'bruschetta': 'Italian', 'tiramisu': 'Italian',
+            'prosciutto': 'Italian', 'mozzarella di bufala': 'Italian', 'parmigiano reggiano': 'Italian',
+            'bruschetta': 'Italian', 'tiramisu': 'Italian', 'osso buco': 'Italian',
+            'risi e bisi': 'Italian', 'carpaccio': 'Italian', 'gnocchi': 'Italian',
+            'panna cotta': 'Italian', 'risotto alla milanese': 'Italian',
             
-            # Mexican
-            'taco': 'Mexican', 'burrito': 'Mexican', 'quesadilla': 'Mexican',
-            'guacamole': 'Mexican', 'salsa': 'Mexican', 'enchilada': 'Mexican',
-            'tamale': 'Mexican', 'mole': 'Mexican', 'pico de gallo': 'Mexican',
+            # Mexican - very specific to Mexican cuisine
+            'taco al pastor': 'mexican', 'carnitas': 'mexican', 'quesadilla': 'mexican',
+            'guacamole': 'mexican', 'salsa verde': 'mexican', 'enchilada': 'mexican',
+            'tamale': 'mexican', 'mole poblano': 'mexican', 'pico de gallo': 'mexican',
+            'chiles en nogada': 'mexican', 'cochinita pibil': 'mexican',
+            'adobo': 'mexican', 'achiote': 'mexican', 'pozole': 'mexican',
+            'chilaquiles': 'mexican', 'huevos rancheros': 'mexican',
+            'chile relleno': 'mexican', 'sopaipilla': 'mexican',
+            'horchata': 'mexican', 'agua fresca': 'mexican',
+            'flautas': 'mexican', 'tostada': 'mexican', 'sopes': 'mexican',
+            'menudo': 'mexican', 'birria': 'mexican', 'churro': 'mexican',
+            'tres leches': 'mexican', 'arroz con leche': 'mexican',
             
-            # Indian
-            'curry': 'Indian', 'masala': 'Indian', 'tikka': 'Indian', 'biryani': 'Indian',
-            'naan': 'Indian', 'samosas': 'Indian', 'dal': 'Indian', 'vindaloo': 'Indian',
-            'tandoori': 'Indian', 'paneer': 'Indian', 'chutney': 'Indian', 'roti': 'Indian',
+            # Indian - very specific to Indian cuisine
+            'butter chicken': 'Indian', 'garam masala': 'Indian', 'chicken tikka masala': 'Indian', 
+            'biryani': 'Indian', 'naan': 'Indian', 'samosas': 'Indian', 'dal makhani': 'Indian', 
+            'vindaloo': 'Indian', 'tandoori chicken': 'Indian', 'paneer tikka': 'Indian', 
+            'chana masala': 'Indian', 'roti': 'Indian', 'palak paneer': 'Indian',
             
-            # Chinese
-            'dumpling': 'Chinese', 'wonton': 'Chinese', 'kung pao': 'Chinese',
-            'sweet and sour': 'Chinese', 'chow mein': 'Chinese', 'lo mein': 'Chinese',
-            'peking duck': 'Chinese', 'char siu': 'Chinese', 'bao': 'Chinese',
+            # Chinese - very specific to Chinese cuisine
+            'xiaolongbao': 'Chinese', 'char siu bao': 'Chinese', 'kung pao chicken': 'Chinese',
+            'peking duck': 'Chinese', 'char siu': 'Chinese', 'baozi': 'Chinese',
+            'mapo tofu': 'Chinese', 'hot pot': 'Chinese', 'zhajiangmian': 'Chinese',
+            'zongzi': 'Chinese', 'century egg': 'Chinese',
             
-            # Japanese
+            # Japanese - very specific to Japanese cuisine
             'sushi': 'Japanese', 'sashimi': 'Japanese', 'ramen': 'Japanese',
             'tempura': 'Japanese', 'teriyaki': 'Japanese', 'udon': 'Japanese',
-            'miso': 'Japanese', 'wasabi': 'Japanese', 'bento': 'Japanese',
+            'miso soup': 'Japanese', 'wasabi': 'Japanese', 'bento': 'Japanese',
+            'tonkatsu': 'Japanese', 'okonomiyaki': 'Japanese', 'takoyaki': 'Japanese',
             
-            # Thai
-            'pad thai': 'Thai', 'tom yum': 'Thai', 'green curry': 'Thai',
-            'massaman': 'Thai', 'satay': 'Thai', 'papaya salad': 'Thai',
+            # Thai - very specific to Thai cuisine
+            'pad thai': 'Thai', 'tom yum goong': 'Thai', 'green curry': 'Thai',
+            'massaman curry': 'Thai', 'satay': 'Thai', 'som tam': 'Thai',
+            'khao soi': 'Thai', 'pad see ew': 'Thai', 'tom kha gai': 'Thai',
+            'mango sticky rice': 'Thai', 'laab': 'Thai',
             
-            # French
-            'ratatouille': 'French', 'quiche': 'French', 'crepe': 'French',
+            # French - very specific to French cuisine
+            'ratatouille': 'French', 'quiche lorraine': 'French', 'crepe suzette': 'French',
             'croissant': 'French', 'coq au vin': 'French', 'bouillabaisse': 'French',
+            'tarte tatin': 'French', 'soufflé': 'French', 'confit de canard': 'French',
+            'boeuf bourguignon': 'French', 'cassoulet': 'French',
             
-            # Mediterranean
-            'hummus': 'Greek', 'falafel': 'Greek', 'tzatziki': 'Greek',
-            'tabbouleh': 'Greek', 'pita': 'Greek', 'baba ghanoush': 'Greek',
+            # Greek - only very specific Greek dishes
+            'tzatziki': 'Greek', 'moussaka': 'Greek', 'dolmades': 'Greek',
+            'spanakopita': 'Greek', 'gyro': 'Greek', 'souvlaki': 'Greek',
+            'baklava': 'Greek', 'pastitsio': 'Greek', 'loukoumades': 'Greek',
+            'galaktoboureko': 'Greek', 'kleftiko': 'Greek',
             
-            # American
-            'burger': 'American', 'hot dog': 'American', 'barbecue': 'American',
-            'mac and cheese': 'American', 'apple pie': 'American', 'fried chicken': 'American',
-            'biscuits and gravy': 'American', 'cornbread': 'American',
-            'grits': 'American', 'jambalaya': 'American', 'gumbo': 'American',
-            'biscuits': 'American', 'fried green tomatoes': 'American'
+            # Other Mediterranean cuisines - be very specific
+            'hummus': 'Lebanese', 'falafel': 'Levantine', 'baba ghanoush': 'Lebanese',
+            'shakshuka': 'Israeli', 'tabbouleh': 'Lebanese', 'pita': 'Middle Eastern',
+            'kibbeh': 'Lebanese', 'fattoush': 'Lebanese', 'shawarma': 'Middle Eastern',
+            'dolma': 'Turkish', 'börek': 'Turkish', 'baklava': 'Turkish',
+            'paella': 'Spanish', 'gazpacho': 'Spanish', 'tortilla española': 'Spanish',
+            
+            # American - only very specific American dishes
+            'philly cheesesteak': 'American', 'buffalo wings': 'American', 'barbecue ribs': 'American',
+            'mac and cheese': 'American', 'apple pie': 'American', 'southern fried chicken': 'American',
+            'biscuits and gravy': 'American', 'cornbread': 'American', 'clam chowder': 'American',
+            'cobb salad': 'American', 'reuben sandwich': 'American', 'buffalo chicken wings': 'American',
+            'cajun jambalaya': 'American', 'new england clam bake': 'American',
+            'tex-mex fajitas': 'American', 'california roll': 'American', 'chicago deep dish pizza': 'American'
         }
         
         # Common category to cuisine mappings
@@ -745,16 +806,39 @@ class RecipeSearchService:
         # Handle None or empty cuisine
         if not cuisine or not isinstance(cuisine, str) or not cuisine.strip() or cuisine.lower().strip() in ['none', 'null']:
             if recipe:
-                # First try to detect from dish name
                 title = recipe.get('title', '').lower()
+                
+                # First, check if the title contains a specific cuisine
+                for cuisine_name in self.VALID_CUISINES:
+                    if cuisine_name in title:
+                        return cuisine_name
+                
+                # Then try to detect from dish name patterns
                 for dish, dish_cuisine in DISH_CUISINE_MAP.items():
                     if dish in title:
-                        return dish_cuisine
-                # Then try ingredients
+                        # Make sure we're not getting a false positive
+                        # e.g., 'taco' in 'tacorice' (Japanese)
+                        if dish == 'taco' and 'tacorice' in title:
+                            continue
+                        return dish_cuisine.lower()  # Ensure lowercase for consistency
+                
+                # Then try to detect from ingredients
                 detected = self._detect_cuisine_from_ingredients(recipe)
-                if detected and detected.lower() in CUISINE_TO_COUNTRY:
-                    return CUISINE_TO_COUNTRY[detected.lower()]
-            return 'American'  # Default fallback
+                if detected:
+                    detected = detected.lower()
+                    # Only return if we have a specific cuisine match
+                    if detected in self.VALID_CUISINES:
+                        return detected
+                    # Only use the mapping if it results in a specific cuisine
+                    mapped = CUISINE_TO_COUNTRY.get(detected, '')
+                    if mapped:
+                        return mapped.lower()  # Ensure lowercase
+            
+            # Only default to American if we really can't determine anything else
+            # and the recipe appears to be American-style
+            if recipe and any(ing in recipe.get('title', '').lower() for ing in ['burger', 'hot dog', 'barbecue', 'mac and cheese']):
+                return 'American'
+            return ''  # Return empty string instead of defaulting
             
         # Clean and normalize the cuisine string
         cuisine = cuisine.strip().lower()
@@ -765,7 +849,11 @@ class RecipeSearchService:
             
         # Check if it's a known cuisine that needs mapping to a country
         if cuisine in CUISINE_TO_COUNTRY:
-            return CUISINE_TO_COUNTRY[cuisine]
+            mapped = CUISINE_TO_COUNTRY[cuisine]
+            # Only return the mapped value if it's not empty
+            if mapped:
+                return mapped
+            # If mapped to empty string, continue to other detection methods
             
         # Check if it's in our dish mapping
         if recipe:
@@ -780,8 +868,10 @@ class RecipeSearchService:
             if detected and detected.lower() in CUISINE_TO_COUNTRY:
                 return CUISINE_TO_COUNTRY[detected.lower()]
                 
-        # If we still don't have a match, default to American
-        return 'American'
+        # If we still don't have a match, return empty string instead of defaulting
+        # This allows the recipe to be tagged with multiple cuisines or none at all
+        # rather than incorrectly defaulting to American
+        return ''
     
     def _calculate_avg_rating(self, ratings: List[float]) -> float:
         """Calculate average rating"""

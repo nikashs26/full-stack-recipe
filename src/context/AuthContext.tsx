@@ -1,7 +1,9 @@
 
 
-import React, { createContext, useContext, useEffect, useState, useMemo, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
 import { useToast } from '@/hooks/use-toast';
+import { apiCall } from '@/utils/apiUtils';
+import { API_BASE_URL } from '../config/api';
 
 interface User {
   user_id: string;
@@ -46,29 +48,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
-  const API_BASE_URL = 'http://localhost:5003/api';
-
-  // Helper function to make authenticated API calls
-  const apiCall = async (endpoint: string, options: RequestInit = {}) => {
-    const url = `${API_BASE_URL}${endpoint}`;
-    const headers = {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-      'X-Requested-With': 'XMLHttpRequest',
-      ...options.headers,
-    };
-
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-
-    return fetch(url, {
-      ...options,
-      headers,
-      credentials: 'include',
-    });
-  };
-
   // Load token from localStorage on app start
   useEffect(() => {
     const loadAuthState = async () => {
@@ -78,51 +57,69 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (savedToken) {
         setToken(savedToken);
         try {
-          const response = await fetch(`${API_BASE_URL}/auth/me`, {
+          const response = await apiCall('/auth/me', {
+            method: 'GET',
             headers: {
               'Authorization': `Bearer ${savedToken}`,
               'Content-Type': 'application/json',
               'Accept': 'application/json'
-            },
-            credentials: 'include'
+            }
           });
           
           if (response.ok) {
             const data = await response.json();
             setUser(data.user);
             
-            // Check if token needs refresh (if less than 1 day remaining)
-            const tokenData = JSON.parse(atob(savedToken.split('.')[1]));
-            const expiresIn = tokenData.exp * 1000 - Date.now(); // Convert to milliseconds
-            
-            if (expiresIn < 24 * 60 * 60 * 1000) { // Less than 1 day remaining
-              // Refresh token
-              const refreshResponse = await fetch(`${API_BASE_URL}/auth/refresh`, {
-                method: 'POST',
-                headers: {
-                  'Authorization': `Bearer ${savedToken}`,
-                  'Content-Type': 'application/json'
-                },
-                credentials: 'include'
-              });
+            // Check if token needs refresh (if less than 1 hour remaining)
+            try {
+              const tokenData = JSON.parse(atob(savedToken.split('.')[1]));
+              const expiresIn = tokenData.exp * 1000 - Date.now(); // Convert to milliseconds
               
-              if (refreshResponse.ok) {
-                const refreshData = await refreshResponse.json();
-                localStorage.setItem('auth_token', refreshData.token);
-                setToken(refreshData.token);
+              if (expiresIn < 60 * 60 * 1000) { // Less than 1 hour remaining
+                // Refresh token
+                const refreshToken = localStorage.getItem('refresh_token');
+                if (refreshToken) {
+                  try {
+                    const refreshResponse = await apiCall('/auth/refresh', {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                      },
+                      body: JSON.stringify({ refresh_token: refreshToken })
+                    });
+
+                    if (refreshResponse.ok) {
+                      const refreshData = await refreshResponse.json();
+                      if (refreshData.token) {
+                        localStorage.setItem('auth_token', refreshData.token);
+                        setToken(refreshData.token);
+                        if (refreshData.refresh_token) {
+                          localStorage.setItem('refresh_token', refreshData.refresh_token);
+                        }
+                      }
+                    }
+                  } catch (error) {
+                    console.error('Error refreshing token:', error);
+                  }
+                }
               }
+            } catch (error) {
+              console.error('Error parsing token:', error);
             }
           } else {
-            // Token is invalid
-            localStorage.removeItem('auth_token');
-            setToken(null);
+            // If /me fails, clear auth state
             setUser(null);
+            setToken(null);
+            localStorage.removeItem('auth_token');
+            localStorage.removeItem('refresh_token');
           }
         } catch (error) {
-          console.error('Auth check failed:', error);
-          localStorage.removeItem('auth_token');
-          setToken(null);
+          console.error('Error verifying token:', error);
           setUser(null);
+          setToken(null);
+          localStorage.removeItem('auth_token');
+          localStorage.removeItem('refresh_token');
         }
       }
       
@@ -142,13 +139,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const expiresIn = tokenData.exp * 1000 - Date.now(); // Convert to milliseconds
         
         if (expiresIn < 24 * 60 * 60 * 1000) { // Less than 1 day remaining
-          const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+          const response = await apiCall('/auth/refresh', {
             method: 'POST',
             headers: {
               'Authorization': `Bearer ${token}`,
               'Content-Type': 'application/json'
-            },
-            credentials: 'include'
+            }
           });
           
           if (response.ok) {
@@ -169,13 +165,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const verifyTokenAndLoadUser = async (tokenToCheck: string): Promise<boolean> => {
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/me`, {
+      const response = await apiCall('/auth/me', {
+        method: 'GET',
         headers: {
           'Authorization': `Bearer ${tokenToCheck}`,
           'Content-Type': 'application/json',
           'Accept': 'application/json'
-        },
-        credentials: 'include'
+        }
       });
       
       if (response.ok) {

@@ -23,10 +23,11 @@ app = Flask(__name__)
 cors = CORS(app, 
     resources={
         r"/*": {
-            "origins": ["http://localhost:8081", "http://127.0.0.1:8081"],
+            "origins": ["http://localhost:8081", "http://127.0.0.1:8081", 
+                        "http://localhost:8083", "http://127.0.0.1:8083"],
             "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-            "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"],
-            "expose_headers": ["Content-Type", "Authorization"],
+            "allow_headers": ["Content-Type", "Authorization", "X-Requested-With", "x-requested-with"],
+            "expose_headers": ["Content-Type", "Authorization", "X-Requested-With", "x-requested-with"],
             "supports_credentials": True,
             "max_age": 3600
         }
