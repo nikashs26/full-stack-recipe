@@ -13,12 +13,22 @@ class RecipeSearchService:
     Advanced recipe search using ChromaDB for semantic similarity
     """
     
+    # Define valid cuisines for proper filtering
+    VALID_CUISINES = [
+        'american', 'british', 'canadian', 'chinese', 'dutch', 'french', 'greek', 
+        'indian', 'irish', 'italian', 'jamaican', 'japanese', 'kenyan', 'malaysian', 
+        'mexican', 'moroccan', 'russian', 'spanish', 'thai', 'tunisian', 'turkish', 
+        'vietnamese', 'lebanese', 'polish', 'german', 'swedish', 'lithuanian', 
+        'ethiopian', 'nigerian', 'south african', 'brazilian', 'australian', 
+        'hawaiian', 'north african', 'west african', 'east african', 'southern african',
+        'mediterranean'
+    ]
+    
     def __init__(self):
         self.client = chromadb.PersistentClient(path="./chroma_db")
-        self.recipe_collection = self.client.get_or_create_collection(
-            name="recipes",
-            metadata={"description": "Recipe collection with semantic search capabilities"}
-        )
+        # Use the same collection as RecipeCacheService which is working
+        self.recipe_collection = self.client.get_collection("recipe_details_cache")
+        print("Using recipe_details_cache collection for search")
         
         try:
             # Initialize sentence transformer for better embeddings
@@ -39,7 +49,7 @@ class RecipeSearchService:
         metadata = {
             "recipe_id": str(recipe.get("id", "")),
             "name": recipe.get("name", ""),
-            "cuisine": recipe.get("cuisine", ""),
+            "cuisine": self._normalize_cuisine(recipe.get("cuisine", "")), # Use normalized cuisine
             "difficulty": recipe.get("difficulty", ""),
             "meal_type": recipe.get("mealType", ""),
             "cooking_time": recipe.get("cookingTime", ""),
@@ -70,7 +80,7 @@ class RecipeSearchService:
             self.recipe_collection.upsert(
                 documents=[searchable_text],
                 metadatas=[metadata],
-                ids=[f"recipe_{recipe.get('id')}"],
+                ids=[str(recipe.get('id'))],  # Use recipe ID directly, not prefixed
                 embeddings=[embedding] if embedding else None
             )
             logger.info(f"Successfully indexed recipe: {metadata['name']}")
@@ -87,51 +97,278 @@ class RecipeSearchService:
         where_clause = self._build_where_clause(filters)
         
         try:
-            # Perform semantic search with expanded query
-            results = self.recipe_collection.query(
-                query_texts=[expanded_query],
-                n_results=min(limit * 3, 1000),  # Fetch more for post-ranking
-                where=where_clause if where_clause else None,
-                include=['documents', 'metadatas', 'distances']
-            )
+            print(f"Searching with query: '{expanded_query}'")
+            print(f"Where clause: {where_clause}")
             
-            if not results or not results['documents']:
+            # First, try to get all documents to see what's available
+            all_docs = self.recipe_collection.get(limit=5)
+            print(f"Collection has {len(all_docs['documents'])} documents available")
+            
+            # Show sample documents to debug
+            if all_docs['documents']:
+                print("Sample documents:")
+                for i, (doc, metadata) in enumerate(zip(all_docs['documents'], all_docs['metadatas'])):
+                    print(f"  Doc {i+1}: {metadata.get('name', 'No name')} - {doc[:100]}...")
+            
+            # Try multiple search strategies
+            results = None
+            
+            # Strategy 1: Try the expanded query
+            try:
+                results = self.recipe_collection.query(
+                    query_texts=[expanded_query],
+                    n_results=min(limit * 3, 1000),
+                    where=where_clause if where_clause else None,
+                    include=['documents', 'metadatas', 'distances']
+                )
+                print(f"Strategy 1 (expanded query) found {len(results['documents'][0]) if results and results['documents'] else 0} results")
+            except Exception as e:
+                print(f"Strategy 1 failed: {e}")
+            
+            # Strategy 2: If no results, try the original query
+            if not results or not results['documents'] or len(results['documents'][0]) == 0:
+                try:
+                    results = self.recipe_collection.query(
+                        query_texts=[query],
+                        n_results=min(limit * 3, 1000),
+                        where=where_clause if where_clause else None,
+                        include=['documents', 'metadatas', 'distances']
+                    )
+                    print(f"Strategy 2 (original query) found {len(results['documents'][0]) if results and results['documents'] else 0} results")
+                except Exception as e:
+                    print(f"Strategy 2 failed: {e}")
+            
+            # Strategy 3: If still no results, try a generic search
+            if not results or not results['documents'] or len(results['documents'][0]) == 0:
+                try:
+                    results = self.recipe_collection.query(
+                        query_texts=["recipe"],
+                        n_results=min(limit * 3, 1000),
+                        where=where_clause if where_clause else None,
+                        include=['documents', 'metadatas', 'distances']
+                    )
+                    print(f"Strategy 3 (generic search) found {len(results['documents'][0]) if results and results['documents'] else 0} results")
+                except Exception as e:
+                    print(f"Strategy 3 failed: {e}")
+            
+            # Strategy 4: If still no results, try without any filters
+            if not results or not results['documents'] or len(results['documents'][0]) == 0:
+                try:
+                    results = self.recipe_collection.query(
+                        query_texts=[expanded_query],
+                        n_results=min(limit * 3, 1000),
+                        include=['documents', 'metadatas', 'distances']
+                    )
+                    print(f"Strategy 4 (no filters) found {len(results['documents'][0]) if results and results['documents'] else 0} results")
+                except Exception as e:
+                    print(f"Strategy 4 failed: {e}")
+            
+            # Strategy 5: If still no results, try with just the first word of the query
+            if not results or not results['documents'] or len(results['documents'][0]) == 0:
+                try:
+                    first_word = query.split()[0] if query else "recipe"
+                    results = self.recipe_collection.query(
+                        query_texts=[first_word],
+                        n_results=min(limit * 3, 1000),
+                        include=['documents', 'metadatas', 'distances']
+                    )
+                    print(f"Strategy 5 (first word: {first_word}) found {len(results['documents'][0]) if results and results['documents'] else 0} results")
+                except Exception as e:
+                    print(f"Strategy 5 failed: {e}")
+            
+            if not results or not results['documents'] or len(results['documents'][0]) == 0:
+                print("All search strategies failed - no results found")
                 return []
+            
+            print(f"Final search found {len(results['documents'][0])} results")
             
             # Process and rank results
             processed_results = []
             for i, doc in enumerate(results['documents'][0]):
-                metadata = results['metadatas'][0][i]
-                base_score = 1 - results['distances'][0][i]  # Convert distance to similarity
-                
-                # Calculate final ranking score incorporating multiple factors
-                final_score = self._calculate_ranking_score(
-                    base_score=base_score,
-                    metadata=metadata,
-                    query=query  # Use original query for ranking
-                )
-                
-                processed_results.append({
-                    "recipe_id": metadata["recipe_id"],
-                    "name": metadata["name"],
-                    "cuisine": metadata["cuisine"],
-                    "difficulty": metadata["difficulty"],
-                    "meal_type": metadata["meal_type"],
-                    "cooking_time": metadata["cooking_time"],
-                    "avg_rating": metadata["avg_rating"],
-                    "calories": metadata["calories"],
-                    "protein": metadata["protein"],
-                    "servings": metadata["servings"],
-                    "similarity_score": final_score,
-                    "metadata": metadata
-                })
+                try:
+                    metadata = results['metadatas'][0][i]
+                    base_score = 1 - results['distances'][0][i]  # Convert distance to similarity
+                    
+                    # Try to parse the document as JSON first
+                    recipe_data = {}
+                    try:
+                        if doc.startswith('{'):
+                            # Parse JSON document
+                            doc_recipe = json.loads(doc)
+                            recipe_data = {
+                                'id': doc_recipe.get('id', metadata.get('recipe_id', '')),
+                                'name': doc_recipe.get('name', doc_recipe.get('title', '')),
+                                'title': doc_recipe.get('title', doc_recipe.get('name', '')),
+                                'cuisine': doc_recipe.get('cuisine', ''),
+                                'description': doc_recipe.get('description', ''),
+                                'ingredients': doc_recipe.get('ingredients', []),
+                                'instructions': doc_recipe.get('instructions', ''),
+                                'difficulty': doc_recipe.get('difficulty', ''),
+                                'meal_type': doc_recipe.get('mealType', ''),
+                                'cooking_time': doc_recipe.get('cookingTime', ''),
+                                'calories': doc_recipe.get('nutrition', {}).get('calories', 0),
+                                'protein': doc_recipe.get('nutrition', {}).get('protein', 0),
+                                'servings': doc_recipe.get('servings', 0),
+                                'avg_rating': doc_recipe.get('avg_rating', 0),
+                                'ingredient_count': len(doc_recipe.get('ingredients', [])),
+                                'is_vegetarian': "vegetarian" in doc_recipe.get('dietaryRestrictions', []),
+                                'is_vegan': "vegan" in doc_recipe.get('dietaryRestrictions', []),
+                                'is_gluten_free': "gluten-free" in doc_recipe.get('dietaryRestrictions', []),
+                                'similarity_score': base_score,
+                                # Add missing fields with proper image handling
+                                'image': doc_recipe.get('image', doc_recipe.get('imageUrl', '')),
+                                'imageUrl': doc_recipe.get('imageUrl', doc_recipe.get('image', '')),
+                                'dietaryRestrictions': doc_recipe.get('dietaryRestrictions', []),
+                                'cuisines': doc_recipe.get('cuisines', [doc_recipe.get('cuisine', '')]),
+                                'diets': doc_recipe.get('diets', []),
+                                'readyInMinutes': doc_recipe.get('readyInMinutes', doc_recipe.get('cookingTime', 30)),
+                                'ready_in_minutes': doc_recipe.get('readyInMinutes', doc_recipe.get('cookingTime', 30)),
+                                'sourceUrl': doc_recipe.get('sourceUrl', ''),
+                                'summary': doc_recipe.get('summary', doc_recipe.get('description', '')),
+                                # Add additional fields for better frontend compatibility
+                                'strMeal': doc_recipe.get('strMeal', doc_recipe.get('name', '')),
+                                'strMealThumb': doc_recipe.get('strMealThumb', doc_recipe.get('image', '')),
+                                'strInstructions': doc_recipe.get('strInstructions', doc_recipe.get('instructions', '')),
+                                'strCategory': doc_recipe.get('strCategory', doc_recipe.get('cuisine', '')),
+                                'strArea': doc_recipe.get('strArea', doc_recipe.get('cuisine', '')),
+                                # Enhanced nutrition information
+                                'nutrition': {
+                                    'calories': doc_recipe.get('nutrition', {}).get('calories', 0),
+                                    'protein': doc_recipe.get('nutrition', {}).get('protein', 0),
+                                    'carbs': doc_recipe.get('nutrition', {}).get('carbohydrates', doc_recipe.get('nutrition', {}).get('carbs', 0)),
+                                    'fat': doc_recipe.get('nutrition', {}).get('fat', 0),
+                                    'fiber': doc_recipe.get('nutrition', {}).get('fiber', 0),
+                                    'sugar': doc_recipe.get('nutrition', {}).get('sugar', 0),
+                                    'sodium': doc_recipe.get('nutrition', {}).get('sodium', 0)
+                                },
+                                'servings': doc_recipe.get('servings', 1),
+                                'servingSize': doc_recipe.get('nutrition', {}).get('servingSize', '1 serving'),
+                                # Calculate macros per serving if available
+                                'macrosPerServing': self._calculate_macros_per_serving(doc_recipe)
+                            }
+                        else:
+                            # Fallback to metadata-based recipe data
+                            recipe_data = {
+                                'id': metadata.get('recipe_id', metadata.get('id', '')),
+                                'name': metadata.get('name', metadata.get('title', '')),
+                                'title': metadata.get('name', metadata.get('title', '')),
+                                'cuisine': metadata.get('cuisine', ''),
+                                'description': doc[:200] + '...' if len(doc) > 200 else doc,
+                                'difficulty': metadata.get('difficulty', ''),
+                                'meal_type': metadata.get('meal_type', ''),
+                                'cooking_time': metadata.get('cooking_time', ''),
+                                'calories': metadata.get('calories', 0),
+                                'protein': metadata.get('protein', 0),
+                                'servings': metadata.get('servings', 0),
+                                'avg_rating': metadata.get('avg_rating', 0),
+                                'ingredient_count': metadata.get('ingredient_count', 0),
+                                'is_vegetarian': metadata.get('is_vegetarian', False),
+                                'is_vegan': metadata.get('is_vegan', False),
+                                'is_gluten_free': metadata.get('is_gluten_free', False),
+                                'similarity_score': base_score,
+                                # Add missing fields with better defaults
+                                'image': 'https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?auto=format&fit=crop&w=400&h=300&q=80',
+                                'imageUrl': 'https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?auto=format&fit=crop&w=400&h=300&q=80',
+                                'dietaryRestrictions': [],
+                                'cuisines': [metadata.get('cuisine', '')],
+                                'diets': [],
+                                'readyInMinutes': 30,
+                                'ready_in_minutes': 30,
+                                'sourceUrl': '',
+                                'summary': doc[:200] + '...' if len(doc) > 200 else doc,
+                                # Enhanced nutrition information
+                                'nutrition': {
+                                    'calories': metadata.get('calories', 300),
+                                    'protein': metadata.get('protein', 15),
+                                    'carbs': metadata.get('carbs', 30),
+                                    'fat': metadata.get('fat', 10),
+                                    'fiber': metadata.get('fiber', 3),
+                                    'sugar': metadata.get('sugar', 5),
+                                    'sodium': metadata.get('sodium', 400)
+                                },
+                                'servings': metadata.get('servings', 1),
+                                'servingSize': metadata.get('servingSize', '1 serving'),
+                                # Calculate macros per serving
+                                'macrosPerServing': {
+                                    'calories': metadata.get('calories', 300),
+                                    'protein': metadata.get('protein', 15),
+                                    'carbs': metadata.get('carbs', 30),
+                                    'fat': metadata.get('fat', 10)
+                                }
+                            }
+                    except json.JSONDecodeError:
+                        # If JSON parsing fails, use metadata-based approach
+                        recipe_data = {
+                            'id': metadata.get('recipe_id', metadata.get('id', '')),
+                            'name': metadata.get('name', metadata.get('title', '')),
+                            'title': metadata.get('name', metadata.get('title', '')),
+                            'cuisine': metadata.get('cuisine', ''),
+                            'description': doc[:200] + '...' if len(doc) > 200 else doc,
+                            'difficulty': metadata.get('difficulty', ''),
+                            'meal_type': metadata.get('meal_type', ''),
+                            'cooking_time': metadata.get('cooking_time', ''),
+                            'calories': metadata.get('calories', 0),
+                            'protein': metadata.get('protein', 0),
+                            'servings': metadata.get('servings', 0),
+                            'avg_rating': metadata.get('avg_rating', 0),
+                            'ingredient_count': metadata.get('ingredient_count', 0),
+                            'is_vegetarian': metadata.get('is_vegetarian', False),
+                            'is_vegan': metadata.get('is_vegan', False),
+                            'is_gluten_free': metadata.get('is_gluten_free', False),
+                            'similarity_score': base_score,
+                            # Add missing fields with better defaults
+                            'image': 'https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?auto=format&fit=crop&w=400&h=300&q=80',
+                            'imageUrl': 'https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?auto=format&fit=crop&w=400&h=300&q=80',
+                            'dietaryRestrictions': [],
+                            'cuisines': [metadata.get('cuisine', '')],
+                            'diets': [],
+                            'readyInMinutes': 30,
+                            'ready_in_minutes': 30,
+                            'sourceUrl': '',
+                            'summary': doc[:200] + '...' if len(doc) > 200 else doc,
+                            # Enhanced nutrition information
+                            'nutrition': {
+                                'calories': metadata.get('calories', 300),
+                                'protein': metadata.get('protein', 15),
+                                'carbs': metadata.get('carbs', 30),
+                                'fat': metadata.get('fat', 10),
+                                'fiber': metadata.get('fiber', 3),
+                                'sugar': metadata.get('sugar', 5),
+                                'sodium': metadata.get('sodium', 400)
+                            },
+                            'servings': metadata.get('servings', 1),
+                            'servingSize': metadata.get('servingSize', '1 serving'),
+                            # Calculate macros per serving
+                            'macrosPerServing': {
+                                'calories': metadata.get('calories', 300),
+                                'protein': metadata.get('protein', 15),
+                                'carbs': metadata.get('carbs', 30),
+                                'fat': metadata.get('fat', 10)
+                            }
+                        }
+                    
+                    # Calculate final ranking score incorporating multiple factors
+                    final_score = self._calculate_ranking_score(
+                        base_score=base_score,
+                        metadata=metadata,
+                        query=query  # Use original query for ranking
+                    )
+                    
+                    recipe_data["similarity_score"] = final_score
+                    processed_results.append(recipe_data)
+                    
+                except Exception as e:
+                    print(f"Error processing result {i}: {e}")
+                    continue
             
             # Sort by final score and return top results
-            processed_results.sort(key=lambda x: x["similarity_score"], reverse=True)
+            processed_results.sort(key=lambda x: x.get("similarity_score", 0), reverse=True)
             return processed_results[:limit]
             
         except Exception as e:
-            logger.error(f"Error during semantic search: {e}")
+            print(f"Error during semantic search: {e}")
+            import traceback
+            traceback.print_exc()
             return []
 
     def _build_where_clause(self, filters: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -235,7 +472,7 @@ class RecipeSearchService:
         """
         # Get the recipe document
         recipe_doc = self.recipe_collection.get(
-            ids=[f"recipe_{recipe_id}"],
+            ids=[str(recipe_id)],  # Use recipe ID directly, not prefixed
             include=['documents']
         )
         
@@ -273,33 +510,14 @@ class RecipeSearchService:
         return similar_recipes
     
     def get_recipe_recommendations(self, user_preferences: Dict[str, Any], limit: int = 8) -> List[Dict[str, Any]]:
-        """
-        Get personalized recipe recommendations based on user preferences.
-        Prioritizes recipes matching both favorite cuisine and favorite food, then fills with favorite food (any cuisine), then favorite cuisine (any food), then others. Always includes at least one favorite food recipe if possible.
-        """
-        favorite_foods = [f.lower() for f in user_preferences.get("favoriteFoods", [])]
-        favorite_cuisines = set(self._normalize_cuisine(c).lower() for c in user_preferences.get("favoriteCuisines", []))
+        favorite_foods = [f.lower() for f in user_preferences.get("favoriteFoods", []) if f]
+        favorite_cuisines = set(self._normalize_cuisine(c, None).lower() for c in user_preferences.get("favoriteCuisines", []) if c)
+        foods_to_avoid = set(f.lower() for f in user_preferences.get("foodsToAvoid", []) if f)
         dietary_restrictions = [d.lower() for d in user_preferences.get("dietaryRestrictions", [])]
-        health_goals = user_preferences.get("healthGoals", [])
-        meal_types = user_preferences.get("mealTypes", [])
-        skill_level = user_preferences.get("cookingSkillLevel", None)
 
-        # Build a broad query to get a large pool of candidates
-        query_parts = []
-        if favorite_foods:
-            food_terms = [f'"{food}"' for food in favorite_foods]
-            query_parts.append(f"({' OR '.join(food_terms)})")
-        if dietary_restrictions:
-            query_parts.append(" AND ".join(dietary_restrictions))
-        if health_goals:
-            query_parts.append(" ".join(health_goals))
-        if meal_types:
-            query_parts.append(f"({' OR '.join(meal_types)})")
-        if skill_level:
-            query_parts.append(f"difficulty: {skill_level.lower()}")
-        query = " ".join(query_parts) if query_parts else "popular delicious recipes"
+        print(f"User selected cuisines: {favorite_cuisines}")
+        print(f"User favorite foods: {favorite_foods}")
 
-        # Build filters
         filters = {}
         if "vegetarian" in dietary_restrictions:
             filters["is_vegetarian"] = True
@@ -307,84 +525,518 @@ class RecipeSearchService:
             filters["is_vegan"] = True
         if "gluten-free" in dietary_restrictions:
             filters["is_gluten_free"] = True
-        # Don't filter by cuisine yet; we'll do that in post-processing
 
-        # Get a large pool of candidates (broad query)
-        candidates = self.semantic_search(query, filters, limit * 10)
-
-        # If favorite foods are present, also get candidates with just favorite food(s) as the query (no cuisine restriction)
-        food_candidates = []
-        if favorite_foods:
-            for food in favorite_foods:
-                food_results = self.semantic_search(food, filters, limit * 5)
-                food_candidates.extend(food_results)
-
-        # Merge and deduplicate candidates by recipe_id
-        seen_ids = set()
-        all_candidates = []
-        for r in candidates + food_candidates:
-            rid = r.get('recipe_id') or r.get('id')
-            if rid and rid not in seen_ids:
-                all_candidates.append(r)
-                seen_ids.add(rid)
-
-        if not all_candidates:
-            return []
-
-        # Helper to check for favorite food in a recipe
+        # Define helper functions first
         def has_fav_food(recipe):
-            text = ' '.join([
-                str(recipe.get('name', '')),
-                str(recipe.get('description', '')),
-                ' '.join([ing['name'] if isinstance(ing, dict) and 'name' in ing else str(ing) for ing in recipe.get('ingredients', [])]),
-                str(recipe.get('instructions', ''))
-            ]).lower()
-            return any(food in text for food in favorite_foods)
+            if not recipe:
+                return False
+                
+            # Get all searchable text from the recipe
+            text_parts = [
+                str(recipe.get('name', '') or ''),
+                str(recipe.get('title', '') or ''),
+                str(recipe.get('description', '') or ''),
+                str(recipe.get('cuisine', '') or '')
+            ]
+            
+            # Also check ingredients if available
+            ingredients = recipe.get('ingredients', [])
+            if ingredients:
+                for ing in ingredients:
+                    if isinstance(ing, dict):
+                        if 'name' in ing:
+                            text_parts.append(str(ing['name']))
+                        elif 'ingredient' in ing:
+                            text_parts.append(str(ing['ingredient']))
+                    else:
+                        text_parts.append(str(ing))
+            
+            # Create a single lowercase string for searching
+            search_text = ' '.join(text_parts).lower()
+            
+            # Check each favorite food
+            for food in favorite_foods:
+                if not food:  # Skip empty foods
+                    continue
+                    
+                # Check for exact word matches
+                if f' {food} ' in f' {search_text} ' or \
+                   search_text.startswith(f'{food} ') or \
+                   search_text.endswith(f' {food}') or \
+                   search_text == food:
+                    return True
+                    
+                # Check for partial matches (for foods like "burger" in "hamburger")
+                if food in search_text:
+                    return True
+                    
+                # Also check for plural/singular forms
+                if food.endswith('s') and (f' {food[:-1]} ' in f' {search_text} ' or
+                                         search_text.startswith(f'{food[:-1]} ')):
+                    return True
+                    
+                # Check for common variations
+                if food == 'burger':
+                    if 'hamburger' in search_text or 'beef' in search_text or 'patty' in search_text:
+                        return True
+                        
+            return False
 
-        # Helper to check for favorite cuisine in a recipe
-        def has_fav_cuisine(recipe):
-            cuisine = self._normalize_cuisine(recipe.get('cuisine', ''), recipe).lower()
-            return cuisine in favorite_cuisines
+        def in_fav_cuisine(recipe):
+            if not recipe or not favorite_cuisines:
+                return False
+                
+            # Try multiple ways to get cuisine
+            recipe_cuisine = ''
+            
+            # First try the normalized cuisine field
+            if recipe.get('cuisine'):
+                recipe_cuisine = self._normalize_cuisine(recipe.get('cuisine', ''), recipe).lower()
+            
+            # If no cuisine found, try cuisines array
+            if not recipe_cuisine and recipe.get('cuisines'):
+                cuisines = recipe.get('cuisines', [])
+                if isinstance(cuisines, list) and cuisines:
+                    for cuisine in cuisines:
+                        if cuisine:
+                            recipe_cuisine = self._normalize_cuisine(cuisine, recipe).lower()
+                            if recipe_cuisine:
+                                break
+            
+            # If still no cuisine, try to detect from recipe content
+            if not recipe_cuisine:
+                recipe_cuisine = self._detect_cuisine_from_ingredients(recipe).lower()
+            
+            # Check if any favorite cuisine matches
+            for fav_cuisine in favorite_cuisines:
+                if fav_cuisine and fav_cuisine.lower() == recipe_cuisine:
+                    return True
+                    
+                # For broad cuisines like "International", be more flexible
+                if fav_cuisine.lower() in ['international', 'global', 'world', 'fusion']:
+                    # If the recipe has any recognizable cuisine, it's considered "international"
+                    if recipe_cuisine and recipe_cuisine not in ['', 'none', 'unknown', 'n/a']:
+                        return True
+                        
+            return False
 
-        # Partition candidates
-        both = []  # Matches both favorite food and cuisine
-        food_only = []  # Matches favorite food (any cuisine)
-        cuisine_only = []  # Matches favorite cuisine (any food)
-        others = []
-        for recipe in all_candidates:
-            food = has_fav_food(recipe)
-            cuisine = has_fav_cuisine(recipe)
-            if food and cuisine:
-                both.append(recipe)
-            elif food:
-                food_only.append(recipe)
-            elif cuisine:
-                cuisine_only.append(recipe)
-            else:
-                others.append(recipe)
+        def has_foods_to_avoid(recipe):
+            if not recipe or not foods_to_avoid:
+                return False
+            # Get all searchable text from the recipe
+            text_parts = [
+                str(recipe.get('name', '') or ''),
+                str(recipe.get('title', '') or ''),
+                str(recipe.get('description', '') or ''),
+                str(recipe.get('cuisine', '') or '')
+            ]
+            
+            # Create a single lowercase string for searching
+            search_text = ' '.join(text_parts).lower()
+            
+            # Check each food to avoid
+            for food in foods_to_avoid:
+                if not food:  # Skip empty foods
+                    continue
+                if food in search_text:
+                    return True
+            return False
 
-        # Build recommendations
-        recommendations = []
-        # 1. Fill with both-matches
-        recommendations.extend(both[:limit])
-        # 2. Fill with food-only matches
-        if len(recommendations) < limit:
-            needed = limit - len(recommendations)
-            recommendations.extend(food_only[:needed])
-        # 3. Fill with cuisine-only matches
-        if len(recommendations) < limit:
-            needed = limit - len(recommendations)
-            recommendations.extend(cuisine_only[:needed])
-        # 4. Fill with others
-        if len(recommendations) < limit:
-            needed = limit - len(recommendations)
-            recommendations.extend(others[:needed])
-        # 5. Guarantee at least one favorite food recipe if possible
+        def count_matching_foods(recipe):
+            if not recipe:
+                return 0
+                
+            count = 0
+            # Get all searchable text from the recipe
+            text_parts = [
+                str(recipe.get('name', '') or ''),
+                str(recipe.get('title', '') or ''),
+                str(recipe.get('description', '') or ''),
+                str(recipe.get('cuisine', '') or '')
+            ]
+            
+            # Also check ingredients if available
+            ingredients = recipe.get('ingredients', [])
+            if ingredients:
+                for ing in ingredients:
+                    if isinstance(ing, dict):
+                        if 'name' in ing:
+                            text_parts.append(str(ing['name']))
+                        elif 'ingredient' in ing:
+                            text_parts.append(str(ing['ingredient']))
+                    else:
+                        text_parts.append(str(ing))
+            
+            # Create a single lowercase string for searching
+            search_text = ' '.join(text_parts).lower()
+            
+            # Check each favorite food
+            for food in favorite_foods:
+                if not food:  # Skip empty foods
+                    continue
+                    
+                # Check for exact word matches
+                if f' {food} ' in f' {search_text} ' or \
+                   search_text.startswith(f'{food} ') or \
+                   search_text.endswith(f' {food}') or \
+                   search_text == food:
+                    count += 1
+                    continue
+                    
+                # Check for partial matches (for foods like "burger" in "hamburger")
+                if food in search_text:
+                    count += 1
+                    continue
+                    
+                # Also check for plural/singular forms
+                if food.endswith('s') and (f' {food[:-1]} ' in f' {search_text} ' or
+                                         search_text.startswith(f'{food[:-1]} ')):
+                    count += 1
+                    continue
+                    
+                # Check for common variations
+                if food == 'burger':
+                    if 'hamburger' in search_text or 'beef' in search_text or 'patty' in search_text:
+                        count += 1
+                        continue
+                    
+            return count
+        
+        # Always search for favorite foods first if present
         if favorite_foods:
-            if not any(has_fav_food(r) for r in recommendations) and (food_only or both):
-                # Replace last with a favorite food recipe
-                recommendations[-1] = (food_only or both)[0]
-        return recommendations[:limit]
+            print(f"Searching for favorite foods: {favorite_foods}")
+            # Build a query that looks for any of the favorite foods
+            # Use space-separated format instead of OR operators for ChromaDB
+            query = " ".join(favorite_foods)
+            print(f"Food search query: {query}")
+            
+            # Get more candidates since we're searching for specific foods
+            candidates = self.semantic_search(query, filters, limit * 30)
+            print(f"Found {len(candidates)} candidates with favorite foods")
+            
+            # If no results, try searching for each food individually
+            if not candidates:
+                print("No results with combined search, trying individual food searches...")
+                for food in favorite_foods:
+                    food_candidates = self.semantic_search(food, filters, limit * 10)
+                    candidates.extend(food_candidates)
+                    print(f"Found {len(food_candidates)} candidates for '{food}'")
+            
+            # Filter to only include recipes that actually contain at least one favorite food
+            candidates = [r for r in candidates if has_fav_food(r)]
+            print(f"After filtering for actual food matches: {len(candidates)} candidates")
+            
+        # If we have cuisines, also search within those cuisines
+        elif favorite_cuisines:
+            # Check if any of the cuisines are "International" or similar broad terms
+            has_broad_cuisine = any(c.lower() in ['international', 'global', 'world', 'fusion'] for c in favorite_cuisines)
+            
+            if has_broad_cuisine:
+                # For broad cuisines like "International", get popular recipes
+                print(f"Broad cuisine detected, getting popular recipes")
+                candidates = self.semantic_search("popular recipes", filters, limit * 10)
+            else:
+                # Search for each selected cuisine separately to ensure we get recipes from those cuisines
+                all_candidates = []
+                for cuisine in favorite_cuisines:
+                    print(f"Searching for recipes in cuisine: {cuisine}")
+                    # Search with cuisine-specific terms
+                    search_terms = [cuisine]  # Use simple terms instead of quoted terms
+                    
+                    query = " ".join(search_terms)
+                    print(f"Cuisine search query: {query}")
+                    cuisine_candidates = self.semantic_search(query, filters, limit * 10)
+                    
+                    # More flexible cuisine matching - include recipes that match the cuisine
+                    filtered_candidates = []
+                    for recipe in cuisine_candidates:
+                        recipe_cuisine = self._normalize_cuisine(recipe.get('cuisine', ''), recipe).lower()
+                        
+                        # Check for exact match
+                        if recipe_cuisine == cuisine:
+                            filtered_candidates.append(recipe)
+                            continue
+                            
+                        # Check for partial match (e.g., "spanish" in "spanish paella")
+                        if cuisine in recipe_cuisine or recipe_cuisine in cuisine:
+                            filtered_candidates.append(recipe)
+                            continue
+                            
+                        # Check if the recipe title/name contains the cuisine
+                        recipe_name = (recipe.get('name', '') or recipe.get('title', '')).lower()
+                        if cuisine in recipe_name:
+                            filtered_candidates.append(recipe)
+                            continue
+                            
+                        # Check if the recipe description contains the cuisine
+                        recipe_desc = (recipe.get('description', '')).lower()
+                        if cuisine in recipe_desc:
+                            filtered_candidates.append(recipe)
+                            continue
+                            
+                        # For broad cuisines like "International", include any recipe with a recognizable cuisine
+                        if cuisine.lower() in ['international', 'global', 'world', 'fusion']:
+                            if recipe_cuisine and recipe_cuisine not in ['', 'none', 'unknown', 'n/a']:
+                                filtered_candidates.append(recipe)
+                                continue
+                    
+                    print(f"Found {len(filtered_candidates)} recipes from {cuisine} cuisine")
+                    all_candidates.extend(filtered_candidates)
+                
+                candidates = all_candidates
+        else:
+            # If no cuisines or favorite foods, just get popular recipes
+            print("No specific preferences, getting popular recipes")
+            query = "popular recipes"
+            candidates = self.semantic_search(query, filters, limit * 10)
+            
+        # If we have BOTH favorite foods AND cuisines, also search for foods across all cuisines
+        if favorite_foods and favorite_cuisines:
+            print(f"User has both favorite foods and cuisines, also searching for foods: {favorite_foods}")
+            
+            # Search for favorite foods across all cuisines
+            food_query = " ".join(favorite_foods)
+            food_candidates = self.semantic_search(food_query, filters, limit * 20)
+            print(f"Found {len(food_candidates)} candidates for favorite foods across all cuisines")
+            
+            # Filter for actual food matches
+            food_candidates = [r for r in food_candidates if has_fav_food(r)]
+            print(f"After filtering for actual food matches: {len(food_candidates)} candidates")
+            
+            # Combine with existing candidates, prioritizing food matches
+            all_candidates = food_candidates + candidates
+            
+            # Remove duplicates while preserving order
+            seen_ids = set()
+            unique_candidates = []
+            for candidate in all_candidates:
+                candidate_id = candidate.get('id', candidate.get('recipe_id', ''))
+                if candidate_id not in seen_ids:
+                    seen_ids.add(candidate_id)
+                    unique_candidates.append(candidate)
+            
+            candidates = unique_candidates
+            print(f"Combined candidates (foods + cuisines): {len(candidates)}")
+
+        print(f"Total candidates after cuisine filtering: {len(candidates)}")
+
+        # Remove foods to avoid first
+        candidates = [r for r in candidates if not has_foods_to_avoid(r)]
+        print(f"Candidates after removing foods to avoid: {len(candidates)}")
+
+        # Score each recipe based on multiple factors
+        def score_recipe(recipe):
+            if not recipe:
+                return 0
+                
+            score = 0
+            
+            # Medium priority: matching favorite foods (reduced from 5 to 3 points)
+            food_matches = count_matching_foods(recipe)
+            score += food_matches * 3  # Reduced from 5 to 3 points per matching favorite food
+            
+            # Medium priority: matching cuisine (increased from 3 to 4 points)
+            if favorite_cuisines and in_fav_cuisine(recipe):
+                score += 4  # Increased from 3 to 4 points for cuisine matches
+            
+            # If we only have favorite foods (no cuisines), give a small boost
+            if not favorite_cuisines and favorite_foods:
+                score += 5  # Reduced from 10 to 5 points
+                
+                # Extra boost if multiple favorite foods match
+                if food_matches > 1:
+                    score += (food_matches - 1) * 2  # Reduced from 3 to 2 points
+            
+            # Bonus for food matches in title/name (reduced from 3 to 2 points)
+            title = str(recipe.get('title', '') or '') + ' ' + str(recipe.get('name', '') or '')
+            title = title.lower()
+            for food in favorite_foods:
+                if food and food in title:
+                    score += 2  # Reduced from 3 to 2 points for title matches
+                    # Extra bonus if multiple foods in title
+                    if food_matches > 1:
+                        score += 1
+                    break
+            
+            return score
+        
+        # Sort candidates by score (highest first)
+        candidates.sort(key=score_recipe, reverse=True)
+        
+        # Get unique recipes by ID, maintaining score-based order
+        seen = set()
+        recommendations = []
+        for r in candidates:
+            rid = r.get('recipe_id') or r.get('id')
+            if rid and rid not in seen:
+                recommendations.append(r)
+                seen.add(rid)
+        
+        # Implement fair distribution across cuisines
+        if favorite_cuisines and not favorite_foods:
+            print(f"Implementing fair distribution across {len(favorite_cuisines)} cuisines")
+            
+            # Group recipes by cuisine
+            cuisine_groups = {}
+            for recipe in recommendations:
+                recipe_cuisine = self._normalize_cuisine(recipe.get('cuisine', ''), recipe).lower()
+                
+                # Find which favorite cuisine this recipe matches
+                matched_cuisine = None
+                for fav_cuisine in favorite_cuisines:
+                    if (recipe_cuisine == fav_cuisine.lower() or 
+                        fav_cuisine.lower() in recipe_cuisine or 
+                        recipe_cuisine in fav_cuisine.lower()):
+                        matched_cuisine = fav_cuisine
+                        break
+                
+                if matched_cuisine:
+                    if matched_cuisine not in cuisine_groups:
+                        cuisine_groups[matched_cuisine] = []
+                    cuisine_groups[matched_cuisine].append(recipe)
+            
+            # Calculate how many recipes per cuisine
+            recipes_per_cuisine = max(1, limit // len(favorite_cuisines))
+            print(f"Target: {recipes_per_cuisine} recipes per cuisine")
+            
+            # Build fair distribution
+            fair_recommendations = []
+            cuisine_index = 0
+            
+            # Round-robin distribution
+            while len(fair_recommendations) < limit and cuisine_index < recipes_per_cuisine * len(favorite_cuisines):
+                for cuisine in favorite_cuisines:
+                    if cuisine in cuisine_groups and len(cuisine_groups[cuisine]) > 0:
+                        # Take the highest scored recipe from this cuisine
+                        best_recipe = max(cuisine_groups[cuisine], key=score_recipe)
+                        fair_recommendations.append(best_recipe)
+                        cuisine_groups[cuisine].remove(best_recipe)
+                        
+                        if len(fair_recommendations) >= limit:
+                            break
+                
+                cuisine_index += 1
+            
+            # If we don't have enough recipes, fill with remaining high-scored recipes
+            remaining_recipes = []
+            for cuisine_recipes in cuisine_groups.values():
+                remaining_recipes.extend(cuisine_recipes)
+            
+            remaining_recipes.sort(key=score_recipe, reverse=True)
+            fair_recommendations.extend(remaining_recipes[:limit - len(fair_recommendations)])
+            
+            recommendations = fair_recommendations
+            print(f"Fair distribution complete: {len(recommendations)} recipes")
+            
+            # Log distribution
+            cuisine_counts = {}
+            for recipe in recommendations:
+                recipe_cuisine = self._normalize_cuisine(recipe.get('cuisine', ''), recipe).lower()
+                for fav_cuisine in favorite_cuisines:
+                    if (recipe_cuisine == fav_cuisine.lower() or 
+                        fav_cuisine.lower() in recipe_cuisine or 
+                        recipe_cuisine in fav_cuisine.lower()):
+                        cuisine_counts[fav_cuisine] = cuisine_counts.get(fav_cuisine, 0) + 1
+                        break
+            
+            print(f"Final distribution by cuisine: {cuisine_counts}")
+        
+        # Debug: Print top 10 scored recipes
+        print("\nTop 10 Scored Recipes:")
+        for i, r in enumerate(recommendations[:10], 1):
+            rid = r.get('recipe_id') or r.get('id')
+            title = r.get('title', 'No title')
+            cuisine = self._normalize_cuisine(r.get('cuisine', ''), r)
+            score = score_recipe(r)
+            print(f"{i}. {title} | Cuisine: {cuisine} | Score: {score}")
+            
+            # Debug: Show searchable text for top recipes
+            if i <= 5:
+                # Get the actual recipe data for debugging
+                recipe_name = r.get('name', '') or r.get('title', '')
+                recipe_description = r.get('description', '')
+                recipe_ingredients = r.get('ingredients', [])
+                
+                # Create searchable text from actual recipe data
+                text_parts = [
+                    str(recipe_name),
+                    str(recipe_description)
+                ]
+                
+                # Add ingredients if available
+                if recipe_ingredients:
+                    for ing in recipe_ingredients:
+                        if isinstance(ing, dict):
+                            if 'name' in ing:
+                                text_parts.append(str(ing['name']))
+                            elif 'ingredient' in ing:
+                                text_parts.append(str(ing['ingredient']))
+                        else:
+                            text_parts.append(str(ing))
+                
+                search_text = ' '.join(text_parts).lower()
+                print(f"   Searchable text: {search_text[:100]}...")
+                print(f"   Has burger: {'burger' in search_text}")
+                print(f"   Has beef: {'beef' in search_text}")
+                print(f"   Recipe name: {recipe_name}")
+                print(f"   Recipe cuisine: {r.get('cuisine', 'N/A')}")
+            
+            # Show matching favorite foods for top recipes
+            if i <= 5:
+                matches = []
+                for food in favorite_foods:
+                    if (food in title.lower() or 
+                        any(food in str(ing).lower() for ing in r.get('ingredients', []))):
+                        matches.append(food)
+                if matches:
+                    print(f"   Matching foods: {', '.join(matches)}")
+        
+        # Remove duplicates while preserving order
+        seen = set()
+        final = []
+        for r in recommendations:
+            rid = r.get('recipe_id') or r.get('id')
+            if rid and rid not in seen:
+                final.append(r)
+                seen.add(rid)
+            if len(final) >= limit:
+                break
+        
+        # Debug logging - categorize recommendations
+        both = []
+        food_only = []
+        cuisine_only = []
+        others = []
+        
+        for r in final:
+            has_food = has_fav_food(r) if favorite_foods else False
+            has_cuisine = in_fav_cuisine(r) if favorite_cuisines else False
+            
+            if has_food and has_cuisine:
+                both.append(r)
+            elif has_food:
+                food_only.append(r)
+            elif has_cuisine:
+                cuisine_only.append(r)
+            else:
+                others.append(r)
+        
+        print(f"Recommendations breakdown:")
+        print(f"- Both fav food and cuisine: {len(both)}")
+        print(f"- Fav food only: {len(food_only)}")
+        print(f"- Fav cuisine only: {len(cuisine_only)}")
+        print(f"- Others: {len(others)}")
+        print(f"- Final recommendations: {len(final)}")
+        
+        # Log the cuisines of final recommendations
+        if final:
+            final_cuisines = {}
+            for r in final:
+                cuisine = self._normalize_cuisine(r.get('cuisine', ''), r).lower()
+                final_cuisines[cuisine] = final_cuisines.get(cuisine, 0) + 1
+            print(f"Final recommendations by cuisine: {final_cuisines}")
+        
+        return final
 
     def _build_recipe_query(self, user_preferences: Dict[str, Any]) -> tuple[str, dict]:
         """
@@ -401,8 +1053,8 @@ class RecipeSearchService:
         # 1. Add favorite foods (if any) with high priority
         favorite_foods = user_preferences.get("favoriteFoods", [])
         if favorite_foods:
-            food_terms = [f'"{food}"' for food in favorite_foods]  # Exact match
-            query_parts.append(f"({' OR '.join(food_terms)})")
+            # Use space-separated format for ChromaDB compatibility
+            query_parts.append(" ".join(favorite_foods))
         
         # 2. Add dietary restrictions (high priority)
         dietary_restrictions = user_preferences.get("dietaryRestrictions", [])
@@ -417,7 +1069,8 @@ class RecipeSearchService:
         # 4. Add meal type preferences
         meal_types = user_preferences.get("mealTypes", [])
         if meal_types:
-            query_parts.append(f"({' OR '.join(meal_types)})")
+            # Use space-separated format for ChromaDB compatibility
+            query_parts.append(" ".join(meal_types))
             
         # 5. Add favorite cuisines as a filter
         if "favoriteCuisines" in user_preferences and user_preferences["favoriteCuisines"]:
@@ -588,200 +1241,152 @@ class RecipeSearchService:
             
         return ""
         
-    def _normalize_cuisine(self, cuisine: str, recipe: Optional[Dict[str, Any]] = None) -> str:
+    def _normalize_cuisine(self, cuisine: str, recipe: Optional[Dict] = None) -> str:
         """
-        Normalize and validate cuisine string, ensuring every recipe gets a specific country.
-        
-        Args:
-            cuisine: The cuisine string to normalize
-            recipe: Optional recipe dictionary for additional context
-            
-        Returns:
-            Normalized cuisine string, always returns a specific country
+        Normalize cuisine names to standard format with flexible matching.
+        Returns empty string if no clear match is found.
         """
-        # Map of non-country cuisines to their respective countries
-        CUISINE_TO_COUNTRY = {
-            # Regional/Continental to Countries
-            'southern': 'American',
-            'soul food': 'American',
-            'cajun': 'American',
-            'creole': 'American',
-            'southwestern': 'American',
-            'mediterranean': 'Greek',  # Most representative country
-            'middle eastern': 'Lebanese',  # Most representative country
-            'scandinavian': 'Swedish',
-            'nordic': 'Swedish',
-            'caribbean': 'Jamaican',
-            'latin': 'Mexican',
-            'latin american': 'Mexican',
-            'central american': 'Mexican',
-            'south american': 'Brazilian',
-            'north american': 'American',
-            'eastern european': 'Polish',
-            'western european': 'French',
-            'northern european': 'German',
-            'southern european': 'Italian',
-            'balkan': 'Greek',
-            'baltic': 'Lithuanian',
-            'british isles': 'British',
-            'british': 'British',
-            'celtic': 'Irish',
-            'asian': 'Chinese',
-            'southeast asian': 'Thai',
-            'south asian': 'Indian',
-            'east asian': 'Chinese',
-            'central asian': 'Indian',
-            'african': 'Moroccan',
-            'north african': 'Moroccan',
-            'west african': 'Nigerian',
-            'east african': 'Ethiopian',
-            'southern african': 'South African',
-            'oceanic': 'Australian',
-            'polynesian': 'Hawaiian',
-            'pacific islander': 'Hawaiian',
-            'middle eastern': 'Lebanese',
-            'international': 'American',  # Default to American for truly global dishes
-            'fusion': 'American',         # Default to American for fusion
-            'global': 'American',         # Default to American for global
-            'western': 'American',
-            'other': 'American',
-        }
-        
-        # Common dish to cuisine mappings (checked first)
-        DISH_CUISINE_MAP = {
-            # British
-            'shortbread': 'British',
-            'scone': 'British',
-            'trifle': 'British',
-            'fish and chips': 'British',
-            'shepherd': 'British',  # shepherd's pie
-            'yorkshire pudding': 'British',
+        if not cuisine or not isinstance(cuisine, str):
+            return ""
             
-            # Italian
-            'pasta': 'Italian',
-            'risotto': 'Italian',
-            'bruschetta': 'Italian',
-            'tiramisu': 'Italian',
-            'osso buco': 'Italian',
-            'risi e bisi': 'Italian',
-            
-            # French
-            'ratatouille': 'French',
-            'quiche': 'French',
-            'soufflé': 'French',
-            'coq au vin': 'French',
-            'bouillabaisse': 'French',
-            'tarte tatin': 'French',
-            
-            # Japanese
-            'sushi': 'Japanese',
-            'ramen': 'Japanese',
-            'tempura': 'Japanese',
-            'teriyaki': 'Japanese',
-            'udon': 'Japanese',
-            'miso': 'Japanese',
-            
-            # Add more dish-specific mappings here
-        }
-        
-        # Common ingredient to cuisine mappings
-        INGREDIENT_CUISINE_MAP = {
-            # Italian
-            'pasta': 'Italian', 'risotto': 'Italian', 'pesto': 'Italian', 'pancetta': 'Italian',
-            'prosciutto': 'Italian', 'mozzarella': 'Italian', 'parmesan': 'Italian',
-            'bruschetta': 'Italian', 'tiramisu': 'Italian',
-            
-            # Mexican
-            'taco': 'Mexican', 'burrito': 'Mexican', 'quesadilla': 'Mexican',
-            'guacamole': 'Mexican', 'salsa': 'Mexican', 'enchilada': 'Mexican',
-            'tamale': 'Mexican', 'mole': 'Mexican', 'pico de gallo': 'Mexican',
-            
-            # Indian
-            'curry': 'Indian', 'masala': 'Indian', 'tikka': 'Indian', 'biryani': 'Indian',
-            'naan': 'Indian', 'samosas': 'Indian', 'dal': 'Indian', 'vindaloo': 'Indian',
-            'tandoori': 'Indian', 'paneer': 'Indian', 'chutney': 'Indian', 'roti': 'Indian',
-            
-            # Chinese
-            'dumpling': 'Chinese', 'wonton': 'Chinese', 'kung pao': 'Chinese',
-            'sweet and sour': 'Chinese', 'chow mein': 'Chinese', 'lo mein': 'Chinese',
-            'peking duck': 'Chinese', 'char siu': 'Chinese', 'bao': 'Chinese',
-            
-            # Japanese
-            'sushi': 'Japanese', 'sashimi': 'Japanese', 'ramen': 'Japanese',
-            'tempura': 'Japanese', 'teriyaki': 'Japanese', 'udon': 'Japanese',
-            'miso': 'Japanese', 'wasabi': 'Japanese', 'bento': 'Japanese',
-            
-            # Thai
-            'pad thai': 'Thai', 'tom yum': 'Thai', 'green curry': 'Thai',
-            'massaman': 'Thai', 'satay': 'Thai', 'papaya salad': 'Thai',
-            
-            # French
-            'ratatouille': 'French', 'quiche': 'French', 'crepe': 'French',
-            'croissant': 'French', 'coq au vin': 'French', 'bouillabaisse': 'French',
-            
-            # Mediterranean
-            'hummus': 'Greek', 'falafel': 'Greek', 'tzatziki': 'Greek',
-            'tabbouleh': 'Greek', 'pita': 'Greek', 'baba ghanoush': 'Greek',
-            
-            # American
-            'burger': 'American', 'hot dog': 'American', 'barbecue': 'American',
-            'mac and cheese': 'American', 'apple pie': 'American', 'fried chicken': 'American',
-            'biscuits and gravy': 'American', 'cornbread': 'American',
-            'grits': 'American', 'jambalaya': 'American', 'gumbo': 'American',
-            'biscuits': 'American', 'fried green tomatoes': 'American'
-        }
-        
-        # Common category to cuisine mappings
-        CATEGORY_CUISINE_MAP = {
-            'pasta': 'Italian', 'pizza': 'Italian', 'risotto': 'Italian',
-            'taco': 'Mexican', 'burrito': 'Mexican', 'enchilada': 'Mexican',
-            'curry': 'Indian', 'biryani': 'Indian', 'tikka': 'Indian',
-            'dumpling': 'Chinese', 'noodle': 'Chinese', 'stir-fry': 'Chinese',
-            'sushi': 'Japanese', 'ramen': 'Japanese', 'tempura': 'Japanese',
-            'pad thai': 'Thai', 'tom yum': 'Thai', 'green curry': 'Thai',
-            'ratatouille': 'French', 'quiche': 'French', 'crepe': 'French'
-        }
-        
-        # Handle None or empty cuisine
-        if not cuisine or not isinstance(cuisine, str) or not cuisine.strip() or cuisine.lower().strip() in ['none', 'null']:
-            if recipe:
-                # First try to detect from dish name
-                title = recipe.get('title', '').lower()
-                for dish, dish_cuisine in DISH_CUISINE_MAP.items():
-                    if dish in title:
-                        return dish_cuisine
-                # Then try ingredients
-                detected = self._detect_cuisine_from_ingredients(recipe)
-                if detected and detected.lower() in CUISINE_TO_COUNTRY:
-                    return CUISINE_TO_COUNTRY[detected.lower()]
-            return 'American'  # Default fallback
-            
-        # Clean and normalize the cuisine string
         cuisine = cuisine.strip().lower()
         
-        # Check if it's already a specific country cuisine
-        if cuisine in self.VALID_CUISINES:
-            return cuisine
+        # Handle broad/general cuisines
+        broad_cuisines = {
+            'international': 'International',
+            'global': 'Global',
+            'world': 'World',
+            'fusion': 'Fusion',
+            'mixed': 'Mixed',
+            'various': 'Various',
+            'general': 'General'
+        }
+        
+        # Check for broad cuisines first
+        if cuisine in broad_cuisines:
+            return broad_cuisines[cuisine]
             
-        # Check if it's a known cuisine that needs mapping to a country
-        if cuisine in CUISINE_TO_COUNTRY:
-            return CUISINE_TO_COUNTRY[cuisine]
+        # Flexible cuisine mappings (exact and partial matches)
+        cuisine_mappings = {
+            'indian': 'Indian',
+            'vietnamese': 'Vietnamese',
+            'thai': 'Thai',
+            'japanese': 'Japanese',
+            'chinese': 'Chinese',
+            'italian': 'Italian',
+            'mexican': 'Mexican',
+            'greek': 'Greek',
+            'spanish': 'Spanish',
+            'french': 'French',
+            'korean': 'Korean',
+            'lebanese': 'Lebanese',
+            'turkish': 'Turkish',
+            'moroccan': 'Moroccan',
+            'american': 'American',
+            'british': 'British',
+            'caribbean': 'Caribbean',
+            'mediterranean': 'Mediterranean',
+            'middle eastern': 'Middle Eastern',
+            'eastern european': 'Eastern European',
+            'irish': 'Irish',
+            'german': 'German',
+            'dutch': 'Dutch',
+            'swedish': 'Swedish',
+            'polish': 'Polish',
+            'russian': 'Russian',
+            'brazilian': 'Brazilian',
+            'australian': 'Australian',
+            'hawaiian': 'Hawaiian',
+            'african': 'African',
+            'north african': 'North African',
+            'west african': 'West African',
+            'east african': 'East African',
+            'south african': 'South African',
+            'southern african': 'Southern African',
+            'canadian': 'Canadian',
+            'jamaican': 'Jamaican',
+            'kenyan': 'Kenyan',
+            'malaysian': 'Malaysian',
+            'tunisian': 'Tunisian',
+            'vietnamese': 'Vietnamese',
+            'lithuanian': 'Lithuanian',
+            'ethiopian': 'Ethiopian',
+            'nigerian': 'Nigerian'
+        }
+        
+        # Check for exact match first
+        if cuisine in cuisine_mappings:
+            return cuisine_mappings[cuisine]
             
-        # Check if it's in our dish mapping
-        if recipe:
-            title = recipe.get('title', '').lower()
-            for dish, dish_cuisine in DISH_CUISINE_MAP.items():
-                if dish in title:
-                    return dish_cuisine
-                    
-        # Try to detect from ingredients as last resort
-        if recipe:
-            detected = self._detect_cuisine_from_ingredients(recipe)
-            if detected and detected.lower() in CUISINE_TO_COUNTRY:
-                return CUISINE_TO_COUNTRY[detected.lower()]
+        # Check for partial matches
+        for key, value in cuisine_mappings.items():
+            if key in cuisine or cuisine in key:
+                return value
                 
-        # If we still don't have a match, default to American
-        return 'American'
+        # Check for specific cuisine markers with high confidence
+        if 'pho' in cuisine or 'banh mi' in cuisine or 'viet' in cuisine:
+            return 'Vietnamese'
+        if 'curry' in cuisine and ('indian' in cuisine or 'masala' in cuisine):
+            return 'Indian'
+        if 'sushi' in cuisine or 'ramen' in cuisine or 'teriyaki' in cuisine:
+            return 'Japanese'
+        if 'pad thai' in cuisine or 'tom yum' in cuisine or 'thai' in cuisine:
+            return 'Thai'
+        if 'taco' in cuisine or 'burrito' in cuisine or 'enchilada' in cuisine:
+            return 'Mexican'
+        if 'pasta' in cuisine or 'pizza' in cuisine or 'risotto' in cuisine:
+            return 'Italian'
+        if 'baguette' in cuisine or 'brie' in cuisine or 'provençal' in cuisine:
+            return 'French'
+        if 'kimchi' in cuisine or 'bulgogi' in cuisine or 'bibimbap' in cuisine:
+            return 'Korean'
+        if 'paella' in cuisine or 'chorizo' in cuisine or 'tapas' in cuisine:
+            return 'Spanish'
+        if 'feta' in cuisine or 'tzatziki' in cuisine or 'gyro' in cuisine:
+            return 'Greek'
+        if 'burger' in cuisine or 'hot dog' in cuisine or 'barbecue' in cuisine:
+            return 'American'
+            
+        # Check for recipe content if available
+        if recipe:
+            # Get all searchable text
+            text = ' '.join([
+                str(recipe.get('name', '')),
+                str(recipe.get('title', '')),
+                str(recipe.get('description', '')),
+                ' '.join([ing['name'] if isinstance(ing, dict) and 'name' in ing 
+                         else str(ing) for ing in recipe.get('ingredients', [])])
+            ]).lower()
+            
+            # Check for specific cuisine markers in recipe content
+            if 'pho' in text or 'banh mi' in text or 'viet' in text:
+                return 'Vietnamese'
+            if 'curry' in text and ('indian' in text or 'masala' in text):
+                return 'Indian'
+            if 'sushi' in text or 'ramen' in text or 'teriyaki' in text:
+                return 'Japanese'
+            if 'pad thai' in text or 'tom yum' in text or 'thai' in text:
+                return 'Thai'
+            if 'taco' in text or 'burrito' in text or 'enchilada' in text:
+                return 'Mexican'
+            if 'pasta' in text or 'pizza' in text or 'risotto' in text:
+                return 'Italian'
+            if 'baguette' in text or 'brie' in text or 'provençal' in text:
+                return 'French'
+            if 'kimchi' in text or 'bulgogi' in text or 'bibimbap' in text:
+                return 'Korean'
+            if 'paella' in text or 'chorizo' in text or 'tapas' in text:
+                return 'Spanish'
+            if 'feta' in text or 'tzatziki' in text or 'gyro' in text:
+                return 'Greek'
+            if 'burger' in text or 'hot dog' in text or 'barbecue' in text:
+                return 'American'
+                
+        # Return the original cuisine if it looks reasonable
+        if len(cuisine) > 2 and cuisine not in ['', 'none', 'unknown', 'n/a']:
+            return cuisine.title()
+            
+        return ""
     
     def _calculate_avg_rating(self, ratings: List[float]) -> float:
         """Calculate average rating"""
@@ -826,7 +1431,7 @@ class RecipeSearchService:
                 "indexed_at": datetime.now().isoformat()
             }
             metadatas.append(metadata)
-            ids.append(f"recipe_{recipe.get('id')}")
+            ids.append(str(recipe.get('id')))  # Use recipe ID directly, not prefixed
             
             # Generate embedding if we have the encoder
             if self.encoder:
@@ -845,83 +1450,206 @@ class RecipeSearchService:
         """
         Expand the search query with relevant cooking terms and synonyms
         """
-        query_lower = query.lower()
-        expanded_terms = []
+        # Ensure we have a valid query
+        if not query or not query.strip():
+            return "recipe"
         
-        # Cooking time synonyms
-        time_terms = {
-            "quick": ["fast", "rapid", "speedy", "quick", "30 minutes", "easy"],
-            "fast": ["quick", "rapid", "speedy", "30 minutes", "easy"],
-            "instant": ["quick", "fast", "immediate", "rapid", "15 minutes"],
-            "slow": ["slow-cooked", "slow cooker", "crockpot", "braised"],
-        }
+        # For now, just return the original query to ensure we get results
+        # We can add expansion later once basic search is working
+        return query.strip() 
+
+    def _create_searchable_text(self, recipe: Dict[str, Any]) -> str:
+        """
+        Create a comprehensive searchable text representation of a recipe
+        """
+        text_parts = []
         
-        # Cooking method synonyms
-        method_terms = {
-            "bake": ["roast", "oven-baked", "baked"],
-            "grill": ["barbecue", "bbq", "grilled", "chargrilled"],
-            "fry": ["pan-fry", "sauté", "stir-fry", "deep-fry"],
-            "roast": ["bake", "oven-roasted", "roasted"],
-            "steam": ["steamed", "poach"],
-            "raw": ["no-cook", "uncooked", "fresh"],
-        }
-        
-        # Dietary terms
-        diet_terms = {
-            "healthy": ["nutritious", "low-calorie", "light", "lean", "wholesome"],
-            "vegetarian": ["meat-free", "plant-based"],
-            "vegan": ["plant-based", "dairy-free", "meat-free"],
-            "keto": ["low-carb", "high-fat", "ketogenic"],
-            "paleo": ["grain-free", "whole30"],
-            "gluten-free": ["wheat-free", "celiac-friendly"],
-        }
-        
-        # Meal type synonyms
-        meal_terms = {
-            "breakfast": ["brunch", "morning meal"],
-            "lunch": ["midday meal", "luncheon"],
-            "dinner": ["supper", "evening meal"],
-            "snack": ["appetizer", "finger food"],
-            "dessert": ["sweet", "pudding", "treats"],
-        }
-        
-        # Flavor profile terms
-        flavor_terms = {
-            "spicy": ["hot", "chili", "peppery", "fiery"],
-            "sweet": ["sugary", "dessert", "candied"],
-            "savory": ["umami", "hearty", "rich"],
-            "tangy": ["sour", "citrus", "zesty"],
-        }
-        
-        # Add original query
-        expanded_terms.append(query)
-        
-        # Check for term matches and add synonyms
-        for term_dict in [time_terms, method_terms, diet_terms, meal_terms, flavor_terms]:
-            for key, synonyms in term_dict.items():
-                if key in query_lower:
-                    expanded_terms.extend(synonyms)
-        
-        # Special handling for common recipe queries
-        if "easy" in query_lower:
-            expanded_terms.extend(["simple", "beginner", "basic", "quick"])
-        if "gourmet" in query_lower:
-            expanded_terms.extend(["fancy", "elegant", "sophisticated", "upscale"])
-        if "comfort food" in query_lower:
-            expanded_terms.extend(["hearty", "homestyle", "warming", "cozy"])
-        if "healthy" in query_lower:
-            expanded_terms.extend(["nutritious", "light", "fresh", "wholesome"])
+        # Add basic recipe info
+        if recipe.get('name'):
+            text_parts.append(recipe['name'])
+        if recipe.get('title'):
+            text_parts.append(recipe['title'])
+        if recipe.get('description'):
+            text_parts.append(recipe['description'])
             
-        # Remove duplicates while preserving order
-        seen = set()
-        unique_terms = []
-        for term in expanded_terms:
-            if term not in seen:
-                unique_terms.append(term)
-                seen.add(term)
-        
-        # Join terms with weights for more relevant ones
-        primary_terms = [query] * 2  # Give original query more weight
-        secondary_terms = unique_terms[1:]  # Other terms have normal weight
-        
-        return " | ".join(primary_terms + secondary_terms) 
+        # Add ingredients
+        ingredients = recipe.get('ingredients', [])
+        if ingredients:
+            ingredient_texts = []
+            for ing in ingredients:
+                if isinstance(ing, dict):
+                    if 'name' in ing:
+                        ingredient_texts.append(ing['name'])
+                    elif 'ingredient' in ing:
+                        ingredient_texts.append(ing['ingredient'])
+                else:
+                    ingredient_texts.append(str(ing))
+            text_parts.append(' '.join(ingredient_texts))
+            
+        # Add instructions
+        instructions = recipe.get('instructions', '')
+        if instructions:
+            if isinstance(instructions, list):
+                text_parts.append(' '.join(instructions))
+            else:
+                text_parts.append(str(instructions))
+                
+        # Add cuisine and tags
+        if recipe.get('cuisine'):
+            text_parts.append(recipe['cuisine'])
+        if recipe.get('tags'):
+            if isinstance(recipe['tags'], list):
+                text_parts.extend(recipe['tags'])
+            else:
+                text_parts.append(str(recipe['tags']))
+                
+        return ' '.join(text_parts) 
+
+    def _calculate_macros_per_serving(self, recipe: Dict[str, Any]) -> Dict[str, Any]:
+        """Calculate macros per serving for a recipe"""
+        try:
+            # Get nutrition data
+            nutrition = recipe.get('nutrition', {})
+            servings = recipe.get('servings', 1)
+            
+            # If we have complete nutrition data, calculate per serving
+            if nutrition and servings > 0:
+                calories = nutrition.get('calories', 0)
+                protein = nutrition.get('protein', 0)
+                carbs = nutrition.get('carbohydrates', nutrition.get('carbs', 0))
+                fat = nutrition.get('fat', 0)
+                
+                if calories > 0:
+                    return {
+                        'calories': round(calories / servings, 1),
+                        'protein': round(protein / servings, 1),
+                        'carbs': round(carbs / servings, 1),
+                        'fat': round(fat / servings, 1)
+                    }
+            
+            # If no nutrition data, estimate based on ingredients
+            ingredients = recipe.get('ingredients', [])
+            if ingredients:
+                return self._estimate_macros_from_ingredients(ingredients, servings)
+            
+            # Default macros if no data available
+            return {
+                'calories': 300,
+                'protein': 15,
+                'carbs': 30,
+                'fat': 10
+            }
+            
+        except Exception as e:
+            print(f"Error calculating macros: {e}")
+            return {
+                'calories': 300,
+                'protein': 15,
+                'carbs': 30,
+                'fat': 10
+            }
+    
+    def _estimate_macros_from_ingredients(self, ingredients: List[Any], servings: int) -> Dict[str, Any]:
+        """Estimate macros based on ingredients"""
+        try:
+            # Common ingredient macro estimates (per 100g)
+            ingredient_macros = {
+                'chicken': {'calories': 165, 'protein': 31, 'carbs': 0, 'fat': 3.6},
+                'beef': {'calories': 250, 'protein': 26, 'carbs': 0, 'fat': 15},
+                'salmon': {'calories': 208, 'protein': 25, 'carbs': 0, 'fat': 12},
+                'rice': {'calories': 130, 'protein': 2.7, 'carbs': 28, 'fat': 0.3},
+                'pasta': {'calories': 131, 'protein': 5, 'carbs': 25, 'fat': 1.1},
+                'potato': {'calories': 77, 'protein': 2, 'carbs': 17, 'fat': 0.1},
+                'tomato': {'calories': 18, 'protein': 0.9, 'carbs': 3.9, 'fat': 0.2},
+                'onion': {'calories': 40, 'protein': 1.1, 'carbs': 9.3, 'fat': 0.1},
+                'garlic': {'calories': 149, 'protein': 6.4, 'carbs': 33, 'fat': 0.5},
+                'olive oil': {'calories': 884, 'protein': 0, 'carbs': 0, 'fat': 100},
+                'butter': {'calories': 717, 'protein': 0.9, 'carbs': 0.1, 'fat': 81},
+                'cheese': {'calories': 402, 'protein': 25, 'carbs': 1.3, 'fat': 33},
+                'egg': {'calories': 155, 'protein': 13, 'carbs': 1.1, 'fat': 11},
+                'milk': {'calories': 42, 'protein': 3.4, 'carbs': 5, 'fat': 1},
+                'bread': {'calories': 265, 'protein': 9, 'carbs': 49, 'fat': 3.2},
+                'flour': {'calories': 364, 'protein': 10, 'carbs': 76, 'fat': 1},
+                'sugar': {'calories': 387, 'protein': 0, 'carbs': 100, 'fat': 0},
+                'honey': {'calories': 304, 'protein': 0.3, 'carbs': 82, 'fat': 0},
+                'vegetable': {'calories': 20, 'protein': 1, 'carbs': 4, 'fat': 0.2},
+                'fruit': {'calories': 60, 'protein': 0.5, 'carbs': 15, 'fat': 0.2}
+            }
+            
+            total_calories = 0
+            total_protein = 0
+            total_carbs = 0
+            total_fat = 0
+            ingredient_count = 0
+            
+            for ingredient in ingredients:
+                if isinstance(ingredient, dict):
+                    ingredient_name = ingredient.get('name', ingredient.get('ingredient', '')).lower()
+                else:
+                    ingredient_name = str(ingredient).lower()
+                
+                # Find matching macro data
+                for key, macros in ingredient_macros.items():
+                    if key in ingredient_name:
+                        total_calories += macros['calories']
+                        total_protein += macros['protein']
+                        total_carbs += macros['carbs']
+                        total_fat += macros['fat']
+                        ingredient_count += 1
+                        break
+                
+                # If no specific match, use generic estimates
+                if ingredient_count == 0:
+                    if any(word in ingredient_name for word in ['meat', 'chicken', 'beef', 'pork', 'lamb']):
+                        total_calories += 200
+                        total_protein += 25
+                        total_carbs += 0
+                        total_fat += 10
+                    elif any(word in ingredient_name for word in ['fish', 'salmon', 'tuna', 'cod']):
+                        total_calories += 150
+                        total_protein += 20
+                        total_carbs += 0
+                        total_fat += 8
+                    elif any(word in ingredient_name for word in ['rice', 'pasta', 'noodle', 'bread']):
+                        total_calories += 100
+                        total_protein += 3
+                        total_carbs += 20
+                        total_fat += 1
+                    elif any(word in ingredient_name for word in ['vegetable', 'carrot', 'broccoli', 'spinach']):
+                        total_calories += 30
+                        total_protein += 2
+                        total_carbs += 6
+                        total_fat += 0.2
+                    else:
+                        total_calories += 50
+                        total_protein += 2
+                        total_carbs += 8
+                        total_fat += 1
+                    
+                    ingredient_count += 1
+            
+            # Calculate per serving
+            if servings > 0 and ingredient_count > 0:
+                return {
+                    'calories': round(total_calories / servings, 1),
+                    'protein': round(total_protein / servings, 1),
+                    'carbs': round(total_carbs / servings, 1),
+                    'fat': round(total_fat / servings, 1)
+                }
+            
+            # Default if no ingredients or servings
+            return {
+                'calories': 300,
+                'protein': 15,
+                'carbs': 30,
+                'fat': 10
+            }
+            
+        except Exception as e:
+            print(f"Error estimating macros from ingredients: {e}")
+            return {
+                'calories': 300,
+                'protein': 15,
+                'carbs': 30,
+                'fat': 10
+            } 

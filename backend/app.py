@@ -10,6 +10,7 @@ from routes.meal_planner import meal_planner_bp
 from routes.health import health_bp
 from routes.review_routes import review_bp
 from routes.folder_routes import folder_bp
+from routes.smart_features import smart_features_bp
 from test_ollama import test_bp
 from test_meal_planner import test_meal_bp
 
@@ -19,21 +20,15 @@ load_dotenv()
 # Initialize Flask app
 app = Flask(__name__)
 
-# Configure CORS for development and production
-allowed_origins = [
-    "http://localhost:8081", 
-    "http://127.0.0.1:8081",
-    "https://*.netlify.app",  # Allow all Netlify domains
-    "https://*.netlify.com"   # Allow Netlify preview domains
-]
-
+# Configure CORS for development
 cors = CORS(app, 
     resources={
         r"/*": {
-            "origins": allowed_origins,
+            "origins": ["http://localhost:8081", "http://127.0.0.1:8081", 
+                        "http://localhost:8083", "http://127.0.0.1:8083"],
             "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-            "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"],
-            "expose_headers": ["Content-Type", "Authorization"],
+            "allow_headers": ["Content-Type", "Authorization", "X-Requested-With", "x-requested-with"],
+            "expose_headers": ["Content-Type", "Authorization", "X-Requested-With", "x-requested-with"],
             "supports_credentials": True,
             "max_age": 3600
         }
@@ -52,9 +47,10 @@ app.register_blueprint(meal_planner_bp, url_prefix='/api')
 app.register_blueprint(health_bp)  # Health check routes
 app.register_blueprint(review_bp, url_prefix='/api')  # Review routes
 app.register_blueprint(folder_bp, url_prefix='/api')  # Folder routes
+app.register_blueprint(smart_features_bp, url_prefix='/api')  # Smart features routes
 app.register_blueprint(test_bp, url_prefix='/api')  # Test routes
 app.register_blueprint(test_meal_bp, url_prefix='/api')  # Test meal planner routes
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5003))
-    app.run(host="0.0.0.0", port=port, debug=False)
+    port = int(os.environ.get("PORT", 5004))
+    app.run(host="0.0.0.0", port=port, debug=True)

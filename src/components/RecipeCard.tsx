@@ -1,13 +1,11 @@
 
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Edit, Trash2, Star, Clock, Heart, Utensils, Clock3, Users, BarChart2 } from 'lucide-react';
-import { Recipe } from '../types/recipe';
+import { Clock, Star, Trash2, Clock3, Utensils, Users, BarChart2, Flame, Droplet, Carrot } from 'lucide-react';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from './ui/hover-card';
+import { ExtendedRecipe, Recipe } from '../types/recipe';
 import { useRecipeClickTracking } from '../utils/clickTracking';
-
-// Use the ExtendedRecipe type from recipe types
-import type { ExtendedRecipe } from '../types/recipe';
+import { getReliableImageUrl } from '../utils/recipeUtils';
 
 interface RecipeCardProps {
   recipe: ExtendedRecipe | Recipe;
@@ -135,37 +133,31 @@ const RecipeCard: React.FC<RecipeCardProps> = React.memo(({
     }
   }, [recipe]);
   
-  // Handle image from various sources
+  // Handle image from various sources with better fallback
   const imageUrl = React.useMemo((): string => {
-    // Check for direct image properties first
-    if ('image' in recipe && recipe.image) {
-      const img = recipe.image;
-      // If it's a relative path, make it absolute
-      if (typeof img === 'string' && img.startsWith('/')) {
-        return img;
+    // Try different image sources in order of preference
+    const imageSources = [
+      recipe.image,
+      recipe.imageUrl,
+      (recipe as any).strMealThumb, // TheMealDB format
+      (recipe as any).thumbnail
+    ];
+    
+    for (const source of imageSources) {
+      if (source) {
+        // Use the original URL if it's not a broken pattern
+        return getReliableImageUrl(source, 'medium');
       }
-      return img;
     }
     
-    if ('imageUrl' in recipe && recipe.imageUrl) {
-      const img = recipe.imageUrl;
-      // If it's a relative path, make it absolute
-      if (typeof img === 'string' && img.startsWith('/')) {
-        return img;
-      }
-      return img;
-    }
-    
-    // For TheMealDB recipes, use a better image URL
+    // Special handling for TheMealDB
     if ('source' in recipe && recipe.source === 'TheMealDB' && recipe.id) {
-      const mealId = typeof recipe.id === 'string' ? recipe.id.split('_').pop() : '';
-      if (mealId) {
-        return `https://www.themealdb.com/images/media/meals/${mealId}.jpg`;
-      }
+      const ingredientName = typeof recipe.id === 'string' ? recipe.id.split('_').pop() : '';
+      return `https://www.themealdb.com/images/ingredients/${ingredientName || 'placeholder'}.jpg`;
     }
     
-    // Use a better placeholder image
-    return 'https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?auto=format&fit=crop&w=800&q=80';
+    // Return a reliable fallback image
+    return getReliableImageUrl(undefined, 'medium');
   }, [recipe]);
   
   // Handle ID from various sources
@@ -192,9 +184,15 @@ const RecipeCard: React.FC<RecipeCardProps> = React.memo(({
       hasSummary: 'summary' in recipe,
       recipeType: recipe.type,
       readyInMinutesDirect: 'readyInMinutes' in recipe ? recipe.readyInMinutes : undefined,
-      ready_in_minutesDirect: 'ready_in_minutes' in recipe ? (recipe as any).ready_in_minutes : undefined
+      ready_in_minutesDirect: 'ready_in_minutes' in recipe ? (recipe as any).ready_in_minutes : undefined,
+      // Add image debugging
+      originalImage: recipe.image,
+      originalImageUrl: (recipe as any).imageUrl,
+      finalImageUrl: imageUrl,
+      hasImage: !!recipe.image,
+      hasImageUrl: !!(recipe as any).imageUrl
     });
-  }, [recipe, recipeName, readyInMinutes]);
+  }, [recipe, recipeName, readyInMinutes, imageUrl]);
   
   // Calculate average rating if ratings is an array
   const averageRating = React.useMemo(() => {
@@ -301,8 +299,10 @@ const RecipeCard: React.FC<RecipeCardProps> = React.memo(({
             className="w-full h-full object-cover transform hover:scale-105 transition-transform duration-300"
             onError={(e) => {
               const target = e.target as HTMLImageElement;
-              if (target.src !== "https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?auto=format&fit=crop&w=800&q=80") {
-                target.src = "https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?auto=format&fit=crop&w=800&q=80";
+              // Use the utility function for fallback
+              const fallbackImage = getReliableImageUrl(undefined, 'medium');
+              if (target.src !== fallbackImage) {
+                target.src = fallbackImage;
               }
             }}
           />
@@ -391,6 +391,32 @@ const RecipeCard: React.FC<RecipeCardProps> = React.memo(({
               <span>{averageRating !== undefined ? Number(averageRating).toFixed(1) : 'N/A'}</span>
             </div>
           </div>
+          
+          {/* Macro Information */}
+          {((recipe as any).macrosPerServing || recipe.nutrition) && (
+            <div className="mt-2 flex items-center justify-between text-xs text-gray-400">
+              <div className="flex items-center space-x-2">
+                <span className="flex items-center">
+                  <Flame className="w-3 h-3 mr-1 text-orange-500" />
+                  {((recipe as any).macrosPerServing?.calories || recipe.nutrition?.calories || 'N/A')} cal
+                </span>
+                <span className="flex items-center">
+                  <Droplet className="w-3 h-3 mr-1 text-blue-500" />
+                  {((recipe as any).macrosPerServing?.protein || recipe.nutrition?.protein || 'N/A')}g P
+                </span>
+                <span className="flex items-center">
+                  <Carrot className="w-3 h-3 mr-1 text-green-500" />
+                  {((recipe as any).macrosPerServing?.carbs || (recipe.nutrition as any)?.carbs || (recipe.nutrition as any)?.carbohydrates || 'N/A')}g C
+                </span>
+              </div>
+              {recipe.servings && recipe.servings > 1 && (
+                <span className="flex items-center">
+                  <Users className="w-3 h-3 mr-1" />
+                  {recipe.servings} servings
+                </span>
+              )}
+            </div>
+          )}
         </div>
           </Link>
           

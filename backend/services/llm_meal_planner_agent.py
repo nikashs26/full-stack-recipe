@@ -2395,34 +2395,100 @@ Make the meals varied and follow the dietary restrictions. Don't use random reci
         return self._get_fallback_suggestions(meal_type, preferences, count)
     
     def _get_fallback_suggestions(self, meal_type: str, preferences: Dict[str, Any], count: int) -> List[Dict[str, Any]]:
-        """Get fallback recipe suggestions"""
+        """Get fallback recipe suggestions with prioritization of favorite foods and cuisines"""
+        # Get user preferences with defaults
         dietary_restrictions = preferences.get('dietary_restrictions', [])
-        is_vegetarian = 'vegetarian' in [r.lower() for r in dietary_restrictions]
+        favorite_cuisines = preferences.get('favorite_cuisines', [])
+        favorite_foods = preferences.get('favorite_foods', []) or []
         
-        suggestions = []
+        # Determine dietary preferences
+        is_vegetarian = 'vegetarian' in [r.lower() for r in dietary_restrictions]
+        is_vegan = 'vegan' in [r.lower() for r in dietary_restrictions]
+        
+        # Base recipe database with enhanced variety and tagging
         base_recipes = {
             "breakfast": [
-                {"name": "Overnight Oats", "cuisine": "American"},
-                {"name": "Avocado Toast", "cuisine": "American"},
-                {"name": "Smoothie Bowl", "cuisine": "American"},
-                {"name": "Greek Yogurt Parfait", "cuisine": "Mediterranean"},
+                {"name": "Overnight Oats", "cuisine": "American", "tags": ["oats", "healthy", "quick"], "base_ingredients": ["oats"]},
+                {"name": "Avocado Toast", "cuisine": "American", "tags": ["avocado", "quick", "toast"], "base_ingredients": ["avocado", "bread"]},
+                {"name": "Smoothie Bowl", "cuisine": "American", "tags": ["fruits", "healthy", "quick"], "base_ingredients": ["fruits"]},
+                {"name": "Greek Yogurt Parfait", "cuisine": "Mediterranean", "tags": ["yogurt", "fruits", "healthy"], "base_ingredients": ["yogurt"]},
+                {"name": "Chia Pudding", "cuisine": "International", "tags": ["healthy", "make-ahead"], "base_ingredients": ["chia"]},
+                {"name": "Vegetable Omelette", "cuisine": "French", "tags": ["eggs", "vegetables", "protein"], "base_ingredients": ["eggs"]},
             ],
             "lunch": [
-                {"name": "Quinoa Salad", "cuisine": "Mediterranean"},
-                {"name": "Buddha Bowl", "cuisine": "American"},
-                {"name": "Lentil Soup", "cuisine": "International"},
-                {"name": "Veggie Wrap", "cuisine": "American"},
+                {"name": "Quinoa Salad", "cuisine": "Mediterranean", "tags": ["healthy", "protein", "salad"], "base_ingredients": ["quinoa"]},
+                {"name": "Buddha Bowl", "cuisine": "American", "tags": ["vegetables", "grains", "balanced"], "base_ingredients": ["grains"]},
+                {"name": "Lentil Soup", "cuisine": "International", "tags": ["legumes", "hearty", "soup"], "base_ingredients": ["lentils"]},
+                {"name": "Veggie Wrap", "cuisine": "American", "tags": ["quick", "portable", "vegetables"], "base_ingredients": ["tortilla"]},
+                {"name": "Falafel Pita", "cuisine": "Middle Eastern", "tags": ["chickpeas", "vegetarian", "sandwich"], "base_ingredients": ["chickpeas"]},
+                {"name": "Sushi Bowl", "cuisine": "Japanese", "tags": ["rice", "fish", "vegetables"], "base_ingredients": ["rice"]},
             ],
             "dinner": [
-                {"name": "Grilled Chicken", "cuisine": "American"},
-                {"name": "Vegetable Curry", "cuisine": "Indian"},
-                {"name": "Pasta Primavera", "cuisine": "Italian"},
-                {"name": "Stuffed Peppers", "cuisine": "Mediterranean"},
+                {"name": "Grilled Chicken with Vegetables", "cuisine": "American", "tags": ["protein", "grilled", "balanced"], "base_ingredients": ["chicken"]},
+                {"name": "Vegetable Curry with Rice", "cuisine": "Indian", "tags": ["spicy", "vegetables", "hearty"], "base_ingredients": ["rice"]},
+                {"name": "Pasta Primavera", "cuisine": "Italian", "tags": ["pasta", "vegetables", "quick"], "base_ingredients": ["pasta"]},
+                {"name": "Stuffed Peppers", "cuisine": "Mediterranean", "tags": ["vegetables", "baked", "hearty"], "base_ingredients": ["bell peppers"]},
+                {"name": "Tofu Stir Fry", "cuisine": "Asian", "tags": ["tofu", "vegetables", "quick"], "base_ingredients": ["tofu"]},
+                {"name": "Bean Chili", "cuisine": "Mexican", "tags": ["beans", "hearty", "spicy"], "base_ingredients": ["beans"]},
             ]
         }
         
-        recipes = base_recipes.get(meal_type, [])
-        for i, recipe in enumerate(recipes[:count]):
+        # Filter recipes based on dietary restrictions
+        filtered_recipes = []
+        for recipe in base_recipes.get(meal_type, []):
+            # Skip if vegan and recipe contains non-vegan ingredients
+            if is_vegan and any(tag in ["chicken", "eggs", "yogurt"] for tag in recipe.get("tags", [])):
+                continue
+            # Skip if vegetarian and recipe contains meat
+            if is_vegetarian and any(tag in ["chicken"] for tag in recipe.get("tags", [])):
+                continue
+            filtered_recipes.append(recipe)
+        
+        # Score recipes based on user preferences
+        def score_recipe(recipe):
+            score = 0
+            
+            # Higher score for preferred cuisines
+            if favorite_cuisines and recipe["cuisine"].lower() in [c.lower() for c in favorite_cuisines]:
+                score += 10
+                
+            # Check if any favorite food is in recipe name or tags
+            if favorite_foods:
+                for food in favorite_foods:
+                    food_lower = food.lower()
+                    if (food_lower in recipe["name"].lower() or 
+                        any(food_lower in tag.lower() for tag in recipe.get("tags", [])) or
+                        any(food_lower in ing.lower() for ing in recipe.get("base_ingredients", []))):
+                        score += 15  # Higher weight for favorite foods than cuisines
+                        break
+                        
+            return score
+        
+        # Sort recipes by score (highest first)
+        scored_recipes = [(recipe, score_recipe(recipe)) for recipe in filtered_recipes]
+        scored_recipes.sort(key=lambda x: x[1], reverse=True)
+        
+        # Take top recipes
+        top_recipes = [recipe for recipe, score in scored_recipes[:count]]
+        
+        # If we don't have enough recipes, add some from other meal types
+        if len(top_recipes) < count:
+            for other_meal_type in base_recipes:
+                if other_meal_type != meal_type:
+                    for recipe in base_recipes[other_meal_type]:
+                        if recipe not in top_recipes and len(top_recipes) < count:
+                            top_recipes.append(recipe)
+        
+        # Format the response
+        suggestions = []
+        for recipe in top_recipes:
+            # Add tags based on user preferences
+            tags = ["healthy"]
+            if favorite_cuisines and recipe["cuisine"].lower() in [c.lower() for c in favorite_cuisines]:
+                tags.append("your-cuisine")
+            if favorite_foods and any(food.lower() in recipe["name"].lower() for food in favorite_foods):
+                tags.append("your-favorite")
+                
             suggestions.append({
                 "name": recipe["name"],
                 "cuisine": recipe["cuisine"],
@@ -2430,10 +2496,11 @@ Make the meals varied and follow the dietary restrictions. Don't use random reci
                 "cook_time": "20 minutes",
                 "difficulty": "Easy",
                 "servings": 2,
-                "ingredients": ["Basic ingredients"],
+                "ingredients": ["Fresh ingredients"],
                 "instructions": [f"Prepare {recipe['name']} following standard recipe"],
                 "nutritional_highlights": ["Balanced nutrition"],
-                "tags": ["healthy"]
+                "tags": tags,
+                "priority": "high" if "your-favorite" in tags else "medium" if "your-cuisine" in tags else "low"
             })
         
-        return suggestions 
+        return suggestions

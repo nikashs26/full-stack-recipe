@@ -3,6 +3,8 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useAuth } from '../context/AuthContext';
+import { apiCall } from '../utils/apiUtils';
+import { API_BASE_URL } from '../config/api';
 import { useToast } from '@/hooks/use-toast';
 import Header from '../components/Header';
 import { Button } from '@/components/ui/button';
@@ -14,47 +16,141 @@ import { Input } from "@/components/ui/input";
 import { Loader2, Info, Lock } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 
+// Interface for form options
+interface FormOption {
+  id: string;
+  label: string;
+  description: string;
+}
+
+// Define the form schema with proper types
+const formSchema = z.object({
+  dietaryRestrictions: z.array(z.string()).default([]),
+  favoriteCuisines: z.array(z.string()).default([]),
+  foodsToAvoid: z.array(z.string()).default([]),
+  cookingSkillLevel: z.enum(['beginner', 'intermediate', 'advanced'] as const).default('beginner'),
+  favoriteFoods: z.tuple([z.string(), z.string(), z.string()]).default(['', '', '']),
+  healthGoals: z.array(z.string()).default([]),
+  maxCookingTime: z.string().default('30 minutes'),
+  includeBreakfast: z.boolean().default(true),
+  includeLunch: z.boolean().default(true),
+  includeDinner: z.boolean().default(true),
+  includeSnacks: z.boolean().default(false),
+  targetCalories: z.number().min(0).default(2000),
+  targetProtein: z.number().min(0).default(150),
+  targetCarbs: z.number().min(0).default(200),
+  targetFat: z.number().min(0).default(65),
+});
+
+type FormValues = z.infer<typeof formSchema>;
+
 // Define the shape of user preferences from the API
-type UserPreferences = {
-  dietaryRestrictions?: string[];
-  favoriteCuisines?: string[];
-  foodsToAvoid?: string[];
-  cookingSkillLevel?: 'beginner' | 'intermediate' | 'advanced';
-  favoriteFoods?: string[];
-  healthGoals?: string[];
-  maxCookingTime?: string;
-  includeBreakfast?: boolean;
-  includeLunch?: boolean;
-  includeDinner?: boolean;
-  includeSnacks?: boolean;
-  targetCalories?: number;
-  targetProtein?: number;
-  targetCarbs?: number;
-  targetFat?: number;
-  [key: string]: any; // Add index signature for additional properties
-};
+type UserPreferences = FormValues;
+
+// Form options
+const dietaryOptions: FormOption[] = [
+  { id: 'vegetarian', label: 'Vegetarian', description: 'No meat or fish' },
+  { id: 'vegan', label: 'Vegan', description: 'No animal products' },
+  { id: 'gluten-free', label: 'Gluten Free', description: 'No gluten' },
+  { id: 'dairy-free', label: 'Dairy Free', description: 'No dairy' },
+  { id: 'nut-free', label: 'Nut Free', description: 'No nuts' },
+  { id: 'keto', label: 'Keto', description: 'Low carb, high fat' },
+  { id: 'paleo', label: 'Paleo', description: 'Whole foods only' },
+  { id: 'pescatarian', label: 'Pescatarian', description: 'Fish but no other meat' },
+  { id: 'low-carb', label: 'Low Carb', description: 'Reduced carbohydrates' },
+  { id: 'low-fat', label: 'Low Fat', description: 'Reduced fat' },
+];
+
+const cuisineOptions: FormOption[] = [
+  { id: 'american', label: 'American', description: 'Burgers, BBQ, comfort food' },
+  { id: 'british', label: 'British', description: 'Fish and chips, pies, roasts' },
+  { id: 'canadian', label: 'Canadian', description: 'Poutine, tourtière, butter tarts' },
+  { id: 'chinese', label: 'Chinese', description: 'Stir-fries, dumplings, noodles' },
+  { id: 'dutch', label: 'Dutch', description: 'Stamppot, bitterballen, poffertjes' },
+  { id: 'french', label: 'French', description: 'Coq au vin, ratatouille, croissants' },
+  { id: 'greek', label: 'Greek', description: 'Gyros, moussaka, tzatziki' },
+  { id: 'indian', label: 'Indian', description: 'Curries, biryani, naan' },
+  { id: 'irish', label: 'Irish', description: 'Irish stew, colcannon, boxty' },
+  { id: 'italian', label: 'Italian', description: 'Pasta, pizza, risotto' },
+  { id: 'jamaican', label: 'Jamaican', description: 'Jerk chicken, ackee and saltfish' },
+  { id: 'japanese', label: 'Japanese', description: 'Sushi, ramen, tempura' },
+  { id: 'kenyan', label: 'Kenyan', description: 'Ugali, nyama choma, sukuma wiki' },
+  { id: 'malaysian', label: 'Malaysian', description: 'Nasi lemak, laksa, satay' },
+  { id: 'mexican', label: 'Mexican', description: 'Tacos, enchiladas, mole' },
+  { id: 'moroccan', label: 'Moroccan', description: 'Tagine, couscous, pastilla' },
+  { id: 'russian', label: 'Russian', description: 'Borscht, pelmeni, blini' },
+  { id: 'spanish', label: 'Spanish', description: 'Paella, tapas, gazpacho' },
+  { id: 'thai', label: 'Thai', description: 'Pad thai, green curry, tom yum' },
+  { id: 'tunisian', label: 'Tunisian', description: 'Couscous, brik, lablabi' },
+  { id: 'turkish', label: 'Turkish', description: 'Kebabs, baklava, meze' },
+  { id: 'vietnamese', label: 'Vietnamese', description: 'Pho, banh mi, spring rolls' },
+];
+
+const healthGoalOptions: FormOption[] = [
+  { id: 'weight-loss', label: 'Weight Loss', description: 'Lower calorie options' },
+  { id: 'muscle-gain', label: 'Muscle Gain', description: 'Higher protein options' },
+  { id: 'heart-health', label: 'Heart Health', description: 'Low sodium, healthy fats' },
+  { id: 'digestive-health', label: 'Digestive Health', description: 'High fiber, probiotics' },
+  { id: 'energy', label: 'More Energy', description: 'Balanced macronutrients' },
+  { id: 'immunity', label: 'Immunity Boost', description: 'Rich in vitamins and minerals' },
+];
+
+const foodAvoidanceOptions: FormOption[] = [
+  { id: 'pork', label: 'Pork', description: 'No pork products' },
+  { id: 'beef', label: 'Beef', description: 'No beef products' },
+  { id: 'poultry', label: 'Poultry', description: 'No chicken or turkey' },
+  { id: 'seafood', label: 'Seafood', description: 'No fish or shellfish' },
+  { id: 'eggs', label: 'Eggs', description: 'No eggs' },
+  { id: 'dairy', label: 'Dairy', description: 'No milk, cheese, or yogurt' },
+  { id: 'gluten', label: 'Gluten', description: 'No wheat, barley, rye' },
+];
+
+const cookingSkillOptions: FormOption[] = [
+  { id: 'beginner', label: 'Beginner', description: 'New to cooking' },
+  { id: 'intermediate', label: 'Intermediate', description: 'Some cooking experience' },
+  { id: 'advanced', label: 'Advanced', description: 'Experienced cook' },
+];
 
 // Load user preferences from the backend
 const loadUserPreferences = async (): Promise<UserPreferences> => {
   try {
-    const token = localStorage.getItem('auth_token');
-    if (!token) {
-      throw new Error('No authentication token found');
-    }
-
-    const response = await fetch('http://localhost:5003/api/preferences', {
+    console.log('Loading user preferences...');
+    
+    // First try the authenticated endpoint
+    let response = await apiCall('/preferences', {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
-        'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
-      },
-      credentials: 'include'
+      }
     });
+
+    console.log('Preferences API response status:', response.status);
+    console.log('Preferences API response headers:', response.headers);
+
+    // If authentication fails, try the session-based endpoint
+    if (response.status === 401) {
+      console.log('Authentication failed, trying session-based preferences...');
+      response = await fetch(`${API_BASE_URL}/preferences`, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include'
+      });
+      console.log('Session-based preferences response status:', response.status);
+    }
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       console.error('Error response from server:', errorData);
+      
+      // If it's an authentication error, throw a specific error
+      if (response.status === 401) {
+        throw new Error('Authentication required. Please sign in again.');
+      }
+      
       throw new Error(errorData.error || 'Failed to load preferences');
     }
 
@@ -64,10 +160,18 @@ const loadUserPreferences = async (): Promise<UserPreferences> => {
     // The preferences are in the 'preferences' field of the response
     const preferences = data.preferences || data;
     
-    // Ensure favoriteFoods is an array of strings
-    const favoriteFoods = Array.isArray(preferences.favoriteFoods) 
-      ? [...preferences.favoriteFoods, '', '', ''].slice(0, 3)
-      : ['', '', ''];
+      // Ensure favoriteFoods is a tuple of exactly 3 strings
+    const favoriteFoods = (() => {
+      const foods = Array.isArray(preferences.favoriteFoods) 
+        ? preferences.favoriteFoods.filter((f): f is string => typeof f === 'string')
+        : [];
+      // Ensure we have exactly 3 strings, filling with empty strings if needed
+      return [
+        foods[0] || '',
+        foods[1] || '',
+        foods[2] || ''
+      ] as [string, string, string];
+    })();
     
     // Ensure favoriteCuisines is an array and filter out any empty strings or invalid values
     const favoriteCuisines = Array.isArray(preferences.favoriteCuisines) 
@@ -104,145 +208,94 @@ const loadUserPreferences = async (): Promise<UserPreferences> => {
     };
   } catch (error) {
     console.error('Error loading preferences:', error);
-    // Return default values if there's an error
-    return {
-      dietaryRestrictions: [],
-      favoriteCuisines: [],
-      foodsToAvoid: [],
-      cookingSkillLevel: 'beginner',
-      favoriteFoods: ['', '', ''],
-      healthGoals: [],
-      maxCookingTime: '30 minutes',
-      includeBreakfast: true,
-      includeLunch: true,
-      includeDinner: true,
-      includeSnacks: false,
-      targetCalories: 2000,
-      targetProtein: 150,
-      targetCarbs: 200,
-      targetFat: 65
-    };
+    throw error;
   }
 };
 
 // Save user preferences to the backend
-const saveUserPreferences = async (data: UserPreferences) => {
+const saveUserPreferences = async (data: UserPreferences, toast: any) => {
   try {
-    const token = localStorage.getItem('auth_token');
-    if (!token) {
-      throw new Error('No authentication token found');
-    }
-
-    // Process the data before sending
+    console.log('Saving preferences with data:', data);
+    
+    // Prepare the payload according to the backend's expected format
     const payload = {
-      ...data,
-      // Ensure favoriteFoods is an array of strings
-      favoriteFoods: Array.isArray(data.favoriteFoods) 
-        ? data.favoriteFoods.slice(0, 3).map(food => String(food || '').trim()).filter(Boolean)
-        : ['', '', ''],
-      // Ensure favoriteCuisines is an array of non-empty strings
-      favoriteCuisines: Array.isArray(data.favoriteCuisines)
-        ? data.favoriteCuisines
-            .map(c => typeof c === 'string' ? c.trim() : '')
-            .filter(Boolean)
-        : [],
-      // Ensure foodsToAvoid is an array of non-empty strings
-      foodsToAvoid: Array.isArray(data.foodsToAvoid)
-        ? data.foodsToAvoid
-            .map(food => typeof food === 'string' ? food.trim() : '')
-            .filter(Boolean)
-        : []
+      preferences: {
+        ...data,
+        // Ensure arrays are always arrays and not undefined
+        dietaryRestrictions: data.dietaryRestrictions || [],
+        favoriteCuisines: data.favoriteCuisines || [],
+        foodsToAvoid: data.foodsToAvoid || [],
+        healthGoals: data.healthGoals || [],
+        favoriteFoods: data.favoriteFoods || ['', '', ''],
+        cookingSkillLevel: data.cookingSkillLevel || 'beginner',
+        // Include meal preferences
+        includeBreakfast: data.includeBreakfast ?? true,
+        includeLunch: data.includeLunch ?? true,
+        includeDinner: data.includeDinner ?? true,
+        includeSnacks: data.includeSnacks ?? false,
+        // Include nutrition targets
+        targetCalories: data.targetCalories,
+        targetProtein: data.targetProtein,
+        targetCarbs: data.targetCarbs,
+        targetFat: data.targetFat,
+      },
     };
 
-    console.log('Saving preferences:', payload);
+    console.log('Saving preferences with payload:', payload);
 
-    const response = await fetch('http://localhost:5003/api/preferences', {
+    // Use the apiCall utility which handles authentication and token refresh
+    const response = await apiCall('/preferences', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
         'Accept': 'application/json'
       },
-      body: JSON.stringify(payload), // Send payload directly, not nested under 'preferences'
-      credentials: 'include'
+      body: JSON.stringify(payload)
     });
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       console.error('Error response from server:', errorData);
-      throw new Error(errorData.error || 'Failed to save preferences');
+      
+      if (response.status === 401) {
+        throw new Error('Your session has expired. Please sign in again.');
+      }
+      
+      throw new Error(errorData.error || `Failed to save preferences: ${response.statusText}`);
     }
 
     const result = await response.json();
-    console.log('Save response:', result);
+    console.log('Preferences saved successfully:', result);
     
     return result;
   } catch (error) {
     console.error('Error saving preferences:', error);
+    
+    // If it's an auth error, show a more user-friendly message
+    if (error.message.includes('auth') || error.message.includes('token') || error.message.includes('session')) {
+      toast({
+        title: 'Authentication Error',
+        description: 'Your session has expired. Please sign in again.',
+        variant: 'destructive',
+      });
+      // Redirect to login after showing the toast
+      setTimeout(() => {
+        window.location.href = '/signin';
+      }, 2000);
+    } else {
+      // For other errors, just show the error message
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to save preferences',
+        variant: 'destructive',
+      });
+    }
+    
     throw error;
   }
 };
 
-// Interface for form options
-interface FormOption {
-  id: string;
-  label: string;
-  description: string;
-}
-
-// Form schema for validation
-const formSchema = z.object({
-  dietaryRestrictions: z.array(z.string()).default([]),
-  favoriteCuisines: z.array(z.string()).default([]),
-  foodsToAvoid: z.array(z.string()).default([]),
-  cookingSkillLevel: z.string().default('beginner'),
-  favoriteFoods: z.array(z.string()).default(['', '', '']).optional(),
-  healthGoals: z.array(z.string()).default([]),
-  maxCookingTime: z.string().default('30 minutes'),
-  // Meal inclusion preferences
-  includeBreakfast: z.boolean().default(true),
-  includeLunch: z.boolean().default(true),
-  includeDinner: z.boolean().default(true),
-  includeSnacks: z.boolean().default(false),
-  // Nutritional targets
-  targetCalories: z.number().min(0).max(10000).default(2000),
-  targetProtein: z.number().min(0).max(1000).default(150),
-  targetCarbs: z.number().min(0).max(1000).default(200),
-  targetFat: z.number().min(0).max(500).default(65)
-});
-
-type FormValues = z.infer<typeof formSchema>;
-
-// Form options
-const dietaryOptions: FormOption[] = [
-  { id: 'vegetarian', label: 'Vegetarian', description: 'No meat or fish' },
-  { id: 'vegan', label: 'Vegan', description: 'No animal products' },
-  { id: 'gluten-free', label: 'Gluten Free', description: 'No wheat, barley, or rye' },
-  { id: 'dairy-free', label: 'Dairy Free', description: 'No milk products' },
-  { id: 'keto', label: 'Keto', description: 'Low carb, high fat' },
-  { id: 'paleo', label: 'Paleo', description: 'No processed foods' }
-];
-
-const cuisineOptions: FormOption[] = [
-  { id: 'italian', label: 'Italian', description: 'Pasta, pizza, regional flavors' },
-  { id: 'mexican', label: 'Mexican', description: 'Spicy, flavorful, corn and flour-based dishes' },
-  { id: 'indian', label: 'Indian', description: 'Curry, aromatic spices, diverse flavors' },
-  { id: 'chinese', label: 'Chinese', description: 'Stir-fry, rice, diverse regional cuisines' },
-  { id: 'japanese', label: 'Japanese', description: 'Sushi, ramen, delicate flavors' },
-  { id: 'thai', label: 'Thai', description: 'Sweet, sour, spicy balance' },
-  { id: 'mediterranean', label: 'Mediterranean', description: 'Olive oil, fresh vegetables, seafood' },
-  { id: 'french', label: 'French', description: 'Classic techniques, rich sauces' },
-  { id: 'greek', label: 'Greek', description: 'Olive oil, feta, fresh herbs' },
-  { id: 'spanish', label: 'Spanish', description: 'Paella, tapas, olive oil' },
-  { id: 'korean', label: 'Korean', description: 'Kimchi, barbecue, fermented foods' },
-  { id: 'vietnamese', label: 'Vietnamese', description: 'Fresh herbs, fish sauce, balance' },
-  { id: 'american', label: 'American', description: 'Comfort food, grilled dishes, fusion' },
-  { id: 'british', label: 'British', description: 'Hearty dishes, pies, roasts' },
-  { id: 'irish', label: 'Irish', description: 'Stews, potato dishes, breads' },
-  { id: 'caribbean', label: 'Caribbean', description: 'Spicy, tropical flavors, seafood' },
-  { id: 'moroccan', label: 'Moroccan', description: 'Tagines, couscous, aromatic spices' }
-];
-
+// Common foods to avoid options
 const commonFoodsToAvoid: FormOption[] = [
   { id: 'nuts', label: 'Nuts', description: 'Tree nuts and peanuts' },
   { id: 'shellfish', label: 'Shellfish', description: 'Shrimp, crab, lobster' },
@@ -258,17 +311,44 @@ const commonFoodsToAvoid: FormOption[] = [
   { id: 'gluten', label: 'Gluten', description: 'Wheat, barley, rye' }
 ];
 
-const UserPreferencesPage: React.FC = () => {
-  const { isAuthenticated } = useAuth();
+const UserPreferencesPage = () => {
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [customCuisine, setCustomCuisine] = useState('');
+  const [customFoodToAvoid, setCustomFoodToAvoid] = useState('');
 
-  const handleAddCustomCuisine = (e: React.FormEvent) => {
-    e.preventDefault();
+  // Define default values separately to ensure type safety
+  const defaultValues: FormValues = {
+    dietaryRestrictions: [],
+    favoriteCuisines: [],
+    foodsToAvoid: [],
+    cookingSkillLevel: 'beginner',
+    favoriteFoods: ['', '', ''],
+    healthGoals: [],
+    maxCookingTime: '30 minutes',
+    includeBreakfast: true,
+    includeLunch: true,
+    includeDinner: true,
+    includeSnacks: false,
+    targetCalories: 2000,
+    targetProtein: 150,
+    targetCarbs: 200,
+    targetFat: 65,
+  };
+
+  const form = useForm<FormValues>({
+    resolver: zodResolver(formSchema),
+    defaultValues,
+  });
+  
+  const handleAddCustomCuisine = () => {
     const cuisine = customCuisine.trim();
     if (!cuisine) return;
     
-    // Get current values from form
+      // Get current values from form
     const currentCuisines = form.getValues('favoriteCuisines') || [];
     
     // Check if cuisine already exists (case-insensitive)
@@ -281,7 +361,7 @@ const UserPreferencesPage: React.FC = () => {
       const newCuisines = [...currentCuisines, cuisine];
       
       // Update the form state
-      form.setValue('favoriteCuisines', newCuisines, { 
+      form.setValue('favoriteCuisines', newCuisines as string[], { 
         shouldDirty: true,
         shouldValidate: true
       });
@@ -301,7 +381,7 @@ const UserPreferencesPage: React.FC = () => {
     const currentCuisines = form.getValues('favoriteCuisines') || [];
     const newCuisines = currentCuisines.filter(c => c !== cuisineToRemove);
     
-    form.setValue('favoriteCuisines', newCuisines, { 
+    form.setValue('favoriteCuisines', newCuisines as string[], { 
       shouldDirty: true, 
       shouldValidate: true 
     });
@@ -347,42 +427,16 @@ const UserPreferencesPage: React.FC = () => {
       form.trigger('foodsToAvoid');
     }, 0);
   };
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
-  const [customCuisine, setCustomCuisine] = useState('');
-  const [customFoodToAvoid, setCustomFoodToAvoid] = useState('');
 
-  const form = useForm<FormValues>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
-      dietaryRestrictions: [],
-      favoriteCuisines: [],
-      foodsToAvoid: [], // Initialize with empty array
-      cookingSkillLevel: 'beginner',
-      favoriteFoods: ['', '', ''],
-      healthGoals: [],
-      maxCookingTime: '30 minutes',
-      includeBreakfast: true,
-      includeLunch: true,
-      includeDinner: true,
-      includeSnacks: false,
-      targetCalories: 2000,
-      targetProtein: 150,
-      targetCarbs: 200,
-      targetFat: 65
-    }
-  });
 
   // Load user preferences on mount
   useEffect(() => {
     const loadPreferences = async () => {
-      if (!isAuthenticated) {
-        setIsLoading(false);
-        return;
-      }
-
+      console.log('loadPreferences - Starting to load preferences');
       try {
         const preferences = await loadUserPreferences();
+        
+        console.log('loadPreferences - Successfully loaded preferences:', preferences);
         
         // Prepare form values with proper defaults
         const formValues: FormValues = {
@@ -399,9 +453,16 @@ const UserPreferencesPage: React.FC = () => {
           healthGoals: Array.isArray(preferences.healthGoals) 
             ? preferences.healthGoals 
             : [],
-          favoriteFoods: Array.isArray(preferences.favoriteFoods) 
-            ? [...preferences.favoriteFoods, '', '', ''].slice(0, 3)
-            : ['', '', ''],
+          favoriteFoods: (() => {
+            const foods = Array.isArray(preferences.favoriteFoods) 
+              ? preferences.favoriteFoods.filter((f): f is string => typeof f === 'string')
+              : [];
+            return [
+              foods[0] || '',
+              foods[1] || '',
+              foods[2] || ''
+            ] as [string, string, string];
+          })(),
           cookingSkillLevel: (preferences.cookingSkillLevel as 'beginner' | 'intermediate' | 'advanced') || 'beginner',
           maxCookingTime: preferences.maxCookingTime || '30 minutes',
           includeBreakfast: preferences.includeBreakfast !== false,
@@ -418,75 +479,105 @@ const UserPreferencesPage: React.FC = () => {
         form.reset(formValues);
       } catch (error) {
         console.error('Failed to load preferences:', error);
-        toast({
-          title: 'Error',
-          description: 'Failed to load your preferences. Please try again.',
-          variant: 'destructive',
-        });
+        
+        // If it's an authentication error, just use default values
+        if (error.message.includes('Authentication required') || error.message.includes('Invalid or expired token')) {
+          console.log('Using default preferences due to authentication error');
+          // Use default form values
+          form.reset();
+        } else {
+          toast({
+            title: 'Error',
+            description: 'Failed to load your preferences. Please try again.',
+            variant: 'destructive',
+          });
+        }
       } finally {
         setIsLoading(false);
       }
     };
 
-    if (isAuthenticated) {
-      loadPreferences();
-    }
-  }, [isAuthenticated, form, toast]);
+    // Always try to load preferences, even if not authenticated
+    console.log('useEffect - Loading preferences');
+    loadPreferences();
+  }, [form, toast]);
+
+  // Type guard to check if a value is a valid cooking skill level
+  const isCookingSkillLevel = (value: unknown): value is 'beginner' | 'intermediate' | 'advanced' => {
+    return typeof value === 'string' && ['beginner', 'intermediate', 'advanced'].includes(value);
+  };
+
+  // Clean and validate form values before submission
+  const cleanAndValidateFormValues = (values: FormValues): UserPreferences => {
+    // Ensure all required fields have values and are of the correct type
+    const cleaned: UserPreferences = {
+      dietaryRestrictions: Array.isArray(values.dietaryRestrictions)
+        ? [...new Set(values.dietaryRestrictions
+            .filter((r): r is string => Boolean(r) && typeof r === 'string')
+            .map(r => r.trim())
+            .filter(Boolean))]
+        : [],
+
+      favoriteCuisines: Array.isArray(values.favoriteCuisines)
+        ? [...new Set(values.favoriteCuisines
+            .filter((c): c is string => Boolean(c) && typeof c === 'string')
+            .map(c => c.trim())
+            .filter(Boolean))]
+        : [],
+
+      foodsToAvoid: Array.isArray(values.foodsToAvoid)
+        ? values.foodsToAvoid.filter((f): f is string => Boolean(f) && typeof f === 'string')
+        : [],
+
+      cookingSkillLevel: isCookingSkillLevel(values.cookingSkillLevel)
+        ? values.cookingSkillLevel
+        : 'beginner',
+
+      // Ensure we always have exactly 3 favorite foods, with empty strings for missing values
+      favoriteFoods: (() => {
+        const foods = Array.isArray(values.favoriteFoods)
+          ? values.favoriteFoods
+              .filter((f): f is string => typeof f === 'string')
+              .map(f => f.trim())
+              .filter(Boolean)
+          : [];
+        return [
+          foods[0] || '',
+          foods[1] || '',
+          foods[2] || ''
+        ] as [string, string, string];
+      })(),
+
+      healthGoals: Array.isArray(values.healthGoals)
+        ? values.healthGoals.filter((g): g is string => Boolean(g) && typeof g === 'string')
+        : [],
+
+      // Ensure numeric values are within reasonable bounds
+      maxCookingTime: typeof values.maxCookingTime === 'string' ? values.maxCookingTime : '30 minutes',
+      includeBreakfast: values.includeBreakfast !== false,
+      includeLunch: values.includeLunch !== false,
+      includeDinner: values.includeDinner !== false,
+      includeSnacks: Boolean(values.includeSnacks),
+      targetCalories: Math.max(0, Math.min(Number(values.targetCalories) || 2000, 10000)),
+      targetProtein: Math.max(0, Math.min(Number(values.targetProtein) || 150, 500)),
+      targetCarbs: Math.max(0, Math.min(Number(values.targetCarbs) || 200, 1000)),
+      targetFat: Math.max(0, Math.min(Number(values.targetFat) || 65, 300))
+    };
+
+    return cleaned;
+  };
 
   // Handle form submission
-  const onSubmit = async (formData: FormValues) => {
-    if (!isAuthenticated) {
-      navigate('/login');
-      return;
-    }
-
+  const onSubmit = async (values: FormValues) => {
     try {
       setIsSaving(true);
       
-      // Get current form state to ensure we have the latest values
-      const currentValues = form.getValues();
-      console.log('Current form values before submit:', currentValues);
-      
-      // Clean up the data before sending
-      const cleanedData: UserPreferences = {
-        // Ensure dietary restrictions is an array and handle the case where it might be undefined
-        dietaryRestrictions: Array.isArray(currentValues.dietaryRestrictions) 
-          ? [...new Set(currentValues.dietaryRestrictions
-              .filter(Boolean)
-              .map((r: string) => r.trim())
-              .filter(Boolean))]
-          : [],
-        favoriteCuisines: Array.isArray(currentValues.favoriteCuisines) 
-          ? [...new Set(currentValues.favoriteCuisines
-              .filter((c: any) => c && typeof c === 'string')
-              .map((c: string) => c.trim())
-              .filter(Boolean))]
-          : [],
-        foodsToAvoid: Array.isArray(currentValues.foodsToAvoid) 
-          ? currentValues.foodsToAvoid.filter(Boolean)
-          : [],
-        cookingSkillLevel: (currentValues.cookingSkillLevel as 'beginner' | 'intermediate' | 'advanced') || 'beginner',
-        favoriteFoods: Array.isArray(currentValues.favoriteFoods)
-          ? currentValues.favoriteFoods.filter(Boolean).map((f: any) => f.trim())
-          : [],
-        healthGoals: Array.isArray(currentValues.healthGoals)
-          ? currentValues.healthGoals.filter(Boolean)
-          : [],
-        maxCookingTime: currentValues.maxCookingTime || '30 minutes',
-        includeBreakfast: currentValues.includeBreakfast !== false,
-        includeLunch: currentValues.includeLunch !== false,
-        includeDinner: currentValues.includeDinner !== false,
-        includeSnacks: !!currentValues.includeSnacks,
-        targetCalories: currentValues.targetCalories || 2000,
-        targetProtein: currentValues.targetProtein || 150,
-        targetCarbs: currentValues.targetCarbs || 200,
-        targetFat: currentValues.targetFat || 65
-      };
-      
-      console.log('Submitting preferences:', cleanedData);
+      // Clean and validate the form values
+      const cleanedData = cleanAndValidateFormValues(values);
+      console.log('Submitting cleaned preferences:', cleanedData);
       
       // Save with proper structure that backend expects
-      await saveUserPreferences(cleanedData);
+      await saveUserPreferences(cleanedData, toast);
       
       // Update the form state to reflect the saved values
       form.reset(cleanedData);
@@ -494,14 +585,40 @@ const UserPreferencesPage: React.FC = () => {
       toast({
         title: "Success",
         description: "Your preferences have been saved successfully.",
+        variant: "default",
       });
     } catch (error) {
-      console.error('Error saving preferences:', error);
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : 'Failed to save preferences',
-        variant: "destructive",
-      });
+      console.error('Error in form submission:', error);
+      
+      // Handle different types of errors
+      if (error instanceof Error) {
+        // Authentication errors
+        if (error.message.includes('auth') || 
+            error.message.includes('token') || 
+            error.message.includes('session') ||
+            error.message.includes('Authentication required') || 
+            error.message.includes('Invalid or expired token')) {
+          toast({
+            title: 'Authentication Required',
+            description: 'Please sign in to save your preferences.',
+            variant: 'destructive',
+          });
+        } else {
+          // Other errors
+          toast({
+            title: "Error",
+            description: error.message || "Failed to save preferences. Please try again.",
+            variant: "destructive",
+          });
+        }
+      } else {
+        // Non-Error objects
+        toast({
+          title: "Error",
+          description: "An unexpected error occurred. Please try again.",
+          variant: "destructive",
+        });
+      }
     } finally {
       setIsSaving(false);
     }
@@ -519,32 +636,8 @@ const UserPreferencesPage: React.FC = () => {
     );
   }
 
-  // Render sign-in prompt for unauthenticated users
-  if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle>Sign In Required</CardTitle>
-            <CardDescription>
-              Please sign in to view and edit your preferences.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Button className="w-full" onClick={() => navigate('/login')}>
-              Sign In
-            </Button>
-            <div className="text-center text-sm text-gray-500">
-              Don't have an account?{' '}
-              <Button variant="link" className="p-0 h-auto" onClick={() => navigate('/signup')}>
-                Sign up
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
+  // Watch the favoriteFoods field for changes
+  const favoriteFoods = form.watch('favoriteFoods') as [string, string, string] || ['', '', ''] as [string, string, string];
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -578,10 +671,16 @@ const UserPreferencesPage: React.FC = () => {
                       name={`favoriteFoods.${index}`}
                       render={({ field }) => (
                         <FormItem>
+                          <FormLabel>Favorite Food {index + 1}</FormLabel>
                           <FormControl>
                             <Input
-                              placeholder={`Favorite food #${index + 1}`}
-                              {...field}
+                              placeholder={`Favorite food ${index + 1}`}
+                              value={favoriteFoods[index]}
+                              onChange={(e) => {
+                                const newFoods = [...favoriteFoods] as [string, string, string];
+                                newFoods[index] = e.target.value;
+                                form.setValue('favoriteFoods', newFoods, { shouldDirty: true });
+                              }}
                             />
                           </FormControl>
                           <FormMessage />
@@ -679,7 +778,7 @@ const UserPreferencesPage: React.FC = () => {
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') {
                           e.preventDefault();
-                          handleAddCustomCuisine(e);
+                          handleAddCustomCuisine();
                         }
                       }}
                       className="flex-1"

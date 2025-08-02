@@ -66,11 +66,11 @@ export const RecipeDetail: React.FC<RecipeDetailProps> = ({
       <div className="relative rounded-xl overflow-hidden bg-muted">
         <div className="aspect-w-16 aspect-h-9 w-full">
           <img
-            src={recipe.image || '/placeholder-recipe.jpg'}
+            src={recipe.image || 'https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?auto=format&fit=crop&w=800&h=600&q=80'}
             alt={recipe.name}
             className="w-full h-full object-cover"
             onError={(e) => {
-              (e.target as HTMLImageElement).src = '/placeholder-recipe.jpg';
+              (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?auto=format&fit=crop&w=800&h=600&q=80';
             }}
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent" />
@@ -178,11 +178,12 @@ export const RecipeDetail: React.FC<RecipeDetailProps> = ({
           </Card>
 
           {/* Nutrition Facts */}
-          {recipe.nutrition && (
+          {(recipe.nutrition || (recipe as any).macrosPerServing) && (
             <div className="mt-6">
               <RecipeNutrition 
                 nutrition={recipe.nutrition} 
                 servings={recipe.servings}
+                macrosPerServing={(recipe as any).macrosPerServing}
               />
             </div>
           )}

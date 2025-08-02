@@ -1,21 +1,12 @@
-// API Configuration for different environments
-export const API_CONFIG = {
-  development: {
-    baseURL: 'http://localhost:5003/api',
-    timeout: 30000
-  },
-  production: {
-    baseURL: import.meta.env.VITE_REACT_APP_API_URL || 'https://your-backend-url.railway.app/api',
-    timeout: 30000
-  }
-};
+// Vite environment variables must be prefixed with VITE_
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5004/api';
 
-export const getApiConfig = () => {
-  const env = import.meta.env.MODE || 'development';
-  console.log('🌍 Environment:', env);
-  console.log('🔗 API URL:', API_CONFIG[env as keyof typeof API_CONFIG].baseURL);
-  console.log('🔧 VITE_REACT_APP_API_URL:', import.meta.env.VITE_REACT_APP_API_URL || 'Not set');
-  return API_CONFIG[env as keyof typeof API_CONFIG];
-};
+// Remove any trailing slashes from the API URL
+const cleanApiUrl = API_URL.endsWith('/') ? API_URL.slice(0, -1) : API_URL;
 
-export const API_BASE_URL = getApiConfig().baseURL; 
+// Ensure the URL ends with /api
+const baseURL = cleanApiUrl.endsWith('/api') 
+  ? cleanApiUrl 
+  : `${cleanApiUrl}/api`;
+
+export const API_BASE_URL = baseURL;

@@ -6,7 +6,7 @@ import logging
 import os
 import requests
 from datetime import datetime, timedelta
-from services.llm_meal_planner_agent import LLMMealPlannerAgent
+from services.free_llm_meal_planner import FreeLLMMealPlannerAgent
 from services.user_preferences_service import UserPreferencesService
 from middleware.auth_middleware import require_auth, get_current_user_id
 
@@ -18,7 +18,7 @@ meal_planner_bp = Blueprint('meal_planner', __name__)
 
 # Initialize services
 user_preferences_service = UserPreferencesService()
-llm_meal_planner_agent = LLMMealPlannerAgent()
+free_llm_meal_planner = FreeLLMMealPlannerAgent(user_preferences_service)
 
 def build_llama_prompt(preferences, budget=None, dietary_goals=None, currency='$'):
     """Build a structured prompt for meal planning with nutritional requirements."""
@@ -243,7 +243,7 @@ def generate_meal_plan_with_llm(prompt, model_name="llama3.2"):
         
         # Generate the meal plan using the LLM agent
         logger.info("Calling LLM agent to generate meal plan...")
-        meal_plan = llm_meal_planner_agent.generate_weekly_meal_plan(preferences)
+        meal_plan = free_llm_meal_planner.generate_weekly_meal_plan(preferences)
         
         if not meal_plan or 'days' not in meal_plan:
             logger.error("Failed to generate valid meal plan from LLM agent")
@@ -689,7 +689,7 @@ def simple_ai_meal_plan():
         logger.debug(f"User preferences: {preferences}")
         
         # Use the free LLM meal planner agent
-        result = llm_meal_planner_agent.generate_weekly_meal_plan(preferences)
+        result = free_llm_meal_planner.generate_weekly_meal_plan(user_id)
         
         if not result or result.get('error'):
             error_msg = result.get('error', 'Unknown error') if result else 'No response from AI service'
@@ -736,7 +736,7 @@ def generate_meal_plan():
         logger.info(f"Using preferences for user {user_id}: {list(preferences.keys())}")
         
         # Generate meal plan using LLM agent
-        result = llm_meal_planner_agent.generate_weekly_meal_plan(preferences)
+        result = free_llm_meal_planner.generate_weekly_meal_plan(preferences)
         
         if "error" in result:
             logger.error(f"Meal plan generation failed: {result['error']}")
@@ -772,7 +772,7 @@ def regenerate_specific_meal():
         logger.info(f"Regenerating {meal_type} for {day} for user {user_id}")
         
         # Regenerate specific meal
-        result = llm_meal_planner_agent.regenerate_specific_meal(user_id, day, meal_type, current_plan)
+        result = free_llm_meal_planner.regenerate_specific_meal(user_id, day, meal_type, current_plan)
         
         if "error" in result:
             return jsonify({"error": result["error"]}), 500
@@ -802,7 +802,7 @@ def get_recipe_suggestions():
             logger.warning("No preferences provided for recipe suggestions")
             return jsonify({"error": "No preferences provided"}), 400
         
-        recipes = llm_meal_planner_agent.get_recipe_suggestions(meal_type, preferences, count)
+        recipes = free_llm_meal_planner.get_recipe_suggestions(meal_type, preferences, count)
         
         return jsonify({
             "success": True,
@@ -830,7 +830,7 @@ def health_check():
         }
         
         # Test the LLM agent (this will use fallback if LLM is not available)
-        plan_result = llm_meal_planner_agent.generate_weekly_meal_plan(test_preferences)
+        plan_result = free_llm_meal_planner.generate_weekly_meal_plan(test_preferences)
         
         return jsonify({
             "success": True,
@@ -1217,3 +1217,38 @@ def debug_user_preferences():
             'error': 'Debug endpoint failed',
             'details': str(e)
         }), 500
+
+@meal_planner_bp.route('/simple-meal-plan', methods=['GET'])
+@cross_origin(origins=['http://localhost:8081'])
+@require_auth
+def simple_meal_plan():
+    """Generate a simple meal plan using user preferences (no LLM required)"""
+    try:
+        user_id = get_current_user_id()
+        if not user_id:
+            return jsonify({"error": "Authentication required"}), 401
+        
+        # Get user preferences
+        preferences = user_preferences_service.get_preferences(user_id)
+        if not preferences:
+            return jsonify({
+                "error": "No preferences found. Please set your preferences first."
+            }), 400
+        
+        # Generate simple meal plan
+        result = free_llm_meal_planner.generate_weekly_meal_plan(user_id)
+        
+        if "error" in result:
+            return jsonify(result), 400
+        
+        return jsonify({
+            "success": True,
+            "meal_plan": result.get("plan", {}),
+            "preferences_used": result.get("preferences_used", {}),
+            "llm_used": result.get("llm_used", "Rule-based"),
+            "generated_at": datetime.utcnow().isoformat()
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error generating simple meal plan: {str(e)}")
+        return jsonify({"error": f"Failed to generate meal plan: {str(e)}"}), 500

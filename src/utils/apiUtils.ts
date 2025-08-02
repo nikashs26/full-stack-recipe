@@ -2,11 +2,10 @@ import { API_BASE_URL } from '../config/api';
 
 export const apiCall = async (endpoint: string, options: RequestInit = {}) => {
   const token = localStorage.getItem('auth_token');
-  const headers = {
+  const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
-    'X-Requested-With': 'XMLHttpRequest',
-    ...options.headers,
+    ...(options.headers || {}) as Record<string, string>,
   };
 
   if (token) {

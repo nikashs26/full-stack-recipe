@@ -241,3 +241,51 @@ export const formatRecipeForDisplay = (recipe: Recipe | SpoonacularRecipe, isExt
   }
   return recipe;
 };
+
+/**
+ * Get a reliable image URL with fallback
+ * @param imageUrl - The original image URL
+ * @param size - The desired image size (small, medium, large)
+ * @returns A reliable image URL
+ */
+export const getReliableImageUrl = (imageUrl?: string, size: 'small' | 'medium' | 'large' = 'medium'): string => {
+  // Check if the image URL is valid and accessible
+  const isValidImageUrl = (url: string): boolean => {
+    if (!url || typeof url !== 'string') return false;
+    
+    // Only filter out the most problematic URL patterns that cause actual errors
+    // These are the specific patterns that cause ERR_TUNNEL_CONNECTION_FAILED
+    const problematicPatterns = [
+      /^[a-z]{6}\d{10}\.(jpg|png)$/i, // Pattern like urzj1d1587670726.jpg
+      /^\d{10}\.(jpg|png)$/i, // Pattern like 1529443236.jpg
+    ];
+    
+    // Only reject URLs that match the problematic patterns
+    if (problematicPatterns.some(pattern => pattern.test(url))) {
+      console.log(`Filtering out problematic image URL: ${url}`);
+      return false;
+    }
+    
+    // Allow ALL other URLs, including:
+    // - HTTP/HTTPS URLs
+    // - Data URLs
+    // - Relative URLs
+    // - External URLs like Unsplash, etc.
+    // - Any other valid image URL
+    return true;
+  };
+  
+  // If the original URL is valid, use it
+  if (imageUrl && isValidImageUrl(imageUrl)) {
+    return imageUrl;
+  }
+  
+  // Return appropriate fallback based on size
+  const fallbackImages = {
+    small: 'https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?auto=format&fit=crop&w=300&h=200&q=80',
+    medium: 'https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?auto=format&fit=crop&w=400&h=300&q=80',
+    large: 'https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?auto=format&fit=crop&w=800&h=600&q=80'
+  };
+  
+  return fallbackImages[size];
+};

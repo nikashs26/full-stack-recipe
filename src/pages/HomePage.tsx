@@ -14,6 +14,7 @@ import { fetchRecipes } from '../lib/spoonacular';
 import { useAuth } from '../context/AuthContext';
 import { getHomepagePopularRecipes } from '../services/popularRecipesService';
 import { addSampleClicks } from '../utils/testClickTracking';
+import { apiCall } from '../utils/apiUtils';
 
 const HomePage: React.FC = () => {
   const { isAuthenticated, user } = useAuth();
@@ -156,7 +157,6 @@ const HomePage: React.FC = () => {
       ...savedRecipes.map(recipe => ({ ...recipe, type: 'saved' as const }))
     ];
 
-    // If user is authenticated and has preferences, filter recommendations accordingly
     let recommendedRecipes = [];
     let popularRecipes = [];
     let newestRecipes = [];
@@ -165,28 +165,51 @@ const HomePage: React.FC = () => {
     console.log('📊 Recipe counts - Backend:', spoonacularRecipes.length, 'Manual:', manualRecipes.length, 'Saved:', savedRecipes.length);
     console.log('🔍 Total recipes to filter:', allCombined.length);
     
-    if (isAuthenticated && userPreferences && Object.keys(userPreferences).length > 0) {
-      console.log('🎯 User preferences found:', userPreferences);
+    // Check if user has meaningful preferences (not just empty arrays/strings)
+    const hasMeaningfulPreferences = React.useMemo(() => {
+      if (!userPreferences) return false;
+      
+      // Check if any preference arrays have actual content
+      const hasFavoriteFoods = Array.isArray(userPreferences.favoriteFoods) && 
+        userPreferences.favoriteFoods.some(food => food && food.trim() !== '');
+      
+      const hasFavoriteCuisines = Array.isArray(userPreferences.favoriteCuisines) && 
+        userPreferences.favoriteCuisines.some(cuisine => cuisine && cuisine.trim() !== '');
+      
+      const hasDietaryRestrictions = Array.isArray(userPreferences.dietaryRestrictions) && 
+        userPreferences.dietaryRestrictions.length > 0;
+      
+      const hasFoodsToAvoid = Array.isArray(userPreferences.foodsToAvoid) && 
+        userPreferences.foodsToAvoid.some(food => food && food.trim() !== '');
+      
+      const hasCookingSkill = userPreferences.cookingSkillLevel && userPreferences.cookingSkillLevel !== 'beginner';
+      
+      const hasHealthGoals = Array.isArray(userPreferences.healthGoals) && 
+        userPreferences.healthGoals.length > 0;
+      
+      // Return true if any meaningful preference is set
+      return hasFavoriteFoods || hasFavoriteCuisines || hasDietaryRestrictions || 
+             hasFoodsToAvoid || hasCookingSkill || hasHealthGoals;
+    }, [userPreferences]);
+
+    // For authenticated users with preferences, use fallback filtering
+    if (isAuthenticated && userPreferences && hasMeaningfulPreferences) {
+      console.log('✅ User has meaningful preferences, using fallback filtering');
+      
+      // Fallback to frontend filtering (simplified version)
       const { 
         favoriteCuisines = [], 
         dietaryRestrictions = [],
         favoriteFoods = [] 
       } = userPreferences;
       
-      console.log('🎯 Applying user preferences:', { 
-        favoriteCuisines, 
-        dietaryRestrictions, 
-        favoriteFoods 
-      });
-      
-      // First, filter out recipes that don't match dietary restrictions
+      // Simple filtering based on cuisines and dietary restrictions
       let filteredRecipes = allCombined;
       
       if (dietaryRestrictions && dietaryRestrictions.length > 0) {
-        console.log('🔍 Filtering recipes by dietary restrictions:', dietaryRestrictions);
         filteredRecipes = allCombined.filter(recipe => {
           const recipeDiets = recipe.diets || [];
-          const matches = dietaryRestrictions.every(prefDiet => {
+          return dietaryRestrictions.every(prefDiet => {
             if (!prefDiet) return true;
             const prefLower = prefDiet.toLowerCase().trim();
             return recipeDiets.some(diet => {
@@ -201,397 +224,55 @@ const HomePage: React.FC = () => {
               return false;
             });
           });
-          
-          if (matches) {
-            console.log(`✅ Recipe matches dietary restrictions: ${recipe.title || recipe.name}`, {
-              recipeDiets,
-              matchesDietary: true
-            });
-          }
-          
-          return matches;
         });
-        
-        console.log(`📊 After dietary filtering: ${filteredRecipes.length} recipes remaining`);
-      } else {
-        console.log('ℹ️ No dietary restrictions to filter by');
       }
-
-      console.log(`✅ Filtered ${filteredRecipes.length} recipes that match dietary restrictions`);
-
-      console.log('🎯 Scoring recipes based on preferences...');
       
-      // Then score the remaining recipes
-      recommendedRecipes = filteredRecipes.map(recipe => {
-        const recipeCuisines = Array.isArray(recipe.cuisines) ? recipe.cuisines : [];
-        const recipeTitle = (recipe.title || recipe.name || 'Untitled Recipe').toLowerCase();
-        const recipeIngredients = Array.isArray(recipe.ingredients) 
-          ? recipe.ingredients.map(i => (i.name || '').toLowerCase())
-          : [];
-        
-        // 1. Calculate match score based on favorite foods (HIGHEST PRIORITY)
-        let foodMatchScore = 0;
-        const foodMatches: string[] = [];
-        
-        if (favoriteFoods && favoriteFoods.length > 0) {
-          console.log(`🍎 Checking ${recipeTitle} against favorite foods:`, favoriteFoods);
-          
-          favoriteFoods.forEach(food => {
-            if (!food) return;
-            const foodLower = food.trim().toLowerCase();
-            if (!foodLower) return;
-            
-            // Check if food is in title (highest score)
-            if (recipeTitle.includes(foodLower)) {
-              foodMatchScore += 20; // Increased weight for title matches
-              foodMatches.push(`Title: ${food}`);
-              console.log(`   🏆 ${food} found in title: ${recipeTitle}`);
-              return;
-            }
-            
-            // Check if food is in ingredients (medium score)
-            const ingredientMatch = recipeIngredients.some(ing => {
-              if (!ing) return false;
-              
-              // Check for whole word match first (higher score)
-              if (new RegExp(`\\b${foodLower}\\b`, 'i').test(ing)) {
-                foodMatchScore += 15;
-                foodMatches.push(`Ingredient: ${food}`);
-                console.log(`   ✔️ ${food} found as whole word in ingredients`);
-                return true;
-              }
-              
-              // Check for partial match (lower score)
-              if (ing.includes(foodLower)) {
-                foodMatchScore += 8;
-                foodMatches.push(`Ingredient (partial): ${food}`);
-                console.log(`   ➖ ${food} found as partial match in ingredients`);
-                return true;
-              }
-              return false;
-            });
-            
-            // If no direct match, check for partial matches in title (lowest score)
-            if (!ingredientMatch && foodLower.length > 3) {
-              const words = recipeTitle.split(/\\s+/);
-              if (words.some(word => word.includes(foodLower))) {
-                foodMatchScore += 5;
-                foodMatches.push(`Title (partial): ${food}`);
-                console.log(`   🔍 ${food} found as partial match in title`);
-              }
-            }
-          });
-        } else {
-          console.log('ℹ️ No favorite foods to match against');
-        }
-        
-        // 2. Calculate match score based on cuisine (MEDIUM PRIORITY)
-        let cuisineMatchScore = 0;
-        const cuisineMatches: string[] = [];
-        
-        if (favoriteCuisines && favoriteCuisines.length > 0 && recipeCuisines.length > 0) {
-          console.log(`🌍 Checking cuisines for ${recipeTitle}:`, {
-            recipeCuisines,
-            favoriteCuisines
-          });
-          
-          favoriteCuisines.forEach(cuisine => {
-            if (!cuisine) return;
-            const cuisineLower = cuisine.trim().toLowerCase();
-            if (!cuisineLower) return;
-            
-            // Check for exact cuisine match (highest score)
-            const exactMatch = recipeCuisines.some(c => c?.toLowerCase() === cuisineLower);
-            if (exactMatch) {
-              cuisineMatchScore += 15; // Increased weight for exact matches
-              cuisineMatches.push(`Cuisine: ${cuisine}`);
-              console.log(`   🏆 Exact cuisine match: ${cuisine}`);
-              return;
-            }
-            
-            // Check for partial match in cuisine names (medium score)
-            const partialCuisineMatch = recipeCuisines.some(c => {
-              if (!c) return false;
-              const cLower = c.toLowerCase();
-              return cLower.includes(cuisineLower) || cuisineLower.includes(cLower);
-            });
-            
-            if (partialCuisineMatch) {
-              cuisineMatchScore += 8;
-              cuisineMatches.push(`Cuisine (partial): ${cuisine}`);
-              console.log(`   🔍 Partial cuisine match: ${cuisine}`);
-              return;
-            }
-            
-            // Check for match in title (lower score)
-            if (cuisineLower.length > 3 && recipeTitle.includes(cuisineLower)) {
-              cuisineMatchScore += 5;
-              cuisineMatches.push(`Title contains: ${cuisine}`);
-              console.log(`   🔤 Cuisine in title: ${cuisine}`);
-            }
-          });
-        } else if (favoriteCuisines && favoriteCuisines.length > 0) {
-          console.log('ℹ️ No cuisines found in recipe to match against');
-        }
-        
-        // 3. Calculate quality bonus (LOW PRIORITY)
-        let qualityBonus = 0;
-        const qualityDetails: string[] = [];
-        
-        // Image presence (important for visual appeal)
-        const hasImage = recipe.image && !['/placeholder.svg', ''].includes(recipe.image);
-        if (hasImage) {
-          qualityBonus += 3; // Increased weight for images
-          qualityDetails.push('Has image');
-        }
-        
-        // Cooking time (prefer quicker recipes)
-        const readyInMinutes = recipe.readyInMinutes || recipe.ready_in_minutes;
-        if (readyInMinutes) {
-          if (readyInMinutes <= 20) {
-            qualityBonus += 4;
-            qualityDetails.push('Very quick meal');
-          } else if (readyInMinutes <= 30) {
-            qualityBonus += 3;
-            qualityDetails.push('Quick meal');
-          } else if (readyInMinutes <= 45) {
-            qualityBonus += 1;
-            qualityDetails.push('Moderate prep time');
-          } else {
-            qualityBonus -= 1; // Slight penalty for longer prep times
-            qualityDetails.push('Longer prep time');
-          }
-        }
-        
-        // Health score (if available)
-        const healthScore = recipe.healthScore || recipe.health_score;
-        if (healthScore) {
-          if (healthScore >= 8) {
-            qualityBonus += 3;
-            qualityDetails.push('Very healthy');
-          } else if (healthScore >= 6) {
-            qualityBonus += 2;
-            qualityDetails.push('Healthy');
-          }
-        }
-        
-        // Servings (prefer family-sized meals)
-        const servings = recipe.servings;
-        if (servings && servings >= 4) {
-          qualityBonus += 1;
-          qualityDetails.push(`Serves ${servings}`);
-        }
-        
-        console.log('📊 Quality score details:', { qualityBonus, qualityDetails });
-        
-        // Calculate total score with weights and normalization
-        const totalScore = Math.max(0, Math.min(100, (
-          (foodMatchScore * 0.6) +      // 60% weight to favorite foods (highest priority)
-          (cuisineMatchScore * 0.3) +   // 30% weight to cuisines
-          (qualityBonus * 0.1)          // 10% weight to quality (lowest priority)
-        )));
-        
-        // Add debug information to the recipe
-        const matchDetails = {
-          foodMatches,
-          cuisineMatches,
-          qualityDetails,
-          scores: {
-            food: foodMatchScore,
-            cuisine: cuisineMatchScore,
-            quality: qualityBonus,
-            total: totalScore
-          }
-        };
-        
-        console.log(`\n📊 Recipe "${recipeTitle}" scores:`, JSON.stringify({
-          ...matchDetails,
-          finalScore: totalScore.toFixed(2)
-        }, null, 2));
-        
-        return { 
-          ...recipe, 
-          _matchScore: totalScore,
-          _matchDetails: matchDetails // Store match details for debugging
-        };
-      })
-      // Sort by total score (descending)
-      .sort((a, b) => b._matchScore - a._matchScore)
-      // Remove the temporary score property
-      .map(({ _matchScore, ...rest }) => rest);
-      
-      console.log(`🎉 Found ${recommendedRecipes.length} STRICT preference-matched recipes:`, 
-        recommendedRecipes.map(r => r.title || r.name));
-      
-      // Group recipes by cuisine for proportional distribution
-      const recipesByCuisine: Record<string, any[]> = {};
-      const uncategorizedRecipes: any[] = [];
-      
-      // Initialize cuisine groups
+      // Simple cuisine filtering
       if (favoriteCuisines && favoriteCuisines.length > 0) {
-        favoriteCuisines.forEach(cuisine => {
-          if (cuisine) recipesByCuisine[cuisine] = [];
+        filteredRecipes = filteredRecipes.filter(recipe => {
+          const recipeCuisines = Array.isArray(recipe.cuisines) ? recipe.cuisines : [];
+          const recipeTitle = (recipe.title || recipe.name || '').toLowerCase();
+          
+          return favoriteCuisines.some(cuisine => {
+            if (!cuisine) return false;
+            const cuisineLower = cuisine.toLowerCase();
+            return recipeCuisines.some(c => c?.toLowerCase().includes(cuisineLower)) ||
+                   recipeTitle.includes(cuisineLower);
+          });
         });
       }
       
-      // Categorize recipes by cuisine
-      recommendedRecipes.forEach(recipe => {
-        const recipeCuisines = Array.isArray(recipe.cuisines) ? recipe.cuisines : [];
-        let categorized = false;
-        
-        // Try to match with preferred cuisines
-        for (const [cuisine, recipes] of Object.entries(recipesByCuisine)) {
-          const cuisineLower = cuisine.toLowerCase();
-          const hasMatchingCuisine = recipeCuisines.some(c => 
-            c && c.toLowerCase().includes(cuisineLower)
-          );
-          
-          if (hasMatchingCuisine) {
-            recipes.push(recipe);
-            categorized = true;
-            break; // Only add to the first matching cuisine
-          }
-        }
-        
-        // If no cuisine match, check title
-        if (!categorized) {
-          const title = (recipe.title || '').toLowerCase();
-          for (const [cuisine, recipes] of Object.entries(recipesByCuisine)) {
-            if (title.includes(cuisine.toLowerCase())) {
-              recipes.push(recipe);
-              categorized = true;
-              break;
-            }
-          }
-        }
-        
-        // If still not categorized, add to uncategorized
-        if (!categorized) {
-          uncategorizedRecipes.push(recipe);
-        }
-      });
-      
-      console.log('📊 Recipes by cuisine:', Object.fromEntries(
-        Object.entries(recipesByCuisine).map(([k, v]) => [k, v.length])
-      ));
-      
-      // Calculate number of recipes per cuisine (distribute 8 recipes proportionally)
-      const targetCount = 8;
-      const cuisineCount = Object.keys(recipesByCuisine).length;
-      let remainingRecipesList = [...recommendedRecipes];
-      let distributedRecipes: any[] = [];
-      
-      if (cuisineCount > 0) {
-        // First pass: distribute recipes evenly
-        let recipesPerCuisine = Math.max(1, Math.floor(targetCount / cuisineCount));
-        
-        // Distribute recipes
-        for (const [cuisine, recipes] of Object.entries(recipesByCuisine)) {
-          const takeCount = Math.min(recipesPerCuisine, recipes.length);
-          const selected = recipes
-            .sort((a, b) => (b._matchScore || 0) - (a._matchScore || 0))
-            .slice(0, takeCount);
-          
-          distributedRecipes = [...distributedRecipes, ...selected];
-          remainingRecipesList = remainingRecipesList.filter(r => !selected.includes(r));
-        }
-        
-        // If we have space left, add more from cuisines that have more recipes
-        if (distributedRecipes.length < targetCount) {
-          // Sort cuisines by number of remaining recipes (descending)
-          const sortedCuisines = Object.entries(recipesByCuisine)
-            .sort(([, a], [, b]) => b.length - a.length);
-          
-          let added = 0;
-          while (distributedRecipes.length < targetCount && added < 100) { // safety check
-            let madeProgress = false;
-            
-            for (const [cuisine, recipes] of sortedCuisines) {
-              const remaining = recipes.filter(r => !distributedRecipes.includes(r));
-              if (remaining.length > 0) {
-                const recipe = remaining[0]; // Take the next best recipe
-                distributedRecipes.push(recipe);
-                remainingRecipesList = remainingRecipesList.filter(r => r !== recipe);
-                madeProgress = true;
-                
-                if (distributedRecipes.length >= targetCount) break;
-              }
-            }
-            
-            if (!madeProgress) break; // No more recipes to add
-            added++;
-          }
-        }
-      } else {
-        // If no cuisines, just take top recipes
-        distributedRecipes = recommendedRecipes
-          .sort((a, b) => (b._matchScore || 0) - (a._matchScore || 0))
-          .slice(0, targetCount);
-      }
-      
-      // If we still don't have enough, add from uncategorized
-      if (distributedRecipes.length < targetCount && uncategorizedRecipes.length > 0) {
-        const needed = targetCount - distributedRecipes.length;
-        const toAdd = uncategorizedRecipes
-          .sort((a, b) => (b._matchScore || 0) - (a._matchScore || 0))
-          .slice(0, needed);
-        
-        distributedRecipes = [...distributedRecipes, ...toAdd];
-      }
-      
-      // Update recommendedRecipes with our distributed selection
-      recommendedRecipes = distributedRecipes.slice(0, targetCount);
-      
-      console.log(`✅ Final distributed recommendations (${recommendedRecipes.length}):`, 
-        recommendedRecipes.map(r => ({
-          title: r.title || r.name,
-          cuisines: r.cuisines || [],
-          score: r._matchScore
-        })));
-      
-      // Get remaining recipes for popular/newest sections
-      const remainingRecipes = allCombined.filter(recipe => 
-        !recommendedRecipes.find(r => (r.id || r._id) === (recipe.id || recipe._id) && r.type === recipe.type)
-      );
-      
-      // Use real popular recipes data if available, otherwise fall back to random selection
-      if (showPersonalPopular && isAuthenticated && user?.id) {
-        // Use personal popular recipes
-        if (personalPopularRecipesData && personalPopularRecipesData.length > 0) {
-          console.log('👤 Using personal popular recipes data:', personalPopularRecipesData.length);
-          popularRecipes = personalPopularRecipesData.map(recipe => ({ ...recipe, type: 'external' as const }));
-        } else {
-          console.log('🔄 No personal popular recipes data, using random selection');
-          popularRecipes = [...remainingRecipes].sort(() => Math.random() - 0.5);
-        }
-      } else if (popularRecipesData && popularRecipesData.length > 0) {
-        console.log('🎯 Using global popular recipes data:', popularRecipesData.length);
-        popularRecipes = popularRecipesData.map(recipe => ({ ...recipe, type: 'external' as const }));
-      } else {
-        console.log('🔄 No popular recipes data, using random selection');
-        popularRecipes = [...remainingRecipes].sort(() => Math.random() - 0.5);
-      }
-      
-      // Newest recipes = reverse order of remaining
-      newestRecipes = [...remainingRecipes].reverse();
-      
+      recommendedRecipes = filteredRecipes.slice(0, 8);
     } else {
-      // For non-authenticated users or users without preferences, show curated selection
-      console.log('🔄 No preferences found, showing default recipes');
-      const shuffled = [...allCombined].sort(() => Math.random() - 0.5);
-      recommendedRecipes = shuffled.slice(0, 8); // Keep 8 recipes in the shuffled list
-      
-      // Use real popular recipes data if available, otherwise use random selection
-      if (popularRecipesData && popularRecipesData.length > 0) {
-        console.log('🎯 Using real popular recipes for non-authenticated user:', popularRecipesData.length);
-        popularRecipes = popularRecipesData.map(recipe => ({ ...recipe, type: 'external' as const }));
-      } else {
-        popularRecipes = shuffled.slice(4, 8);
-      }
-      
-      newestRecipes = shuffled.slice(8, 12);
+      console.log('ℹ️ No user preferences, using default recipe organization');
     }
 
+    // Get remaining recipes for popular/newest sections
+    const remainingRecipes = allCombined.filter(recipe => 
+      !recommendedRecipes.find(r => (r.id || r._id) === (recipe.id || recipe._id) && r.type === recipe.type)
+    );
+    
+    // Use real popular recipes data if available, otherwise fall back to random selection
+    if (showPersonalPopular && isAuthenticated && user?.id) {
+      // Use personal popular recipes
+      if (personalPopularRecipesData && personalPopularRecipesData.length > 0) {
+        console.log('👤 Using personal popular recipes data:', personalPopularRecipesData.length);
+        popularRecipes = personalPopularRecipesData.map(recipe => ({ ...recipe, type: 'external' as const }));
+      } else {
+        console.log('🔄 No personal popular recipes data, using random selection');
+        popularRecipes = [...remainingRecipes].sort(() => Math.random() - 0.5);
+      }
+    } else if (popularRecipesData && popularRecipesData.length > 0) {
+      console.log('🎯 Using global popular recipes data:', popularRecipesData.length);
+      popularRecipes = popularRecipesData.map(recipe => ({ ...recipe, type: 'external' as const }));
+    } else {
+      console.log('🔄 No popular recipes data, using random selection');
+      popularRecipes = [...remainingRecipes].sort(() => Math.random() - 0.5);
+    }
+    
+    // Newest recipes = reverse order of remaining
+    newestRecipes = [...remainingRecipes].reverse();
+    
     return {
       recommended: recommendedRecipes.slice(0, 8), // Show 8 recommended recipes
       popular: popularRecipes.slice(0, 4),

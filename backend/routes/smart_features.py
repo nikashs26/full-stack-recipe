@@ -4,6 +4,7 @@ from services.meal_history_service import MealHistoryService
 from services.smart_shopping_service import SmartShoppingService
 from services.user_preferences_service import UserPreferencesService
 import logging
+from middleware.auth_middleware import get_current_user_id, require_auth
 
 logger = logging.getLogger(__name__)
 
@@ -119,27 +120,46 @@ def find_similar_recipes(recipe_id):
         return jsonify({"error": str(e)}), 500
 
 @smart_features_bp.route('/recommendations', methods=['GET'])
+# @require_auth  # Temporarily disabled for testing
 def get_personalized_recommendations():
     """
     Get personalized recipe recommendations based on user preferences
     """
     try:
-        # For demo purposes, use demo_user
-        user_id = "demo_user"
-        limit = request.args.get('limit', 8, type=int)
+        # For testing, use a default user ID instead of requiring authentication
+        user_id = get_current_user_id() or "test_user_123"
+        print(f"🔍 Recommendations endpoint - User ID: {user_id}")
         
-        # Get user preferences
-        preferences = user_preferences_service.get_preferences(user_id)
-        if not preferences:
-            # Use default preferences
+        limit = request.args.get('limit', 8, type=int)
+        print(f"📊 Requested limit: {limit}")
+        
+        # For testing, create default preferences with burger as favorite food
+        if user_id == "test_user_123":
             preferences = {
-                "favoriteCuisines": ["Mediterranean", "Asian"],
-                "cookingSkillLevel": "beginner",
-                "dietaryRestrictions": [],
-                "healthGoals": ["General wellness"]
+                "favoriteFoods": ["burger"],
+                "favoriteCuisines": [],
+                "foodsToAvoid": [],
+                "dietaryRestrictions": []
             }
+            print(f"🧪 Using test preferences: {preferences}")
+        else:
+            # Get user preferences from the database
+            preferences = user_preferences_service.get_preferences(user_id)
+            print(f"📋 Retrieved preferences: {preferences}")
+        
+        if not preferences:
+            print("⚠️ No preferences found")
+            return jsonify({
+                "success": True,
+                "recommendations": [],
+                "message": "No preferences found. Please set your preferences first."
+            }), 200
+        
+        # Log the preferences being used for debugging
+        print(f"✅ Using preferences for user {user_id}: {preferences}")
         
         results = recipe_search_service.get_recipe_recommendations(preferences, limit)
+        print(f"🎯 Generated {len(results)} recommendations")
         
         return jsonify({
             "success": True,
@@ -149,6 +169,7 @@ def get_personalized_recommendations():
         }), 200
         
     except Exception as e:
+        print(f"❌ Error in recommendations endpoint: {e}")
         return jsonify({"error": str(e)}), 500
 
 @smart_features_bp.route('/meal-history/log', methods=['POST'])
