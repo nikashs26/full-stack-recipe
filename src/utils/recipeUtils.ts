@@ -253,18 +253,25 @@ export const getReliableImageUrl = (imageUrl?: string, size: 'small' | 'medium' 
   const isValidImageUrl = (url: string): boolean => {
     if (!url || typeof url !== 'string') return false;
     
-    // Check for specific broken URL patterns (the ones causing ERR_TUNNEL_CONNECTION_FAILED)
-    const brokenPatterns = [
+    // Only filter out the most problematic URL patterns that cause actual errors
+    // These are the specific patterns that cause ERR_TUNNEL_CONNECTION_FAILED
+    const problematicPatterns = [
       /^[a-z]{6}\d{10}\.(jpg|png)$/i, // Pattern like urzj1d1587670726.jpg
-      /^\d+\.(jpg|png)$/i, // Pattern like 1529443236.jpg
+      /^\d{10}\.(jpg|png)$/i, // Pattern like 1529443236.jpg
     ];
     
-    // Only reject URLs that match the specific broken patterns
-    if (brokenPatterns.some(pattern => pattern.test(url))) {
+    // Only reject URLs that match the problematic patterns
+    if (problematicPatterns.some(pattern => pattern.test(url))) {
+      console.log(`Filtering out problematic image URL: ${url}`);
       return false;
     }
     
-    // Allow all other URLs, including good external URLs like Unsplash
+    // Allow ALL other URLs, including:
+    // - HTTP/HTTPS URLs
+    // - Data URLs
+    // - Relative URLs
+    // - External URLs like Unsplash, etc.
+    // - Any other valid image URL
     return true;
   };
   

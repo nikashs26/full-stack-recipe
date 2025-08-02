@@ -215,7 +215,7 @@ class RecipeSearchService:
                                 'is_vegan': "vegan" in doc_recipe.get('dietaryRestrictions', []),
                                 'is_gluten_free': "gluten-free" in doc_recipe.get('dietaryRestrictions', []),
                                 'similarity_score': base_score,
-                                # Add missing fields
+                                # Add missing fields with proper image handling
                                 'image': doc_recipe.get('image', doc_recipe.get('imageUrl', '')),
                                 'imageUrl': doc_recipe.get('imageUrl', doc_recipe.get('image', '')),
                                 'dietaryRestrictions': doc_recipe.get('dietaryRestrictions', []),
@@ -224,7 +224,13 @@ class RecipeSearchService:
                                 'readyInMinutes': doc_recipe.get('readyInMinutes', doc_recipe.get('cookingTime', 30)),
                                 'ready_in_minutes': doc_recipe.get('readyInMinutes', doc_recipe.get('cookingTime', 30)),
                                 'sourceUrl': doc_recipe.get('sourceUrl', ''),
-                                'summary': doc_recipe.get('summary', doc_recipe.get('description', ''))
+                                'summary': doc_recipe.get('summary', doc_recipe.get('description', '')),
+                                # Add additional fields for better frontend compatibility
+                                'strMeal': doc_recipe.get('strMeal', doc_recipe.get('name', '')),
+                                'strMealThumb': doc_recipe.get('strMealThumb', doc_recipe.get('image', '')),
+                                'strInstructions': doc_recipe.get('strInstructions', doc_recipe.get('instructions', '')),
+                                'strCategory': doc_recipe.get('strCategory', doc_recipe.get('cuisine', '')),
+                                'strArea': doc_recipe.get('strArea', doc_recipe.get('cuisine', ''))
                             }
                         else:
                             # Fallback to metadata-based recipe data
@@ -246,9 +252,9 @@ class RecipeSearchService:
                                 'is_vegan': metadata.get('is_vegan', False),
                                 'is_gluten_free': metadata.get('is_gluten_free', False),
                                 'similarity_score': base_score,
-                                # Add missing fields with defaults
-                                'image': '',
-                                'imageUrl': '',
+                                # Add missing fields with better defaults
+                                'image': 'https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?auto=format&fit=crop&w=400&h=300&q=80',
+                                'imageUrl': 'https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?auto=format&fit=crop&w=400&h=300&q=80',
                                 'dietaryRestrictions': [],
                                 'cuisines': [metadata.get('cuisine', '')],
                                 'diets': [],
@@ -277,9 +283,9 @@ class RecipeSearchService:
                             'is_vegan': metadata.get('is_vegan', False),
                             'is_gluten_free': metadata.get('is_gluten_free', False),
                             'similarity_score': base_score,
-                            # Add missing fields with defaults
-                            'image': '',
-                            'imageUrl': '',
+                            # Add missing fields with better defaults
+                            'image': 'https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?auto=format&fit=crop&w=400&h=300&q=80',
+                            'imageUrl': 'https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?auto=format&fit=crop&w=400&h=300&q=80',
                             'dietaryRestrictions': [],
                             'cuisines': [metadata.get('cuisine', '')],
                             'diets': [],
@@ -468,89 +474,7 @@ class RecipeSearchService:
         if "gluten-free" in dietary_restrictions:
             filters["is_gluten_free"] = True
 
-        # If we have favorite foods but no cuisines, search specifically for those foods
-        if favorite_foods and not favorite_cuisines:
-            print(f"Searching specifically for favorite foods: {favorite_foods}")
-            # Build a query that looks for any of the favorite foods
-            # Use space-separated format instead of OR operators for ChromaDB
-            query = " ".join(favorite_foods)
-            print(f"Food search query: {query}")
-            
-            # Get more candidates since we're not filtering by cuisine
-            candidates = self.semantic_search(query, filters, limit * 30)
-            print(f"Found {len(candidates)} candidates with favorite foods")
-            
-            # If no results, try searching for each food individually
-            if not candidates:
-                print("No results with combined search, trying individual food searches...")
-                for food in favorite_foods:
-                    food_candidates = self.semantic_search(food, filters, limit * 10)
-                    candidates.extend(food_candidates)
-                    print(f"Found {len(food_candidates)} candidates for '{food}'")
-            
-            # Filter to only include recipes that actually contain at least one favorite food
-            candidates = [r for r in candidates if has_fav_food(r)]
-            print(f"After filtering for actual food matches: {len(candidates)} candidates")
-            
-        # If we have cuisines, search within those cuisines
-        elif favorite_cuisines:
-            # Check if any of the cuisines are "International" or similar broad terms
-            has_broad_cuisine = any(c.lower() in ['international', 'global', 'world', 'fusion'] for c in favorite_cuisines)
-            
-            if has_broad_cuisine:
-                # For broad cuisines like "International", search for favorite foods without strict cuisine filtering
-                print(f"Broad cuisine detected, searching for favorite foods: {favorite_foods}")
-                if favorite_foods:
-                    query = " ".join(favorite_foods)
-                    candidates = self.semantic_search(query, filters, limit * 30)
-                    print(f"Found {len(candidates)} candidates with favorite foods (broad cuisine)")
-                    
-                    # If no results, try individual food searches
-                    if not candidates:
-                        for food in favorite_foods:
-                            food_candidates = self.semantic_search(food, filters, limit * 10)
-                            candidates.extend(food_candidates)
-                            print(f"Found {len(food_candidates)} candidates for '{food}'")
-                    
-                    # Filter for actual food matches
-                    candidates = [r for r in candidates if has_fav_food(r)]
-                    print(f"After filtering for actual food matches: {len(candidates)} candidates")
-                else:
-                    # No favorite foods, just get popular recipes
-                    candidates = self.semantic_search("popular recipes", filters, limit * 10)
-            else:
-                # Search for each selected cuisine separately to ensure we get recipes from those cuisines
-                all_candidates = []
-                for cuisine in favorite_cuisines:
-                    print(f"Searching for recipes in cuisine: {cuisine}")
-                    # Search with cuisine-specific terms
-                    search_terms = [cuisine]  # Use simple terms instead of quoted terms
-                    if favorite_foods:
-                        search_terms.extend(favorite_foods)
-                    
-                    query = " ".join(search_terms)
-                    print(f"Cuisine search query: {query}")
-                    cuisine_candidates = self.semantic_search(query, filters, limit * 10)
-                    
-                    # Double-check that these recipes are actually from the correct cuisine
-                    filtered_candidates = []
-                    for recipe in cuisine_candidates:
-                        recipe_cuisine = self._normalize_cuisine(recipe.get('cuisine', ''), recipe).lower()
-                        if recipe_cuisine == cuisine:
-                            filtered_candidates.append(recipe)
-                    
-                    print(f"Found {len(filtered_candidates)} recipes from {cuisine} cuisine")
-                    all_candidates.extend(filtered_candidates)
-                
-                candidates = all_candidates
-        else:
-            # If no cuisines or favorite foods, just get popular recipes
-            print("No specific preferences, getting popular recipes")
-            query = "popular recipes"
-            candidates = self.semantic_search(query, filters, limit * 10)
-
-        print(f"Total candidates after cuisine filtering: {len(candidates)}")
-
+        # Define helper functions first
         def has_fav_food(recipe):
             if not recipe:
                 return False
@@ -666,10 +590,6 @@ class RecipeSearchService:
                     return True
             return False
 
-        # Remove foods to avoid first
-        candidates = [r for r in candidates if not has_foods_to_avoid(r)]
-        print(f"Candidates after removing foods to avoid: {len(candidates)}")
-
         def count_matching_foods(recipe):
             if not recipe:
                 return 0
@@ -730,6 +650,128 @@ class RecipeSearchService:
                     
             return count
         
+        # Always search for favorite foods first if present
+        if favorite_foods:
+            print(f"Searching for favorite foods: {favorite_foods}")
+            # Build a query that looks for any of the favorite foods
+            # Use space-separated format instead of OR operators for ChromaDB
+            query = " ".join(favorite_foods)
+            print(f"Food search query: {query}")
+            
+            # Get more candidates since we're searching for specific foods
+            candidates = self.semantic_search(query, filters, limit * 30)
+            print(f"Found {len(candidates)} candidates with favorite foods")
+            
+            # If no results, try searching for each food individually
+            if not candidates:
+                print("No results with combined search, trying individual food searches...")
+                for food in favorite_foods:
+                    food_candidates = self.semantic_search(food, filters, limit * 10)
+                    candidates.extend(food_candidates)
+                    print(f"Found {len(food_candidates)} candidates for '{food}'")
+            
+            # Filter to only include recipes that actually contain at least one favorite food
+            candidates = [r for r in candidates if has_fav_food(r)]
+            print(f"After filtering for actual food matches: {len(candidates)} candidates")
+            
+        # If we have cuisines, also search within those cuisines
+        elif favorite_cuisines:
+            # Check if any of the cuisines are "International" or similar broad terms
+            has_broad_cuisine = any(c.lower() in ['international', 'global', 'world', 'fusion'] for c in favorite_cuisines)
+            
+            if has_broad_cuisine:
+                # For broad cuisines like "International", get popular recipes
+                print(f"Broad cuisine detected, getting popular recipes")
+                candidates = self.semantic_search("popular recipes", filters, limit * 10)
+            else:
+                # Search for each selected cuisine separately to ensure we get recipes from those cuisines
+                all_candidates = []
+                for cuisine in favorite_cuisines:
+                    print(f"Searching for recipes in cuisine: {cuisine}")
+                    # Search with cuisine-specific terms
+                    search_terms = [cuisine]  # Use simple terms instead of quoted terms
+                    
+                    query = " ".join(search_terms)
+                    print(f"Cuisine search query: {query}")
+                    cuisine_candidates = self.semantic_search(query, filters, limit * 10)
+                    
+                    # More flexible cuisine matching - include recipes that match the cuisine
+                    filtered_candidates = []
+                    for recipe in cuisine_candidates:
+                        recipe_cuisine = self._normalize_cuisine(recipe.get('cuisine', ''), recipe).lower()
+                        
+                        # Check for exact match
+                        if recipe_cuisine == cuisine:
+                            filtered_candidates.append(recipe)
+                            continue
+                            
+                        # Check for partial match (e.g., "spanish" in "spanish paella")
+                        if cuisine in recipe_cuisine or recipe_cuisine in cuisine:
+                            filtered_candidates.append(recipe)
+                            continue
+                            
+                        # Check if the recipe title/name contains the cuisine
+                        recipe_name = (recipe.get('name', '') or recipe.get('title', '')).lower()
+                        if cuisine in recipe_name:
+                            filtered_candidates.append(recipe)
+                            continue
+                            
+                        # Check if the recipe description contains the cuisine
+                        recipe_desc = (recipe.get('description', '')).lower()
+                        if cuisine in recipe_desc:
+                            filtered_candidates.append(recipe)
+                            continue
+                            
+                        # For broad cuisines like "International", include any recipe with a recognizable cuisine
+                        if cuisine.lower() in ['international', 'global', 'world', 'fusion']:
+                            if recipe_cuisine and recipe_cuisine not in ['', 'none', 'unknown', 'n/a']:
+                                filtered_candidates.append(recipe)
+                                continue
+                    
+                    print(f"Found {len(filtered_candidates)} recipes from {cuisine} cuisine")
+                    all_candidates.extend(filtered_candidates)
+                
+                candidates = all_candidates
+        else:
+            # If no cuisines or favorite foods, just get popular recipes
+            print("No specific preferences, getting popular recipes")
+            query = "popular recipes"
+            candidates = self.semantic_search(query, filters, limit * 10)
+            
+        # If we have BOTH favorite foods AND cuisines, also search for foods across all cuisines
+        if favorite_foods and favorite_cuisines:
+            print(f"User has both favorite foods and cuisines, also searching for foods: {favorite_foods}")
+            
+            # Search for favorite foods across all cuisines
+            food_query = " ".join(favorite_foods)
+            food_candidates = self.semantic_search(food_query, filters, limit * 20)
+            print(f"Found {len(food_candidates)} candidates for favorite foods across all cuisines")
+            
+            # Filter for actual food matches
+            food_candidates = [r for r in food_candidates if has_fav_food(r)]
+            print(f"After filtering for actual food matches: {len(food_candidates)} candidates")
+            
+            # Combine with existing candidates, prioritizing food matches
+            all_candidates = food_candidates + candidates
+            
+            # Remove duplicates while preserving order
+            seen_ids = set()
+            unique_candidates = []
+            for candidate in all_candidates:
+                candidate_id = candidate.get('id', candidate.get('recipe_id', ''))
+                if candidate_id not in seen_ids:
+                    seen_ids.add(candidate_id)
+                    unique_candidates.append(candidate)
+            
+            candidates = unique_candidates
+            print(f"Combined candidates (foods + cuisines): {len(candidates)}")
+
+        print(f"Total candidates after cuisine filtering: {len(candidates)}")
+
+        # Remove foods to avoid first
+        candidates = [r for r in candidates if not has_foods_to_avoid(r)]
+        print(f"Candidates after removing foods to avoid: {len(candidates)}")
+
         # Score each recipe based on multiple factors
         def score_recipe(recipe):
             if not recipe:
@@ -777,6 +819,75 @@ class RecipeSearchService:
             if rid and rid not in seen:
                 recommendations.append(r)
                 seen.add(rid)
+        
+        # Implement fair distribution across cuisines
+        if favorite_cuisines and not favorite_foods:
+            print(f"Implementing fair distribution across {len(favorite_cuisines)} cuisines")
+            
+            # Group recipes by cuisine
+            cuisine_groups = {}
+            for recipe in recommendations:
+                recipe_cuisine = self._normalize_cuisine(recipe.get('cuisine', ''), recipe).lower()
+                
+                # Find which favorite cuisine this recipe matches
+                matched_cuisine = None
+                for fav_cuisine in favorite_cuisines:
+                    if (recipe_cuisine == fav_cuisine.lower() or 
+                        fav_cuisine.lower() in recipe_cuisine or 
+                        recipe_cuisine in fav_cuisine.lower()):
+                        matched_cuisine = fav_cuisine
+                        break
+                
+                if matched_cuisine:
+                    if matched_cuisine not in cuisine_groups:
+                        cuisine_groups[matched_cuisine] = []
+                    cuisine_groups[matched_cuisine].append(recipe)
+            
+            # Calculate how many recipes per cuisine
+            recipes_per_cuisine = max(1, limit // len(favorite_cuisines))
+            print(f"Target: {recipes_per_cuisine} recipes per cuisine")
+            
+            # Build fair distribution
+            fair_recommendations = []
+            cuisine_index = 0
+            
+            # Round-robin distribution
+            while len(fair_recommendations) < limit and cuisine_index < recipes_per_cuisine * len(favorite_cuisines):
+                for cuisine in favorite_cuisines:
+                    if cuisine in cuisine_groups and len(cuisine_groups[cuisine]) > 0:
+                        # Take the highest scored recipe from this cuisine
+                        best_recipe = max(cuisine_groups[cuisine], key=score_recipe)
+                        fair_recommendations.append(best_recipe)
+                        cuisine_groups[cuisine].remove(best_recipe)
+                        
+                        if len(fair_recommendations) >= limit:
+                            break
+                
+                cuisine_index += 1
+            
+            # If we don't have enough recipes, fill with remaining high-scored recipes
+            remaining_recipes = []
+            for cuisine_recipes in cuisine_groups.values():
+                remaining_recipes.extend(cuisine_recipes)
+            
+            remaining_recipes.sort(key=score_recipe, reverse=True)
+            fair_recommendations.extend(remaining_recipes[:limit - len(fair_recommendations)])
+            
+            recommendations = fair_recommendations
+            print(f"Fair distribution complete: {len(recommendations)} recipes")
+            
+            # Log distribution
+            cuisine_counts = {}
+            for recipe in recommendations:
+                recipe_cuisine = self._normalize_cuisine(recipe.get('cuisine', ''), recipe).lower()
+                for fav_cuisine in favorite_cuisines:
+                    if (recipe_cuisine == fav_cuisine.lower() or 
+                        fav_cuisine.lower() in recipe_cuisine or 
+                        recipe_cuisine in fav_cuisine.lower()):
+                        cuisine_counts[fav_cuisine] = cuisine_counts.get(fav_cuisine, 0) + 1
+                        break
+            
+            print(f"Final distribution by cuisine: {cuisine_counts}")
         
         # Debug: Print top 10 scored recipes
         print("\nTop 10 Scored Recipes:")

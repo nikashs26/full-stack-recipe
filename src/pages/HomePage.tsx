@@ -117,54 +117,6 @@ const HomePage: React.FC = () => {
     enabled: !!user?.id && showPersonalPopular, // Only fetch when user is logged in and toggle is on
   });
 
-  // Query for backend recommendations
-  const { data: backendRecommendations = [], isLoading: isLoadingRecommendations } = useQuery({
-    queryKey: ['backend-recommendations', userPreferences],
-    queryFn: async () => {
-      if (!isAuthenticated || !userPreferences) {
-        console.log('No user preferences, returning empty recommendations');
-        return [];
-      }
-
-      try {
-        console.log('Fetching recommendations from backend with preferences:', userPreferences);
-        
-        // Check if we have any preferences that would generate recommendations
-        const hasRelevantPreferences = 
-          (userPreferences.favoriteFoods && userPreferences.favoriteFoods.some(f => f.trim() !== '')) ||
-          (userPreferences.favoriteCuisines && userPreferences.favoriteCuisines.length > 0);
-        
-        if (!hasRelevantPreferences) {
-          console.log('No relevant preferences for recommendations');
-          return [];
-        }
-        
-        const response = await apiCall('/recommendations?limit=8', {
-          method: 'GET',
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json'
-          }
-        });
-
-        if (!response.ok) {
-          console.error('Failed to fetch recommendations:', response.status, response.statusText);
-          return [];
-        }
-
-        const data = await response.json();
-        console.log('Backend recommendations response:', data);
-        
-        return data.recommendations || [];
-      } catch (error) {
-        console.error('Error fetching recommendations:', error);
-        return [];
-      }
-    },
-    enabled: isAuthenticated && !!userPreferences,
-    staleTime: 5 * 60 * 1000, // 5 minutes
-  });
-
   // Log any query errors
   useEffect(() => {
     if (backendError) {
@@ -212,7 +164,6 @@ const HomePage: React.FC = () => {
     console.log('🍽️ Recipe organization - isAuthenticated:', isAuthenticated, 'userPreferences:', userPreferences);
     console.log('📊 Recipe counts - Backend:', spoonacularRecipes.length, 'Manual:', manualRecipes.length, 'Saved:', savedRecipes.length);
     console.log('🔍 Total recipes to filter:', allCombined.length);
-    console.log('🎯 Backend recommendations available:', backendRecommendations.length);
     
     // Check if user has meaningful preferences (not just empty arrays/strings)
     const hasMeaningfulPreferences = React.useMemo(() => {
@@ -240,68 +191,58 @@ const HomePage: React.FC = () => {
       return hasFavoriteFoods || hasFavoriteCuisines || hasDietaryRestrictions || 
              hasFoodsToAvoid || hasCookingSkill || hasHealthGoals;
     }, [userPreferences]);
-    
+
+    // For authenticated users with preferences, use fallback filtering
     if (isAuthenticated && userPreferences && hasMeaningfulPreferences) {
-      console.log('🎯 User preferences found:', userPreferences);
+      console.log('✅ User has meaningful preferences, using fallback filtering');
       
-      // Use backend recommendations if available
-      if (backendRecommendations.length > 0) {
-        console.log('✅ Using backend recommendations:', backendRecommendations.length);
-        recommendedRecipes = backendRecommendations.map(recipe => ({ 
-          ...recipe, 
-          type: 'external' as const 
-        }));
-      } else {
-        console.log('⚠️ No backend recommendations, using fallback filtering');
-        
-        // Fallback to frontend filtering (simplified version)
-        const { 
-          favoriteCuisines = [], 
-          dietaryRestrictions = [],
-          favoriteFoods = [] 
-        } = userPreferences;
-        
-        // Simple filtering based on cuisines and dietary restrictions
-        let filteredRecipes = allCombined;
-        
-        if (dietaryRestrictions && dietaryRestrictions.length > 0) {
-          filteredRecipes = allCombined.filter(recipe => {
-            const recipeDiets = recipe.diets || [];
-            return dietaryRestrictions.every(prefDiet => {
-              if (!prefDiet) return true;
-              const prefLower = prefDiet.toLowerCase().trim();
-              return recipeDiets.some(diet => {
-                if (!diet) return false;
-                const dietLower = diet.toLowerCase().trim();
-                if (prefLower === 'vegetarian' && dietLower === 'vegetarian') return true;
-                if (prefLower === 'vegan' && dietLower === 'vegan') return true;
-                if (prefLower === 'gluten-free' && (dietLower === 'gluten-free' || dietLower === 'gluten free')) return true;
-                if (prefLower === 'dairy-free' && (dietLower === 'dairy-free' || dietLower === 'dairy free')) return true;
-                if (prefLower === 'keto' && (dietLower === 'ketogenic' || dietLower === 'keto')) return true;
-                if (prefLower === 'paleo' && (dietLower === 'paleo' || dietLower === 'paleolithic')) return true;
-                return false;
-              });
+      // Fallback to frontend filtering (simplified version)
+      const { 
+        favoriteCuisines = [], 
+        dietaryRestrictions = [],
+        favoriteFoods = [] 
+      } = userPreferences;
+      
+      // Simple filtering based on cuisines and dietary restrictions
+      let filteredRecipes = allCombined;
+      
+      if (dietaryRestrictions && dietaryRestrictions.length > 0) {
+        filteredRecipes = allCombined.filter(recipe => {
+          const recipeDiets = recipe.diets || [];
+          return dietaryRestrictions.every(prefDiet => {
+            if (!prefDiet) return true;
+            const prefLower = prefDiet.toLowerCase().trim();
+            return recipeDiets.some(diet => {
+              if (!diet) return false;
+              const dietLower = diet.toLowerCase().trim();
+              if (prefLower === 'vegetarian' && dietLower === 'vegetarian') return true;
+              if (prefLower === 'vegan' && dietLower === 'vegan') return true;
+              if (prefLower === 'gluten-free' && (dietLower === 'gluten-free' || dietLower === 'gluten free')) return true;
+              if (prefLower === 'dairy-free' && (dietLower === 'dairy-free' || dietLower === 'dairy free')) return true;
+              if (prefLower === 'keto' && (dietLower === 'ketogenic' || dietLower === 'keto')) return true;
+              if (prefLower === 'paleo' && (dietLower === 'paleo' || dietLower === 'paleolithic')) return true;
+              return false;
             });
           });
-        }
-        
-        // Simple cuisine filtering
-        if (favoriteCuisines && favoriteCuisines.length > 0) {
-          filteredRecipes = filteredRecipes.filter(recipe => {
-            const recipeCuisines = Array.isArray(recipe.cuisines) ? recipe.cuisines : [];
-            const recipeTitle = (recipe.title || recipe.name || '').toLowerCase();
-            
-            return favoriteCuisines.some(cuisine => {
-              if (!cuisine) return false;
-              const cuisineLower = cuisine.toLowerCase();
-              return recipeCuisines.some(c => c?.toLowerCase().includes(cuisineLower)) ||
-                     recipeTitle.includes(cuisineLower);
-            });
-          });
-        }
-        
-        recommendedRecipes = filteredRecipes.slice(0, 8);
+        });
       }
+      
+      // Simple cuisine filtering
+      if (favoriteCuisines && favoriteCuisines.length > 0) {
+        filteredRecipes = filteredRecipes.filter(recipe => {
+          const recipeCuisines = Array.isArray(recipe.cuisines) ? recipe.cuisines : [];
+          const recipeTitle = (recipe.title || recipe.name || '').toLowerCase();
+          
+          return favoriteCuisines.some(cuisine => {
+            if (!cuisine) return false;
+            const cuisineLower = cuisine.toLowerCase();
+            return recipeCuisines.some(c => c?.toLowerCase().includes(cuisineLower)) ||
+                   recipeTitle.includes(cuisineLower);
+          });
+        });
+      }
+      
+      recommendedRecipes = filteredRecipes.slice(0, 8);
     } else {
       console.log('ℹ️ No user preferences, using default recipe organization');
     }
@@ -337,7 +278,7 @@ const HomePage: React.FC = () => {
       popular: popularRecipes.slice(0, 4),
       newest: newestRecipes.slice(0, 4)
     };
-  }, [spoonacularRecipes, manualRecipes, savedRecipes, popularRecipesData, isAuthenticated, userPreferences, showPersonalPopular, personalPopularRecipesData, backendRecommendations]);
+  }, [spoonacularRecipes, manualRecipes, savedRecipes, popularRecipesData, isAuthenticated, userPreferences, showPersonalPopular, personalPopularRecipesData]);
 
   const isLoading = isLoadingBackend || isLoadingManual || isLoadingPopular || (showPersonalPopular && isLoadingPersonalPopular);
 

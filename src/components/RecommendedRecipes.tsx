@@ -16,6 +16,35 @@ import { apiCall } from '../utils/apiUtils';
 const RecommendedRecipes: React.FC = () => {
   const { user, isAuthenticated } = useAuth();
   
+  // Check if user has meaningful preferences (not just empty arrays/strings)
+  const hasMeaningfulPreferences = React.useMemo(() => {
+    if (!user?.preferences) return false;
+    
+    const prefs = user.preferences;
+    
+    // Check if any preference arrays have actual content
+    const hasFavoriteFoods = Array.isArray(prefs.favoriteFoods) && 
+      prefs.favoriteFoods.some(food => food && food.trim() !== '');
+    
+    const hasFavoriteCuisines = Array.isArray(prefs.favoriteCuisines) && 
+      prefs.favoriteCuisines.some(cuisine => cuisine && cuisine.trim() !== '');
+    
+    const hasDietaryRestrictions = Array.isArray(prefs.dietaryRestrictions) && 
+      prefs.dietaryRestrictions.length > 0;
+    
+    const hasFoodsToAvoid = Array.isArray(prefs.foodsToAvoid) && 
+      prefs.foodsToAvoid.some(food => food && food.trim() !== '');
+    
+    const hasCookingSkill = prefs.cookingSkillLevel && prefs.cookingSkillLevel !== 'beginner';
+    
+    const hasHealthGoals = Array.isArray(prefs.healthGoals) && 
+      prefs.healthGoals.length > 0;
+    
+    // Return true if any meaningful preference is set
+    return hasFavoriteFoods || hasFavoriteCuisines || hasDietaryRestrictions || 
+           hasFoodsToAvoid || hasCookingSkill || hasHealthGoals;
+  }, [user?.preferences]);
+  
   // Query for local recipes
   const { data: allRecipes = [], isLoading: isLocalLoading } = useQuery({
     queryKey: ['localRecipes'],
@@ -38,7 +67,7 @@ const RecommendedRecipes: React.FC = () => {
 
   // Query backend recommendations API
   const { data: recommendedRecipes = [], isLoading: isRecommendationsLoading } = useQuery({
-    queryKey: ['recommendations', user?.preferences],
+    queryKey: ['recommendations', user?.preferences, hasMeaningfulPreferences],
     queryFn: async () => {
       if (!isAuthenticated || !user?.preferences) {
         console.log('No user preferences, returning empty recommendations');
@@ -95,35 +124,6 @@ const RecommendedRecipes: React.FC = () => {
     manual: manualRecipes.length,
     saved: allRecipes.length
   });
-
-  // Check if user has meaningful preferences (not just empty arrays/strings)
-  const hasMeaningfulPreferences = React.useMemo(() => {
-    if (!user?.preferences) return false;
-    
-    const prefs = user.preferences;
-    
-    // Check if any preference arrays have actual content
-    const hasFavoriteFoods = Array.isArray(prefs.favoriteFoods) && 
-      prefs.favoriteFoods.some(food => food && food.trim() !== '');
-    
-    const hasFavoriteCuisines = Array.isArray(prefs.favoriteCuisines) && 
-      prefs.favoriteCuisines.some(cuisine => cuisine && cuisine.trim() !== '');
-    
-    const hasDietaryRestrictions = Array.isArray(prefs.dietaryRestrictions) && 
-      prefs.dietaryRestrictions.length > 0;
-    
-    const hasFoodsToAvoid = Array.isArray(prefs.foodsToAvoid) && 
-      prefs.foodsToAvoid.some(food => food && food.trim() !== '');
-    
-    const hasCookingSkill = prefs.cookingSkillLevel && prefs.cookingSkillLevel !== 'beginner';
-    
-    const hasHealthGoals = Array.isArray(prefs.healthGoals) && 
-      prefs.healthGoals.length > 0;
-    
-    // Return true if any meaningful preference is set
-    return hasFavoriteFoods || hasFavoriteCuisines || hasDietaryRestrictions || 
-           hasFoodsToAvoid || hasCookingSkill || hasHealthGoals;
-  }, [user?.preferences]);
 
   // Don't show recommendations if no meaningful preferences are set
   if (!isAuthenticated || !user?.preferences || !hasMeaningfulPreferences) {
