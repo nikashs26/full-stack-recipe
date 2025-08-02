@@ -178,11 +178,12 @@ export const RecipeDetail: React.FC<RecipeDetailProps> = ({
           </Card>
 
           {/* Nutrition Facts */}
-          {recipe.nutrition && (
+          {(recipe.nutrition || (recipe as any).macrosPerServing) && (
             <div className="mt-6">
               <RecipeNutrition 
                 nutrition={recipe.nutrition} 
                 servings={recipe.servings}
+                macrosPerServing={(recipe as any).macrosPerServing}
               />
             </div>
           )}

@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Clock, Star, Trash2, Clock3, Utensils, Users, BarChart2 } from 'lucide-react';
+import { Clock, Star, Trash2, Clock3, Utensils, Users, BarChart2, Flame, Droplet, Carrot } from 'lucide-react';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from './ui/hover-card';
 import { ExtendedRecipe, Recipe } from '../types/recipe';
 import { useRecipeClickTracking } from '../utils/clickTracking';
@@ -391,6 +391,32 @@ const RecipeCard: React.FC<RecipeCardProps> = React.memo(({
               <span>{averageRating !== undefined ? Number(averageRating).toFixed(1) : 'N/A'}</span>
             </div>
           </div>
+          
+          {/* Macro Information */}
+          {((recipe as any).macrosPerServing || recipe.nutrition) && (
+            <div className="mt-2 flex items-center justify-between text-xs text-gray-400">
+              <div className="flex items-center space-x-2">
+                <span className="flex items-center">
+                  <Flame className="w-3 h-3 mr-1 text-orange-500" />
+                  {((recipe as any).macrosPerServing?.calories || recipe.nutrition?.calories || 'N/A')} cal
+                </span>
+                <span className="flex items-center">
+                  <Droplet className="w-3 h-3 mr-1 text-blue-500" />
+                  {((recipe as any).macrosPerServing?.protein || recipe.nutrition?.protein || 'N/A')}g P
+                </span>
+                <span className="flex items-center">
+                  <Carrot className="w-3 h-3 mr-1 text-green-500" />
+                  {((recipe as any).macrosPerServing?.carbs || (recipe.nutrition as any)?.carbs || (recipe.nutrition as any)?.carbohydrates || 'N/A')}g C
+                </span>
+              </div>
+              {recipe.servings && recipe.servings > 1 && (
+                <span className="flex items-center">
+                  <Users className="w-3 h-3 mr-1" />
+                  {recipe.servings} servings
+                </span>
+              )}
+            </div>
+          )}
         </div>
           </Link>
           

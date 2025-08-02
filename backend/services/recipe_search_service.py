@@ -230,7 +230,21 @@ class RecipeSearchService:
                                 'strMealThumb': doc_recipe.get('strMealThumb', doc_recipe.get('image', '')),
                                 'strInstructions': doc_recipe.get('strInstructions', doc_recipe.get('instructions', '')),
                                 'strCategory': doc_recipe.get('strCategory', doc_recipe.get('cuisine', '')),
-                                'strArea': doc_recipe.get('strArea', doc_recipe.get('cuisine', ''))
+                                'strArea': doc_recipe.get('strArea', doc_recipe.get('cuisine', '')),
+                                # Enhanced nutrition information
+                                'nutrition': {
+                                    'calories': doc_recipe.get('nutrition', {}).get('calories', 0),
+                                    'protein': doc_recipe.get('nutrition', {}).get('protein', 0),
+                                    'carbs': doc_recipe.get('nutrition', {}).get('carbohydrates', doc_recipe.get('nutrition', {}).get('carbs', 0)),
+                                    'fat': doc_recipe.get('nutrition', {}).get('fat', 0),
+                                    'fiber': doc_recipe.get('nutrition', {}).get('fiber', 0),
+                                    'sugar': doc_recipe.get('nutrition', {}).get('sugar', 0),
+                                    'sodium': doc_recipe.get('nutrition', {}).get('sodium', 0)
+                                },
+                                'servings': doc_recipe.get('servings', 1),
+                                'servingSize': doc_recipe.get('nutrition', {}).get('servingSize', '1 serving'),
+                                # Calculate macros per serving if available
+                                'macrosPerServing': self._calculate_macros_per_serving(doc_recipe)
                             }
                         else:
                             # Fallback to metadata-based recipe data
@@ -261,7 +275,26 @@ class RecipeSearchService:
                                 'readyInMinutes': 30,
                                 'ready_in_minutes': 30,
                                 'sourceUrl': '',
-                                'summary': doc[:200] + '...' if len(doc) > 200 else doc
+                                'summary': doc[:200] + '...' if len(doc) > 200 else doc,
+                                # Enhanced nutrition information
+                                'nutrition': {
+                                    'calories': metadata.get('calories', 300),
+                                    'protein': metadata.get('protein', 15),
+                                    'carbs': metadata.get('carbs', 30),
+                                    'fat': metadata.get('fat', 10),
+                                    'fiber': metadata.get('fiber', 3),
+                                    'sugar': metadata.get('sugar', 5),
+                                    'sodium': metadata.get('sodium', 400)
+                                },
+                                'servings': metadata.get('servings', 1),
+                                'servingSize': metadata.get('servingSize', '1 serving'),
+                                # Calculate macros per serving
+                                'macrosPerServing': {
+                                    'calories': metadata.get('calories', 300),
+                                    'protein': metadata.get('protein', 15),
+                                    'carbs': metadata.get('carbs', 30),
+                                    'fat': metadata.get('fat', 10)
+                                }
                             }
                     except json.JSONDecodeError:
                         # If JSON parsing fails, use metadata-based approach
@@ -292,7 +325,26 @@ class RecipeSearchService:
                             'readyInMinutes': 30,
                             'ready_in_minutes': 30,
                             'sourceUrl': '',
-                            'summary': doc[:200] + '...' if len(doc) > 200 else doc
+                            'summary': doc[:200] + '...' if len(doc) > 200 else doc,
+                            # Enhanced nutrition information
+                            'nutrition': {
+                                'calories': metadata.get('calories', 300),
+                                'protein': metadata.get('protein', 15),
+                                'carbs': metadata.get('carbs', 30),
+                                'fat': metadata.get('fat', 10),
+                                'fiber': metadata.get('fiber', 3),
+                                'sugar': metadata.get('sugar', 5),
+                                'sodium': metadata.get('sodium', 400)
+                            },
+                            'servings': metadata.get('servings', 1),
+                            'servingSize': metadata.get('servingSize', '1 serving'),
+                            # Calculate macros per serving
+                            'macrosPerServing': {
+                                'calories': metadata.get('calories', 300),
+                                'protein': metadata.get('protein', 15),
+                                'carbs': metadata.get('carbs', 30),
+                                'fat': metadata.get('fat', 10)
+                            }
                         }
                     
                     # Calculate final ranking score incorporating multiple factors
@@ -1452,3 +1504,152 @@ class RecipeSearchService:
                 text_parts.append(str(recipe['tags']))
                 
         return ' '.join(text_parts) 
+
+    def _calculate_macros_per_serving(self, recipe: Dict[str, Any]) -> Dict[str, Any]:
+        """Calculate macros per serving for a recipe"""
+        try:
+            # Get nutrition data
+            nutrition = recipe.get('nutrition', {})
+            servings = recipe.get('servings', 1)
+            
+            # If we have complete nutrition data, calculate per serving
+            if nutrition and servings > 0:
+                calories = nutrition.get('calories', 0)
+                protein = nutrition.get('protein', 0)
+                carbs = nutrition.get('carbohydrates', nutrition.get('carbs', 0))
+                fat = nutrition.get('fat', 0)
+                
+                if calories > 0:
+                    return {
+                        'calories': round(calories / servings, 1),
+                        'protein': round(protein / servings, 1),
+                        'carbs': round(carbs / servings, 1),
+                        'fat': round(fat / servings, 1)
+                    }
+            
+            # If no nutrition data, estimate based on ingredients
+            ingredients = recipe.get('ingredients', [])
+            if ingredients:
+                return self._estimate_macros_from_ingredients(ingredients, servings)
+            
+            # Default macros if no data available
+            return {
+                'calories': 300,
+                'protein': 15,
+                'carbs': 30,
+                'fat': 10
+            }
+            
+        except Exception as e:
+            print(f"Error calculating macros: {e}")
+            return {
+                'calories': 300,
+                'protein': 15,
+                'carbs': 30,
+                'fat': 10
+            }
+    
+    def _estimate_macros_from_ingredients(self, ingredients: List[Any], servings: int) -> Dict[str, Any]:
+        """Estimate macros based on ingredients"""
+        try:
+            # Common ingredient macro estimates (per 100g)
+            ingredient_macros = {
+                'chicken': {'calories': 165, 'protein': 31, 'carbs': 0, 'fat': 3.6},
+                'beef': {'calories': 250, 'protein': 26, 'carbs': 0, 'fat': 15},
+                'salmon': {'calories': 208, 'protein': 25, 'carbs': 0, 'fat': 12},
+                'rice': {'calories': 130, 'protein': 2.7, 'carbs': 28, 'fat': 0.3},
+                'pasta': {'calories': 131, 'protein': 5, 'carbs': 25, 'fat': 1.1},
+                'potato': {'calories': 77, 'protein': 2, 'carbs': 17, 'fat': 0.1},
+                'tomato': {'calories': 18, 'protein': 0.9, 'carbs': 3.9, 'fat': 0.2},
+                'onion': {'calories': 40, 'protein': 1.1, 'carbs': 9.3, 'fat': 0.1},
+                'garlic': {'calories': 149, 'protein': 6.4, 'carbs': 33, 'fat': 0.5},
+                'olive oil': {'calories': 884, 'protein': 0, 'carbs': 0, 'fat': 100},
+                'butter': {'calories': 717, 'protein': 0.9, 'carbs': 0.1, 'fat': 81},
+                'cheese': {'calories': 402, 'protein': 25, 'carbs': 1.3, 'fat': 33},
+                'egg': {'calories': 155, 'protein': 13, 'carbs': 1.1, 'fat': 11},
+                'milk': {'calories': 42, 'protein': 3.4, 'carbs': 5, 'fat': 1},
+                'bread': {'calories': 265, 'protein': 9, 'carbs': 49, 'fat': 3.2},
+                'flour': {'calories': 364, 'protein': 10, 'carbs': 76, 'fat': 1},
+                'sugar': {'calories': 387, 'protein': 0, 'carbs': 100, 'fat': 0},
+                'honey': {'calories': 304, 'protein': 0.3, 'carbs': 82, 'fat': 0},
+                'vegetable': {'calories': 20, 'protein': 1, 'carbs': 4, 'fat': 0.2},
+                'fruit': {'calories': 60, 'protein': 0.5, 'carbs': 15, 'fat': 0.2}
+            }
+            
+            total_calories = 0
+            total_protein = 0
+            total_carbs = 0
+            total_fat = 0
+            ingredient_count = 0
+            
+            for ingredient in ingredients:
+                if isinstance(ingredient, dict):
+                    ingredient_name = ingredient.get('name', ingredient.get('ingredient', '')).lower()
+                else:
+                    ingredient_name = str(ingredient).lower()
+                
+                # Find matching macro data
+                for key, macros in ingredient_macros.items():
+                    if key in ingredient_name:
+                        total_calories += macros['calories']
+                        total_protein += macros['protein']
+                        total_carbs += macros['carbs']
+                        total_fat += macros['fat']
+                        ingredient_count += 1
+                        break
+                
+                # If no specific match, use generic estimates
+                if ingredient_count == 0:
+                    if any(word in ingredient_name for word in ['meat', 'chicken', 'beef', 'pork', 'lamb']):
+                        total_calories += 200
+                        total_protein += 25
+                        total_carbs += 0
+                        total_fat += 10
+                    elif any(word in ingredient_name for word in ['fish', 'salmon', 'tuna', 'cod']):
+                        total_calories += 150
+                        total_protein += 20
+                        total_carbs += 0
+                        total_fat += 8
+                    elif any(word in ingredient_name for word in ['rice', 'pasta', 'noodle', 'bread']):
+                        total_calories += 100
+                        total_protein += 3
+                        total_carbs += 20
+                        total_fat += 1
+                    elif any(word in ingredient_name for word in ['vegetable', 'carrot', 'broccoli', 'spinach']):
+                        total_calories += 30
+                        total_protein += 2
+                        total_carbs += 6
+                        total_fat += 0.2
+                    else:
+                        total_calories += 50
+                        total_protein += 2
+                        total_carbs += 8
+                        total_fat += 1
+                    
+                    ingredient_count += 1
+            
+            # Calculate per serving
+            if servings > 0 and ingredient_count > 0:
+                return {
+                    'calories': round(total_calories / servings, 1),
+                    'protein': round(total_protein / servings, 1),
+                    'carbs': round(total_carbs / servings, 1),
+                    'fat': round(total_fat / servings, 1)
+                }
+            
+            # Default if no ingredients or servings
+            return {
+                'calories': 300,
+                'protein': 15,
+                'carbs': 30,
+                'fat': 10
+            }
+            
+        except Exception as e:
+            print(f"Error estimating macros from ingredients: {e}")
+            return {
+                'calories': 300,
+                'protein': 15,
+                'carbs': 30,
+                'fat': 10
+            } 
