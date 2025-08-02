@@ -29,7 +29,7 @@ const formSchema = z.object({
   favoriteCuisines: z.array(z.string()).default([]),
   foodsToAvoid: z.array(z.string()).default([]),
   cookingSkillLevel: z.enum(['beginner', 'intermediate', 'advanced'] as const).default('beginner'),
-  favoriteFoods: z.tuple([z.string(), z.string(), z.string()]).default(['', '', '']),
+  favoriteFoods: z.array(z.string()).default([]), // Changed from tuple to array
   healthGoals: z.array(z.string()).default([]),
   maxCookingTime: z.string().default('30 minutes'),
   includeBreakfast: z.boolean().default(true),
@@ -160,17 +160,12 @@ const loadUserPreferences = async (): Promise<UserPreferences> => {
     // The preferences are in the 'preferences' field of the response
     const preferences = data.preferences || data;
     
-      // Ensure favoriteFoods is a tuple of exactly 3 strings
+    // Ensure favoriteFoods is an array of non-empty strings
     const favoriteFoods = (() => {
       const foods = Array.isArray(preferences.favoriteFoods) 
-        ? preferences.favoriteFoods.filter((f): f is string => typeof f === 'string')
+        ? preferences.favoriteFoods.filter((f): f is string => typeof f === 'string' && f.trim().length > 0)
         : [];
-      // Ensure we have exactly 3 strings, filling with empty strings if needed
-      return [
-        foods[0] || '',
-        foods[1] || '',
-        foods[2] || ''
-      ] as [string, string, string];
+      return foods;
     })();
     
     // Ensure favoriteCuisines is an array and filter out any empty strings or invalid values
@@ -326,7 +321,7 @@ const UserPreferencesPage = () => {
     favoriteCuisines: [],
     foodsToAvoid: [],
     cookingSkillLevel: 'beginner',
-    favoriteFoods: ['', '', ''],
+    favoriteFoods: [], // Changed from tuple to array
     healthGoals: [],
     maxCookingTime: '30 minutes',
     includeBreakfast: true,
@@ -455,13 +450,9 @@ const UserPreferencesPage = () => {
             : [],
           favoriteFoods: (() => {
             const foods = Array.isArray(preferences.favoriteFoods) 
-              ? preferences.favoriteFoods.filter((f): f is string => typeof f === 'string')
+              ? preferences.favoriteFoods.filter((f): f is string => typeof f === 'string' && f.trim().length > 0)
               : [];
-            return [
-              foods[0] || '',
-              foods[1] || '',
-              foods[2] || ''
-            ] as [string, string, string];
+            return foods;
           })(),
           cookingSkillLevel: (preferences.cookingSkillLevel as 'beginner' | 'intermediate' | 'advanced') || 'beginner',
           maxCookingTime: preferences.maxCookingTime || '30 minutes',
@@ -533,19 +524,14 @@ const UserPreferencesPage = () => {
         ? values.cookingSkillLevel
         : 'beginner',
 
-      // Ensure we always have exactly 3 favorite foods, with empty strings for missing values
+      // Fix: Only include non-empty favorite foods, don't pad with empty strings
       favoriteFoods: (() => {
         const foods = Array.isArray(values.favoriteFoods)
           ? values.favoriteFoods
-              .filter((f): f is string => typeof f === 'string')
+              .filter((f): f is string => typeof f === 'string' && f.trim().length > 0)
               .map(f => f.trim())
-              .filter(Boolean)
           : [];
-        return [
-          foods[0] || '',
-          foods[1] || '',
-          foods[2] || ''
-        ] as [string, string, string];
+        return foods; // Return as array, not tuple
       })(),
 
       healthGoals: Array.isArray(values.healthGoals)
@@ -636,9 +622,6 @@ const UserPreferencesPage = () => {
     );
   }
 
-  // Watch the favoriteFoods field for changes
-  const favoriteFoods = form.watch('favoriteFoods') as [string, string, string] || ['', '', ''] as [string, string, string];
-
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
@@ -661,33 +644,50 @@ const UserPreferencesPage = () => {
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
               {/* Favorite Foods */}
               <div>
-                <h2 className="text-xl font-medium mb-4">Favorite Foods</h2>
-                <p className="text-sm text-gray-600 mb-4">Enter up to 3 of your favorite foods</p>
+                <h2 className="text-xl font-medium mb-4">Favorite Foods (Optional)</h2>
+                <p className="text-sm text-gray-600 mb-4">Enter your favorite foods to get personalized recommendations</p>
                 <div className="space-y-3">
-                  {[0, 1, 2].map((index) => (
-                    <FormField
-                      key={index}
-                      control={form.control}
-                      name={`favoriteFoods.${index}`}
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Favorite Food {index + 1}</FormLabel>
-                          <FormControl>
-                            <Input
-                              placeholder={`Favorite food ${index + 1}`}
-                              value={favoriteFoods[index]}
-                              onChange={(e) => {
-                                const newFoods = [...favoriteFoods] as [string, string, string];
-                                newFoods[index] = e.target.value;
-                                form.setValue('favoriteFoods', newFoods, { shouldDirty: true });
-                              }}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                  {/* Display existing favorite foods */}
+                  {form.watch('favoriteFoods')?.map((food, index) => (
+                    <div key={index} className="flex items-center gap-2">
+                      <Input
+                        value={food}
+                        onChange={(e) => {
+                          const currentFoods = form.watch('favoriteFoods') || [];
+                          const newFoods = [...currentFoods];
+                          newFoods[index] = e.target.value;
+                          // Remove empty strings from the array
+                          const filteredFoods = newFoods.filter(food => food && food.trim().length > 0);
+                          form.setValue('favoriteFoods', filteredFoods, { shouldDirty: true });
+                        }}
+                        placeholder={`e.g., pizza, burger, chicken`}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const currentFoods = form.watch('favoriteFoods') || [];
+                          const newFoods = currentFoods.filter((_, i) => i !== index);
+                          form.setValue('favoriteFoods', newFoods, { shouldDirty: true });
+                        }}
+                      >
+                        Remove
+                      </Button>
+                    </div>
                   ))}
+                  
+                  {/* Add new favorite food button */}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      const currentFoods = form.watch('favoriteFoods') || [];
+                      form.setValue('favoriteFoods', [...currentFoods, ''], { shouldDirty: true });
+                    }}
+                  >
+                    + Add Favorite Food
+                  </Button>
                 </div>
               </div>
 

@@ -13,9 +13,21 @@ interface User {
   is_verified: boolean;
   preferences?: {
     favoriteCuisines: string[];
+    favoriteFoods: string[];
+    foodsToAvoid: string[];
     dietaryRestrictions: string[];
+    healthGoals: string[];
     allergens: string[];
     cookingSkillLevel: 'beginner' | 'intermediate' | 'advanced';
+    maxCookingTime?: string;
+    includeBreakfast?: boolean;
+    includeLunch?: boolean;
+    includeDinner?: boolean;
+    includeSnacks?: boolean;
+    targetCalories?: number;
+    targetProtein?: number;
+    targetCarbs?: number;
+    targetFat?: number;
   };
 }
 

@@ -14,35 +14,32 @@ import { ThumbsUp, Loader2 } from 'lucide-react';
 import { apiCall } from '../utils/apiUtils';
 
 const RecommendedRecipes: React.FC = () => {
+  console.log('🔍 RecommendedRecipes component rendered');
+  
   const { user, isAuthenticated } = useAuth();
+  
+  console.log('🔍 Component - isAuthenticated:', isAuthenticated);
+  console.log('🔍 Component - user:', user);
+  console.log('🔍 Component - user?.preferences:', user?.preferences);
   
   // Check if user has meaningful preferences (not just empty arrays/strings)
   const hasMeaningfulPreferences = React.useMemo(() => {
-    if (!user?.preferences) return false;
+    if (!user?.preferences) {
+      console.log('🔍 No user preferences found');
+      return false;
+    }
     
     const prefs = user.preferences;
+    console.log('🔍 Checking preferences:', prefs);
+    console.log('🔍 Preferences type:', typeof prefs);
+    console.log('🔍 Preferences keys:', Object.keys(prefs));
     
-    // Check if any preference arrays have actual content
-    const hasFavoriteFoods = Array.isArray(prefs.favoriteFoods) && 
-      prefs.favoriteFoods.some(food => food && food.trim() !== '');
+    // For now, let's be more lenient - if user has any preferences object, show recommendations
+    // This will help us debug what's actually happening
+    const hasAnyPreferences = prefs && typeof prefs === 'object';
     
-    const hasFavoriteCuisines = Array.isArray(prefs.favoriteCuisines) && 
-      prefs.favoriteCuisines.some(cuisine => cuisine && cuisine.trim() !== '');
-    
-    const hasDietaryRestrictions = Array.isArray(prefs.dietaryRestrictions) && 
-      prefs.dietaryRestrictions.length > 0;
-    
-    const hasFoodsToAvoid = Array.isArray(prefs.foodsToAvoid) && 
-      prefs.foodsToAvoid.some(food => food && food.trim() !== '');
-    
-    const hasCookingSkill = prefs.cookingSkillLevel && prefs.cookingSkillLevel !== 'beginner';
-    
-    const hasHealthGoals = Array.isArray(prefs.healthGoals) && 
-      prefs.healthGoals.length > 0;
-    
-    // Return true if any meaningful preference is set
-    return hasFavoriteFoods || hasFavoriteCuisines || hasDietaryRestrictions || 
-           hasFoodsToAvoid || hasCookingSkill || hasHealthGoals;
+    console.log('🔍 Has any preferences:', hasAnyPreferences);
+    return hasAnyPreferences;
   }, [user?.preferences]);
   
   // Query for local recipes
@@ -52,13 +49,17 @@ const RecommendedRecipes: React.FC = () => {
   });
 
   // Query for manual recipes - use an empty search term to get all recipes
-  const { data: manualRecipes = [], isLoading: isManualLoading } = useQuery({
+  const { data: manualRecipesData, isLoading: isManualLoading } = useQuery({
     queryKey: ['recommendedManualRecipes'],
-    queryFn: () => fetchManualRecipes(''), // Empty string to get all recipes
-    placeholderData: (previousData) => previousData || [],
+    queryFn: async () => {
+      const result = await fetchManualRecipes(''); // Empty string to get all recipes
+      return result.recipes || []; // Extract just the recipes array
+    },
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
+  const manualRecipes = manualRecipesData || [];
+  
   // Safely access user preferences with fallback to empty arrays
   const favoriteCuisines = user?.preferences?.favoriteCuisines || [];
   const dietaryRestrictions = user?.preferences?.dietaryRestrictions || [];
@@ -69,8 +70,12 @@ const RecommendedRecipes: React.FC = () => {
   const { data: recommendedRecipes = [], isLoading: isRecommendationsLoading } = useQuery({
     queryKey: ['recommendations', user?.preferences, hasMeaningfulPreferences],
     queryFn: async () => {
+      console.log('🔍 Query function called!');
+      console.log('🔍 isAuthenticated:', isAuthenticated);
+      console.log('🔍 user?.preferences:', user?.preferences);
+      
       if (!isAuthenticated || !user?.preferences) {
-        console.log('No user preferences, returning empty recommendations');
+        console.log('❌ No user preferences, returning empty recommendations');
         return [];
       }
 
@@ -84,7 +89,7 @@ const RecommendedRecipes: React.FC = () => {
       });
 
       try {
-        console.log('Fetching recommendations from backend with preferences:', user.preferences);
+        console.log('🔍 Making API call to /recommendations...');
         
         const response = await apiCall('/recommendations?limit=12', {
           method: 'GET',
@@ -94,23 +99,30 @@ const RecommendedRecipes: React.FC = () => {
           }
         });
 
+        console.log('🔍 API response status:', response.status);
+        console.log('🔍 API response ok:', response.ok);
+
         if (!response.ok) {
-          console.error('Failed to fetch recommendations:', response.status, response.statusText);
+          console.error('❌ Failed to fetch recommendations:', response.status, response.statusText);
           return [];
         }
 
         const data = await response.json();
-        console.log('Backend recommendations response:', data);
+        console.log('✅ Backend recommendations response:', data);
         
         return data.recommendations || [];
       } catch (error) {
-        console.error('Error fetching recommendations:', error);
+        console.error('❌ Error fetching recommendations:', error);
         return [];
       }
     },
-    enabled: isAuthenticated && !!user?.preferences && hasMeaningfulPreferences,
+    enabled: isAuthenticated && !!user?.preferences, // Temporarily removed hasMeaningfulPreferences check
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
+
+  console.log('🔍 Query enabled:', isAuthenticated && !!user?.preferences);
+  console.log('🔍 isAuthenticated:', isAuthenticated);
+  console.log('🔍 user?.preferences:', user?.preferences);
 
   // Combine all recipes for display
   const allCombined = [
@@ -126,7 +138,7 @@ const RecommendedRecipes: React.FC = () => {
   });
 
   // Don't show recommendations if no meaningful preferences are set
-  if (!isAuthenticated || !user?.preferences || !hasMeaningfulPreferences) {
+  if (!isAuthenticated || !user?.preferences) { // Temporarily removed hasMeaningfulPreferences check
     console.log('No meaningful preferences found, not showing recommendations');
     return null;
   }
