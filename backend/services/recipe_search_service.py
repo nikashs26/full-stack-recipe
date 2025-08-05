@@ -15,13 +15,10 @@ class RecipeSearchService:
     
     # Define valid cuisines for proper filtering
     VALID_CUISINES = [
-        'american', 'british', 'canadian', 'chinese', 'dutch', 'french', 'greek', 
-        'indian', 'irish', 'italian', 'jamaican', 'japanese', 'kenyan', 'malaysian', 
-        'mexican', 'moroccan', 'russian', 'spanish', 'thai', 'tunisian', 'turkish', 
-        'vietnamese', 'lebanese', 'polish', 'german', 'swedish', 'lithuanian', 
-        'ethiopian', 'nigerian', 'south african', 'brazilian', 'australian', 
-        'hawaiian', 'north african', 'west african', 'east african', 'southern african',
-        'mediterranean'
+        'american', 'british', 'chinese', 'french', 'greek', 'indian', 'irish', 
+        'italian', 'japanese', 'mexican', 'moroccan', 'spanish', 'thai', 'vietnamese',
+        'mediterranean', 'korean', 'caribbean', 'cajun', 'southern', 'nordic',
+        'eastern european', 'jewish', 'latin american', 'african', 'middle eastern', 'asian'
     ]
     
     def __init__(self):
@@ -623,6 +620,7 @@ class RecipeSearchService:
         def has_foods_to_avoid(recipe):
             if not recipe or not foods_to_avoid:
                 return False
+                
             # Get all searchable text from the recipe
             text_parts = [
                 str(recipe.get('name', '') or ''),
@@ -631,6 +629,18 @@ class RecipeSearchService:
                 str(recipe.get('cuisine', '') or '')
             ]
             
+            # Also check ingredients if available
+            ingredients = recipe.get('ingredients', [])
+            if ingredients:
+                for ing in ingredients:
+                    if isinstance(ing, dict):
+                        if 'name' in ing:
+                            text_parts.append(str(ing['name']))
+                        elif 'ingredient' in ing:
+                            text_parts.append(str(ing['ingredient']))
+                    else:
+                        text_parts.append(str(ing))
+            
             # Create a single lowercase string for searching
             search_text = ' '.join(text_parts).lower()
             
@@ -638,8 +648,23 @@ class RecipeSearchService:
             for food in foods_to_avoid:
                 if not food:  # Skip empty foods
                     continue
+                    
+                # Check for exact word matches
+                if f' {food} ' in f' {search_text} ' or \
+                   search_text.startswith(f'{food} ') or \
+                   search_text.endswith(f' {food}') or \
+                   search_text == food:
+                    return True
+                    
+                # Check for partial matches (for foods like "beef" in "beef broth")
                 if food in search_text:
                     return True
+                    
+                # Also check for plural/singular forms
+                if food.endswith('s') and (f' {food[:-1]} ' in f' {search_text} ' or
+                                         search_text.startswith(f'{food[:-1]} ')):
+                    return True
+                    
             return False
 
         def count_matching_foods(recipe):
@@ -1279,8 +1304,6 @@ class RecipeSearchService:
             'spanish': 'Spanish',
             'french': 'French',
             'korean': 'Korean',
-            'lebanese': 'Lebanese',
-            'turkish': 'Turkish',
             'moroccan': 'Moroccan',
             'american': 'American',
             'british': 'British',
@@ -1289,29 +1312,13 @@ class RecipeSearchService:
             'middle eastern': 'Middle Eastern',
             'eastern european': 'Eastern European',
             'irish': 'Irish',
-            'german': 'German',
-            'dutch': 'Dutch',
-            'swedish': 'Swedish',
-            'polish': 'Polish',
-            'russian': 'Russian',
-            'brazilian': 'Brazilian',
-            'australian': 'Australian',
-            'hawaiian': 'Hawaiian',
+            'cajun': 'Cajun',
+            'southern': 'Southern',
+            'nordic': 'Nordic',
+            'jewish': 'Jewish',
+            'latin american': 'Latin American',
             'african': 'African',
-            'north african': 'North African',
-            'west african': 'West African',
-            'east african': 'East African',
-            'south african': 'South African',
-            'southern african': 'Southern African',
-            'canadian': 'Canadian',
-            'jamaican': 'Jamaican',
-            'kenyan': 'Kenyan',
-            'malaysian': 'Malaysian',
-            'tunisian': 'Tunisian',
-            'vietnamese': 'Vietnamese',
-            'lithuanian': 'Lithuanian',
-            'ethiopian': 'Ethiopian',
-            'nigerian': 'Nigerian'
+            'asian': 'Asian'
         }
         
         # Check for exact match first
