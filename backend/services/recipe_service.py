@@ -906,7 +906,7 @@ class RecipeService:
             
             # Include recipe only if it matches all criteria
             if all([matches_query, has_ingredient, matches_cuisine, matches_diet]):
-                logger.info(f"✅ Including recipe: {recipe_name}")
+                
                 filtered_recipes.append(recipe)
             else:
                 logger.debug(f"❌ Excluding recipe - Criteria not met: {recipe_name}")

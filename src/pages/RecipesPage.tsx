@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { fetchManualRecipes } from '../lib/manualRecipes';
 import { DietaryRestriction, Recipe as RecipeType } from '../types/recipe';
@@ -13,6 +13,7 @@ import { RecipeFilters } from '@/components/RecipeFilters';
 import { useDebounce } from '../hooks/useDebounce';
 import { useMediaQuery } from '../hooks/use-media-query';
 import { Drawer, DrawerContent, DrawerTrigger } from '@/components/ui/drawer';
+import EnhancedPagination from '@/components/EnhancedPagination';
 
 // Recipe type definitions
 type BaseRecipe = {
@@ -80,19 +81,141 @@ type NormalizedRecipe = {
 
 const RecipesPage: React.FC = () => {
   const navigate = useNavigate();
-  const [searchTerm, setSearchTerm] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [ingredientSearch, setIngredientSearch] = useState('');
-  const [selectedCuisines, setSelectedCuisines] = useState<string[]>([]);
-  const [selectedDiets, setSelectedDiets] = useState<string[]>([]);
+  const location = useLocation();
+  
+  // Get state from navigation or localStorage
+  const getPersistedState = () => {
+    // First try to get state from navigation
+    if (location.state) {
+      return {
+        searchTerm: location.state.searchTerm || '',
+        searchQuery: location.state.searchQuery || '',
+        ingredientSearch: location.state.ingredientSearch || '',
+        selectedCuisines: location.state.selectedCuisines || [],
+        selectedDiets: location.state.selectedDiets || [],
+        currentPage: location.state.currentPage || 1
+      };
+    }
+    
+    // Fallback to localStorage
+    try {
+      const stored = localStorage.getItem('recipesPageState');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        
+        // Check if the stored state is not too old (24 hours)
+        const maxAge = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+        if (parsed.timestamp && (Date.now() - parsed.timestamp) > maxAge) {
+          // State is too old, clear it
+          localStorage.removeItem('recipesPageState');
+          return getDefaultState();
+        }
+        
+        return {
+          searchTerm: parsed.searchTerm || '',
+          searchQuery: parsed.searchQuery || '',
+          ingredientSearch: parsed.ingredientSearch || '',
+          selectedCuisines: parsed.selectedCuisines || [],
+          selectedDiets: parsed.selectedDiets || [],
+          currentPage: parsed.currentPage || 1
+        };
+      }
+    } catch (error) {
+      console.warn('Failed to parse stored state:', error);
+      // Clear corrupted state
+      localStorage.removeItem('recipesPageState');
+    }
+    
+    return getDefaultState();
+  };
+
+  const getDefaultState = () => ({
+    searchTerm: '',
+    searchQuery: '',
+    ingredientSearch: '',
+    selectedCuisines: [],
+    selectedDiets: [],
+    currentPage: 1
+  });
+
+  const persistedState = getPersistedState();
+  
+  const [searchTerm, setSearchTerm] = useState(persistedState.searchTerm);
+  const [searchQuery, setSearchQuery] = useState(persistedState.searchQuery);
+  const [ingredientSearch, setIngredientSearch] = useState(persistedState.ingredientSearch);
+  const [selectedCuisines, setSelectedCuisines] = useState<string[]>(persistedState.selectedCuisines);
+  const [selectedDiets, setSelectedDiets] = useState<string[]>(persistedState.selectedDiets);
   const [showMobileFilters, setShowMobileFilters] = useState(false);
   const [showLoading, setShowLoading] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
+  const [currentPage, setCurrentPage] = useState(persistedState.currentPage);
   const [totalPages, setTotalPages] = useState(1);
   const recipesPerPage = 20;
   
   const isDesktop = useMediaQuery("(min-width: 1024px)");
   const debouncedSearchQuery = useDebounce(searchQuery, 500);
+
+  // Persist state to localStorage whenever it changes
+  const persistState = useCallback(() => {
+    const stateToPersist = {
+      searchTerm,
+      searchQuery,
+      ingredientSearch,
+      selectedCuisines,
+      selectedDiets,
+      currentPage,
+      timestamp: Date.now()
+    };
+    
+    try {
+      localStorage.setItem('recipesPageState', JSON.stringify(stateToPersist));
+      console.log('State persisted:', stateToPersist);
+    } catch (error) {
+      console.warn('Failed to persist state:', error);
+    }
+  }, [searchTerm, searchQuery, ingredientSearch, selectedCuisines, selectedDiets, currentPage]);
+
+  // Clear persisted state manually
+  const clearPersistedState = useCallback(() => {
+    try {
+      localStorage.removeItem('recipesPageState');
+      console.log('Persisted state cleared');
+    } catch (error) {
+      console.warn('Failed to clear persisted state:', error);
+    }
+  }, []);
+
+  // Persist state whenever any of the relevant state changes
+  useEffect(() => {
+    persistState();
+  }, [persistState]);
+
+  // Debug: Log when state is restored
+  useEffect(() => {
+    if (location.state) {
+      console.log('State restored from navigation:', location.state);
+    } else if (persistedState.searchTerm || persistedState.selectedCuisines.length > 0 || persistedState.selectedDiets.length > 0) {
+      console.log('State restored from localStorage:', persistedState);
+    } else {
+      console.log('No state to restore, using defaults');
+    }
+  }, [location.state, persistedState]);
+
+  // Clear location state after restoring to prevent it from persisting across page refreshes
+  useEffect(() => {
+    if (location.state) {
+      // Replace the current location to remove the state from the URL
+      // This prevents the state from being restored again on refresh
+      window.history.replaceState({}, document.title, location.pathname);
+    }
+  }, [location.state, location.pathname]);
+
+  // Clear persisted state when component unmounts (optional - you might want to keep it)
+  // useEffect(() => {
+  //   return () => {
+  //     // Optionally clear state on unmount
+  //     // localStorage.removeItem('recipesPageState');
+  //   };
+  // }, []);
 
   // Fetch paginated recipes from ChromaDB with search and filters
   const { 
@@ -103,16 +226,19 @@ const RecipesPage: React.FC = () => {
     queryKey: ['recipes', debouncedSearchQuery, ingredientSearch, selectedCuisines, selectedDiets, currentPage],
     queryFn: async () => {
       try {
+        // Always use pagination for consistent behavior
         const result = await fetchManualRecipes(debouncedSearchQuery, ingredientSearch, {
           page: currentPage,
-          pageSize: recipesPerPage,
+          pageSize: recipesPerPage, // Always use 20 recipes per page
           cuisines: selectedCuisines,
           diets: selectedDiets
         });
         
         // Update total pages based on the response
         const totalRecipes = result.total || 0;
-        setTotalPages(Math.ceil(totalRecipes / recipesPerPage));
+        const calculatedTotalPages = Math.ceil(totalRecipes / recipesPerPage);
+        console.log(`Pagination Debug: total=${totalRecipes}, pageSize=${recipesPerPage}, calculatedTotalPages=${calculatedTotalPages}, currentPage=${currentPage}`);
+        setTotalPages(calculatedTotalPages);
         
         return {
           recipes: result.recipes as unknown as Recipe[],
@@ -130,14 +256,18 @@ const RecipesPage: React.FC = () => {
 
   // Handle recipe name search input change with debounce and reset to first page
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchTerm(e.target.value);
-    setSearchQuery(e.target.value);
+    const newValue = e.target.value;
+    setSearchTerm(newValue);
+    setSearchQuery(newValue);
+    console.log('Search changed, resetting to page 1');
     setCurrentPage(1);
   };
 
   // Handle ingredient search input change
   const handleIngredientSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setIngredientSearch(e.target.value);
+    const newValue = e.target.value;
+    setIngredientSearch(newValue);
+    console.log('Ingredient search changed, resetting to page 1');
     setCurrentPage(1);
   };
 
@@ -297,11 +427,13 @@ const RecipesPage: React.FC = () => {
 
   const clearAllFilters = useCallback(() => {
     setSelectedCuisines([]);
-    setSelectedDiets([]);
     setSearchQuery("");
     setSearchTerm("");
     setIngredientSearch("");
-  }, []);
+    setCurrentPage(1);
+    // Also clear persisted state when clearing all filters
+    clearPersistedState();
+  }, [clearPersistedState]);
 
   // Show loading state only when we have a search query and data is being fetched
   const isLoading = useMemo(() => 
@@ -458,18 +590,34 @@ const RecipesPage: React.FC = () => {
           recipe={recipeForCard}
           isExternal={recipe.type === 'spoonacular'}
           onClick={() => {
+            // Pass current state to the recipe detail page
+            const navigationState = {
+              searchTerm,
+              searchQuery,
+              ingredientSearch,
+              selectedCuisines,
+              selectedDiets,
+              currentPage,
+              returnPath: location.pathname
+            };
+            
             if (recipe.type === 'spoonacular') {
               navigate(`/external-recipe/${recipe.id}`, { 
-                state: { source: 'spoonacular' } 
+                state: { 
+                  source: 'spoonacular',
+                  ...navigationState
+                } 
               });
             } else {
-              navigate(`/recipe/${recipe.id}`);
+              navigate(`/recipe/${recipe.id}`, { 
+                state: navigationState
+              });
             }
           }}
         />
       </div>
     );
-  }, [navigate]);
+  }, [navigate, searchTerm, searchQuery, ingredientSearch, selectedCuisines, selectedDiets, currentPage, location.pathname]);
 
   return (
     <div className="min-h-screen relative">
@@ -565,7 +713,16 @@ const RecipesPage: React.FC = () => {
                   </h2>
                   <p className="text-gray-600">
                     {recipesData.total > 0 ? (
-                      `Showing ${((currentPage - 1) * recipesPerPage) + 1}-${Math.min(currentPage * recipesPerPage, recipesData.total)} of ${recipesData.total} ${recipesData.total === 1 ? 'recipe' : 'recipes'}`
+                      (() => {
+                        const hasSearchOrFilters = searchTerm || ingredientSearch || selectedCuisines.length > 0 || selectedDiets.length > 0;
+                        if (hasSearchOrFilters) {
+                          // Show pagination info for search results
+                          return `Showing ${((currentPage - 1) * recipesPerPage) + 1}-${Math.min(currentPage * recipesPerPage, recipesData.total)} of ${recipesData.total} ${recipesData.total === 1 ? 'recipe' : 'recipes'}`;
+                        } else {
+                          // Show total count for all recipes
+                          return `Showing all ${recipesData.total} ${recipesData.total === 1 ? 'recipe' : 'recipes'}`;
+                        }
+                      })()
                     ) : 'No recipes found'}
                   </p>
                 </div>
@@ -610,115 +767,14 @@ const RecipesPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Pagination Controls */}
           {totalPages > 1 && (
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-8">
-              <div className="text-sm text-gray-500 dark:text-gray-400">
-                Page {currentPage} of {totalPages}
-              </div>
-              
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => currentPage !== 1 && setCurrentPage(1)}
-                  disabled={currentPage === 1 || isLoadingRecipes}
-                >
-                  <ChevronsLeft className="h-4 w-4 mr-1" />
-                  First
-                </Button>
-                
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    if (currentPage > 1) {
-                      setCurrentPage(prev => Math.max(1, prev - 1));
-                    }
-                  }}
-                  disabled={currentPage === 1 || isLoadingRecipes}
-                >
-                  <ChevronLeft className="h-4 w-4 mr-1" />
-                  Previous
-                </Button>
-                
-                <div className="flex items-center gap-1">
-                  {(() => {
-                    // Calculate which page numbers to show (up to 5 at a time)
-                    const maxVisiblePages = 5;
-                    const half = Math.floor(maxVisiblePages / 2);
-                    let startPage = Math.max(1, currentPage - half);
-                    const endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
-                    
-                    // Adjust startPage if we're near the end
-                    if (endPage - startPage + 1 < maxVisiblePages) {
-                      startPage = Math.max(1, endPage - maxVisiblePages + 1);
-                    }
-                    
-                    return (
-                      <>
-                        {Array.from(
-                          { length: Math.min(maxVisiblePages, totalPages) },
-                          (_, i) => {
-                            const pageNum = startPage + i;
-                            return (
-                              <Button
-                                key={pageNum}
-                                variant={currentPage === pageNum ? "default" : "outline"}
-                                size="sm"
-                                onClick={() => {
-                                  if (currentPage !== pageNum) {
-                                    setCurrentPage(pageNum);
-                                  }
-                                }}
-                                disabled={isLoadingRecipes}
-                                className={`min-w-[40px] ${currentPage === pageNum ? 'font-bold' : ''}`}
-                                aria-label={`Go to page ${pageNum}`}
-                              >
-                                {pageNum}
-                              </Button>
-                            );
-                          }
-                        )}
-                      </>
-                    );
-                  })()}
-                </div>
-                
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    if (currentPage < totalPages) {
-                      setCurrentPage(prev => Math.min(totalPages, prev + 1));
-                    }
-                  }}
-                  disabled={currentPage === totalPages || isLoadingRecipes}
-                  aria-label="Next page"
-                >
-                  Next
-                  <ChevronRight className="h-4 w-4 ml-1" />
-                </Button>
-                
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    if (currentPage !== totalPages) {
-                      setCurrentPage(totalPages);
-                    }
-                  }}
-                  disabled={currentPage === totalPages || isLoadingRecipes}
-                  aria-label="Last page"
-                >
-                  Last
-                  <ChevronsRight className="h-4 w-4 ml-1" />
-                </Button>
-              </div>
-              
-              <div className="text-sm text-gray-500 dark:text-gray-400">
-                {recipesData.total} {recipesData.total === 1 ? 'recipe' : 'recipes'} total
-              </div>
+            <div className="flex flex-col items-center border-t border-gray-200 bg-white px-4 py-6 sm:px-6">
+              <EnhancedPagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={setCurrentPage}
+                isLoading={isLoadingRecipes}
+              />
             </div>
           )}
         </div>

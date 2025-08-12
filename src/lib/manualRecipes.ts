@@ -1,6 +1,6 @@
 
 // Use the main backend API URL
-const API_BASE_URL = "http://localhost:5004";
+const API_BASE_URL = "http://localhost:5003";
 
 export interface ManualRecipe {
   id: string | number;
@@ -157,7 +157,7 @@ export const fetchManualRecipes = async (
     if (queryStr) params.append('query', queryStr);
     if (ingredientStr) params.append('ingredient', ingredientStr);
     
-    // Handle pagination
+    // Handle pagination - always use pagination for consistent behavior
     const page = options.page || 1;
     const pageSize = options.pageSize || 20;
     const offset = (page - 1) * pageSize;

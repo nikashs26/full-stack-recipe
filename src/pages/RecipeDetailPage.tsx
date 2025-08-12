@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Heart, Folder, ShoppingCart, Star, ArrowLeft, Loader2, FolderPlus } from 'lucide-react';
 import Header from '../components/Header';
@@ -16,12 +16,34 @@ import { useAuth } from '../context/AuthContext';
 const RecipeDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { isAuthenticated } = useAuth();
   // Removed unused folder modal state
   const [reviews, setReviews] = useState<Review[]>([]);
   
+  // Handle back navigation with state preservation
+  const handleBackNavigation = () => {
+    // Check if we have navigation state to return to
+    if (location.state && location.state.returnPath) {
+      // Navigate back to the recipes page with preserved state
+      navigate('/recipes', { 
+        state: {
+          searchTerm: location.state.searchTerm || '',
+          searchQuery: location.state.searchQuery || '',
+          ingredientSearch: location.state.ingredientSearch || '',
+          selectedCuisines: location.state.selectedCuisines || [],
+          selectedDiets: location.state.selectedDiets || [],
+          currentPage: location.state.currentPage || 1
+        }
+      });
+    } else {
+      // Fallback to browser back navigation
+      navigate(-1);
+    }
+  };
+
   // Fetch the recipe from the backend
   const { data: recipe, isLoading, error } = useQuery({
     queryKey: ['recipe', id],
@@ -216,14 +238,13 @@ const RecipeDetailPage: React.FC = () => {
       <Header />
       <main className="pt-24 md:pt-28">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="mb-6">
-            <Button 
-              variant="outline" 
-              onClick={() => navigate('/recipes')}
-              className="mb-4"
-            >
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Recipes
+          {/* Back Navigation */}
+          <div className="flex flex-col sm:flex-row gap-3 mb-6">
+            <Button onClick={handleBackNavigation} variant="outline" className="w-full sm:w-auto">
+              <ArrowLeft className="mr-2 h-4 w-4" /> Back to recipes
+            </Button>
+            <Button onClick={() => navigate('/recipes')} variant="default" className="w-full sm:w-auto">
+              Browse all recipes
             </Button>
           </div>
 
