@@ -10,12 +10,12 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class RecipeCacheService:
-    def __init__(self, cache_ttl_days: int = 7):
+    def __init__(self, cache_ttl_days: int = None):
         """
         Initialize ChromaDB client and collections for recipe caching
         
         Args:
-            cache_ttl_days: Number of days before cache entries expire (default: 7)
+            cache_ttl_days: Number of days before cache entries expire (default: None - TTL disabled)
         """
         try:
             # Initialize ChromaDB with persistent storage
@@ -38,15 +38,16 @@ class RecipeCacheService:
                 embedding_function=self.embedding_function
             )
             
-            self.cache_ttl = timedelta(days=cache_ttl_days)
-            logger.info(f"ChromaDB recipe cache initialized with {cache_ttl_days} days TTL")
+            # TTL is disabled - recipes will never expire
+            self.cache_ttl = None
+            logger.info("ChromaDB recipe cache initialized with TTL disabled - recipes will never expire")
             logger.info(f"Using persistent storage at ./chroma_db")
         except Exception as e:
             logger.error(f"Failed to initialize ChromaDB recipe cache: {e}")
             self.client = None
             self.search_collection = None
             self.recipe_collection = None
-            self.cache_ttl = timedelta(days=cache_ttl_days)  # Set TTL even if initialization fails
+            self.cache_ttl = None  # TTL disabled even if initialization fails
 
     def _generate_cache_key(self, query: str = "", ingredient: str = "", filters: Optional[Dict[str, Any]] = None) -> str:
         """Generate a unique cache key for the search parameters including filters"""
@@ -59,15 +60,19 @@ class RecipeCacheService:
 
     def _is_cache_valid(self, cached_at: str) -> bool:
         """Check if a cache entry is still valid based on TTL"""
-        if not cached_at or not isinstance(cached_at, str):
-            return False
-            
-        try:
-            cached_time = datetime.fromisoformat(cached_at)
-            return datetime.now() - cached_time < self.cache_ttl
-        except (ValueError, TypeError) as e:
-            logger.warning(f"Invalid cache timestamp '{cached_at}': {str(e)}")
-            return False
+        # Always return True to disable TTL - recipes will never expire
+        return True
+        
+        # Original TTL logic (commented out):
+        # if not cached_at or not isinstance(cached_at, str):
+        #     return False
+        #     
+        # try:
+        #     cached_time = datetime.fromisoformat(cached_at)
+        #     return datetime.now() - cached_time < self.cache_ttl
+        # except (ValueError, TypeError) as e:
+        #     logger.warning(f"Invalid cache timestamp '{cached_at}': {str(e)}")
+        #     return False
             
     async def add_recipe(self, recipe: Dict[str, Any]) -> bool:
         """
@@ -90,13 +95,13 @@ class RecipeCacheService:
                 logger.error("Failed to extract required metadata from recipe")
                 return False
                 
-            # Generate embeddings for the recipe
-            recipe_text = f"{metadata.get('title', '')} {metadata.get('ingredients', '')}"
+            # Store the full recipe data as the document, not just text summary
+            recipe_document = json.dumps(recipe)
             
             # Add to recipe collection
             self.recipe_collection.upsert(
                 ids=[metadata['id']],
-                documents=[recipe_text],
+                documents=[recipe_document],  # Store full recipe data
                 metadatas=[metadata]
             )
             
@@ -226,235 +231,195 @@ class RecipeCacheService:
 
     def get_cached_recipes(self, query: str = "", ingredient: str = "", filters: Optional[Dict[str, Any]] = None) -> List[Dict[Any, Any]]:
         """Retrieve cached recipes for the given search parameters with TTL support"""
-        if not self.recipe_collection or not self.search_collection:
-            logger.warning("ChromaDB collections not initialized")
+        if not self.recipe_collection:
+            logger.warning("ChromaDB recipe collection not initialized")
             return []
         
         try:
-            # Sanitize inputs
-            query = (query or "").strip()
-            ingredient = (ingredient or "").strip()
-            filters = filters or {}
+            # Always get all recipes from cache since search collection only contains metadata
+            # The filtering will be done in the recipe service
+            logger.info("Getting all recipes from cache for filtering in recipe service")
+            return self._get_all_recipes_from_cache()
             
-            # Build where clause for filtering
-            where = {}
-            if filters:
-                try:
-                    # Handle cuisine filter
-                    if filters.get("cuisine"):
-                        where["cuisines"] = {"$eq": filters["cuisine"]}
-                    
-                    # Handle other filters...
-                    if filters.get("max_cooking_time"):
-                        try:
-                            max_time = int(filters["max_cooking_time"])
-                            where["cooking_time"] = {"$lte": max_time}
-                        except (ValueError, TypeError):
-                            logger.warning(f"Invalid max_cooking_time value: {filters['max_cooking_time']}")
-                    
-                    if filters.get("max_calories"):
-                        try:
-                            max_cal = int(filters["max_calories"])
-                            where["calories"] = {"$lte": max_cal}
-                        except (ValueError, TypeError):
-                            logger.warning(f"Invalid max_calories value: {filters['max_calories']}")
-                    
-                    if filters.get("min_rating"):
-                        try:
-                            min_rating = float(filters["min_rating"])
-                            where["avg_rating"] = {"$gte": min_rating}
-                        except (ValueError, TypeError):
-                            logger.warning(f"Invalid min_rating value: {filters['min_rating']}")
-                except Exception as e:
-                    logger.error(f"Error building where clause: {e}")
-                    # Continue with empty where clause rather than failing
-                    where = {}
-            
-            # Combine query and ingredient for search
-            search_text = f"{query} {ingredient}".strip()
-            print("search text: ", search_text)
-            # If we have a search query, use semantic search
-            if search_text:
-                try:
-                    # Search in search collection with error handling - return up to 1000 results
-                    search_results = self.search_collection.query(
-                        query_texts=[search_text],
-                        where=where if where else None,
-                        n_results=1000,  # Increased to return up to 1000 results
-                        include=["metadatas", "distances"]
-                    )
-                except Exception as e:
-                    logger.error(f"Error during semantic search: {e}")
-                    return []
-                
-                if not search_results.get('metadatas'):
-                    return []
-                
-                # Get recipe IDs from search results
-                recipe_ids = []
-                recipe_scores = {}  # Store scores by recipe ID
-                
-                for i, metadata in enumerate(search_results['metadatas']):
-                    try:
-                        recipe_id = metadata.get('id')
-                        if not recipe_id:
-                            continue
-                            
-                        if self._is_cache_valid(metadata.get('cached_at')):
-                            recipe_ids.append(recipe_id)
-                            # Get distance from first query result
-                            distances = search_results.get('distances', [])
-                            if distances and len(distances) > 0 and i < len(distances[0]):
-                                distance = distances[0][i]
-                                recipe_scores[recipe_id] = 1 - distance  # Convert distance to similarity
-                            else:
-                                recipe_scores[recipe_id] = 1.0  # Default score if no distance
-                    except Exception as e:
-                        logger.error(f"Error processing search result metadata: {e}")
-                        continue
-                
-                if not recipe_ids:
-                    return []
-                
-                try:
-                    # Get full recipe data
-                    recipe_results = self.recipe_collection.get(
-                        ids=recipe_ids,
-                        include=["documents", "metadatas"]
-                    )
-                except Exception as e:
-                    logger.error(f"Error fetching recipe details: {e}")
-                    return []
-                
-                # Process results
-                all_recipes = []
-                seen_ids = set()
-                
-                if not recipe_results.get('documents'):
-                    return []
-                
-                for i, doc in enumerate(recipe_results['documents']):
-                    try:
-                        # Skip empty or invalid documents
-                        if not doc or not isinstance(doc, (str, dict)):
-                            logger.debug(f"Skipping invalid document at index {i}")
-                            continue
-                            
-                        # Parse JSON if needed
-                        if isinstance(doc, str):
-                            try:
-                                doc = doc.strip()
-                                if not doc:  # Skip empty strings
-                                    continue
-                                recipe = json.loads(doc)
-                            except json.JSONDecodeError as e:
-                                logger.error(f"Error decoding recipe JSON at index {i}: {e}")
-                                continue
-                        else:
-                            recipe = doc
-                            
-                        # Validate recipe structure
-                        if not isinstance(recipe, dict) or not recipe.get('id'):
-                            logger.debug(f"Skipping invalid recipe at index {i}")
-                            continue
-                            
-                        metadata = recipe_results['metadatas'][i] if i < len(recipe_results['metadatas']) else {}
-                        
-                        recipe_id = recipe.get('id')
-                        if not recipe_id or recipe_id in seen_ids or not self._is_cache_valid(metadata.get('cached_at')):
-                            logger.debug(f"Skipping recipe {recipe_id}: already seen or expired")
-                            continue
-                            
-                        # Calculate relevance score
-                        try:
-                            score = recipe_scores.get(recipe_id, 0.5)  # Default score if not found
-                            # Apply additional scoring logic
-                            score = self._calculate_relevance_score(score, recipe, query, ingredient)
-                            recipe['relevance_score'] = score
-                        except Exception as e:
-                            logger.error(f"Error calculating relevance score for recipe {recipe_id}: {e}")
-                            score = 1.0
-                        
-                        # Add score to recipe
-                        recipe['relevance_score'] = score
-                        all_recipes.append(recipe)
-                        seen_ids.add(recipe_id)
-                        
-                    except Exception as e:
-                        logger.error(f"Unexpected error processing recipe at index {i}: {e}", exc_info=True)
-                        continue
-                
-                # Sort by relevance score
-                try:
-                    all_recipes.sort(key=lambda x: x.get('relevance_score', 0), reverse=True)
-                except Exception as e:
-                    logger.error(f"Error sorting recipes: {e}")
-                
-                logger.info(f"Found {len(all_recipes)} matching recipes")
-                return all_recipes
-                
-            else:
-                # Just get all recipes matching filters
-                try:
-                    recipe_results = self.recipe_collection.get(
-                        where=where if where else None,
-                        include=["documents", "metadatas"]
-                    )
-                except Exception as e:
-                    logger.error(f"Error fetching all recipes: {e}")
-                    return []
-                
-                if not recipe_results.get('documents'):
-                    return []
-                
-                # Process results
-                all_recipes = []
-                seen_ids = set()
-                
-                for i, doc in enumerate(recipe_results['documents']):
-                    try:
-                        # Skip empty or invalid documents
-                        if not doc or not isinstance(doc, (str, dict)):
-                            logger.debug(f"Skipping invalid document at index {i}")
-                            continue
-                            
-                        # Parse JSON if needed
-                        if isinstance(doc, str):
-                            try:
-                                doc = doc.strip()
-                                if not doc:  # Skip empty strings
-                                    continue
-                                recipe = json.loads(doc)
-                            except json.JSONDecodeError as e:
-                                logger.error(f"Error decoding recipe JSON at index {i}: {e}")
-                                continue
-                        else:
-                            recipe = doc
-                            
-                        # Validate recipe structure
-                        if not isinstance(recipe, dict) or not recipe.get('id'):
-                            logger.debug(f"Skipping invalid recipe at index {i}")
-                            continue
-                            
-                        metadata = recipe_results['metadatas'][i] if i < len(recipe_results['metadatas']) else {}
-                        
-                        recipe_id = recipe.get('id')
-                        if not recipe_id or recipe_id in seen_ids or not self._is_cache_valid(metadata.get('cached_at')):
-                            logger.debug(f"Skipping recipe {recipe_id}: already seen or expired")
-                            continue
-                        
-                        all_recipes.append(recipe)
-                        seen_ids.add(recipe_id)
-                        
-                    except Exception as e:
-                        logger.error(f"Unexpected error processing recipe at index {i}: {e}", exc_info=True)
-                        continue
-                
-                logger.info(f"Found {len(all_recipes)} matching recipes")
-                return all_recipes
+            # Original search logic (commented out since search collection doesn't have full recipes):
+            # # Sanitize inputs
+            # query = (query or "").strip()
+            # ingredient = (ingredient or "").strip()
+            # filters = filters or {}
+            # 
+            # # Build where clause for filtering
+            # where = {}
+            # if filters:
+            #     try:
+            #         # Handle cuisine filter
+            #         if filters.get("cuisine"):
+            #             where["cuisines"] = {"$eq": filters["cuisine"]}
+            #         
+            #         # Handle other filters...
+            #         if filters.get("max_cooking_time"):
+            #             try:
+            #                 max_time = int(filters["max_cooking_time"])
+            #             where["cooking_time"] = {"$lte": max_time}
+            #         except (ValueError, TypeError):
+            #             logger.warning(f"Invalid max_cooking_time value: {filters['max_cooking_time']}")
+            #         
+            #         if filters.get("max_calories"):
+            #             try:
+            #             max_cal = int(filters["max_calories"])
+            #             where["calories"] = {"$lte": max_cal}
+            #         except (ValueError, TypeError):
+            #             logger.warning(f"Invalid max_calories value: {filters['max_calories']}")
+            #         
+            #         if filters.get("min_rating"):
+            #             try:
+            #             min_rating = float(filters["min_rating"])
+            #             where["avg_rating"] = {"$gte": min_rating}
+            #         except (ValueError, TypeError):
+            #             logger.warning(f"Invalid max_calories value: {filters['max_calories']}")
+            #     except Exception as e:
+            #         logger.error(f"Error building where clause: {e}")
+            #         # Continue with empty where clause rather than failing
+            #         where = {}
+            # 
+            # # Combine query and ingredient for search
+            # search_text = f"{query} {ingredient}".strip()
+            # print("search text: ", search_text)
+            # # If we have a search query, use semantic search
+            # if search_text:
+            #     try:
+            #         # Search in search collection with error handling - return up to 1000 results
+            #         search_results = self.search_collection.query(
+            #             query_texts=[search_text],
+            #             where=where if where else None,
+            #             n_results=1000,  # Increased to return up to 1000 results
+            #             include=["metadatas", "distances"]
+            #         )
+            #     except Exception as e:
+            #         logger.error(f"Error during semantic search: {e}")
+            #         # Fall back to getting all recipes if search fails
+            #         logger.info("Falling back to getting all recipes from cache")
+            #         return self._get_all_recipes_from_cache()
+            #     
+            #     if not search_results.get('metadatas'):
+            #         logger.info("No search results found, returning all recipes")
+            #         return self._get_all_recipes_from_cache()
+            #     
+            #     # Get recipe IDs from search results
+            #     recipe_ids = []
+            #     recipe_scores = {}  # Store scores by recipe ID
+            #     
+            #     for i, metadata in enumerate(search_results['metadatas']):
+            #         try:
+            #             recipe_id = metadata.get('id')
+            #             if not recipe_id:
+            #                 continue
+            #             
+            #             # TTL is disabled - don't check expiration
+            #             # if not self._is_cache_valid(metadata.get('cached_at')):
+            #             #     logger.debug(f"Skipping expired recipe: {recipe_id}")
+            #             #     continue
+            #             
+            #             recipe_ids.append(recipe_id)
+            #             # Get distance from first query result
+            #             distances = search_results.get('distances', [])
+            #             if distances and len(distances) > 0 and i < len(distances[0]):
+            #                 distance = distances[0][i]
+            #                 recipe_scores[recipe_id] = 1 - distance  # Convert distance to similarity
+            #             else:
+            #                 recipe_scores[recipe_id] = 1.0  # Default score if not found
+            #         except Exception as e:
+            #             logger.error(f"Error processing search result metadata: {e}")
+            #             continue
+            #     
+            #     if not recipe_ids:
+            #         logger.info("No valid recipe IDs found in search results, returning all recipes")
+            #         return self._get_all_recipes_from_cache()
+            #     
+            #     try:
+            #         # Get full recipe data
+            #         recipe_results = self.recipe_collection.get(
+            #             ids=recipe_ids,
+            #             include=["documents", "metadatas"]
+            #         )
+            #     except Exception as e:
+            #         logger.error(f"Error fetching recipe details: {e}")
+            #         return self._get_all_recipes_from_cache()
+            #     
+            #     # Process results
+            #     all_recipes = []
+            #     seen_ids = set()
+            #     
+            #     if not recipe_results.get('documents'):
+            #         return self._get_all_recipes_from_cache()
+            #     
+            #     for i, doc in enumerate(recipe_results['documents']):
+            #         try:
+            #             # Skip empty or invalid documents
+            #             if not doc or not isinstance(doc, (str, dict)):
+            #                 logger.debug(f"Skipping invalid document at index {i}")
+            #                 continue
+            #             
+            #             # Parse JSON if needed
+            #             if isinstance(doc, str):
+            #                 try:
+            #                     doc = doc.strip()
+            #                     if not doc:  # Skip empty strings
+            #                     continue
+            #                     recipe = json.loads(doc)
+            #                 except json.JSONDecodeError as e:
+            #                     logger.error(f"Error decoding recipe JSON at index {i}: {e}")
+            #                     continue
+            #             else:
+            #                 recipe = doc
+            #             
+            #             # Validate recipe structure
+            #             if not isinstance(recipe, dict) or not recipe.get('id'):
+            #                 logger.debug(f"Skipping invalid recipe at index {i}")
+            #                 continue
+            #             
+            #             metadata = recipe_results['metadatas'][i] if i < len(recipe_results['metadatas']) else {}
+            #             
+            #             recipe_id = recipe.get('id')
+            #             if not recipe_id or recipe_id in seen_ids:
+            #                 logger.debug(f"Skipping recipe {recipe_id}: already seen")
+            #                 continue
+            #             # TTL is disabled - don't check expiration
+            #             # if not self._is_cache_valid(metadata.get('cached_at')):
+            #             #     logger.debug(f"Skipping recipe {recipe_id}: expired")
+            #             #     continue
+            #             
+            #             # Calculate relevance score
+            #             try:
+            #                 score = recipe_scores.get(recipe_id, 0.5)  # Default score if not found
+            #                 # Apply additional scoring logic
+            #                 score = self._calculate_relevance_score(score, recipe, query, ingredient)
+            #                 recipe['relevance_score'] = score
+            #             except Exception as e:
+            #                 logger.error(f"Error calculating relevance score for recipe {recipe_id}: {e}")
+            #                 score = 1.0
+            #             
+            #             # Add score to recipe
+            #             recipe['relevance_score'] = score
+            #             all_recipes.append(recipe)
+            #             seen_ids.add(recipe_id)
+            #             
+            #         except Exception as e:
+            #             logger.error(f"Unexpected error processing recipe at index {i}: {e}", exc_info=True)
+            #             continue
+            #     
+            #     # Sort by relevance score
+            #     try:
+            #         all_recipes.sort(key=lambda x: x.get('relevance_score', 0), reverse=True)
+            #         return all_recipes
+            #     except Exception as e:
+            #         logger.error(f"Error sorting recipes: {e}")
+            #         return all_recipes
+            # else:
+            #     # No search query, return all recipes
+            #     return self._get_all_recipes_from_cache()
             
         except Exception as e:
-            logger.error(f"Error retrieving cached recipes: {e}")
+            logger.error(f"Error in get_cached_recipes: {e}")
             return []
 
     def _calculate_relevance_score(self, base_score: float, recipe: Dict[str, Any], query: str, ingredient: str) -> float:
@@ -602,8 +567,8 @@ class RecipeCacheService:
                         # Check if cache is still valid
                         if not self._is_cache_valid(meta.get('cached_at')):
                             logger.debug(f"Cache entry expired for recipe ID: {recipe_id}")
-                            # Schedule for cleanup
-                            asyncio.create_task(self._async_cleanup_recipe(recipe_id))
+                            # TTL is disabled - don't clean up expired recipes
+                            # asyncio.create_task(self._async_cleanup_recipe(recipe_id))
                             id_to_recipe[recipe_id] = None
                             continue
                             
@@ -717,10 +682,11 @@ class RecipeCacheService:
                 return None
                 
             # Check if cache is still valid
-            if not self._is_cache_valid(metadata.get('cached_at')):
-                logger.info(f"Cache entry expired for recipe ID: {recipe_id}")
-                self.recipe_collection.delete(ids=[recipe_id])
-                return None
+            # TTL is disabled - don't delete expired recipes
+            # if not self._is_cache_valid(metadata.get('cached_at')):
+            #     logger.info(f"Cache entry expired for recipe ID: {recipe_id}")
+            #     self.recipe_collection.delete(ids=[recipe_id])
+            #     return None
                 
             logger.debug(f"Successfully retrieved recipe from cache: {recipe.get('title', 'Untitled')} (ID: {recipe_id})")
             return recipe
@@ -736,73 +702,122 @@ class RecipeCacheService:
 
     def clear_expired_cache(self) -> int:
         """Clear expired cache entries and return number of entries cleared"""
-        cleared_count = 0
-        try:
-            # Clear expired search results
-            search_results = self.search_collection.get(
-                include=["metadatas", "ids"]
-            )
-            for i, metadata in enumerate(search_results['metadatas']):
-                if not self._is_cache_valid(metadata.get('cached_at')):
-                    self.search_collection.delete(ids=[search_results['ids'][i]])
-                    cleared_count += 1
-            
-            # Clear expired recipes
-            recipe_results = self.recipe_collection.get(
-                include=["metadatas", "ids"]
-            )
-            for i, metadata in enumerate(recipe_results['metadatas']):
-                if not self._is_cache_valid(metadata.get('cached_at')):
-                    self.recipe_collection.delete(ids=[recipe_results['ids'][i]])
-                    cleared_count += 1
-            
-            logger.info(f"Cleared {cleared_count} expired cache entries")
-            return cleared_count
-            
-        except Exception as e:
-            logger.error(f"Error clearing expired cache: {e}")
-            return cleared_count
+        # TTL is disabled - no recipes expire, so nothing to clear
+        logger.info("TTL is disabled - no recipes will expire from cache")
+        return 0
+        
+        # Original cleanup logic (commented out):
+        # cleared_count = 0
+        # try:
+        #     # Clear expired search results
+        #     search_results = self.search_collection.get(
+        #         include=["metadatas", "ids"]
+        #     )
+        #     for i, metadata in enumerate(search_results['metadatas']):
+        #         if not self._is_cache_valid(metadata.get('cached_at')):
+        #             self.search_collection.delete(ids=[search_results['ids'][i]])
+        #             cleared_count += 1
+        #     
+        #     # Clear expired recipes
+        #     recipe_results = self.recipe_collection.get(
+        #         include=["metadatas", "ids"]
+        #     )
+        #     for i, metadata in enumerate(recipe_results['metadatas']):
+        #         if not self._is_cache_valid(metadata.get('cached_at')):
+        #             self.recipe_collection.delete(ids=[recipe_results['ids'][i]])
+        #             cleared_count += 1
+        #     
+        #     logger.info(f"Cleared {cleared_count} expired cache entries")
+        #     return cleared_count
+        #     
+        # except Exception as e:
+        #     logger.error(f"Error clearing expired cache: {e}")
+        #     return cleared_count
 
     def get_cache_stats(self) -> Dict[str, Any]:
-        """Get cache statistics including TTL information"""
+        """Get comprehensive cache statistics"""
         stats = {
             "total_recipes": 0,
-            "total_searches": 0,
             "valid_recipes": 0,
+            "total_searches": 0,
             "valid_searches": 0,
-            "expired_entries": 0,
-            "cache_ttl_days": self.cache_ttl.days,
+            "cache_size_mb": 0,
             "last_cleanup": None
         }
         
         try:
-            # Get recipe stats
-            recipe_results = self.recipe_collection.get(
-                include=["metadatas"]
-            )
-            stats["total_recipes"] = len(recipe_results['metadatas'])
-            stats["valid_recipes"] = sum(
-                1 for m in recipe_results['metadatas'] 
-                if self._is_cache_valid(m.get('cached_at'))
+            if not self.client:
+                return stats
+                
+            # Get recipe collection stats
+            try:
+                recipe_count = self.recipe_collection.count()
+                stats["total_recipes"] = recipe_count
+                
+                # Count valid recipes (not expired)
+                if recipe_count > 0:
+                    # TTL is disabled - all recipes are valid
+                    stats["valid_recipes"] = recipe_count
+                    
+                    # Original TTL logic (commented out):
+                    # all_recipes = self.recipe_collection.get(include=['metadatas'])
+                    # valid_count = sum(
+                    #     1 for meta in all_recipes['metadatas']
+                    #     if meta and self._is_cache_valid(meta.get('cached_at', ''))
+                    # )
+                    # stats["valid_recipes"] = valid_count
+            except Exception as e:
+                logger.warning(f"Could not get recipe collection stats: {e}")
+                
+            # Get search collection stats
+            try:
+                search_count = self.search_collection.count()
+                stats["total_searches"] = search_count
+                
+                # Count valid searches (not expired)
+                if search_count > 0:
+                    # TTL is disabled - all searches are valid
+                    stats["valid_searches"] = search_count
+                    
+                    # Original TTL logic (commented out):
+                    # all_searches = self.search_collection.get(include=['metadatas'])
+                    # valid_count = sum(
+                    #     1 for meta in all_searches['metadatas']
+                    #     if meta and self._is_cache_valid(meta.get('cached_at', ''))
+                    # )
+                    # stats["valid_searches"] = valid_count
+            except Exception as e:
+                logger.warning(f"Could not get search collection stats: {e}")
+                
+            # Calculate cache size
+            try:
+                import os
+                cache_path = "./chroma_db"
+                if os.path.exists(cache_path):
+                    total_size = 0
+                    for dirpath, dirnames, filenames in os.walk(cache_path):
+                        for filename in filenames:
+                            filepath = os.path.join(dirpath, filename)
+                            if os.path.exists(filepath):
+                                total_size += os.path.getsize(filepath)
+                    stats["cache_size_mb"] = round(total_size / (1024 * 1024), 2)
+            except Exception as e:
+                logger.warning(f"Could not calculate cache size: {e}")
+                
+            # Calculate total valid entries
+            stats["total_valid_entries"] = (
+                stats["valid_recipes"] + 
+                stats["valid_searches"]
             )
             
-            # Get search stats
-            search_results = self.search_collection.get(
-                include=["metadatas"]
-            )
-            stats["total_searches"] = len(search_results['metadatas'])
-            stats["valid_searches"] = sum(
-                1 for m in search_results['metadatas']
-                if self._is_cache_valid(m.get('cached_at'))
-            )
-            
-            stats["expired_entries"] = (
+            # Calculate total expired entries
+            stats["total_expired_entries"] = (
                 (stats["total_recipes"] - stats["valid_recipes"]) +
                 (stats["total_searches"] - stats["valid_searches"])
             )
             
             # Get last cleanup time if available
-            cleanup_meta = self.client.get_collection("recipe_details_cache").get()
+            cleanup_meta = self.client.get_collection("recipe_search_cache").get()
             if cleanup_meta and cleanup_meta.get("last_cleanup"):
                 stats["last_cleanup"] = cleanup_meta["last_cleanup"]
             
@@ -810,4 +825,107 @@ class RecipeCacheService:
             
         except Exception as e:
             logger.error(f"Error getting cache stats: {e}")
-            return stats 
+            return stats
+
+    def get_recipe_count(self) -> Dict[str, Any]:
+        """Get the count of recipes in the cache"""
+        try:
+            if not self.client or not self.recipe_collection:
+                return {"total": 0, "valid": 0, "expired": 0}
+                
+            total_count = self.recipe_collection.count()
+            
+            # Count valid recipes (not expired)
+            valid_count = 0
+            if total_count > 0:
+                all_recipes = self.recipe_collection.get(include=['metadatas'])
+                valid_count = sum(
+                    1 for meta in all_recipes['metadatas']
+                    if meta and self._is_cache_valid(meta.get('cached_at', ''))
+                )
+            
+            expired_count = total_count - valid_count
+            
+            return {
+                "total": total_count,
+                "valid": valid_count,
+                "expired": expired_count
+            }
+            
+        except Exception as e:
+            logger.error(f"Error getting recipe count: {e}")
+            return {"total": 0, "valid": 0, "expired": 0}
+
+    def _get_all_recipes_from_cache(self, where: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """Get all recipes from cache with optional filtering"""
+        try:
+            if not self.client or not self.recipe_collection:
+                logger.warning("ChromaDB collections not initialized")
+                return []
+            
+            # Get all recipes from the recipe collection
+            try:
+                recipe_results = self.recipe_collection.get(
+                    where=where if where else None,
+                    include=["documents", "metadatas"]
+                )
+            except Exception as e:
+                logger.error(f"Error fetching all recipes: {e}")
+                return []
+            
+            if not recipe_results.get('documents'):
+                return []
+            
+            # Process results
+            all_recipes = []
+            seen_ids = set()
+            
+            for i, doc in enumerate(recipe_results['documents']):
+                try:
+                    # Skip empty or invalid documents
+                    if not doc or not isinstance(doc, (str, dict)):
+                        logger.debug(f"Skipping invalid document at index {i}")
+                        continue
+                        
+                    # Parse JSON if needed
+                    if isinstance(doc, str):
+                        try:
+                            doc = doc.strip()
+                            if not doc:  # Skip empty strings
+                                continue
+                            recipe = json.loads(doc)
+                        except json.JSONDecodeError as e:
+                            logger.error(f"Error decoding recipe JSON at index {i}: {e}")
+                            continue
+                    else:
+                        recipe = doc
+                        
+                    # Validate recipe structure
+                    if not isinstance(recipe, dict) or not recipe.get('id'):
+                        logger.debug(f"Skipping invalid recipe at index {i}")
+                        continue
+                        
+                    metadata = recipe_results['metadatas'][i] if i < len(recipe_results['metadatas']) else {}
+                    
+                    recipe_id = recipe.get('id')
+                    if not recipe_id or recipe_id in seen_ids:
+                        logger.debug(f"Skipping recipe {recipe_id}: already seen")
+                        continue
+                    # TTL is disabled - don't check expiration
+                    # if not self._is_cache_valid(metadata.get('cached_at')):
+                    #     logger.debug(f"Skipping recipe {recipe_id}: expired")
+                    #     continue
+                    
+                    all_recipes.append(recipe)
+                    seen_ids.add(recipe_id)
+                    
+                except Exception as e:
+                    logger.error(f"Unexpected error processing recipe at index {i}: {e}", exc_info=True)
+                    continue
+            
+            logger.info(f"Found {len(all_recipes)} recipes in cache")
+            return all_recipes
+            
+        except Exception as e:
+            logger.error(f"Error in _get_all_recipes_from_cache: {e}")
+            return [] 

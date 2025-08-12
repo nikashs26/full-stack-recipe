@@ -131,6 +131,13 @@ def build_llama_prompt(preferences, budget=None, dietary_goals=None, currency='$
 
     USER PREFERENCES:
     {json.dumps(preferences_summary, indent=2)}
+    
+    IMPORTANT INSTRUCTIONS:
+    1. FAVORITE FOODS ARE THE HIGHEST PRIORITY - Include user's favorite foods in multiple meals throughout the week
+    2. Cuisine preferences are secondary to favorite foods - don't force cuisine variety if it means excluding favorite foods
+    3. Ensure favorite foods appear in at least 50% of the meals when possible
+    4. Balance nutritional requirements while maximizing favorite food inclusion
+    5. Variety in cuisines is good but should not override favorite food preferences
     """
     
     # Prepare the format instructions

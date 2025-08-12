@@ -6,7 +6,7 @@ const testRecommendationsAPI = async () => {
   try {
     console.log('📡 Making API call to /api/recommendations...');
     
-    const response = await fetch('http://localhost:5004/api/recommendations?limit=5', {
+    const response = await fetch('http://localhost:5003/api/recommendations?limit=5', {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
@@ -40,7 +40,7 @@ const testFrontendAPI = async () => {
     console.log('📡 Testing frontend-style API call...');
     
     // Simulate the frontend's apiCall function
-    const API_BASE_URL = 'http://localhost:5004/api';
+    const API_BASE_URL = 'http://localhost:5003/api';
     const token = localStorage.getItem('auth_token');
     
     console.log('🔑 Token present:', !!token);

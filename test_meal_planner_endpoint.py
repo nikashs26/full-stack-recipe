@@ -9,7 +9,7 @@ def test_meal_planner_endpoint():
     print("Testing meal planner endpoint...")
     
     # Test the endpoint
-    url = "http://localhost:5004/api/ai/simple_meal_plan"
+    url = "http://localhost:5003/api/ai/simple_meal_plan"
     
     # Test with a simple POST request
     try:

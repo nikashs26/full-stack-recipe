@@ -3,49 +3,46 @@
   "successful_analyses": 3,
   "failed_analyses": 0,
   "success_rate": 1.0,
-  "generated_at": "2025-08-12T07:41:05.433231",
+  "generated_at": "2025-08-12T21:41:20.537020",
   "results": [
     {
       "recipe_id": "test-001",
       "title": "Chicken Stir Fry",
       "nutrition": {
-        "calories": 340.0,
+        "calories": 350.0,
         "carbohydrates": 12.0,
         "fat": 14.0,
-        "protein": 43.0
+        "protein": 40.0
       },
-      "analyzed_at": "2025-08-12T07:40:57.221762",
+      "analyzed_at": "2025-08-12T21:41:16.536415",
       "llm_service": "ollama",
-      "status": "success",
-      "attempts": 1
+      "status": "success"
     },
     {
       "recipe_id": "test-002",
       "title": "Simple Pasta",
       "nutrition": {
-        "calories": 350.0,
-        "carbohydrates": 64.0,
-        "fat": 14.0,
+        "calories": 520.0,
+        "carbohydrates": 84.6,
+        "fat": 31.8,
         "protein": 20.0
       },
-      "analyzed_at": "2025-08-12T07:41:01.328112",
+      "analyzed_at": "2025-08-12T21:41:17.985772",
       "llm_service": "ollama",
-      "status": "success",
-      "attempts": 1
+      "status": "success"
     },
     {
       "recipe_id": "test-003",
       "title": "Greek Salad",
       "nutrition": {
-        "calories": 220.0,
-        "carbohydrates": 12.0,
-        "fat": 18.0,
-        "protein": 4.0
+        "calories": 140.0,
+        "carbohydrates": 10.0,
+        "fat": 8.0,
+        "protein": 3.0
       },
-      "analyzed_at": "2025-08-12T07:41:05.432737",
+      "analyzed_at": "2025-08-12T21:41:20.536058",
       "llm_service": "ollama",
-      "status": "success",
-      "attempts": 1
+      "status": "success"
     }
   ]
 }

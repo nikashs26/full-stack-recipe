@@ -233,14 +233,15 @@ USER PREFERENCES:
 - Cooking Skill Level: {cooking_skill}
 - Max Cooking Time: {max_cooking_time}
 
-REQUIREMENTS:
-1. Provide exactly 21 meals (3 per day for 7 days)
-2. Ensure nutritional balance and variety
-3. Respect all dietary restrictions and allergens
-4. Match cooking complexity to skill level
-5. Include diverse cuisines and cooking methods
-6. Incorporate favorite foods when possible
-7. Keep cooking time within the specified limit
+CRITICAL REQUIREMENTS (in order of priority):
+1. FAVORITE FOODS ARE THE HIGHEST PRIORITY - Include user's favorite foods in at least 50% of all meals
+2. Don't force cuisine variety if it means excluding favorite foods
+3. Provide exactly 21 meals (3 per day for 7 days)
+4. Ensure nutritional balance and variety
+5. Respect all dietary restrictions and allergens
+6. Match cooking complexity to skill level
+7. Include diverse cuisines and cooking methods (but secondary to favorite foods)
+8. Keep cooking time within the specified limit
 
 FORMAT your response as a JSON object with this exact structure:
 {{
@@ -265,6 +266,7 @@ FORMAT your response as a JSON object with this exact structure:
 }}
 
 Start with Monday and continue through Sunday. Each day should have breakfast, lunch, and dinner.
+REMEMBER: Favorite foods should appear frequently throughout the week, even if it means repeating some cuisines.
 """
         
         return prompt

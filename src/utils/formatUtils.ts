@@ -57,8 +57,10 @@ export const formatInstructions = (instructions: string): string[] => {
   // Clean HTML tags
   const cleanInstructions = instructions.replace(/<[^>]*>/g, '');
   
-  // Split by periods followed by space, or by numbered steps
-  const possibleSteps = cleanInstructions.split(/\.\s+|\d+\.\s+/).filter(step => step.trim().length > 0);
+  // More intelligent splitting that looks for actual step numbers, not just any number
+  // Look for numbers at the beginning of lines or after periods, but not in the middle of sentences
+  const stepPattern = /(?:\b(?:Step\s*)?\d+[.)]|\n\s*\d+[.)]|^\s*\d+[.)])/;
+  const possibleSteps = cleanInstructions.split(stepPattern).filter(step => step.trim().length > 0);
   
   // If we have very few steps, try to further split long steps
   if (possibleSteps.length < 3 && possibleSteps.some(step => step.length > 100)) {

@@ -112,17 +112,18 @@ def parse_instructions(instructions: str) -> Dict[str, Any]:
     if not instructions:
         return {'description': '', 'steps': []}
     
-    # Clean up the instructions
-    instructions = ' '.join(instructions.split())  # Normalize whitespace
+    # Clean up the instructions - preserve original structure but normalize whitespace
+    instructions = instructions.replace('\r\n', '\n').replace('\r', '\n')
     
-    # First, try to split by numbered steps (e.g., "1.", "1)", "Step 1:")
+    # First, try to split by actual numbered steps (e.g., "1.", "1)", "Step 1:")
     import re
     
-    # Pattern to match numbered steps with optional dots/parentheses
-    step_pattern = r'(?:\b(?:Step\s*)?\d+[.)]|\d+\s*[.)]|\*\s*|\n\s*\n)'
+    # Look for actual step numbers at the beginning of lines or after periods
+    # This pattern is more conservative and won't split on measurements
+    step_pattern = r'(?:\n\s*\d+[.)]|\A\s*\d+[.)])'
     
     # Split by the step pattern
-    raw_steps = re.split(f'({step_pattern})', instructions, flags=re.IGNORECASE)
+    raw_steps = re.split(f'({step_pattern})', instructions, flags=re.MULTILINE)
     
     # Clean up the split results
     steps = []
@@ -134,7 +135,7 @@ def parse_instructions(instructions: str) -> Dict[str, Any]:
             continue
             
         # If this part is a step number/indicator
-        if re.match(f'^{step_pattern}$', part, flags=re.IGNORECASE):
+        if re.match(f'^{step_pattern}$', part, flags=re.MULTILINE):
             if current_step:  # Save the previous step if exists
                 steps.append(current_step.strip())
             current_step = part + ' '  # Start new step with the number
@@ -147,35 +148,73 @@ def parse_instructions(instructions: str) -> Dict[str, Any]:
     
     # If we couldn't split by numbers, try other methods
     if len(steps) <= 1:
-        # Try splitting by double newlines first
+        # Try splitting by double newlines first (preserve natural paragraph breaks)
         steps = [s.strip() for s in instructions.split('\n\n') if s.strip()]
         
-        # If that doesn't work, try splitting by periods that end a sentence
+        # If that doesn't work, try splitting by single newlines that look like step separators
         if len(steps) <= 1:
-            sentences = re.split(r'(?<=[.!?])\s+(?=[A-Z])', instructions)
-            steps = [s for s in sentences if s.strip()]
+            # Look for newlines that are followed by capital letters (likely new steps)
+            steps = [s.strip() for s in re.split(r'\n(?=\s*[A-Z])', instructions) if s.strip()]
     
-    # Clean up each step
-    steps = [re.sub(r'^\s*\d+[.)]?\s*', '', s).strip() for s in steps if s.strip()]
+    # Clean up each step - remove leading numbers and normalize
+    cleaned_steps = []
+    for step in steps:
+        if step:
+            # Remove leading step numbers
+            cleaned_step = re.sub(r'^\s*\d+[.)]?\s*', '', step).strip()
+            if cleaned_step:
+                # Normalize whitespace within the step
+                cleaned_step = ' '.join(cleaned_step.split())
+                cleaned_steps.append(cleaned_step)
+    
+    # If we still don't have multiple steps, try to split by cooking action keywords
+    if len(cleaned_steps) <= 1 and instructions:
+        # Look for common cooking instruction patterns that indicate new steps
+        cooking_keywords = [
+            'preheat', 'heat', 'add', 'stir', 'mix', 'combine', 'pour', 'bake', 'cook', 'fry',
+            'grill', 'roast', 'boil', 'simmer', 'season', 'salt', 'pepper', 'drain', 'remove',
+            'serve', 'garnish', 'decorate', 'cool', 'chill', 'refrigerate', 'freeze', 'place',
+            'transfer', 'return', 'bring', 'lower', 'cover', 'uncover', 'flip', 'turn'
+        ]
+        
+        # Split by sentences that contain cooking keywords
+        sentences = re.split(r'[.!?]+', instructions)
+        for sentence in sentences:
+            sentence = sentence.strip()
+            if sentence and len(sentence) > 15:  # Only meaningful sentences
+                # Check if sentence contains cooking keywords
+                if any(keyword in sentence.lower() for keyword in cooking_keywords):
+                    cleaned_steps.append(sentence)
+    
+    # If all else fails, try to split by periods that end sentences
+    if len(cleaned_steps) <= 1:
+        # More intelligent sentence splitting that doesn't break on measurements
+        # Look for periods followed by space and capital letter, but avoid breaking on measurements
+        sentences = re.split(r'(?<=[.!?])\s+(?=[A-Z][a-z])', instructions)
+        cleaned_steps = [s.strip() for s in sentences if s.strip() and len(s.strip()) > 20]
+    
+    # Ensure we have at least one step
+    if not cleaned_steps:
+        cleaned_steps = [instructions.strip()]
     
     # Number the steps properly
-    steps = [f"{i+1}. {step}" for i, step in enumerate(steps)]
+    numbered_steps = [f"{i+1}. {step}" for i, step in enumerate(cleaned_steps)]
     
     # If we have multiple steps, use the first one as description if it's short enough
     description = ''
-    if steps:
-        if len(steps) > 1 and len(steps[0].split()) < 30:  # First step is short
-            description = steps[0]
-            steps = steps[1:]
-        elif len(steps[0].split()) > 50:  # First step is too long, split it
-            words = steps[0].split()
+    if numbered_steps:
+        if len(numbered_steps) > 1 and len(numbered_steps[0].split()) < 30:  # First step is short
+            description = numbered_steps[0]
+            numbered_steps = numbered_steps[1:]
+        elif len(numbered_steps[0].split()) > 50:  # First step is too long, split it
+            words = numbered_steps[0].split()
             split_point = len(words) // 2
             description = ' '.join(words[:split_point]).strip()
-            steps[0] = ' '.join(words[split_point:]).strip()
+            numbered_steps[0] = ' '.join(words[split_point:]).strip()
     
     return {
         'description': description,
-        'steps': steps
+        'steps': numbered_steps
     }
 
 def enhance_recipe(recipe: Dict[str, Any]) -> Dict[str, Any]:

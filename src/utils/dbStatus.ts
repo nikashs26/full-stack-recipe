@@ -42,7 +42,7 @@ export const getDatabaseStatus = async (): Promise<{
   try {
     // First try direct API endpoint for testing ChromaDB
     try {
-      const testResponse = await fetch('http://localhost:5004/api/health');
+      const testResponse = await fetch('http://localhost:5003/api/health');
       if (testResponse.ok) {
         const testData = await testResponse.json();
         console.log("ChromaDB health check:", testData);

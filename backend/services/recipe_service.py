@@ -325,15 +325,60 @@ class RecipeService:
             # Handle instructions - split into steps if they're numbered
             instructions = recipe_data.get('strInstructions', '')
             if instructions:
-                # Split by newlines and filter out empty lines
-                steps = [step.strip() for step in str(instructions).split('\n') if step.strip()]
-                # If there's only one step, try splitting by numbers or bullet points
-                if len(steps) == 1:
-                    import re
-                    # Split by numbers followed by a dot or parenthesis
-                    steps = re.split(r'\d+[\.\)]\s*', steps[0])
-                    # Filter out empty steps
-                    steps = [step.strip() for step in steps if step.strip()]
+                # First try to split by common step separators
+                import re
+                
+                # Try different patterns for step separation
+                # Pattern 1: Numbers followed by dots or parentheses (e.g., "1.", "1)", "1 -")
+                steps_pattern1 = re.split(r'\d+[\.\)\-\s]+', instructions)
+                
+                # Pattern 2: Split by double newlines or periods followed by newlines
+                steps_pattern2 = re.split(r'\.\s*\n|\n\s*\n', instructions)
+                
+                # Pattern 3: Split by single newlines
+                steps_pattern3 = instructions.split('\n')
+                
+                # Choose the best pattern based on which one gives us the most non-empty steps
+                all_patterns = [steps_pattern1, steps_pattern2, steps_pattern3]
+                best_pattern = max(all_patterns, key=lambda x: len([s for s in x if s.strip()]))
+                
+                # Clean up the steps
+                steps = []
+                for step in best_pattern:
+                    step = step.strip()
+                    if step and len(step) > 5:  # Only include steps with meaningful content
+                        # Remove leading numbers, dots, dashes, etc.
+                        step = re.sub(r'^[\d\.\)\-\s]+', '', step).strip()
+                        if step:
+                            steps.append(step)
+                
+                # If we still don't have multiple steps, try to split by common cooking instruction keywords
+                if len(steps) <= 1 and instructions:
+                    # Look for common cooking instruction patterns
+                    cooking_keywords = [
+                        'preheat', 'heat', 'add', 'stir', 'mix', 'combine', 'pour', 'bake', 'cook', 'fry',
+                        'grill', 'roast', 'boil', 'simmer', 'season', 'salt', 'pepper', 'drain', 'remove',
+                        'serve', 'garnish', 'decorate', 'cool', 'chill', 'refrigerate', 'freeze'
+                    ]
+                    
+                    # Split by sentences that contain cooking keywords
+                    sentences = re.split(r'[.!?]+', instructions)
+                    for sentence in sentences:
+                        sentence = sentence.strip()
+                        if sentence and len(sentence) > 10:  # Only meaningful sentences
+                            # Check if sentence contains cooking keywords
+                            if any(keyword in sentence.lower() for keyword in cooking_keywords):
+                                steps.append(sentence)
+                
+                # If all else fails, just split by periods and clean up
+                if len(steps) <= 1:
+                    sentences = re.split(r'[.!?]+', instructions)
+                    steps = [s.strip() for s in sentences if s.strip() and len(s.strip()) > 10]
+                
+                # Ensure we have at least one step
+                if not steps:
+                    steps = [instructions.strip()]
+                    
             else:
                 steps = ['No instructions provided.']
             
@@ -732,9 +777,12 @@ class RecipeService:
         # Check instructions if available
         instructions = recipe.get('instructions', '')
         if isinstance(instructions, list):
-            instructions = ' '.join(str(step) for step in instructions)
-        instructions = str(instructions).lower()
-        if any(term in instructions for term in query_terms):
+            # Create a copy of instructions for search without modifying the original
+            search_instructions = ' '.join(str(step) for step in instructions)
+        else:
+            search_instructions = str(instructions)
+        search_instructions = search_instructions.lower()
+        if any(term in search_instructions for term in query_terms):
             return True
             
         # Check tags if available
@@ -787,7 +835,7 @@ class RecipeService:
                    f"offset: {offset}, limit: {limit}")
         
         # Get all recipes from cache
-        all_recipes = self.recipe_cache.get_cached_recipes()
+        all_recipes = self.recipe_cache.get_cached_recipes(query, ingredient)
         if not all_recipes:
             logger.warning("No recipes found in cache")
             return []
@@ -825,6 +873,123 @@ class RecipeService:
             
             all_recipes = filtered_recipes
             logger.info(f"Filtered to {len(all_recipes)} recipes matching favorite foods")
+        
+        # Apply preference-based scoring and balancing
+        if cuisines or favorite_foods:
+            # Normalize cuisine preferences to lowercase for consistent comparison
+            normalized_cuisines = [c.lower().strip() for c in cuisines] if cuisines else []
+            
+            # Score recipes based on preferences
+            scored_recipes = []
+            for recipe in all_recipes:
+                score = 0
+                
+                # Score based on cuisine preferences
+                if normalized_cuisines:
+                    recipe_cuisines = []
+                    if 'cuisines' in recipe and isinstance(recipe['cuisines'], list):
+                        recipe_cuisines.extend([c.lower().strip() for c in recipe['cuisines'] if isinstance(c, str)])
+                    if 'cuisine' in recipe and isinstance(recipe['cuisine'], list):
+                        recipe_cuisines.extend([c.lower().strip() for c in recipe['cuisine'] if isinstance(c, str)])
+                    
+                    for pref_cuisine in normalized_cuisines:
+                        if pref_cuisine in recipe_cuisines:
+                            score += 10  # High score for cuisine match
+                            break
+                
+                # Score based on favorite foods
+                if favorite_foods:
+                    recipe_text = f"{recipe.get('title', '')} {recipe.get('description', '')}".lower()
+                    for food in favorite_foods:
+                        if food.lower() in recipe_text:
+                            score += 5  # Medium score for food match
+                            break
+                
+                scored_recipes.append((recipe, score))
+            
+            # Sort by score (highest first)
+            scored_recipes.sort(key=lambda x: x[1], reverse=True)
+            
+            # Balance the results to ensure even distribution
+            if normalized_cuisines and len(normalized_cuisines) > 1:
+                balanced_recipes = []
+                cuisine_counts = {cuisine: 0 for cuisine in normalized_cuisines}
+                max_per_cuisine = max(1, limit // len(normalized_cuisines))  # Ensure even distribution
+                
+                logger.info(f"Balancing {len(normalized_cuisines)} cuisines with max {max_per_cuisine} per cuisine")
+                
+                # Group recipes by cuisine for better balancing
+                cuisine_groups = {cuisine: [] for cuisine in normalized_cuisines}
+                other_recipes = []
+                
+                for recipe, score in scored_recipes:
+                    recipe_cuisines = []
+                    if 'cuisines' in recipe and isinstance(recipe['cuisines'], list):
+                        recipe_cuisines.extend([c.lower().strip() for c in recipe['cuisines'] if isinstance(c, str)])
+                    if 'cuisine' in recipe and isinstance(recipe['cuisine'], list):
+                        recipe_cuisines.extend([c.lower().strip() for c in recipe['cuisine'] if isinstance(c, str)])
+                    
+                    # Find which preference cuisine this recipe matches
+                    matched_cuisine = None
+                    for pref_cuisine in normalized_cuisines:
+                        if pref_cuisine in recipe_cuisines:
+                            matched_cuisine = pref_cuisine
+                            break
+                    
+                    if matched_cuisine:
+                        cuisine_groups[matched_cuisine].append((recipe, score))
+                    else:
+                        other_recipes.append((recipe, score))
+                
+                # Sort each cuisine group by score
+                for cuisine in normalized_cuisines:
+                    cuisine_groups[cuisine].sort(key=lambda x: x[1], reverse=True)
+                
+                # Round-robin selection to ensure even distribution
+                round_num = 0
+                while len(balanced_recipes) < limit:
+                    added_in_round = False
+                    
+                    for cuisine in normalized_cuisines:
+                        if len(balanced_recipes) >= limit:
+                            break
+                        if cuisine_counts[cuisine] < max_per_cuisine and round_num < len(cuisine_groups[cuisine]):
+                            recipe, score = cuisine_groups[cuisine][round_num]
+                            balanced_recipes.append(recipe)
+                            cuisine_counts[cuisine] += 1
+                            added_in_round = True
+                            logger.debug(f"Added {recipe.get('title', 'Unknown')} for {cuisine} cuisine (round {round_num}, count: {cuisine_counts[cuisine]})")
+                    
+                    if not added_in_round:
+                        break  # No more recipes to add
+                    
+                    round_num += 1
+                
+                # Fill remaining slots with any remaining recipes, still respecting cuisine limits
+                for cuisine in normalized_cuisines:
+                    if len(balanced_recipes) >= limit:
+                        break
+                    
+                    start_idx = cuisine_counts[cuisine]
+                    for i in range(start_idx, len(cuisine_groups[cuisine])):
+                        if len(balanced_recipes) >= limit:
+                            break
+                        if cuisine_counts[cuisine] < max_per_cuisine:
+                            recipe, score = cuisine_groups[cuisine][i]
+                            balanced_recipes.append(recipe)
+                            cuisine_counts[cuisine] += 1
+                
+                # Add other recipes if we still have space
+                for recipe, score in other_recipes:
+                    if len(balanced_recipes) >= limit:
+                        break
+                    balanced_recipes.append(recipe)
+                
+                all_recipes = balanced_recipes
+                logger.info(f"Balanced results: {len(all_recipes)} recipes with cuisine distribution: {cuisine_counts}")
+            else:
+                # No balancing needed, just use scored results
+                all_recipes = [recipe for recipe, score in scored_recipes]
         
         # Filter recipes based on query, ingredient, cuisine, and dietary restrictions
         filtered_recipes = []

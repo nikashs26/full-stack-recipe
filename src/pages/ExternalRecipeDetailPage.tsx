@@ -25,27 +25,6 @@ const ExternalRecipeDetailPage: React.FC = () => {
   // Determine the source from location state or default to spoonacular
   const source = (location.state as ExternalRecipeDetailLocationState)?.source || 'spoonacular';
   
-  // Handle back navigation with state preservation
-  const handleBackNavigation = () => {
-    // Check if we have navigation state to return to
-    if (location.state && location.state.returnPath) {
-      // Navigate back to the recipes page with preserved state
-      navigate('/recipes', { 
-        state: {
-          searchTerm: location.state.searchTerm || '',
-          searchQuery: location.state.searchQuery || '',
-          ingredientSearch: location.state.ingredientSearch || '',
-          selectedCuisines: location.state.selectedCuisines || [],
-          selectedDiets: location.state.selectedDiets || [],
-          currentPage: location.state.currentPage || 1
-        }
-      });
-    } else {
-      // Fallback to recipes page
-      navigate('/recipes');
-    }
-  };
-
   const { data: recipe, isLoading, error } = useQuery({
     queryKey: ['external-recipe', source, id],
     queryFn: async () => {
@@ -351,11 +330,16 @@ const ExternalRecipeDetailPage: React.FC = () => {
         .trim();
       
       if (cleanInstructions.length > 20) {
-        const numberedSteps = cleanInstructions.split(/\d+\.\s+/).filter(step => step.trim().length > 15);
+        // More intelligent splitting that looks for actual step numbers, not just any number
+        // Look for numbers at the beginning of lines or after periods, but not in the middle of sentences
+        const stepPattern = /(?:\b(?:Step\s*)?\d+[.)]|\n\s*\d+[.)]|^\s*\d+[.)])/;
+        const numberedSteps = cleanInstructions.split(stepPattern).filter(step => step.trim().length > 15);
         if (numberedSteps.length > 1) {
           return numberedSteps.slice(1);
         } else {
-          const sentences = cleanInstructions.split(/\.\s+(?=[A-Z])/).filter(step => step.trim().length > 20);
+          // More intelligent sentence splitting that doesn't break on measurements
+          // Look for periods followed by space and capital letter, but avoid breaking on measurements
+          const sentences = cleanInstructions.split(/\.\s+(?=[A-Z][a-z])/).filter(step => step.trim().length > 20);
           if (sentences.length > 1) {
             return sentences.map(sentence => sentence.endsWith('.') ? sentence : sentence + '.');
           } else {
@@ -387,19 +371,19 @@ const ExternalRecipeDetailPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
-      
       <main className="pt-24 md:pt-28">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {/* Back Navigation */}
-          <div className="flex flex-col sm:flex-row gap-3 mb-6">
-            <Button onClick={handleBackNavigation} variant="outline" className="w-full sm:w-auto">
-              <ArrowLeft className="mr-2 h-4 w-4" /> Back to recipes
-            </Button>
-            <Button onClick={() => navigate('/recipes')} variant="default" className="w-full sm:w-auto">
-              Browse all recipes
+          <div className="mb-6">
+            <Button 
+              variant="outline" 
+              onClick={() => navigate('/recipes')}
+              className="mb-4"
+            >
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to Recipes
             </Button>
           </div>
-          
+
           {/* Recipe header */}
           <div className="bg-white shadow-sm rounded-lg overflow-hidden">
             <div className="relative h-64 md:h-96 w-full">

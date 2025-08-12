@@ -25,81 +25,71 @@ class NutritionAnalysisAgent:
         self.ollama_url = os.getenv('OLLAMA_URL', 'http://localhost:11434')
         self.hf_api_key = os.getenv('HUGGING_FACE_API_KEY')
         
-        # Use only Ollama for free, reliable analysis
+        # Priority order for LLM services (Ollama first since it's working)
         self.llm_services = [
-            ('ollama', self._analyze_with_ollama)
+            ('ollama', self._analyze_with_ollama),
+            ('openai', self._analyze_with_openai),
+            ('huggingface', self._analyze_with_huggingface)
         ]
         
-        logger.info("Nutrition Analysis Agent initialized - using Ollama (free local model)")
+        logger.info("Nutrition Analysis Agent initialized")
     
-    async def analyze_recipe_nutrition(self, recipe: Dict[str, Any], max_retries: int = 2) -> Dict[str, Any]:
+    async def analyze_recipe_nutrition(self, recipe: Dict[str, Any]) -> Dict[str, Any]:
         """
         Analyze a single recipe to extract nutritional information.
         
         Args:
             recipe: Recipe dictionary containing ingredients, instructions, etc.
-            max_retries: Maximum number of retry attempts for failed analysis
             
         Returns:
             Dictionary with nutritional information and analysis metadata
         """
-        for attempt in range(max_retries + 1):
-            try:
-                logger.info(f"Analyzing nutrition for recipe: {recipe.get('title', 'Unknown')} (attempt {attempt + 1})")
-                
-                # Prepare recipe data for analysis
-                recipe_text = self._prepare_recipe_for_analysis(recipe)
-                
-                # Try each LLM service in order
-                for service_name, service_func in self.llm_services:
-                    try:
-                        logger.info(f"Attempting analysis with {service_name}")
-                        nutrition_data = await service_func(recipe_text, recipe)
-                        
-                        if nutrition_data and self._validate_nutrition_data(nutrition_data):
-                            logger.info(f"Successfully analyzed recipe with {service_name}")
-                            return {
-                                'recipe_id': recipe.get('id'),
-                                'title': recipe.get('title'),
-                                'nutrition': nutrition_data,
-                                'analyzed_at': datetime.utcnow().isoformat(),
-                                'llm_service': service_name,
-                                'status': 'success',
-                                'attempts': attempt + 1
-                            }
-                            
-                    except Exception as e:
-                        logger.warning(f"Failed to analyze with {service_name}: {e}")
-                        continue
-                
-                # If all services fail, log the attempt
-                if attempt < max_retries:
-                    logger.warning(f"Attempt {attempt + 1} failed, retrying...")
-                    await asyncio.sleep(1)  # Brief delay before retry
-                else:
-                    logger.error("All LLM services failed for recipe analysis after all retries")
-                    return {
-                        'recipe_id': recipe.get('id'),
-                        'title': recipe.get('title'),
-                        'status': 'error',
-                        'error': 'All LLM services failed after retries',
-                        'analyzed_at': datetime.utcnow().isoformat(),
-                        'attempts': attempt + 1
-                    }
+        try:
+            logger.info(f"Analyzing nutrition for recipe: {recipe.get('title', 'Unknown')}")
+            
+            # Prepare recipe data for analysis
+            recipe_text = self._prepare_recipe_for_analysis(recipe)
+            
+            # Try each LLM service in order
+            for service_name, service_func in self.llm_services:
+                try:
+                    logger.info(f"Attempting analysis with {service_name}")
+                    nutrition_data = await service_func(recipe_text, recipe)
                     
-            except Exception as e:
-                logger.error(f"Unexpected error analyzing recipe (attempt {attempt + 1}): {e}")
-                if attempt < max_retries:
-                    await asyncio.sleep(1)
-                else:
-                    return {
-                        'recipe_id': recipe.get('id'),
-                        'title': recipe.get('title'),
-                        'status': 'error',
-                        'error': str(e),
-                        'analyzed_at': datetime.utcnow().isoformat(),
-                        'attempts': attempt + 1
-                    }
+                    if nutrition_data and self._validate_nutrition_data(nutrition_data):
+                        logger.info(f"Successfully analyzed recipe with {service_name}")
+                        return {
+                            'recipe_id': recipe.get('id'),
+                            'title': recipe.get('title'),
+                            'nutrition': nutrition_data,
+                            'analyzed_at': datetime.utcnow().isoformat(),
+                            'llm_service': service_name,
+                            'status': 'success'
+                        }
+                        
+                except Exception as e:
+                    logger.warning(f"Failed to analyze with {service_name}: {e}")
+                    continue
+            
+            # If all services fail, return error
+            logger.error("All LLM services failed for recipe analysis")
+            return {
+                'recipe_id': recipe.get('id'),
+                'title': recipe.get('title'),
+                'status': 'error',
+                'error': 'All LLM services failed',
+                'analyzed_at': datetime.utcnow().isoformat()
+            }
+            
+        except Exception as e:
+            logger.error(f"Unexpected error analyzing recipe: {e}")
+            return {
+                'recipe_id': recipe.get('id'),
+                'title': recipe.get('title'),
+                'status': 'error',
+                'error': str(e),
+                'analyzed_at': datetime.utcnow().isoformat()
+            }
     
     async def analyze_multiple_recipes(self, recipes: List[Dict[str, Any]], 
                                      batch_size: int = 5) -> List[Dict[str, Any]]:
@@ -240,22 +230,11 @@ Provide the response in JSON format with these exact keys: calories, carbohydrat
             
             payload = {
                 "model": "llama3.2:latest",
-                "prompt": f"""You are a professional nutritionist with expertise in recipe analysis. Your task is to analyze the nutritional content of recipes and provide accurate information per serving.
+                "prompt": f"""You are a nutrition expert. Analyze this recipe and provide nutritional information per serving in JSON format.
 
-CRITICAL: You must respond with ONLY valid JSON in this exact format, no other text:
-{{"calories": number, "carbohydrates": number, "fat": number, "protein": number}}
-
-Recipe to analyze:
 {recipe_text}
 
-Guidelines for analysis:
-- Consider typical serving sizes and cooking methods
-- Account for ingredient preparation and cooking losses
-- Provide realistic, practical estimates
-- Use standard units: calories (kcal), carbs/fat/protein (grams)
-- Ensure values are reasonable for a single serving
-
-Respond with ONLY the JSON object in the exact format specified above.""",
+Respond only with valid JSON containing: calories, carbohydrates, fat, protein""",
                 "stream": False
             }
             
@@ -265,9 +244,6 @@ Respond with ONLY the JSON object in the exact format specified above.""",
             
             result = response.json()
             content = result.get('response', '')
-            
-            # Ollama returns the response as a JSON string, so we need to parse it
-            logger.debug(f"Ollama raw response: {content}")
             
             return self._parse_llm_response(content)
             
@@ -340,43 +316,17 @@ Respond only with valid JSON containing: calories, carbohydrates, fat, protein""
             
             content = content.strip()
             
-            # Try to parse as JSON directly first
+            # Try to parse as JSON
             try:
                 nutrition_data = json.loads(content)
-                logger.debug(f"Successfully parsed JSON directly: {nutrition_data}")
             except json.JSONDecodeError:
-                logger.debug(f"Direct JSON parsing failed, trying to extract JSON from: {content}")
-                
-                # Try to extract JSON-like content using regex
+                # Try to extract JSON-like content
                 import re
-                
-                # Look for JSON object pattern - be more flexible with Ollama responses
-                json_patterns = [
-                    r'\{[^}]*\}',  # Basic JSON object
-                    r'\{[^}]*"[^"]*"[^}]*\}',  # JSON with quoted strings
-                    r'\{[^}]*"[^"]*"[^}]*"[^"]*"[^}]*\}',  # JSON with multiple quoted strings
-                ]
-                
-                nutrition_data = None
-                for pattern in json_patterns:
-                    json_match = re.search(pattern, content)
-                    if json_match:
-                        try:
-                            nutrition_data = json.loads(json_match.group())
-                            logger.debug(f"Successfully parsed extracted JSON with pattern {pattern}: {nutrition_data}")
-                            break
-                        except json.JSONDecodeError:
-                            # Try to clean up the extracted content
-                            cleaned_content = json_match.group().replace('\\', '')
-                            try:
-                                nutrition_data = json.loads(cleaned_content)
-                                logger.debug(f"Successfully parsed cleaned JSON: {nutrition_data}")
-                                break
-                            except json.JSONDecodeError:
-                                continue
-                
-                if not nutrition_data:
-                    raise Exception("Failed to parse JSON from any pattern")
+                json_match = re.search(r'\{[^}]*\}', content)
+                if json_match:
+                    nutrition_data = json.loads(json_match.group())
+                else:
+                    raise Exception("No valid JSON found in response")
             
             # Validate required fields
             required_fields = ['calories', 'carbohydrates', 'fat', 'protein']
@@ -401,7 +351,6 @@ Respond only with valid JSON containing: calories, carbohydrates, fat, protein""
                 
                 parsed_data[field] = round(float(value), 1)
             
-            logger.debug(f"Successfully parsed nutrition data: {parsed_data}")
             return parsed_data
             
         except Exception as e:

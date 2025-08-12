@@ -3,7 +3,7 @@ const testFrontendAPI = async () => {
   console.log('🧪 Testing Frontend API Call...');
   
   // Simulate the frontend API call
-  const API_BASE_URL = 'http://localhost:5004/api';
+  const API_BASE_URL = 'http://localhost:5003/api';
   const token = localStorage.getItem('auth_token');
   
   console.log('Token:', token ? 'Present' : 'Missing');
