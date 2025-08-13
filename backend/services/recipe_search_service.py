@@ -345,6 +345,9 @@ class RecipeSearchService:
 
         favorite_cuisines = norm_ordered
 
+        # Favorite foods (normalized)
+        favorite_foods = [str(f).strip().lower() for f in (user_preferences.get("favoriteFoods") or []) if str(f).strip()]
+
         # Build base filters from dietary restrictions
         filters = {}
         dr = [d.lower() for d in user_preferences.get("dietaryRestrictions", [])]
@@ -355,13 +358,58 @@ class RecipeSearchService:
         if "gluten-free" in dr:
             filters["is_gluten_free"] = True
 
-        # If no cuisines selected, just return top results by the general query
+        # Helper: extract a stable id from a recipe dict
+        def _get_recipe_key(recipe: Dict[str, Any]) -> str:
+            return str(
+                recipe.get('recipe_id')
+                or recipe.get('id')
+                or recipe.get('_id')
+                or recipe.get('metadata', {}).get('recipe_id')
+                or recipe.get('metadata', {}).get('id')
+                or recipe.get('metadata', {}).get('_id')
+                or hash(json.dumps(recipe, sort_keys=True)[:128])
+            )
+
+        # If no cuisines selected, just return top results by favorite foods first, then popular
         if not favorite_cuisines:
-            query = "popular delicious recipes"
-            return self.semantic_search(query=query, filters=filters, limit=limit)
+            aggregated: List[Dict[str, Any]] = []
+            used = set()
+
+            # Try to satisfy with favorite foods first
+            if favorite_foods:
+                for food in favorite_foods:
+                    q = f"delicious {food} recipes"
+                    res = self.semantic_search(query=q, filters=filters, limit=limit * 2)
+                    for r in res:
+                        k = _get_recipe_key(r)
+                        if k in used:
+                            continue
+                        aggregated.append(r)
+                        used.add(k)
+                        if len(aggregated) >= limit:
+                            logger.info("Filled recommendations using favorite foods only (no cuisines selected)")
+                            return aggregated[:limit]
+                # If we found any favorite-food matches, return them without filling with popular
+                if len(aggregated) > 0:
+                    logger.info(f"Returning {len(aggregated)} favorite-food matches (no cuisines selected)")
+                    return aggregated[:limit]
+
+            # Fallback to popular only when we have no favorite-food matches
+            if len(aggregated) < limit:
+                query = "popular delicious recipes"
+                pop = self.semantic_search(query=query, filters=filters, limit=limit * 2)
+                for r in pop:
+                    k = _get_recipe_key(r)
+                    if k in used:
+                        continue
+                    aggregated.append(r)
+                    used.add(k)
+                    if len(aggregated) >= limit:
+                        break
+            return aggregated[:limit]
         
         # Get recipes for each favorite cuisine
-        recipes_by_cuisine = {}
+        recipes_by_cuisine: Dict[str, List[Dict[str, Any]]] = {}
         total_recipes_needed = limit
         
         # Calculate how many recipes to get per cuisine for even distribution
@@ -370,108 +418,85 @@ class RecipeSearchService:
         
         logger.info(f"Distributing {total_recipes_needed} recipes across {len(favorite_cuisines)} cuisines: {recipes_per_cuisine} per cuisine + {extra_recipes} extra")
         
-        # Search for recipes for each cuisine
+        # For each cuisine, try favorite foods within cuisine first, then general cuisine queries
         for i, cuisine in enumerate(favorite_cuisines):
-            # Add extra recipes to the first few cuisines for even distribution
             current_limit = recipes_per_cuisine + (1 if i < extra_recipes else 0)
-            
-            # Try multiple search strategies for each cuisine to get enough recipes
-            valid_cuisine_recipes = []
-            
-            # Strategy 1: Direct cuisine search
-            cuisine_query = f"delicious {cuisine} recipes"
-            cuisine_results = self.semantic_search(query=cuisine_query, filters=filters, limit=current_limit * 3)
-            
-            # Strategy 2: If not enough results, try broader search
-            if len(cuisine_results) < current_limit:
-                broader_query = f"{cuisine} food dishes"
-                broader_results = self.semantic_search(query=broader_query, filters=filters, limit=current_limit * 2)
-                # Combine and deduplicate
-                all_results = cuisine_results + broader_results
-                # Remove duplicates based on recipe_id
-                seen_ids = set()
-                unique_results = []
-                for recipe in all_results:
-                    recipe_id = recipe.get('id', recipe.get('_id', ''))
-                    if recipe_id not in seen_ids:
-                        unique_results.append(recipe)
-                        seen_ids.add(recipe_id)
-                cuisine_results = unique_results
-            
-            # Strategy 3: If still not enough, search without cuisine filter and filter by cuisine later
-            if len(cuisine_results) < current_limit:
-                general_query = "popular recipes"
-                general_results = self.semantic_search(query=general_query, filters=filters, limit=current_limit * 4)
-                # Add general results to the pool
-                all_results = cuisine_results + general_results
-                # Remove duplicates
-                seen_ids = set()
-                unique_results = []
-                for recipe in all_results:
-                    recipe_id = recipe.get('id', recipe.get('_id', ''))
-                    if recipe_id not in seen_ids:
-                        unique_results.append(recipe)
-                        seen_ids.add(recipe_id)
-                cuisine_results = unique_results
-            
-            # Filter and normalize recipes for this cuisine
-            for recipe in cuisine_results:
-                if len(valid_cuisine_recipes) >= current_limit:
-                    break
-                    
-                # Pass the entire recipe for better cuisine detection
-                recipe_cuisine = self._normalize_cuisine(recipe.get('cuisine', ''), recipe)
-                if not recipe_cuisine:
-                    # Try to detect cuisine from ingredients if not specified
-                    recipe_cuisine = self._detect_cuisine_from_ingredients(recipe)
-                
-                if recipe_cuisine:
-                    # Update the recipe's cuisine with the normalized version
-                    recipe['cuisine'] = recipe_cuisine
-                    
-                    # Check if this recipe matches the target cuisine
-                    # Normalize both for comparison
-                    target_cuisine_normalized = self._normalize_cuisine(cuisine)
-                    if recipe_cuisine.lower() == target_cuisine_normalized.lower():
+
+            # Accumulator for this cuisine
+            valid_cuisine_recipes: List[Dict[str, Any]] = []
+            seen_ids_for_cuisine: set = set()
+
+            # 1) Prioritize favorite foods WITHIN cuisine
+            if favorite_foods:
+                for food in favorite_foods:
+                    if len(valid_cuisine_recipes) >= current_limit:
+                        break
+                    fav_cuisine_query = f"{cuisine} {food} recipes"
+                    fav_results = self.semantic_search(query=fav_cuisine_query, filters=filters, limit=current_limit * 3)
+                    for recipe in fav_results:
+                        if len(valid_cuisine_recipes) >= current_limit:
+                            break
+                        # Normalize cuisine and check match
+                        recipe_cuisine = self._normalize_cuisine(recipe.get('cuisine', ''), recipe) or self._detect_cuisine_from_ingredients(recipe)
+                        if not recipe_cuisine:
+                            continue
+                        recipe['cuisine'] = recipe_cuisine
+                        target_cuisine_normalized = self._normalize_cuisine(cuisine)
+                        if recipe_cuisine.lower() != target_cuisine_normalized.lower():
+                            continue
+                        k = _get_recipe_key(recipe)
+                        if k in seen_ids_for_cuisine:
+                            continue
                         valid_cuisine_recipes.append(recipe)
-            
-            # If we still don't have enough recipes, be more flexible with cuisine matching
+                        seen_ids_for_cuisine.add(k)
+
+            # 2) General cuisine searches if still short
             if len(valid_cuisine_recipes) < current_limit:
+                # Strategy 1: Direct cuisine search
+                cuisine_query = f"delicious {cuisine} recipes"
+                cuisine_results = self.semantic_search(query=cuisine_query, filters=filters, limit=current_limit * 3)
+
+                # Strategy 2: Broader phrasing
+                if len(cuisine_results) < current_limit:
+                    broader_query = f"{cuisine} food dishes"
+                    broader_results = self.semantic_search(query=broader_query, filters=filters, limit=current_limit * 2)
+                    # Combine and dedupe
+                    all_results = cuisine_results + broader_results
+                    unique, seen_local = [], set()
+                    for r in all_results:
+                        kk = _get_recipe_key(r)
+                        if kk in seen_local:
+                            continue
+                        unique.append(r)
+                        seen_local.add(kk)
+                    cuisine_results = unique
+
+                # Filter by target cuisine and append
                 for recipe in cuisine_results:
                     if len(valid_cuisine_recipes) >= current_limit:
                         break
-                        
-                    # Skip if we already have this recipe
-                    recipe_id = recipe.get('id', recipe.get('_id', ''))
-                    if any(r.get('id', r.get('_id', '')) == recipe_id for r in valid_cuisine_recipes):
-                        continue
-                    
-                    # Try to detect cuisine from ingredients if not specified
-                    recipe_cuisine = recipe.get('cuisine', '')
+                    recipe_cuisine = self._normalize_cuisine(recipe.get('cuisine', ''), recipe) or self._detect_cuisine_from_ingredients(recipe)
                     if not recipe_cuisine:
-                        recipe_cuisine = self._detect_cuisine_from_ingredients(recipe)
-                    
-                    if recipe_cuisine:
-                        recipe['cuisine'] = recipe_cuisine
-                        
-                        # More flexible matching - check if cuisine contains the target or vice versa
-                        target_cuisine_normalized = self._normalize_cuisine(cuisine)
-                        if (recipe_cuisine.lower() == target_cuisine_normalized.lower() or
-                            target_cuisine_normalized.lower() in recipe_cuisine.lower() or
-                            recipe_cuisine.lower() in target_cuisine_normalized.lower()):
-                            valid_cuisine_recipes.append(recipe)
-            
-            # Store recipes for this cuisine
+                        continue
+                    recipe['cuisine'] = recipe_cuisine
+                    target_cuisine_normalized = self._normalize_cuisine(cuisine)
+                    if recipe_cuisine.lower() != target_cuisine_normalized.lower():
+                        continue
+                    k = _get_recipe_key(recipe)
+                    if k in seen_ids_for_cuisine:
+                        continue
+                    valid_cuisine_recipes.append(recipe)
+                    seen_ids_for_cuisine.add(k)
+
             recipes_by_cuisine[cuisine] = valid_cuisine_recipes[:current_limit]
-            logger.info(f"Found {len(recipes_by_cuisine[cuisine])} recipes for {cuisine} cuisine")
+            logger.info(f"Found {len(recipes_by_cuisine[cuisine])} recipes for {cuisine} cuisine (with favorite food priority)")
         
-        # Combine recipes with even distribution
-        final_recommendations = []
+        # Combine recipes with even distribution (round-robin across cuisines)
+        final_recommendations: List[Dict[str, Any]] = []
         max_recipes_per_cuisine = max(len(recipes) for recipes in recipes_by_cuisine.values()) if recipes_by_cuisine else 0
         
         logger.info(f"Recipes found per cuisine: {[(cuisine, len(recipes)) for cuisine, recipes in recipes_by_cuisine.items()]}")
         
-        # Distribute recipes evenly by taking one from each cuisine in rotation
         for i in range(max_recipes_per_cuisine):
             for cuisine in favorite_cuisines:
                 if i < len(recipes_by_cuisine.get(cuisine, [])):
@@ -483,38 +508,60 @@ class RecipeSearchService:
         
         logger.info(f"After distribution: {len(final_recommendations)} recipes distributed")
         
-        # If we don't have enough recipes, fill with additional results
+        # If we don't have enough recipes, try FAVORITE FOODS OUTSIDE CUISINES next
+        if len(final_recommendations) < limit and favorite_foods:
+            remaining_slots = limit - len(final_recommendations)
+            logger.info(f"Need {remaining_slots} more recipes, trying favorite foods outside cuisines")
+            
+            existing_ids = { _get_recipe_key(r) for r in final_recommendations }
+            added = 0
+            for food in favorite_foods:
+                if added >= remaining_slots:
+                    break
+                q = f"delicious {food} recipes"
+                res = self.semantic_search(query=q, filters=filters, limit=remaining_slots * 3)
+                for r in res:
+                    if added >= remaining_slots:
+                        break
+                    k = _get_recipe_key(r)
+                    if k in existing_ids:
+                        continue
+                    # Normalize cuisine for consistency (not restricting here)
+                    recipe_cuisine = self._normalize_cuisine(r.get('cuisine', ''), r) or self._detect_cuisine_from_ingredients(r)
+                    if recipe_cuisine:
+                        r['cuisine'] = recipe_cuisine
+                    final_recommendations.append(r)
+                    existing_ids.add(k)
+                    added += 1
+        
+        # If we still don't have enough, fill with additional popular results
         if len(final_recommendations) < limit:
             remaining_slots = limit - len(final_recommendations)
-            logger.info(f"Need {remaining_slots} more recipes, searching for additional results")
+            logger.info(f"Still need {remaining_slots} more recipes, searching for additional popular results")
             
             additional_query = "popular delicious recipes"
-            additional_results = self.semantic_search(query=additional_query, filters=filters, limit=remaining_slots * 2)
-            
-            # Add additional recipes that don't duplicate what we already have
-            existing_ids = {recipe.get('id', recipe.get('_id', '')) for recipe in final_recommendations}
+            additional_results = self.semantic_search(query=additional_query, filters=filters, limit=remaining_slots * 3)
+            existing_ids = { _get_recipe_key(r) for r in final_recommendations }
             for recipe in additional_results:
                 if len(final_recommendations) >= limit:
                     break
-                recipe_id = recipe.get('id', recipe.get('_id', ''))
-                if recipe_id not in existing_ids:
-                    # Normalize cuisine for additional recipes
-                    recipe_cuisine = self._normalize_cuisine(recipe.get('cuisine', ''), recipe)
-                    if not recipe_cuisine:
-                        recipe_cuisine = self._detect_cuisine_from_ingredients(recipe)
-                    if recipe_cuisine:
-                        recipe['cuisine'] = recipe_cuisine
-                    final_recommendations.append(recipe)
-                    existing_ids.add(recipe_id)
+                k = _get_recipe_key(recipe)
+                if k in existing_ids:
+                    continue
+                recipe_cuisine = self._normalize_cuisine(recipe.get('cuisine', ''), recipe) or self._detect_cuisine_from_ingredients(recipe)
+                if recipe_cuisine:
+                    recipe['cuisine'] = recipe_cuisine
+                final_recommendations.append(recipe)
+                existing_ids.add(k)
         
         # Final logging of distribution
-        final_cuisine_counts = {}
+        final_cuisine_counts: Dict[str, int] = {}
         for recipe in final_recommendations:
             cuisine = recipe.get('cuisine', 'Unknown')
             final_cuisine_counts[cuisine] = final_cuisine_counts.get(cuisine, 0) + 1
         
         logger.info(f"Final cuisine distribution: {final_cuisine_counts}")
-        logger.info(f"Final recommendations: {len(final_recommendations)} recipes distributed across {len(favorite_cuisines)} cuisines")
+        logger.info(f"Final recommendations: {len(final_recommendations)} recipes distributed across {len(favorite_cuisines)} cuisines (fav foods prioritized)")
         return final_recommendations[:limit]
 
     

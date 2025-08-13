@@ -253,13 +253,33 @@ const HomePage: React.FC = () => {
         console.log('📊 Backend recommendations cuisines:', backendRecommendations.map(r => r.cuisine));
         
         // Ensure even distribution across cuisines from backend recommendations
-        const cuisineGroups = {};
-        backendRecommendations.forEach(recipe => {
+        // but prioritize favorite-food matches first
+        const favoriteFoodsNorm: string[] = (userPreferences?.favoriteFoods || [])
+          .map((f: any) => (f || '').toString().trim().toLowerCase())
+          .filter(Boolean);
+
+        type AnyRec = any;
+        const cuisineGroupsFav: Record<string, AnyRec[]> = {};
+        const cuisineGroupsOther: Record<string, AnyRec[]> = {};
+        backendRecommendations.forEach((recipe: any) => {
           const cuisine = recipe.cuisine || 'Unknown';
-          if (!cuisineGroups[cuisine]) {
-            cuisineGroups[cuisine] = [];
+          if (!cuisineGroupsFav[cuisine]) cuisineGroupsFav[cuisine] = [];
+          if (!cuisineGroupsOther[cuisine]) cuisineGroupsOther[cuisine] = [];
+          const titleLower = ((recipe.title || recipe.name || '') as string).toLowerCase();
+          const ingredientsLower = Array.isArray(recipe.ingredients) ? recipe.ingredients.map((i: any) => String(i).toLowerCase()) : [];
+          const hasFavFood = favoriteFoodsNorm.length > 0 && favoriteFoodsNorm.some(f => titleLower.includes(f) || ingredientsLower.some(i => i.includes(f)));
+          if (hasFavFood) {
+            cuisineGroupsFav[cuisine].push(recipe);
+          } else {
+            cuisineGroupsOther[cuisine].push(recipe);
           }
-          cuisineGroups[cuisine].push(recipe);
+        });
+        const cuisineGroups: Record<string, AnyRec[]> = {};
+        Object.keys({...cuisineGroupsFav, ...cuisineGroupsOther}).forEach(c => {
+          cuisineGroups[c] = [
+            ...(cuisineGroupsFav[c] || []),
+            ...(cuisineGroupsOther[c] || [])
+          ];
         });
         
         console.log('📊 Cuisine groups from backend:', Object.keys(cuisineGroups).map(c => `${c}: ${cuisineGroups[c].length}`));
@@ -353,19 +373,41 @@ const HomePage: React.FC = () => {
         // Evenly distribute filtered results across selected cuisines (round-robin)
         if (favoriteCuisines && favoriteCuisines.length > 1 && filteredRecipes.length > 0) {
           const normalizedSelected = favoriteCuisines.map(c => (c || '').toString().trim().toLowerCase()).filter(Boolean);
-          const groups: Record<string, any[]> = {};
-          for (const c of normalizedSelected) groups[c] = [];
+          const favoriteFoodsNorm: string[] = (favoriteFoods || []).map((f: any) => (f || '').toString().trim().toLowerCase()).filter(Boolean);
+
+          // Structure: for each selected cuisine, keep two buckets: favorite-food matches and others
+          const groupsFav: Record<string, any[]> = {};
+          const groupsOther: Record<string, any[]> = {};
+          for (const c of normalizedSelected) {
+            groupsFav[c] = [];
+            groupsOther[c] = [];
+          }
           
-          // Assign each recipe to the first matching selected cuisine
+          // Assign each recipe to the first matching selected cuisine, then bucket by favorite-food match
           for (const recipe of filteredRecipes) {
             const rc = (Array.isArray(recipe.cuisines) ? recipe.cuisines : [])
               .map((c: any) => (c || '').toString().trim().toLowerCase());
             const single = (recipe as any).cuisine ? [(recipe as any).cuisine.toString().toLowerCase()] : [];
             const recipeCuisines = [...rc, ...single];
-            const match = normalizedSelected.find(sel => recipeCuisines.some(rc2 => rc2.includes(sel)));
-            if (match) {
-              groups[match].push(recipe);
+            const matchCuisine = normalizedSelected.find(sel => recipeCuisines.some(rc2 => rc2.includes(sel)));
+            if (!matchCuisine) continue;
+
+            // Determine if recipe matches any favorite food (title or name)
+            const titleLower = ((recipe.title || recipe.name || '') as string).toLowerCase();
+            const ingredientsLower = Array.isArray((recipe as any).ingredients) ? ((recipe as any).ingredients as any[]).map(i => String(i).toLowerCase()) : [];
+            const hasFavFood = favoriteFoodsNorm.length > 0 && favoriteFoodsNorm.some(f => titleLower.includes(f) || ingredientsLower.some(i => i.includes(f)));
+
+            if (hasFavFood) {
+              groupsFav[matchCuisine].push(recipe);
+            } else {
+              groupsOther[matchCuisine].push(recipe);
             }
+          }
+
+          // Merge buckets with favorite-food matches first per cuisine
+          const groups: Record<string, any[]> = {};
+          for (const sel of normalizedSelected) {
+            groups[sel] = [...groupsFav[sel], ...groupsOther[sel]];
           }
           
           // Round-robin pick up to 8
@@ -388,7 +430,19 @@ const HomePage: React.FC = () => {
             recommendedRecipes = filteredRecipes.slice(0, 8);
           }
         } else {
-          recommendedRecipes = filteredRecipes.slice(0, 8);
+          // Single cuisine or no cuisine: prioritize favorite foods first, then fill
+          const favoriteFoodsNorm: string[] = (favoriteFoods || []).map((f: any) => (f || '').toString().trim().toLowerCase()).filter(Boolean);
+          if (favoriteFoodsNorm.length > 0) {
+            const titleMatches = filteredRecipes.filter(r => {
+              const t = ((r.title || r.name || '') as string).toLowerCase();
+              const ings = Array.isArray((r as any).ingredients) ? ((r as any).ingredients as any[]).map(i => String(i).toLowerCase()) : [];
+              return favoriteFoodsNorm.some(f => t.includes(f) || ings.some(i => i.includes(f)));
+            });
+            const others = filteredRecipes.filter(r => !titleMatches.includes(r));
+            recommendedRecipes = [...titleMatches, ...others].slice(0, 8);
+          } else {
+            recommendedRecipes = filteredRecipes.slice(0, 8);
+          }
         }
         console.log('🔄 Final frontend recommendations:', recommendedRecipes.length);
       }
