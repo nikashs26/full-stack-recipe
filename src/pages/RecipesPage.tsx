@@ -88,6 +88,7 @@ const RecipesPage: React.FC = () => {
   const [showMobileFilters, setShowMobileFilters] = useState(false);
   const [showLoading, setShowLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const [gotoPage, setGotoPage] = useState<string>("");
   const [totalPages, setTotalPages] = useState(1);
   const recipesPerPage = 20;
   
@@ -688,46 +689,94 @@ const RecipesPage: React.FC = () => {
                   {/* Page Numbers */}
                   <div className="flex items-center gap-1">
                     {(() => {
-                      // Calculate which page numbers to show (up to 5 at a time)
-                      const maxVisiblePages = 5;
-                      const half = Math.floor(maxVisiblePages / 2);
-                      let startPage = Math.max(1, currentPage - half);
-                      const endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
-                      
-                      // Adjust startPage if we're near the end
-                      if (endPage - startPage + 1 < maxVisiblePages) {
-                        startPage = Math.max(1, endPage - maxVisiblePages + 1);
+                      const items: (number | 'ellipsis')[] = [];
+                      const showAllThreshold = 9;
+                      if (totalPages <= showAllThreshold) {
+                        for (let p = 1; p <= totalPages; p++) items.push(p);
+                      } else {
+                        // Always show first two
+                        items.push(1);
+                        if (totalPages >= 2) items.push(2);
+                        // Ellipsis before middle window
+                        if (currentPage > 4) items.push('ellipsis');
+                        // Middle window around current page
+                        const start = Math.max(3, Math.min(currentPage - 1, totalPages - 4));
+                        const end = Math.min(totalPages - 2, Math.max(currentPage + 1, 5));
+                        for (let p = start; p <= end; p++) {
+                          if (!items.includes(p)) items.push(p);
+                        }
+                        // Ellipsis after middle window
+                        if (currentPage < totalPages - 3) items.push('ellipsis');
+                        // Always show last two
+                        if (!items.includes(totalPages - 1)) items.push(totalPages - 1);
+                        if (!items.includes(totalPages)) items.push(totalPages);
                       }
-                      
+
                       return (
                         <>
-                          {Array.from(
-                            { length: Math.min(maxVisiblePages, totalPages) },
-                            (_, i) => {
-                              const pageNum = startPage + i;
+                          {items.map((it, idx) => {
+                            if (it === 'ellipsis') {
                               return (
-                                <Button
-                                  key={pageNum}
-                                  variant={currentPage === pageNum ? "default" : "outline"}
-                                  size="sm"
-                                  onClick={() => {
-                                    if (currentPage !== pageNum) {
-                                      console.log(`Page ${pageNum} clicked, current page:`, currentPage);
-                                      setCurrentPage(pageNum);
-                                    }
-                                  }}
-                                  disabled={isLoadingRecipes}
-                                  className={`min-w-[40px] ${currentPage === pageNum ? 'font-bold' : ''}`}
-                                  aria-label={`Go to page ${pageNum}`}
-                                >
-                                  {pageNum}
+                                <Button key={`e-${idx}`} variant="outline" size="sm" disabled className="min-w-[40px]">
+                                  ...
                                 </Button>
                               );
                             }
-                          )}
+                            const pageNum = it as number;
+                            return (
+                              <Button
+                                key={pageNum}
+                                variant={currentPage === pageNum ? "default" : "outline"}
+                                size="sm"
+                                onClick={() => {
+                                  if (currentPage !== pageNum) {
+                                    console.log(`Page ${pageNum} clicked, current page:`, currentPage);
+                                    setCurrentPage(pageNum);
+                                  }
+                                }}
+                                disabled={isLoadingRecipes}
+                                className={`min-w-[40px] ${currentPage === pageNum ? 'font-bold' : ''}`}
+                                aria-label={`Go to page ${pageNum}`}
+                              >
+                                {pageNum}
+                              </Button>
+                            );
+                          })}
                         </>
                       );
                     })()}
+                  </div>
+                  
+                  {/* Go To Page */}
+                  <div className="flex items-center gap-1 ml-2">
+                    <Input
+                      value={gotoPage}
+                      onChange={(e) => setGotoPage(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          const n = parseInt(gotoPage || '');
+                          if (!isNaN(n)) {
+                            const clamped = Math.max(1, Math.min(totalPages, n));
+                            setCurrentPage(clamped);
+                          }
+                        }
+                      }}
+                      placeholder="Go to"
+                      className="h-8 w-16"
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const n = parseInt(gotoPage || '');
+                        if (!isNaN(n)) {
+                          const clamped = Math.max(1, Math.min(totalPages, n));
+                          setCurrentPage(clamped);
+                        }
+                      }}
+                    >
+                      Go
+                    </Button>
                   </div>
                   
                   {/* Next Arrow */}

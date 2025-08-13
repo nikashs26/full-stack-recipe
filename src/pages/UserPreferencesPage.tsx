@@ -80,9 +80,9 @@ const cuisineOptions: FormOption[] = [
   { id: 'korean', label: 'Korean', description: 'Bibimbap, kimchi, bulgogi' },
   { id: 'caribbean', label: 'Caribbean', description: 'Jerk chicken, rice and peas' },
   { id: 'cajun', label: 'Cajun', description: 'Gumbo, jambalaya, étouffée' },
-  { id: 'nordic', label: 'Nordic', description: 'Smoked salmon, pickled herring' },
+
   { id: 'eastern european', label: 'Eastern European', description: 'Pierogi, borscht, goulash' },
-  { id: 'jewish', label: 'Jewish', description: 'Matzo ball soup, latkes, challah' },
+
   { id: 'latin american', label: 'Latin American', description: 'Arepas, ceviche, empanadas' },
   { id: 'african', label: 'African', description: 'Jollof rice, tagine, injera' },
   { id: 'middle eastern', label: 'Middle Eastern', description: 'Hummus, falafel, shawarma' },
