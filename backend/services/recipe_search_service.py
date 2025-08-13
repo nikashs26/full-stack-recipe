@@ -17,15 +17,37 @@ class RecipeSearchService:
     VALID_CUISINES = [
         'american', 'british', 'chinese', 'french', 'greek', 'indian', 'irish', 
         'italian', 'japanese', 'mexican', 'moroccan', 'spanish', 'thai', 'vietnamese',
-        'mediterranean', 'korean', 'caribbean', 'cajun', 'southern', 'nordic',
-        'eastern european', 'jewish', 'latin american', 'african', 'middle eastern', 'asian'
+        'mediterranean', 'korean', 'caribbean', 'cajun', 'southern',
+        'eastern european', 'latin american', 'african', 'middle eastern', 'asian'
     ]
     
     def __init__(self):
         self.client = chromadb.PersistentClient(path="./chroma_db")
-        # Use the recipe_search_cache collection which contains the actual recipes
-        self.recipe_collection = self.client.get_collection("recipe_search_cache")
-        print("Using recipe_search_cache collection for search")
+        # Try to get the correct collection - check what's available
+        try:
+            # First try the recipe_details_cache collection (which we know exists)
+            self.recipe_collection = self.client.get_collection("recipe_details_cache")
+            print("Using recipe_details_cache collection for search")
+        except Exception as e:
+            try:
+                # Fallback to recipe_search_cache
+                self.recipe_collection = self.client.get_collection("recipe_search_cache")
+                print("Using recipe_search_cache collection for search")
+            except Exception as e2:
+                print(f"Error getting collections: {e2}")
+                # Try to list available collections
+                try:
+                    collections = self.client.list_collections()
+                    print(f"Available collections: {[c.name for c in collections]}")
+                    if collections:
+                        self.recipe_collection = collections[0]
+                        print(f"Using first available collection: {collections[0].name}")
+                    else:
+                        print("No collections found!")
+                        self.recipe_collection = None
+                except Exception as e3:
+                    print(f"Could not list collections: {e3}")
+                    self.recipe_collection = None
         
         try:
             # Initialize sentence transformer for better embeddings
@@ -40,11 +62,14 @@ class RecipeSearchService:
         Get personalized recipe recommendations with fair distribution across cuisines
         """
         favorite_foods = [f.lower() for f in user_preferences.get("favoriteFoods", []) if f]
-        favorite_cuisines = set(self._normalize_cuisine(c, None).lower() for c in user_preferences.get("favoriteCuisines", []) if c)
+        # Preserve input order and ensure uniqueness for cuisines
+        raw_fav_cuisines = [self._normalize_cuisine(c, None).lower() for c in user_preferences.get("favoriteCuisines", []) if c]
+        seen_c = set()
+        favorite_cuisines = [c for c in raw_fav_cuisines if not (c in seen_c or seen_c.add(c))]
         foods_to_avoid = set(f.lower() for f in user_preferences.get("foodsToAvoid", []) if f)
         dietary_restrictions = [d.lower() for d in user_preferences.get("dietaryRestrictions", [])]
 
-        print(f"User selected cuisines: {favorite_cuisines}")
+        print(f"User selected cuisines (ordered): {favorite_cuisines}")
         print(f"User favorite foods: {favorite_foods}")
 
         filters = {}
@@ -116,37 +141,50 @@ class RecipeSearchService:
                 return False
                 
             # Try multiple ways to get cuisine
-            recipe_cuisine = ''
+            recipe_cuisines = []
             
             # First try the normalized cuisine field
             if recipe.get('cuisine'):
-                recipe_cuisine = self._normalize_cuisine(recipe.get('cuisine', ''), recipe).lower()
+                recipe_cuisines.append(self._normalize_cuisine(recipe.get('cuisine', ''), recipe).lower())
             
             # If no cuisine found, try cuisines array
-            if not recipe_cuisine and recipe.get('cuisines'):
+            if recipe.get('cuisines'):
                 cuisines = recipe.get('cuisines', [])
                 if isinstance(cuisines, list) and cuisines:
                     for cuisine in cuisines:
                         if cuisine:
-                            recipe_cuisine = self._normalize_cuisine(cuisine, recipe).lower()
-                            if recipe_cuisine:
-                                break
+                            normalized_cuisine = self._normalize_cuisine(cuisine, recipe).lower()
+                            if normalized_cuisine and normalized_cuisine not in recipe_cuisines:
+                                recipe_cuisines.append(normalized_cuisine)
             
             # If still no cuisine, try to detect from recipe content
-            if not recipe_cuisine:
-                recipe_cuisine = self._detect_cuisine_from_ingredients(recipe).lower()
+            if not recipe_cuisines:
+                detected_cuisine = self._detect_cuisine_from_ingredients(recipe).lower()
+                if detected_cuisine:
+                    recipe_cuisines.append(detected_cuisine)
             
-            # Check if any favorite cuisine matches
+            # Check if any favorite cuisine matches any of the recipe's cuisines
             for fav_cuisine in favorite_cuisines:
-                if fav_cuisine and fav_cuisine.lower() == recipe_cuisine:
-                    return True
+                if not fav_cuisine:
+                    continue
                     
-                # For broad cuisines like "International", be more flexible
-                if fav_cuisine.lower() in ['international', 'global', 'world', 'fusion']:
-                    # If the recipe has any recognizable cuisine, it's considered "international"
-                    if recipe_cuisine and recipe_cuisine not in ['', 'none', 'unknown', 'n/a']:
+                fav_cuisine_lower = fav_cuisine.lower()
+                
+                for recipe_cuisine in recipe_cuisines:
+                    # Exact match
+                    if fav_cuisine_lower == recipe_cuisine:
                         return True
-                        
+                    
+                    # Partial match (e.g., "chinese" in "chinese takeout")
+                    if fav_cuisine_lower in recipe_cuisine or recipe_cuisine in fav_cuisine_lower:
+                        return True
+                    
+                    # For broad cuisines like "International", be more flexible
+                    if fav_cuisine_lower in ['international', 'global', 'world', 'fusion']:
+                        # If the recipe has any recognizable cuisine, it's considered "international"
+                        if recipe_cuisine and recipe_cuisine not in ['', 'none', 'unknown', 'n/a']:
+                            return True
+                            
             return False
 
         def has_foods_to_avoid(recipe):
@@ -310,16 +348,39 @@ class RecipeSearchService:
                     # More flexible cuisine matching - include recipes that match the cuisine
                     filtered_candidates = []
                     for recipe in cuisine_candidates:
-                        recipe_cuisine = self._normalize_cuisine(recipe.get('cuisine', ''), recipe).lower()
+                        # Try multiple ways to get cuisine
+                        recipe_cuisines = []
                         
-                        # Check for exact match
-                        if recipe_cuisine == cuisine:
-                            filtered_candidates.append(recipe)
-                            continue
-                            
-                        # Check for partial match (e.g., "spanish" in "spanish paella")
-                        if cuisine in recipe_cuisine or recipe_cuisine in cuisine:
-                            filtered_candidates.append(recipe)
+                        # First try the normalized cuisine field
+                        if recipe.get('cuisine'):
+                            recipe_cuisines.append(self._normalize_cuisine(recipe.get('cuisine', ''), recipe).lower())
+                        
+                        # If no cuisine found, try cuisines array
+                        if recipe.get('cuisines'):
+                            cuisines = recipe.get('cuisines', [])
+                            if isinstance(cuisines, list) and cuisines:
+                                for recipe_cuisine in cuisines:
+                                    if recipe_cuisine:
+                                        normalized_cuisine = self._normalize_cuisine(recipe_cuisine, recipe).lower()
+                                        if normalized_cuisine and normalized_cuisine not in recipe_cuisines:
+                                            recipe_cuisines.append(normalized_cuisine)
+                        
+                        # Check if any of the recipe's cuisines match
+                        cuisine_matched = False
+                        for recipe_cuisine in recipe_cuisines:
+                            # Check for exact match
+                            if recipe_cuisine == cuisine:
+                                filtered_candidates.append(recipe)
+                                cuisine_matched = True
+                                break
+                                
+                            # Check for partial match (e.g., "spanish" in "spanish paella")
+                            if cuisine in recipe_cuisine or recipe_cuisine in cuisine:
+                                filtered_candidates.append(recipe)
+                                cuisine_matched = True
+                                break
+                        
+                        if cuisine_matched:
                             continue
                             
                         # Check if the recipe title/name contains the cuisine
@@ -336,7 +397,7 @@ class RecipeSearchService:
                             
                         # For broad cuisines like "International", include any recipe with a recognizable cuisine
                         if cuisine.lower() in ['international', 'global', 'world', 'fusion']:
-                            if recipe_cuisine and recipe_cuisine not in ['', 'none', 'unknown', 'n/a']:
+                            if recipe_cuisines and any(cuisine not in ['', 'none', 'unknown', 'n/a'] for cuisine in recipe_cuisines):
                                 filtered_candidates.append(recipe)
                                 continue
                     
@@ -439,129 +500,202 @@ class RecipeSearchService:
         if favorite_cuisines:
             print(f"Implementing fair distribution across {len(favorite_cuisines)} cuisines")
             
-            # Group recipes by cuisine
-            cuisine_groups = {}
-            for recipe in recommendations:
-                recipe_cuisine = self._normalize_cuisine(recipe.get('cuisine', ''), recipe).lower()
+            # Initialize cuisine groups with empty lists
+            cuisine_groups = {cuisine: [] for cuisine in favorite_cuisines}
+            uncategorized = []
+            
+            # Categorize each recipe into cuisine groups
+            for recipe in candidates:
+                recipe_cuisines = set()
                 
-                # Find which favorite cuisine this recipe matches
-                matched_cuisine = None
+                # Extract cuisines from all possible fields
+                if recipe.get('cuisine'):
+                    cuisine = self._normalize_cuisine(recipe.get('cuisine', ''), recipe).lower()
+                    if cuisine:
+                        recipe_cuisines.add(cuisine)
+                
+                if recipe.get('cuisines'):
+                    cuisines = recipe.get('cuisines', [])
+                    if isinstance(cuisines, list):
+                        for cuisine in cuisines:
+                            if cuisine:
+                                normalized = self._normalize_cuisine(cuisine, recipe).lower()
+                                if normalized:
+                                    recipe_cuisines.add(normalized)
+                
+                # Try to match with user's favorite cuisines
+                matched = False
                 for fav_cuisine in favorite_cuisines:
-                    if (recipe_cuisine == fav_cuisine.lower() or 
-                        fav_cuisine.lower() in recipe_cuisine or 
-                        recipe_cuisine in fav_cuisine.lower()):
-                        matched_cuisine = fav_cuisine
+                    fav_lower = fav_cuisine.lower()
+                    for recipe_cuisine in recipe_cuisines:
+                        if (recipe_cuisine == fav_lower or 
+                            fav_lower in recipe_cuisine or 
+                            recipe_cuisine in fav_lower):
+                            cuisine_groups[fav_cuisine].append(recipe)
+                            matched = True
+                            break
+                    if matched:
                         break
                 
-                if matched_cuisine:
-                    if matched_cuisine not in cuisine_groups:
-                        cuisine_groups[matched_cuisine] = []
-                    cuisine_groups[matched_cuisine].append(recipe)
+                if not matched and recipe_cuisines:
+                    uncategorized.append(recipe)
+            
+            # Helper: does a recipe match a specific favorite cuisine?
+            def matches_cuisine(recipe: Dict[str, Any], fav_cuisine: str) -> bool:
+                fl = fav_cuisine.lower()
+                # Check explicit cuisine field
+                rc = recipe.get('cuisine')
+                if rc:
+                    norm = self._normalize_cuisine(rc, recipe).lower()
+                    if norm and (norm == fl or fl in norm or norm in fl):
+                        return True
+                # Check cuisines array
+                cuisines = recipe.get('cuisines', [])
+                if isinstance(cuisines, list):
+                    for c in cuisines:
+                        if not c:
+                            continue
+                        norm = self._normalize_cuisine(c, recipe).lower()
+                        if norm and (norm == fl or fl in norm or norm in fl):
+                            return True
+                # Check title/description as a last resort
+                text = ' '.join([
+                    str(recipe.get('title', '')),
+                    str(recipe.get('name', '')),
+                    str(recipe.get('description', ''))
+                ]).lower()
+                return fl in text
+
+            # Debug: Show what cuisines were found
+            print(f"\nCuisine grouping results:")
+            for cuisine in favorite_cuisines:
+                count = len(cuisine_groups[cuisine])
+                print(f"  {cuisine}: {count} recipes")
+            
+            # Ensure we have at least one recipe per selected cuisine.
+            # First try from overall candidates based on matches_cuisine to avoid relying only on 'uncategorized'.
+            grouped_ids = set()
+            for lst in cuisine_groups.values():
+                for r in lst:
+                    rid = r.get('recipe_id') or r.get('id')
+                    if rid:
+                        grouped_ids.add(rid)
+            for cuisine in favorite_cuisines:
+                if not cuisine_groups[cuisine]:
+                    # Look in all candidates for a match not yet grouped
+                    for r in candidates:
+                        rid = r.get('recipe_id') or r.get('id')
+                        if rid and rid in grouped_ids:
+                            continue
+                        if matches_cuisine(r, cuisine):
+                            cuisine_groups[cuisine].append(r)
+                            if rid:
+                                grouped_ids.add(rid)
+                            break
+            # As a final fallback, use uncategorized text heuristics to fill empty cuisines
+            for cuisine in favorite_cuisines:
+                if not cuisine_groups[cuisine] and uncategorized:
+                    for i, r in enumerate(uncategorized):
+                        if matches_cuisine(r, cuisine):
+                            cuisine_groups[cuisine].append(r)
+                            uncategorized.pop(i)
+                            rid = r.get('recipe_id') or r.get('id')
+                            if rid:
+                                grouped_ids.add(rid)
+                            break
             
             # Calculate how many recipes per cuisine for fair distribution
             recipes_per_cuisine = max(1, limit // len(favorite_cuisines))
             print(f"Target: {recipes_per_cuisine} recipes per cuisine")
             
-            # Build fair distribution ensuring each cuisine gets equal representation
+            # Sort recipes within each cuisine by score
+            for cuisine in cuisine_groups:
+                cuisine_groups[cuisine].sort(key=score_recipe, reverse=True)
+
+            # Build fair distribution using explicit per-cuisine targets
+            n_cuisines = max(1, len(favorite_cuisines))
+            base = limit // n_cuisines
+            remainder = limit % n_cuisines
+            targets = {}
+            for idx, cuisine in enumerate(favorite_cuisines):
+                targets[cuisine] = base + (1 if idx < remainder else 0)
+            print(f"Per-cuisine targets: {targets}")
+
             fair_recommendations = []
-            
-            # First pass: take the top recipes from each cuisine
+            slots_remaining = limit
+
+            # First pass: take up to target per cuisine
             for cuisine in favorite_cuisines:
-                if cuisine in cuisine_groups and len(cuisine_groups[cuisine]) > 0:
-                # Sort recipes in this cuisine by score and take the best ones
-                    sorted_recipes = sorted(cuisine_groups[cuisine], key=score_recipe, reverse=True)
-                    top_recipes = sorted_recipes[:recipes_per_cuisine]
-                    fair_recommendations.extend(top_recipes)
-                # Remove used recipes
-                for recipe in top_recipes:
-                    cuisine_groups[cuisine].remove(recipe)
-            
-            # Second pass: if we have room for more recipes, fill with remaining high-scored recipes
-            # but maintain balance across cuisines
-            remaining_slots = limit - len(fair_recommendations)
-            if remaining_slots > 0:
-                # Collect all remaining recipes and sort by score
-                remaining_recipes = []
-            for cuisine_recipes in cuisine_groups.values():
-                remaining_recipes.extend(cuisine_recipes)
-            
-            remaining_recipes.sort(key=score_recipe, reverse=True)
-                
-                # Fill remaining slots while trying to maintain balance
-            for i, recipe in enumerate(remaining_recipes):
-                if len(fair_recommendations) >= limit:
-                    break
-                
-                # Check if adding this recipe would unbalance the distribution too much
-                recipe_cuisine = self._normalize_cuisine(recipe.get('cuisine', ''), recipe).lower()
-                current_cuisine_counts = {}
-                    
-                    # Count current distribution
-                for r in fair_recommendations:
-                    r_cuisine = self._normalize_cuisine(r.get('cuisine', ''), r).lower()
-                    for fav_c in favorite_cuisines:
-                        if (r_cuisine == fav_c.lower() or 
-                            fav_c.lower() in r_cuisine or 
-                            r_cuisine in fav_c.lower()):
-                            current_cuisine_counts[fav_c] = current_cuisine_counts.get(fav_c, 0) + 1
-                            break
-                    
-                    # Find which cuisine this recipe belongs to
-                    recipe_fav_cuisine = None
-                    for fav_c in favorite_cuisines:
-                        if (recipe_cuisine == fav_c.lower() or 
-                            fav_c.lower() in recipe_cuisine or 
-                            recipe_cuisine in fav_c.lower()):
-                            recipe_fav_cuisine = fav_c
-                            break
-                    
-                    if recipe_fav_cuisine:
-                        # Check if adding this recipe would make the distribution too uneven
-                        current_count = current_cuisine_counts.get(recipe_fav_cuisine, 0)
-                        max_count = max(current_cuisine_counts.values()) if current_cuisine_counts else 0
-                        
-                        # Allow adding if it doesn't create too much imbalance
-                        if current_count + 1 <= max_count + 1:
-                            fair_recommendations.append(recipe)
-                        elif len(fair_recommendations) < limit - 1:  # Still have room
-                            # Only add if this cuisine is significantly underrepresented
-                            if current_count < recipes_per_cuisine - 1:
-                                fair_recommendations.append(recipe)
-            
-            recommendations = fair_recommendations[:limit]
-            print(f"Fair distribution complete: {len(recommendations)} recipes")
-            
-            # Log distribution
-            cuisine_counts = {}
-            for recipe in recommendations:
-                recipe_cuisine = self._normalize_cuisine(recipe.get('cuisine', ''), recipe).lower()
-                for fav_cuisine in favorite_cuisines:
-                    if (recipe_cuisine == fav_cuisine.lower() or 
-                        fav_cuisine.lower() in recipe_cuisine or 
-                        recipe_cuisine in fav_cuisine.lower()):
-                        cuisine_counts[fav_cuisine] = cuisine_counts.get(fav_cuisine, 0) + 1
+                want = targets.get(cuisine, 0)
+                take = min(want, len(cuisine_groups[cuisine]))
+                for _ in range(take):
+                    if slots_remaining <= 0:
                         break
+                    fair_recommendations.append(cuisine_groups[cuisine].pop(0))
+                    slots_remaining -= 1
+
+            # Second pass: if some cuisines lacked enough items, redistribute remaining slots
+            while slots_remaining > 0 and any(cuisine_groups.values()):
+                for cuisine in favorite_cuisines:
+                    if slots_remaining <= 0:
+                        break
+                    if cuisine_groups[cuisine]:
+                        fair_recommendations.append(cuisine_groups[cuisine].pop(0))
+                        slots_remaining -= 1
             
-            print(f"Final distribution by cuisine: {cuisine_counts}")
+            # If we still have slots to fill, add high-scored uncategorized recipes
+            if slots_remaining > 0 and uncategorized:
+                uncategorized.sort(key=score_recipe, reverse=True)
+                fair_recommendations.extend(uncategorized[:slots_remaining])
             
-            # Verify distribution is fair
-            if cuisine_counts:
-                min_count = min(cuisine_counts.values())
-                max_count = max(cuisine_counts.values())
-                print(f"Distribution range: {min_count} to {max_count} recipes per cuisine")
-                if max_count - min_count > 2:
-                    print("⚠️ Warning: Distribution is not very even")
-                else:
-                    print("✅ Distribution is fairly even")
+            # Ensure we don't exceed the limit
+            fair_recommendations = fair_recommendations[:limit]
+            
+            # Update the recommendations list with our fairly distributed recipes
+            recommendations = fair_recommendations
+            
+            # Optional: simple distribution log for debugging
+            try:
+                cuisine_counts = {}
+                for r in recommendations:
+                    r_cuisines = []
+                    if r.get('cuisine'):
+                        norm = self._normalize_cuisine(r.get('cuisine', ''), r).lower()
+                        if norm:
+                            r_cuisines.append(norm)
+                    cuisines = r.get('cuisines', [])
+                    if isinstance(cuisines, list):
+                        for c in cuisines:
+                            if c:
+                                norm = self._normalize_cuisine(c, r).lower()
+                                if norm and norm not in r_cuisines:
+                                    r_cuisines.append(norm)
+                    for fav in favorite_cuisines:
+                        fl = fav.lower()
+                        if any(fl == rc or fl in rc or rc in fl for rc in r_cuisines):
+                            cuisine_counts[fav] = cuisine_counts.get(fav, 0) + 1
+                            break
+                print(f"Final distribution by cuisine: {cuisine_counts}")
+            except Exception as e:
+                print(f"Distribution logging error: {e}")
         
         # Debug: Print top 10 scored recipes
         print("\nTop 10 Scored Recipes:")
         for i, r in enumerate(recommendations[:10], 1):
             rid = r.get('recipe_id') or r.get('id')
             title = r.get('title', 'No title')
-            cuisine = self._normalize_cuisine(r.get('cuisine', ''), r)
+            
+            # Try multiple ways to get cuisine for display
+            display_cuisine = 'Unknown'
+            if r.get('cuisine'):
+                display_cuisine = self._normalize_cuisine(r.get('cuisine', ''), r)
+            elif r.get('cuisines'):
+                cuisines = r.get('cuisines', [])
+                if isinstance(cuisines, list) and cuisines:
+                    display_cuisine = ', '.join(cuisines)
+            
             score = score_recipe(r)
-            print(f"{i}. {title} | Cuisine: {cuisine} | Score: {score}")
+            print(f"{i}. {title} | Cuisine: {display_cuisine} | Score: {score}")
         
         # Remove duplicates while preserving order
         seen = set()
@@ -604,18 +738,176 @@ class RecipeSearchService:
         if final:
             final_cuisines = {}
             for r in final:
-                cuisine = self._normalize_cuisine(r.get('cuisine', ''), r).lower()
-                final_cuisines[cuisine] = final_cuisines.get(cuisine, 0) + 1
+                # Try multiple ways to get cuisine
+                recipe_cuisines = []
+                
+                # First try the normalized cuisine field
+                if r.get('cuisine'):
+                    recipe_cuisines.append(self._normalize_cuisine(r.get('cuisine', ''), r).lower())
+                
+                # If no cuisine found, try cuisines array
+                if r.get('cuisines'):
+                    cuisines = r.get('cuisines', [])
+                    if isinstance(cuisines, list) and cuisines:
+                        for cuisine in cuisines:
+                            if cuisine:
+                                normalized_cuisine = self._normalize_cuisine(cuisine, r).lower()
+                                if normalized_cuisine and normalized_cuisine not in recipe_cuisines:
+                                    recipe_cuisines.append(normalized_cuisine)
+                
+                # Count each cuisine found
+                for recipe_cuisine in recipe_cuisines:
+                    final_cuisines[recipe_cuisine] = final_cuisines.get(recipe_cuisine, 0) + 1
+                
+                # If no cuisine found, mark as unknown
+                if not recipe_cuisines:
+                    final_cuisines['unknown'] = final_cuisines.get('unknown', 0) + 1
+                    
             print(f"Final recommendations by cuisine: {final_cuisines}")
         
         return final
 
     # Add other necessary methods here (semantic_search, _normalize_cuisine, etc.)
     def semantic_search(self, query: str, filters: Optional[Dict[str, Any]] = None, limit: int = 10) -> List[Dict[str, Any]]:
-        """Placeholder for semantic search - implement as needed"""
-        # This is a simplified version - you'll need to implement the full semantic search
-        return []
+        """Basic semantic search using ChromaDB"""
+        if not self.recipe_collection:
+            print("No recipe collection available for search")
+            return []
+            
+        try:
+            # Get all recipes from the collection
+            results = self.recipe_collection.get()
+            
+            if not results or not results.get('documents'):
+                print(f"No recipes found in collection for query: {query}")
+                return []
+            
+            recipes = []
+            for i, doc in enumerate(results['documents']):
+                try:
+                    # Parse the JSON document
+                    recipe = json.loads(doc)
+                    recipes.append(recipe)
+                except (json.JSONDecodeError, TypeError) as e:
+                    print(f"Error parsing recipe {i}: {e}")
+                    continue
+            
+            print(f"Found {len(recipes)} total recipes in database")
+            
+            # Simple text-based filtering based on query
+            if query and query.strip():
+                query_lower = query.lower().strip()
+                filtered_recipes = []
+                
+                for recipe in recipes:
+                    # Check title, description, cuisines, ingredients
+                    searchable_text = []
+                    
+                    if recipe.get('title'):
+                        searchable_text.append(str(recipe['title']).lower())
+                    if recipe.get('name'):
+                        searchable_text.append(str(recipe['name']).lower())
+                    if recipe.get('description'):
+                        searchable_text.append(str(recipe['description']).lower())
+                    if recipe.get('cuisines'):
+                        for cuisine in recipe['cuisines']:
+                            searchable_text.append(str(cuisine).lower())
+                    if recipe.get('cuisine'):
+                        searchable_text.append(str(recipe['cuisine']).lower())
+                    if recipe.get('ingredients'):
+                        for ing in recipe['ingredients']:
+                            if isinstance(ing, dict) and ing.get('name'):
+                                searchable_text.append(str(ing['name']).lower())
+                            elif isinstance(ing, str):
+                                searchable_text.append(ing.lower())
+                    
+                    # Check if query appears in any searchable text
+                    if any(query_lower in text for text in searchable_text):
+                        filtered_recipes.append(recipe)
+                
+                print(f"Query '{query}' matched {len(filtered_recipes)} recipes")
+                recipes = filtered_recipes
+            
+            # Apply filters if provided
+            if filters:
+                filtered_recipes = []
+                for recipe in recipes:
+                    include_recipe = True
+                    
+                    if filters.get('is_vegetarian') and not self._is_vegetarian(recipe):
+                        include_recipe = False
+                    if filters.get('is_vegan') and not self._is_vegan(recipe):
+                        include_recipe = False
+                    if filters.get('is_gluten_free') and not self._is_gluten_free(recipe):
+                        include_recipe = False
+                    
+                    if include_recipe:
+                        filtered_recipes.append(recipe)
+                
+                recipes = filtered_recipes
+                print(f"After applying filters: {len(recipes)} recipes")
+            
+            # Limit results
+            return recipes[:limit]
+            
+        except Exception as e:
+            print(f"Error in semantic_search: {e}")
+            return []
+    
+    def _is_vegetarian(self, recipe: Dict[str, Any]) -> bool:
+        """Check if recipe is vegetarian"""
+        # Simple check - can be enhanced
+        avoid_ingredients = ['beef', 'pork', 'chicken', 'fish', 'shrimp', 'lamb', 'meat']
+        ingredients = recipe.get('ingredients', [])
         
+        for ing in ingredients:
+            if isinstance(ing, dict) and ing.get('name'):
+                ing_name = str(ing['name']).lower()
+                if any(avoid in ing_name for avoid in avoid_ingredients):
+                    return False
+            elif isinstance(ing, str):
+                ing_name = ing.lower()
+                if any(avoid in ing_name for avoid in avoid_ingredients):
+                    return False
+        
+        return True
+    
+    def _is_vegan(self, recipe: Dict[str, Any]) -> bool:
+        """Check if recipe is vegan"""
+        # Simple check - can be enhanced
+        avoid_ingredients = ['beef', 'pork', 'chicken', 'fish', 'shrimp', 'lamb', 'meat', 'cheese', 'milk', 'eggs', 'butter', 'cream']
+        ingredients = recipe.get('ingredients', [])
+        
+        for ing in ingredients:
+            if isinstance(ing, dict) and ing.get('name'):
+                ing_name = str(ing['name']).lower()
+                if any(avoid in ing_name for avoid in avoid_ingredients):
+                    return False
+            elif isinstance(ing, str):
+                ing_name = ing.lower()
+                if any(avoid in ing_name for avoid in avoid_ingredients):
+                    return False
+        
+        return True
+    
+    def _is_gluten_free(self, recipe: Dict[str, Any]) -> bool:
+        """Check if recipe is gluten-free"""
+        # Simple check - can be enhanced
+        gluten_ingredients = ['wheat', 'flour', 'bread', 'pasta', 'noodles', 'soy sauce', 'barley', 'rye']
+        ingredients = recipe.get('ingredients', [])
+        
+        for ing in ingredients:
+            if isinstance(ing, dict) and ing.get('name'):
+                ing_name = str(ing['name']).lower()
+                if any(gluten in ing_name for gluten in gluten_ingredients):
+                    return False
+            elif isinstance(ing, str):
+                ing_name = ing.lower()
+                if any(gluten in ing_name for gluten in gluten_ingredients):
+                    return False
+        
+        return True
+    
     def _normalize_cuisine(self, cuisine: str, recipe: Optional[Dict] = None) -> str:
         """Placeholder for cuisine normalization - implement as needed"""
         if not cuisine:

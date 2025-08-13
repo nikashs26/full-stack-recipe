@@ -25,14 +25,12 @@ class NutritionAnalysisAgent:
         self.ollama_url = os.getenv('OLLAMA_URL', 'http://localhost:11434')
         self.hf_api_key = os.getenv('HUGGING_FACE_API_KEY')
         
-        # Priority order for LLM services (Ollama first since it's working)
+        # Only use Ollama since it's working locally
         self.llm_services = [
-            ('ollama', self._analyze_with_ollama),
-            ('openai', self._analyze_with_openai),
-            ('huggingface', self._analyze_with_huggingface)
+            ('ollama', self._analyze_with_ollama)
         ]
         
-        logger.info("Nutrition Analysis Agent initialized")
+        logger.info("Nutrition Analysis Agent initialized - using Ollama only")
     
     async def analyze_recipe_nutrition(self, recipe: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -223,29 +221,36 @@ Provide the response in JSON format with these exact keys: calories, carbohydrat
     async def _analyze_with_ollama(self, recipe_text: str, recipe: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Analyze recipe using Ollama (local LLM)"""
         try:
-            # Check if Ollama is available
-            response = requests.get(f"{self.ollama_url}/api/tags", timeout=5)
-            if response.status_code != 200:
-                raise Exception("Ollama server not available")
+            import aiohttp
             
-            payload = {
-                "model": "llama3.2:latest",
-                "prompt": f"""You are a nutrition expert. Analyze this recipe and provide nutritional information per serving in JSON format.
+            # Check if Ollama is available
+            async with aiohttp.ClientSession() as session:
+                async with session.get(f"{self.ollama_url}/api/tags", timeout=5) as response:
+                    if response.status != 200:
+                        raise Exception("Ollama server not available")
+                
+                payload = {
+                    "model": "llama3.2:latest",
+                    "prompt": f"""You are a nutrition expert. Analyze this recipe and provide nutritional information per serving in JSON format.
 
 {recipe_text}
 
 Respond only with valid JSON containing: calories, carbohydrates, fat, protein""",
-                "stream": False
-            }
-            
-            response = requests.post(f"{self.ollama_url}/api/generate", json=payload, timeout=30)
-            if response.status_code != 200:
-                raise Exception(f"Ollama API error: {response.status_code}")
-            
-            result = response.json()
-            content = result.get('response', '')
-            
-            return self._parse_llm_response(content)
+                    "stream": False
+                }
+                
+                async with session.post(f"{self.ollama_url}/api/generate", json=payload, timeout=30) as response:
+                    if response.status != 200:
+                        raise Exception(f"Ollama API error: {response.status}")
+                    
+                    result = await response.json()
+                    content = result.get('response', '')
+                    
+                    if not content:
+                        raise Exception("Empty response from Ollama")
+                    
+                    logger.info(f"Ollama response: {content[:100]}...")
+                    return self._parse_llm_response(content)
             
         except Exception as e:
             logger.error(f"Ollama analysis failed: {e}")
@@ -267,7 +272,7 @@ Respond only with valid JSON containing: calories, carbohydrates, fat, protein""
 
 {recipe_text}
 
-Respond only with valid JSON containing: calories, carbohydrates, fat, protein""",
+Respond only with valid JSON containing: calories, carbohydrates, fat, protein. Make sure the macors add up correctly (1g of protein is 4 calories, 1g of carbs is 4 calories, 1g of fat is 9 calories)""",
                 "parameters": {
                     "max_length": 200,
                     "temperature": 0.1,

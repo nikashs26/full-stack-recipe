@@ -247,10 +247,36 @@ def store_recipes_in_chromadb(recipes):
     print(f"\nStoring {len(recipes)} recipes in ChromaDB...")
     
     try:
-        # Clear existing data
-        print("Clearing existing cache...")
-        recipe_cache.clear_cache()
-        print("✓ Cache cleared successfully")
+        # Check existing recipes to avoid duplicates
+        print("Checking existing recipes in cache...")
+        existing_recipes = recipe_cache.get_all_recipes()
+        existing_ids = set()
+        
+        if existing_recipes:
+            for recipe in existing_recipes:
+                if isinstance(recipe, dict) and 'id' in recipe:
+                    existing_ids.add(str(recipe['id']))
+            print(f"Found {len(existing_ids)} existing recipes in cache")
+        
+        # Filter out recipes that already exist
+        new_recipes = []
+        duplicate_count = 0
+        
+        for recipe in recipes:
+            recipe_id = str(recipe['id'])
+            if recipe_id in existing_ids:
+                duplicate_count += 1
+                continue
+            new_recipes.append(recipe)
+        
+        if duplicate_count > 0:
+            print(f"Skipping {duplicate_count} duplicate recipes")
+        
+        if not new_recipes:
+            print("No new recipes to add - all recipes already exist in cache")
+            return
+        
+        print(f"Adding {len(new_recipes)} new recipes to cache...")
         
         # Prepare data for ChromaDB
         ids = []
@@ -258,7 +284,7 @@ def store_recipes_in_chromadb(recipes):
         metadatas = []
         search_texts = []
         
-        for recipe in recipes:
+        for recipe in new_recipes:
             recipe_id = str(recipe['id'])
             ids.append(recipe_id)
             
@@ -303,7 +329,7 @@ def store_recipes_in_chromadb(recipes):
             metadatas=metadatas
         )
         
-        print(f"✓ Successfully stored {len(recipes)} recipes in ChromaDB")
+        print(f"✓ Successfully added {len(new_recipes)} new recipes to ChromaDB")
         
     except Exception as e:
         print(f"Error storing recipes in ChromaDB: {str(e)}")

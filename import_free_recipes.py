@@ -65,7 +65,7 @@ def populate_recipes_via_api():
             
             # Make search request
             response = requests.get(f"{BACKEND_URL}/get_recipes", params={"query": term})
-            print("From Recipe API: ", response)
+            
             if response.ok:
                 data = response.json()
                 recipes = data.get("results", [])
@@ -205,13 +205,13 @@ def main():
     if final_count > initial_count:
         print(f"\n🎉 Success! Added {final_count - initial_count} recipes to the database")
         print("💡 These recipes are now cached and will load instantly on subsequent searches")
-        print("\n🌐 Open your browser to http://localhost:8081 to see the recipes!")
-        print("🔍 Try searching for different cuisines, ingredients, or meal types in your browser!")
+        print("\n🌐 Open your browser to http://localhost:8080 to see the recipes!")
+        print("🔍 Try searching for different cuisines, ingredients, or meal types")
     else:
         print(f"\n⚠️  No new recipes were added. Current count: {final_count}")
         if final_count > 0:
             print("✅ But you already have recipes available in the app!")
-            print("🌐 Open your browser to http://localhost:8081 to see them")
+            print("🌐 Open your browser to http://localhost:8080 to see them")
 
 if __name__ == "__main__":
     main() 

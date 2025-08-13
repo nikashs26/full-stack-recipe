@@ -5,23 +5,23 @@ Modify these settings to customize the behavior of the agent.
 
 # LLM Service Configuration
 LLM_SERVICES = {
-    'openai': {
+    'ollama': {
         'enabled': True,
-        'priority': 1,  # 1 = highest priority
+        'priority': 1,  # 1 = highest priority (was 2)
+        'model': 'llama3.2:latest',
+        'timeout': 30,
+        'url': 'http://localhost:11434'
+    },
+    'openai': {
+        'enabled': False,  # Disabled since API key is invalid
+        'priority': 2,  # Lower priority
         'model': 'gpt-3.5-turbo',
         'temperature': 0.1,
         'max_tokens': 200,
         'timeout': 30
     },
-    'ollama': {
-        'enabled': True,
-        'priority': 2,
-        'model': 'llama3.2:latest',
-        'timeout': 30,
-        'url': 'http://localhost:11434'
-    },
     'huggingface': {
-        'enabled': True,
+        'enabled': False,  # Disabled since it's not working
         'priority': 3,
         'model': 'microsoft/DialoGPT-medium',
         'timeout': 30,
