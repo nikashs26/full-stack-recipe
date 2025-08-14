@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { fetchManualRecipes } from '../lib/manualRecipes';
 import { DietaryRestriction, Recipe as RecipeType } from '../types/recipe';
-import { Loader2, Search, Filter, X, ChefHat, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Utensils } from 'lucide-react';
+import { Loader2, Search, ChefHat, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Utensils } from 'lucide-react';
 import Header from '../components/Header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,8 +11,6 @@ import RecipeCard from '@/components/RecipeCard';
 import { Input } from '@/components/ui/input';
 import { RecipeFilters } from '@/components/RecipeFilters';
 import { useDebounce } from '../hooks/useDebounce';
-import { useMediaQuery } from '../hooks/use-media-query';
-import { Drawer, DrawerContent, DrawerTrigger } from '@/components/ui/drawer';
 
 // Recipe type definitions
 type BaseRecipe = {
@@ -85,14 +83,12 @@ const RecipesPage: React.FC = () => {
   const [ingredientSearch, setIngredientSearch] = useState('');
   const [selectedCuisines, setSelectedCuisines] = useState<string[]>([]);
   const [selectedDiets, setSelectedDiets] = useState<string[]>([]);
-  const [showMobileFilters, setShowMobileFilters] = useState(false);
   const [showLoading, setShowLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [gotoPage, setGotoPage] = useState<string>("");
   const [totalPages, setTotalPages] = useState(1);
   const recipesPerPage = 20;
   
-  const isDesktop = useMediaQuery("(min-width: 1024px)");
   const debouncedSearchQuery = useDebounce(searchQuery, 500);
 
   // Fetch paginated recipes from ChromaDB with search and filters
@@ -146,6 +142,34 @@ const RecipesPage: React.FC = () => {
     console.log('Ingredient search changed, resetting to page 1');
     setCurrentPage(1);
   };
+
+  // Toggle cuisine filter and reset to first page
+  const toggleCuisine = (cuisine: string) => {
+    setSelectedCuisines(prev => 
+      prev.includes(cuisine) 
+        ? prev.filter(c => c !== cuisine) 
+        : [...prev, cuisine]
+    );
+    setCurrentPage(1);
+  };
+
+  // Toggle diet filter and reset to first page
+  const toggleDiet = (diet: string) => {
+    setSelectedDiets(prev => 
+      prev.includes(diet) 
+        ? prev.filter(d => d !== diet) 
+        : [...prev, diet]
+    );
+    setCurrentPage(1);
+  };
+
+  const clearAllFilters = useCallback(() => {
+    setSelectedCuisines([]);
+    setSelectedDiets([]);
+    setSearchQuery("");
+    setSearchTerm("");
+    setIngredientSearch("");
+  }, []);
 
   // Normalize recipes to a common format
   const normalizedRecipes = useMemo<NormalizedRecipe[]>(() => {
@@ -281,34 +305,6 @@ const RecipesPage: React.FC = () => {
     setCurrentPage(1);
   }, []);
 
-  // Toggle cuisine filter and reset to first page
-  const toggleCuisine = (cuisine: string) => {
-    setSelectedCuisines(prev => 
-      prev.includes(cuisine) 
-        ? prev.filter(c => c !== cuisine) 
-        : [...prev, cuisine]
-    );
-    setCurrentPage(1);
-  };
-
-  // Toggle diet filter and reset to first page
-  const toggleDiet = (diet: string) => {
-    setSelectedDiets(prev => 
-      prev.includes(diet) 
-        ? prev.filter(d => d !== diet) 
-        : [...prev, diet]
-    );
-    setCurrentPage(1);
-  };
-
-  const clearAllFilters = useCallback(() => {
-    setSelectedCuisines([]);
-    setSelectedDiets([]);
-    setSearchQuery("");
-    setSearchTerm("");
-    setIngredientSearch("");
-  }, []);
-
   // Show loading state only when we have a search query and data is being fetched
   const isLoading = useMemo(() => 
     (isLoadingRecipes || isFetching) && searchQuery !== '', 
@@ -323,49 +319,6 @@ const RecipesPage: React.FC = () => {
       setShowLoading(false);
     }
   }, [isLoading]);
-
-  const renderFilters = useCallback(() => (
-    <div className="space-y-6">
-      <RecipeFilters
-        searchQuery={searchQuery}
-        selectedCuisines={selectedCuisines}
-        selectedDiets={selectedDiets}
-        onSearchChange={setSearchQuery}
-        onCuisineToggle={toggleCuisine}
-        onDietToggle={toggleDiet}
-        onClearFilters={clearAllFilters}
-      />
-    </div>
-  ), [searchQuery, selectedCuisines, selectedDiets, toggleCuisine, toggleDiet, clearAllFilters]);
-
-  const renderMobileFilters = useCallback(() => (
-    <Drawer open={showMobileFilters} onOpenChange={setShowMobileFilters}>
-      <div className="fixed bottom-6 right-6 z-10 lg:hidden">
-        <Button
-          onClick={() => setShowMobileFilters(true)}
-          className="rounded-full w-14 h-14 shadow-lg"
-          size="icon"
-          aria-label="Open filters"
-        >
-          <Filter className="h-6 w-6" />
-        </Button>
-      </div>
-      <DrawerContent className="h-[90vh] px-4 pb-8">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-semibold">Filters</h2>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setShowMobileFilters(false)}
-            aria-label="Close filters"
-          >
-            <X className="h-5 w-5" />
-          </Button>
-        </div>
-        {renderFilters()}
-      </DrawerContent>
-    </Drawer>
-  ), [showMobileFilters, renderFilters]);
 
   const renderRecipeCard = useCallback((recipe: NormalizedRecipe, index: number) => {
     // Helper function to convert string to DietaryRestriction enum
@@ -495,10 +448,15 @@ const RecipesPage: React.FC = () => {
             {/* Search Container */}
             <div className="w-full max-w-4xl mx-auto">
               <div className="bg-white/95 backdrop-blur-sm rounded-2xl p-6 shadow-xl border border-white/30">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div className="space-y-4 mb-4">
+                  {/* Recipe Name Search */}
                   <div className="relative">
+                    <label htmlFor="recipe-name-search" className="block text-sm font-medium text-gray-700 mb-2">
+                      Recipe Name Search
+                    </label>
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
                     <Input
+                      id="recipe-name-search"
                       type="text"
                       placeholder="Search recipes by name..."
                       className="pl-10 pr-4 py-6 text-base rounded-xl shadow-sm focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 w-full border-0 bg-white/90 hover:bg-white transition-colors duration-200"
@@ -506,9 +464,14 @@ const RecipesPage: React.FC = () => {
                       onChange={handleSearchChange}
                     />
                   </div>
+                  {/* Ingredient Search */}
                   <div className="relative">
+                    <label htmlFor="ingredient-search" className="block text-sm font-medium text-gray-700 mb-2">
+                      Ingredient Search
+                    </label>
                     <Utensils className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
                     <Input
+                      id="ingredient-search"
                       type="text"
                       placeholder="Filter by ingredients..."
                       className="pl-10 pr-4 py-6 text-base rounded-xl shadow-sm focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 w-full border-0 bg-white/90 hover:bg-white transition-colors duration-200"
@@ -519,7 +482,11 @@ const RecipesPage: React.FC = () => {
                 </div>
                 <div className="flex justify-center">
                   <Button 
-                    onClick={() => handleSearchChange({ target: { value: searchTerm } } as React.ChangeEvent<HTMLInputElement>) }
+                    onClick={() => {
+                      // Trigger search with current values
+                      setSearchQuery(searchTerm);
+                      setCurrentPage(1);
+                    }}
                     className="px-8 py-6 text-lg font-medium rounded-xl bg-gradient-to-r from-primary to-amber-600 hover:from-primary/90 hover:to-amber-600/90 text-white shadow-lg hover:shadow-xl transition-all duration-200 w-full md:w-auto"
                   >
                     <Search className="mr-2 h-5 w-5" />
@@ -539,26 +506,34 @@ const RecipesPage: React.FC = () => {
             {/* Filters - Left Sidebar */}
             <div className="lg:w-80 flex-shrink-0">
               <div className="sticky top-24">
-                {isDesktop ? (
-                  <div>
-                    <div className="flex justify-between items-center mb-4 w-full">
-                      <h2 className="text-lg font-semibold">Filters</h2>
-                      {(selectedCuisines.length > 0 || selectedDiets.length > 0) && (
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          onClick={clearAllFilters}
-                          className="text-sm text-primary hover:text-primary/80"
-                        >
-                          Clear all
-                        </Button>
-                      )}
-                    </div>
-                    {renderFilters()}
+                <div>
+                  <div className="flex justify-between items-center mb-4 w-full">
+                    <h2 className="text-lg font-semibold">Filters</h2>
+                    {(selectedCuisines.length > 0 || selectedDiets.length > 0) && (
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={clearAllFilters}
+                        className="text-sm text-primary hover:text-primary/80"
+                      >
+                        Clear all
+                      </Button>
+                    )}
                   </div>
-                ) : (
-                  renderMobileFilters()
-                )}
+                  <div className="space-y-6">
+                    <RecipeFilters
+                      searchQuery={searchQuery}
+                      ingredientSearch={ingredientSearch}
+                      selectedCuisines={selectedCuisines}
+                      selectedDiets={selectedDiets}
+                      onSearchChange={setSearchQuery}
+                      onIngredientSearchChange={setIngredientSearch}
+                      onCuisineToggle={toggleCuisine}
+                      onDietToggle={toggleDiet}
+                      onClearFilters={clearAllFilters}
+                    />
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -606,11 +581,11 @@ const RecipesPage: React.FC = () => {
                     <ChefHat className="mx-auto h-16 w-16 text-gray-300" />
                     <h3 className="mt-4 text-xl font-semibold text-gray-700">No recipes found</h3>
                     <p className="mt-2 text-gray-500 max-w-md mx-auto">
-                      {searchTerm || selectedCuisines.length > 0 || selectedDiets.length > 0
+                      {searchTerm || ingredientSearch || selectedCuisines.length > 0 || selectedDiets.length > 0
                         ? 'No recipes match your search criteria. Try adjusting your filters.'
                         : 'No recipes available at the moment. Check back later or add your own recipe!'}
                     </p>
-                    {(searchTerm || selectedCuisines.length > 0 || selectedDiets.length > 0) && (
+                    {(searchTerm || ingredientSearch || selectedCuisines.length > 0 || selectedDiets.length > 0) && (
                       <Button 
                         onClick={clearAllFilters}
                         className="mt-4"

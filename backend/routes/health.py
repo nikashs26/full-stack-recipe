@@ -1,5 +1,4 @@
 from flask import Blueprint, jsonify
-from pymongo import MongoClient
 import os
 from dotenv import load_dotenv
 
@@ -9,40 +8,53 @@ load_dotenv()
 # Create blueprint
 health_bp = Blueprint('health', __name__)
 
-# MongoDB connection
-MONGO_URI = os.getenv('MONGO_URI', 'mongodb://localhost:27017/')
-DB_NAME = os.getenv('MONGO_DB_NAME', 'recipe_app')
-
-@health_bp.route('/api/health/mongodb', methods=['GET'])
-def check_mongodb():
-    """Check MongoDB connection status"""
+@health_bp.route('/api/health/chromadb', methods=['GET'])
+def check_chromadb():
+    """Check ChromaDB connection status"""
     try:
-        # Try to connect to MongoDB
-        client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
+        # Try to import and initialize ChromaDB
+        import chromadb
+        import os
         
-        # The ismaster command is cheap and does not require auth
-        client.admin.command('ismaster')
-        
-        # If we got here, connection was successful
-        return jsonify({
-            'status': 'success',
-            'message': 'MongoDB connection successful',
-            'mongodb': {
-                'connected': True,
-                'database': DB_NAME,
-                'server': MONGO_URI
-            }
-        }), 200
-        
+        # Check if ChromaDB directory exists and is accessible
+        chroma_path = os.path.abspath("./chroma_db")
+        if os.path.exists(chroma_path):
+            # Try to create a test client
+            client = chromadb.PersistentClient(path=chroma_path)
+            
+            # List collections to verify connection
+            collections = client.list_collections()
+            
+            return jsonify({
+                'status': 'success',
+                'message': 'ChromaDB connection successful',
+                'chromadb': {
+                    'connected': True,
+                    'path': chroma_path,
+                    'collections_count': len(collections),
+                    'collections': [col.name for col in collections]
+                }
+            }), 200
+        else:
+            return jsonify({
+                'status': 'error',
+                'message': 'ChromaDB directory not found',
+                'chromadb': {
+                    'connected': False,
+                    'path': chroma_path,
+                    'error': 'Directory does not exist'
+                }
+            }), 500
+            
     except Exception as e:
         return jsonify({
             'status': 'error',
-            'message': 'MongoDB connection failed',
+            'message': 'ChromaDB connection failed',
             'error': str(e),
-            'mongodb': {
+            'chromadb': {
                 'connected': False,
-                'database': DB_NAME,
-                'server': MONGO_URI
+                'path': './chroma_db',
+                'error': str(e)
             }
         }), 500
 
@@ -52,6 +64,6 @@ def health_check():
     return jsonify({
         'status': 'up',
         'services': {
-            'mongodb': '/api/health/mongodb'
+            'chromadb': '/api/health/chromadb'
         }
     }), 200

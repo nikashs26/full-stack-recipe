@@ -6,6 +6,7 @@ export interface Folder {
   description?: string;
   createdAt: string;
   updatedAt: string;
+  recipe_count?: number;
 }
 
 export enum DietaryRestriction {
@@ -151,8 +152,8 @@ export interface Comment {
 
 export interface ShoppingListItem {
   id: string;
-  ingredient: string;
+  name: string;
   recipeId: string;
   recipeName: string;
-  checked: boolean;
+  completed: boolean;
 }

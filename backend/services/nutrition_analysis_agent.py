@@ -54,16 +54,20 @@ class NutritionAnalysisAgent:
                     logger.info(f"Attempting analysis with {service_name}")
                     nutrition_data = await service_func(recipe_text, recipe)
                     
-                    if nutrition_data and self._validate_nutrition_data(nutrition_data):
-                        logger.info(f"Successfully analyzed recipe with {service_name}")
-                        return {
-                            'recipe_id': recipe.get('id'),
-                            'title': recipe.get('title'),
-                            'nutrition': nutrition_data,
-                            'analyzed_at': datetime.utcnow().isoformat(),
-                            'llm_service': service_name,
-                            'status': 'success'
-                        }
+                    if nutrition_data:
+                        # Validate and correct the nutrition data
+                        corrected_nutrition = self._validate_and_correct_nutrition_data(nutrition_data)
+                        if corrected_nutrition:
+                            logger.info(f"Successfully analyzed recipe with {service_name}")
+                            return {
+                                'recipe_id': recipe.get('id'),
+                                'title': recipe.get('title'),
+                                'nutrition': corrected_nutrition,
+                                'analyzed_at': datetime.utcnow().isoformat(),
+                                'llm_service': service_name,
+                                'status': 'success',
+                                'corrections_applied': corrected_nutrition != nutrition_data
+                            }
                         
                 except Exception as e:
                     logger.warning(f"Failed to analyze with {service_name}: {e}")
@@ -171,7 +175,7 @@ class NutritionAnalysisAgent:
             elif isinstance(recipe['instructions'], str):
                 instructions = [recipe['instructions']]
         
-        # Format for LLM
+        # Format for LLM with strict macro calculation requirements
         recipe_text = f"""
 Recipe: {title}
 Servings: {servings}
@@ -182,13 +186,21 @@ Ingredients:
 Instructions:
 {chr(10).join(f"{i+1}. {step}" for i, step in enumerate(instructions))}
 
-Please analyze this recipe and provide the following nutritional information per serving:
-- Calories (kcal)
-- Carbohydrates (g)
-- Fat (g)
-- Protein (g)
+IMPORTANT: Analyze this recipe and provide EXACT nutritional information per serving.
+
+CRITICAL REQUIREMENTS:
+- Calories (kcal) must equal: (protein × 4) + (carbohydrates × 4) + (fat × 9)
+- Protein: 4 calories per gram
+- Carbohydrates: 4 calories per gram  
+- Fat: 9 calories per gram
 
 Provide the response in JSON format with these exact keys: calories, carbohydrates, fat, protein
+
+Example of correct calculation:
+- If protein=20g, carbs=30g, fat=15g
+- Then calories = (20×4) + (30×4) + (15×9) = 80 + 120 + 135 = 335 kcal
+
+Ensure your macros add up exactly to the calories you specify.
 """
         return recipe_text.strip()
     
@@ -235,7 +247,13 @@ Provide the response in JSON format with these exact keys: calories, carbohydrat
 
 {recipe_text}
 
-Respond only with valid JSON containing: calories, carbohydrates, fat, protein""",
+CRITICAL: The calories must exactly equal: (protein × 4) + (carbohydrates × 4) + (fat × 9)
+- Protein: 4 calories per gram
+- Carbohydrates: 4 calories per gram  
+- Fat: 9 calories per gram
+
+Respond only with valid JSON containing: calories, carbohydrates, fat, protein
+Ensure macros add up exactly to the calories specified.""",
                     "stream": False
                 }
                 
@@ -272,7 +290,12 @@ Respond only with valid JSON containing: calories, carbohydrates, fat, protein""
 
 {recipe_text}
 
-Respond only with valid JSON containing: calories, carbohydrates, fat, protein. Make sure the macors add up correctly (1g of protein is 4 calories, 1g of carbs is 4 calories, 1g of fat is 9 calories)""",
+CRITICAL: The calories must exactly equal: (protein × 4) + (carbohydrates × 4) + (fat × 9)
+- Protein: 4 calories per gram
+- Carbohydrates: 4 calories per gram  
+- Fat: 9 calories per gram
+
+Respond only with valid JSON containing: calories, carbohydrates, fat, protein. Make sure the macros add up exactly to the calories specified.""",
                 "parameters": {
                     "max_length": 200,
                     "temperature": 0.1,
@@ -365,7 +388,7 @@ Respond only with valid JSON containing: calories, carbohydrates, fat, protein. 
     
     def _validate_nutrition_data(self, nutrition_data: Dict[str, Any]) -> bool:
         """
-        Validate that nutrition data is reasonable.
+        Validate that nutrition data is reasonable and macros add up correctly.
         
         Args:
             nutrition_data: Parsed nutrition data
@@ -377,37 +400,111 @@ Respond only with valid JSON containing: calories, carbohydrates, fat, protein. 
             # Check that all required fields are present
             required_fields = ['calories', 'carbohydrates', 'fat', 'protein']
             if not all(field in nutrition_data for field in required_fields):
+                logger.warning(f"Missing required fields: {required_fields}")
                 return False
             
-            # Check that values are reasonable
+            # Extract values
             calories = nutrition_data['calories']
             carbs = nutrition_data['carbohydrates']
             fat = nutrition_data['fat']
             protein = nutrition_data['protein']
             
-            # Basic sanity checks
-            if calories < 0 or calories > 5000:  # Reasonable range for a serving
+            # Basic sanity checks for reasonable ranges
+            if calories < 10 or calories > 2000:  # More reasonable range for a serving
+                logger.warning(f"Calories out of reasonable range: {calories}")
                 return False
             
-            if carbs < 0 or carbs > 200:
+            if carbs < 0 or carbs > 150:
+                logger.warning(f"Carbohydrates out of reasonable range: {carbs}")
                 return False
                 
-            if fat < 0 or fat > 100:
+            if fat < 0 or fat > 80:
+                logger.warning(f"Fat out of reasonable range: {fat}")
                 return False
                 
-            if protein < 0 or protein > 100:
+            if protein < 0 or protein > 80:
+                logger.warning(f"Protein out of reasonable range: {protein}")
                 return False
             
-            # Check that macros add up reasonably (allowing for some variance)
-            total_macros = carbs * 4 + fat * 9 + protein * 4  # Calories from macros
-            if abs(total_macros - calories) > calories * 0.5:  # Allow 50% variance
+            # Calculate expected calories from macros
+            expected_calories = carbs * 4 + fat * 9 + protein * 4
+            
+            # Check if macros add up exactly (allow only 1% tolerance for rounding)
+            tolerance = max(1, expected_calories * 0.01)  # 1% tolerance, minimum 1 calorie
+            if abs(expected_calories - calories) > tolerance:
+                logger.warning(f"Macros don't add up: expected {expected_calories} calories, got {calories}")
+                logger.warning(f"Protein: {protein}g × 4 = {protein * 4} cal")
+                logger.warning(f"Carbs: {carbs}g × 4 = {carbs * 4} cal") 
+                logger.warning(f"Fat: {fat}g × 9 = {fat * 9} cal")
+                logger.warning(f"Total: {protein * 4 + carbs * 4 + fat * 9} cal")
                 return False
             
+            logger.info(f"Nutrition data validated successfully: {calories} cal = {protein}g protein + {carbs}g carbs + {fat}g fat")
             return True
             
         except Exception as e:
             logger.error(f"Nutrition data validation failed: {e}")
             return False
+    
+    def _correct_macro_discrepancies(self, nutrition_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Correct macro discrepancies by recalculating calories from macros.
+        This ensures the data is mathematically correct.
+        
+        Args:
+            nutrition_data: Nutrition data that may have discrepancies
+            
+        Returns:
+            Corrected nutrition data
+        """
+        try:
+            corrected = nutrition_data.copy()
+            
+            # Calculate correct calories from macros
+            carbs = nutrition_data['carbohydrates']
+            fat = nutrition_data['fat']
+            protein = nutrition_data['protein']
+            
+            correct_calories = carbs * 4 + fat * 9 + protein * 4
+            
+            # Update calories to match macros
+            corrected['calories'] = round(correct_calories, 1)
+            
+            logger.info(f"Corrected calories from {nutrition_data['calories']} to {corrected['calories']}")
+            logger.info(f"Based on: {protein}g protein + {carbs}g carbs + {fat}g fat")
+            
+            return corrected
+            
+        except Exception as e:
+            logger.error(f"Failed to correct macro discrepancies: {e}")
+            return nutrition_data
+    
+    def _validate_and_correct_nutrition_data(self, nutrition_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        Validate nutrition data and correct any macro discrepancies.
+        
+        Args:
+            nutrition_data: Parsed nutrition data
+            
+        Returns:
+            Corrected nutrition data if valid, None if invalid
+        """
+        # First try to validate as-is
+        if self._validate_nutrition_data(nutrition_data):
+            return nutrition_data
+        
+        # If validation fails, try to correct discrepancies
+        logger.info("Attempting to correct macro discrepancies...")
+        corrected_data = self._correct_macro_discrepancies(nutrition_data)
+        
+        # Validate the corrected data
+        if self._validate_nutrition_data(corrected_data):
+            logger.info("Successfully corrected and validated nutrition data")
+            return corrected_data
+        
+        # If still invalid, return None
+        logger.warning("Could not correct nutrition data to valid state")
+        return None
     
     def save_nutrition_results(self, results: List[Dict[str, Any]], 
                               output_file: str = "nutrition_analysis_results.json") -> str:
@@ -447,6 +544,59 @@ Respond only with valid JSON containing: calories, carbohydrates, fat, protein. 
         except Exception as e:
             logger.error(f"Failed to save results: {e}")
             raise
+
+    def reprocess_existing_nutrition_data(self, existing_results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Reprocess existing nutrition analysis results to fix macro discrepancies.
+        
+        Args:
+            existing_results: List of existing nutrition analysis results
+            
+        Returns:
+            List of corrected nutrition analysis results
+        """
+        logger.info(f"Reprocessing {len(existing_results)} existing nutrition results...")
+        
+        corrected_results = []
+        corrections_made = 0
+        
+        for result in existing_results:
+            if result.get('status') == 'success' and 'nutrition' in result:
+                original_nutrition = result['nutrition']
+                
+                # Try to validate and correct
+                corrected_nutrition = self._validate_and_correct_nutrition_data(original_nutrition)
+                
+                if corrected_nutrition:
+                    # Check if corrections were made
+                    if corrected_nutrition != original_nutrition:
+                        corrections_made += 1
+                        logger.info(f"Corrected macros for recipe {result.get('recipe_id', 'unknown')}")
+                        logger.info(f"  Original: {original_nutrition}")
+                        logger.info(f"  Corrected: {corrected_nutrition}")
+                    
+                    # Update the result with corrected nutrition
+                    corrected_result = result.copy()
+                    corrected_result['nutrition'] = corrected_nutrition
+                    corrected_result['corrections_applied'] = corrected_nutrition != original_nutrition
+                    corrected_result['reprocessed_at'] = datetime.utcnow().isoformat()
+                    
+                    corrected_results.append(corrected_result)
+                else:
+                    # Could not correct, mark as error
+                    logger.warning(f"Could not correct macros for recipe {result.get('recipe_id', 'unknown')}")
+                    corrected_result = result.copy()
+                    corrected_result['status'] = 'error'
+                    corrected_result['error'] = 'Failed to correct macro discrepancies'
+                    corrected_result['reprocessed_at'] = datetime.utcnow().isoformat()
+                    
+                    corrected_results.append(corrected_result)
+            else:
+                # Keep non-success results as-is
+                corrected_results.append(result)
+        
+        logger.info(f"Reprocessing complete. Made {corrections_made} corrections.")
+        return corrected_results
 
 
 # Example usage and testing

@@ -1,5 +1,4 @@
-import { supabase } from '../integrations/supabase/client';
-import { useAuth } from '../context/AuthContext';
+// ChromaDB-based click tracking using localStorage as fallback
 
 export interface RecipeClick {
   id: string;
@@ -21,7 +20,7 @@ export interface RecipePopularity {
 }
 
 /**
- * Track when a user clicks on a recipe
+ * Track when a user clicks on a recipe using localStorage
  */
 export async function trackRecipeClick(
   recipeId: string, 
@@ -29,31 +28,34 @@ export async function trackRecipeClick(
   userId?: string | null
 ): Promise<void> {
   try {
-    // Get user agent and IP (if available)
+    // Get user agent
     const userAgent = navigator.userAgent;
     
     // Create the click record
     const clickData = {
+      id: `${recipeId}_${Date.now()}`,
       recipe_id: recipeId,
       recipe_type: recipeType,
       user_id: userId || null,
       clicked_at: new Date().toISOString(),
-      ip_address: null, // We'll get this from the backend if needed
+      ip_address: null,
       user_agent: userAgent
     };
 
     console.log('Tracking recipe click:', clickData);
 
-    const { error } = await supabase
-      .from('recipe_clicks')
-      .insert([clickData]);
-
-    if (error) {
-      console.error('Error tracking recipe click:', error);
-      // Don't throw error to avoid breaking the user experience
-    } else {
-      console.log('Recipe click tracked successfully');
+    // Store in localStorage
+    const existingClicks = JSON.parse(localStorage.getItem('recipe_clicks') || '[]');
+    existingClicks.push(clickData);
+    
+    // Keep only last 1000 clicks to prevent localStorage from getting too large
+    if (existingClicks.length > 1000) {
+      existingClicks.splice(0, existingClicks.length - 1000);
     }
+    
+    localStorage.setItem('recipe_clicks', JSON.stringify(existingClicks));
+    console.log('Recipe click tracked successfully in localStorage');
+
   } catch (error) {
     console.error('Exception tracking recipe click:', error);
     // Don't throw error to avoid breaking the user experience
@@ -61,50 +63,42 @@ export async function trackRecipeClick(
 }
 
 /**
- * Get recipe popularity data including clicks and reviews
+ * Get recipe popularity data including clicks and reviews from localStorage
  */
 export async function getRecipePopularity(
   recipeId: string,
   recipeType: string
 ): Promise<RecipePopularity | null> {
   try {
-    // Get total clicks for this recipe
-    const { data: clicksData, error: clicksError } = await supabase
-      .from('recipe_clicks')
-      .select('id')
-      .eq('recipe_id', recipeId)
-      .eq('recipe_type', recipeType);
+    // Get clicks from localStorage
+    const clicksData = JSON.parse(localStorage.getItem('recipe_clicks') || '[]');
+    const recipeClicks = clicksData.filter((click: any) => 
+      click.recipe_id === recipeId && click.recipe_type === recipeType
+    );
 
-    if (clicksError) {
-      console.error('Error getting recipe clicks:', clicksError);
-      return null;
-    }
+    // Get reviews from localStorage (if they exist)
+    const reviewsData = JSON.parse(localStorage.getItem('recipe_reviews') || '[]');
+    const recipeReviews = reviewsData.filter((review: any) => 
+      review.recipe_id === recipeId && review.recipe_type === recipeType
+    );
 
-    // Get reviews for this recipe
-    const { data: reviewsData, error: reviewsError } = await supabase
-      .from('reviews')
-      .select('rating')
-      .eq('recipe_id', recipeId)
-      .eq('recipe_type', recipeType);
-
-    if (reviewsError) {
-      console.error('Error getting recipe reviews:', reviewsError);
-      return null;
-    }
-
-    const totalClicks = clicksData?.length || 0;
-    const totalReviews = reviewsData?.length || 0;
+    const totalClicks = recipeClicks.length;
+    const totalReviews = recipeReviews.length;
     
     // Calculate average rating
     let averageRating = 0;
     if (totalReviews > 0) {
-      const totalRating = reviewsData.reduce((sum, review) => sum + review.rating, 0);
+      const totalRating = recipeReviews.reduce((sum: number, review: any) => sum + (review.rating || 0), 0);
       averageRating = totalRating / totalReviews;
     }
 
-    // Calculate popularity score (weighted combination of clicks and reviews)
-    // Formula: (clicks * 0.3) + (reviews * 0.4) + (average_rating * 0.3)
-    const popularityScore = (totalClicks * 0.3) + (totalReviews * 0.4) + (averageRating * 0.3);
+    // Calculate popularity score with enhanced formula
+    // Formula: (clicks * 0.25) + (reviews * 0.35) + (average_rating * 0.25) + (engagement_bonus * 0.15)
+    // Engagement bonus rewards recipes with both clicks AND reviews
+    const engagementBonus = (totalClicks > 0 && totalReviews > 0) ? 
+      Math.min(totalClicks, totalReviews) * 0.5 : 0;
+    
+    const popularityScore = (totalClicks * 0.25) + (totalReviews * 0.35) + (averageRating * 0.25) + engagementBonus;
 
     return {
       recipe_id: recipeId,
@@ -125,47 +119,33 @@ export async function getRecipePopularity(
  */
 export async function getPopularRecipes(limit: number = 10): Promise<RecipePopularity[]> {
   try {
-    // Get all unique recipes with their popularity data
-    const { data: clicksData, error: clicksError } = await supabase
-      .from('recipe_clicks')
-      .select('recipe_id, recipe_type');
+    // Get all clicks data from localStorage
+    const clicksData = JSON.parse(localStorage.getItem('recipe_clicks') || '[]');
 
-    if (clicksError) {
-      console.error('Error getting recipe clicks:', clicksError);
-      return [];
-    }
+    // Get all reviews data from localStorage
+    const reviewsData = JSON.parse(localStorage.getItem('recipe_reviews') || '[]');
 
-    // Get all reviews
-    const { data: reviewsData, error: reviewsError } = await supabase
-      .from('reviews')
-      .select('recipe_id, recipe_type, rating');
-
-    if (reviewsError) {
-      console.error('Error getting recipe reviews:', reviewsError);
-      return [];
-    }
-
-    console.log('📊 Popularity data:', {
+    console.log('📊 Popularity data from localStorage:', {
       totalClicks: clicksData?.length || 0,
       totalReviews: reviewsData?.length || 0,
-      uniqueRecipesWithClicks: new Set(clicksData?.map(c => `${c.recipe_id}-${c.recipe_type}`)).size,
-      uniqueRecipesWithReviews: new Set(reviewsData?.map(r => `${r.recipe_id}-${r.recipe_type}`)).size
+      uniqueRecipesWithClicks: new Set(clicksData?.map((c: any) => `${c.recipe_id}-${c.recipe_type}`)).size,
+      uniqueRecipesWithReviews: new Set(reviewsData?.map((r: any) => `${r.recipe_id}-${r.recipe_type}`)).size
     });
 
     // Group clicks by recipe
     const clicksByRecipe = new Map<string, number>();
-    clicksData?.forEach(click => {
+    clicksData?.forEach((click: any) => {
       const key = `${click.recipe_id}-${click.recipe_type}`;
       clicksByRecipe.set(key, (clicksByRecipe.get(key) || 0) + 1);
     });
 
     // Group reviews by recipe
     const reviewsByRecipe = new Map<string, { count: number; totalRating: number }>();
-    reviewsData?.forEach(review => {
+    reviewsData?.forEach((review: any) => {
       const key = `${review.recipe_id}-${review.recipe_type}`;
       const existing = reviewsByRecipe.get(key) || { count: 0, totalRating: 0 };
       existing.count += 1;
-      existing.totalRating += review.rating;
+      existing.totalRating += (review.rating || 0);
       reviewsByRecipe.set(key, existing);
     });
 
@@ -187,8 +167,13 @@ export async function getPopularRecipes(limit: number = 10): Promise<RecipePopul
       const totalReviews = reviewData?.count || 0;
       const averageRating = reviewData ? reviewData.totalRating / reviewData.count : 0;
       
-      // Calculate popularity score
-      const popularityScore = (totalClicks * 0.3) + (totalReviews * 0.4) + (averageRating * 0.3);
+      // Calculate popularity score with enhanced formula
+      // Formula: (clicks * 0.25) + (reviews * 0.35) + (average_rating * 0.25) + (engagement_bonus * 0.15)
+      // Engagement bonus rewards recipes with both clicks AND reviews
+      const engagementBonus = (totalClicks > 0 && totalReviews > 0) ? 
+        Math.min(totalClicks, totalReviews) * 0.5 : 0;
+      
+      const popularityScore = (totalClicks * 0.25) + (totalReviews * 0.35) + (averageRating * 0.25) + engagementBonus;
 
       popularityData.push({
         recipe_id: recipeId,
@@ -209,7 +194,14 @@ export async function getPopularRecipes(limit: number = 10): Promise<RecipePopul
       recipe_id: r.recipe_id,
       clicks: r.total_clicks,
       reviews: r.total_reviews,
-      score: r.popularity_score.toFixed(2)
+      avg_rating: r.average_rating.toFixed(1),
+      score: r.popularity_score.toFixed(2),
+      breakdown: {
+        clicks_score: (r.total_clicks * 0.25).toFixed(2),
+        reviews_score: (r.total_reviews * 0.35).toFixed(2),
+        rating_score: (r.average_rating * 0.25).toFixed(2),
+        engagement_bonus: (r.total_clicks > 0 && r.total_reviews > 0 ? Math.min(r.total_clicks, r.total_reviews) * 0.5 : 0).toFixed(2)
+      }
     })));
 
     return sortedRecipes;
@@ -225,48 +217,34 @@ export async function getPopularRecipes(limit: number = 10): Promise<RecipePopul
  */
 export async function getPersonalPopularRecipes(userId: string, limit: number = 10): Promise<RecipePopularity[]> {
   try {
-    // Get clicks by this user
-    const { data: clicksData, error: clicksError } = await supabase
-      .from('recipe_clicks')
-      .select('recipe_id, recipe_type')
-      .eq('user_id', userId);
+    // Get clicks by this user from localStorage
+    const clicksData = JSON.parse(localStorage.getItem('recipe_clicks') || '[]');
+    const userClicks = clicksData.filter((click: any) => click.user_id === userId);
 
-    if (clicksError) {
-      console.error('Error getting user clicks:', clicksError);
-      return [];
-    }
+    // Get reviews by this user from localStorage
+    const reviewsData = JSON.parse(localStorage.getItem('recipe_reviews') || '[]');
+    const userReviews = reviewsData.filter((review: any) => review.author === userId);
 
-    // Get reviews by this user
-    const { data: reviewsData, error: reviewsError } = await supabase
-      .from('reviews')
-      .select('recipe_id, recipe_type, rating')
-      .eq('author', userId);
-
-    if (reviewsError) {
-      console.error('Error getting user reviews:', reviewsError);
-      return [];
-    }
-
-    console.log('👤 Personal popularity data:', {
-      userClicks: clicksData?.length || 0,
-      userReviews: reviewsData?.length || 0,
+    console.log('👤 Personal popularity data from localStorage:', {
+      userClicks: userClicks?.length || 0,
+      userReviews: userReviews?.length || 0,
       userId
     });
 
     // Group clicks by recipe
     const clicksByRecipe = new Map<string, number>();
-    clicksData?.forEach(click => {
+    userClicks?.forEach((click: any) => {
       const key = `${click.recipe_id}-${click.recipe_type}`;
       clicksByRecipe.set(key, (clicksByRecipe.get(key) || 0) + 1);
     });
 
     // Group reviews by recipe
     const reviewsByRecipe = new Map<string, { count: number; totalRating: number }>();
-    reviewsData?.forEach(review => {
+    userReviews?.forEach((review: any) => {
       const key = `${review.recipe_id}-${review.recipe_type}`;
       const existing = reviewsByRecipe.get(key) || { count: 0, totalRating: 0 };
       existing.count += 1;
-      existing.totalRating += review.rating;
+      existing.totalRating += (review.rating || 0);
       reviewsByRecipe.set(key, existing);
     });
 
@@ -286,8 +264,13 @@ export async function getPersonalPopularRecipes(userId: string, limit: number = 
       const totalReviews = reviewData?.count || 0;
       const averageRating = reviewData ? reviewData.totalRating / reviewData.count : 0;
       
-      // Calculate popularity score
-      const popularityScore = (totalClicks * 0.3) + (totalReviews * 0.4) + (averageRating * 0.3);
+      // Calculate popularity score with enhanced formula
+      // Formula: (clicks * 0.25) + (reviews * 0.35) + (average_rating * 0.25) + (engagement_bonus * 0.15)
+      // Engagement bonus rewards recipes with both clicks AND reviews
+      const engagementBonus = (totalClicks > 0 && totalReviews > 0) ? 
+        Math.min(totalClicks, totalReviews) * 0.5 : 0;
+      
+      const popularityScore = (totalClicks * 0.25) + (totalReviews * 0.35) + (averageRating * 0.25) + engagementBonus;
 
       popularityData.push({
         recipe_id: recipeId,
@@ -314,10 +297,8 @@ export async function getPersonalPopularRecipes(userId: string, limit: number = 
  * Hook to track recipe clicks
  */
 export function useRecipeClickTracking() {
-  const { user } = useAuth();
-
   const trackClick = async (recipeId: string, recipeType: 'local' | 'external' | 'manual' | 'spoonacular') => {
-    await trackRecipeClick(recipeId, recipeType, user?.id);
+    await trackRecipeClick(recipeId, recipeType, null); // No user tracking for now
   };
 
   return { trackClick };

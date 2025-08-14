@@ -36,7 +36,7 @@ def build_llama_prompt(preferences, budget=None, dietary_goals=None, currency='$
         "They should serve to make a proper full day of eating for most individuals. "
         "For each meal, include a name, description, cuisine type, cooking time, difficulty level, and ingredients list. "
         "Also include an estimated cost per serving and total cost for each meal.",
-        "",
+        "Try to avoid repitition of recipes. If the user has a favorite food, try to include it at least once per week.",
         "User Preferences:",
         f"- Cuisines: {', '.join(cuisines) if cuisines else 'Any'}",
         f"- Dietary Restrictions: {', '.join(dietary) if dietary else 'None'}",

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Heart, Folder, ShoppingCart, Star, ArrowLeft, Loader2, FolderPlus } from 'lucide-react';
+import { cleanRecipeDescription } from '../utils/recipeDescriptionCleaner';
 import Header from '../components/Header';
 import { Button } from '@/components/ui/button';
 import { updateRecipe, loadRecipes } from '../utils/storage';
@@ -184,22 +185,87 @@ const RecipeDetailPage: React.FC = () => {
   // Add to shopping list functionality
   const addToShoppingList = () => {
     try {
+      console.log('Adding recipe to shopping list:', {
+        recipeId: recipe.id,
+        recipeName: recipe.title || recipe.name,
+        ingredients: recipe.ingredients,
+        ingredientsType: typeof recipe.ingredients,
+        isArray: Array.isArray(recipe.ingredients),
+        recipe: recipe
+      });
+      
+      // Validate ingredients
+      console.log('Recipe ingredients check:', {
+        hasIngredients: !!recipe.ingredients,
+        hasExtendedIngredients: !!recipe.extendedIngredients,
+        ingredientsType: typeof recipe.ingredients,
+        extendedIngredientsType: typeof recipe.extendedIngredients,
+        isArray: Array.isArray(recipe.ingredients),
+        isExtendedArray: Array.isArray(recipe.extendedIngredients),
+        ingredientsLength: recipe.ingredients?.length,
+        extendedLength: recipe.extendedIngredients?.length,
+        ingredients: recipe.ingredients,
+        extendedIngredients: recipe.extendedIngredients
+      });
+      
+      const hasValidIngredients = (recipe.ingredients && Array.isArray(recipe.ingredients) && recipe.ingredients.length > 0) ||
+                                (recipe.extendedIngredients && Array.isArray(recipe.extendedIngredients) && recipe.extendedIngredients.length > 0);
+      
+      if (!hasValidIngredients) {
+        toast({
+          title: 'No ingredients found',
+          description: 'This recipe has no ingredients to add to your shopping list.',
+          variant: 'destructive'
+        });
+        return;
+      }
+      
       const existingItems = JSON.parse(localStorage.getItem('shopping-list') || '[]');
       
-      const newItems: ShoppingListItem[] = recipe.ingredients.map(ingredient => ({
-        id: uuidv4(),
-        name: ingredient,
-        completed: false,
-        recipeId: recipe.id,
-        recipeName: recipe.title || recipe.name
-      }));
+      // Try different possible ingredient field names
+      let ingredientsArray = recipe.ingredients;
+      if (!ingredientsArray && recipe.extendedIngredients) {
+        ingredientsArray = recipe.extendedIngredients;
+      }
+      
+      console.log('Using ingredients array:', ingredientsArray);
+      
+      const newItems: ShoppingListItem[] = ingredientsArray
+        .filter(ingredient => {
+          if (typeof ingredient === 'string') {
+            return ingredient.trim() !== '';
+          } else if (ingredient && typeof ingredient === 'object' && ingredient.name) {
+            return ingredient.name.trim() !== '';
+          }
+          return false;
+        })
+        .map(ingredient => ({
+          id: uuidv4(),
+          name: typeof ingredient === 'string' ? ingredient.trim() : ingredient.name.trim(),
+          completed: false,
+          recipeId: recipe.id,
+          recipeName: recipe.title || recipe.name
+        }));
+      
+      if (newItems.length === 0) {
+        toast({
+          title: 'No valid ingredients',
+          description: 'No valid ingredients found to add to your shopping list.',
+          variant: 'destructive'
+        });
+        return;
+      }
       
       const updatedItems = [...existingItems, ...newItems];
       localStorage.setItem('shopping-list', JSON.stringify(updatedItems));
       
+      console.log('Successfully added items to shopping list:', newItems);
+      console.log('Updated shopping list in localStorage:', updatedItems);
+      console.log('localStorage shopping-list key:', localStorage.getItem('shopping-list'));
+      
       toast({
         title: "Added to shopping list",
-        description: `${recipe.ingredients.length} ingredients from "${recipe.title || recipe.name}" have been added to your shopping list.`,
+        description: `${newItems.length} ingredients from "${recipe.title || recipe.name}" have been added to your shopping list.`,
       });
     } catch (error) {
       console.error('Error adding to shopping list:', error);
@@ -268,7 +334,7 @@ const RecipeDetailPage: React.FC = () => {
               
               <RecipeFolderActions 
                 recipeId={recipe.id}
-                recipeType="local"
+                recipeType={recipe.id?.toString().startsWith('mealdb_') ? 'external' : 'local'}
                 recipeData={recipe}
               />
               
@@ -287,8 +353,8 @@ const RecipeDetailPage: React.FC = () => {
               <div className="bg-blue-50 p-4 rounded-lg mb-4">
                 <h2 className="text-xl font-semibold mb-2">About This Recipe</h2>
                 <p className="text-gray-700">
-                  {recipe.description || recipe.summary || 
-                   `${recipe.title || recipe.name} is a delicious ${recipe.cuisines?.[0] || recipe.cuisine || 'international'} dish. This recipe features ${recipe.ingredients?.length || 0} ingredients and creates a flavorful meal that's perfect for any occasion.`}
+                  {recipe.description || (recipe.summary ? cleanRecipeDescription(recipe.summary) : 
+                   `${recipe.title || recipe.name} is a delicious ${recipe.cuisines?.[0] || recipe.cuisine || 'international'} dish. This recipe features ${recipe.ingredients?.length || 0} ingredients and creates a flavorful meal that's perfect for any occasion.`)}
                 </p>
               </div>
               

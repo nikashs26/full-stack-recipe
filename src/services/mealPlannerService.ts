@@ -1,5 +1,6 @@
 import { apiCall } from '../utils/apiUtils';
 import { API_BASE_URL } from '../config/api';
+import { loadUserPreferences, UserPreferences } from './preferencesService';
 
 export interface MealPlanOptions {
   budget?: number;
@@ -60,10 +61,11 @@ export interface MealDay {
 }
 
 export interface ShoppingListItem {
-  item: string;
-  category: string;
-  estimated_cost: number;
-  quantity?: string;
+  id: string;
+  name: string;
+  recipeId: string;
+  recipeName: string;
+  completed: boolean;
 }
 
 export interface ShoppingList {
@@ -127,10 +129,46 @@ export const generateMealPlan = async (options?: MealPlanOptions): Promise<MealP
     console.log('🔗 Using API URL:', API_BASE_URL_FINAL);
     console.log('🔧 Environment variable:', import.meta.env.VITE_REACT_APP_API_URL || 'Not set');
     
-    // Use the simple meal planner endpoint (no complex macro/nutrition logic)
+    // Load user preferences first
+    console.log('📋 Loading user preferences...');
+    const userPreferences = await loadUserPreferences();
+    console.log('✅ User preferences loaded:', userPreferences);
+    
+    // Prepare preferences for the meal planner
+    const mealPlanPreferences = {
+      // Foods to avoid (allergens + dietary restrictions)
+      foodsToAvoid: [
+        ...userPreferences.allergens,
+        ...userPreferences.dietaryRestrictions
+      ],
+      // Favorite foods (regardless of cuisine)
+      favoriteFoods: userPreferences.favoriteFoods,
+      // Favorite cuisines
+      favoriteCuisines: userPreferences.favoriteCuisines,
+      // Dietary restrictions
+      dietaryRestrictions: userPreferences.dietaryRestrictions,
+      // Cooking skill level
+      cookingSkillLevel: userPreferences.cookingSkillLevel,
+      // Max cooking time
+      maxCookingTime: userPreferences.maxCookingTime,
+      // Meal inclusions
+      includeBreakfast: userPreferences.includeBreakfast,
+      includeLunch: userPreferences.includeLunch,
+      includeDinner: userPreferences.includeDinner,
+      includeSnacks: userPreferences.includeSnacks,
+      // Nutrition targets
+      targetCalories: userPreferences.targetCalories,
+      targetProtein: userPreferences.targetProtein,
+      targetCarbs: userPreferences.targetCarbs,
+      targetFat: userPreferences.targetFat
+    };
+    
+    console.log('🎯 Sending preferences to meal planner:', mealPlanPreferences);
+    
+    // Use the simple meal planner endpoint with user preferences
     const response = await apiCall('/ai/simple_meal_plan', {
       method: 'POST',
-      body: JSON.stringify({}) // No complex options needed
+      body: JSON.stringify({ preferences: mealPlanPreferences })
     });
 
     if (!response.ok) {
@@ -148,7 +186,7 @@ export const generateMealPlan = async (options?: MealPlanOptions): Promise<MealP
     if (data.success && data.plan) {
       console.log('✅ Converting plan data:', data.plan);
       // Convert the simple plan format to our expected format
-      return convertSimplePlanToMealPlanData(data.plan);
+      return convertSimplePlanToMealPlanData(data.plan, mealPlanPreferences);
     } else if (data.error) {
       throw new Error(data.error);
     }
@@ -164,7 +202,7 @@ export const generateMealPlan = async (options?: MealPlanOptions): Promise<MealP
 /**
  * Convert the simple LLM meal plan format to our expected MealPlanData format
  */
-function convertSimplePlanToMealPlanData(simplePlan: any): MealPlanData {
+function convertSimplePlanToMealPlanData(simplePlan: any, preferences?: any): MealPlanData {
   const days: MealDay[] = [];
   const today = new Date();
   
@@ -273,8 +311,8 @@ function convertSimplePlanToMealPlanData(simplePlan: any): MealPlanData {
     shopping_list,
     nutrition_summary,
     generated_at: new Date().toISOString(),
-    preferences_used: {},
-    plan_type: 'weekly'
+    preferences_used: preferences || {},
+    plan_type: 'simple_llm'
   };
 }
 

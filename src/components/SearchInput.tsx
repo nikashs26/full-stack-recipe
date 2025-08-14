@@ -7,6 +7,7 @@ interface SearchInputProps {
   onChange: (value: string) => void;
   placeholder?: string;
   className?: string;
+  icon?: React.ReactNode;
 }
 
 export const SearchInput: React.FC<SearchInputProps> = ({
@@ -14,6 +15,7 @@ export const SearchInput: React.FC<SearchInputProps> = ({
   onChange,
   placeholder = 'Search recipes...',
   className = '',
+  icon,
 }) => {
   const [inputValue, setInputValue] = useState(value);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -36,7 +38,7 @@ export const SearchInput: React.FC<SearchInputProps> = ({
 
   return (
     <div className={`relative ${className}`}>
-      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+      {icon || <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />}
       <Input
         ref={inputRef}
         type="text"

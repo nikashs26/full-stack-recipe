@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Plus, X, Filter, ChefHat, Leaf } from 'lucide-react';
+import { Plus, X, Filter, ChefHat, Leaf, Search, Utensils } from 'lucide-react';
 import SearchInput from './SearchInput';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -66,9 +66,11 @@ const DIET_OPTIONS: FilterOption[] = [
 
 interface RecipeFiltersProps {
   searchQuery: string;
+  ingredientSearch: string;
   selectedCuisines: string[];
   selectedDiets: string[];
   onSearchChange: (query: string) => void;
+  onIngredientSearchChange: (query: string) => void;
   onCuisineToggle: (cuisine: string) => void;
   onDietToggle: (diet: string) => void;
   onClearFilters: () => void;
@@ -76,9 +78,11 @@ interface RecipeFiltersProps {
 
 export const RecipeFilters = ({
   searchQuery,
+  ingredientSearch,
   selectedCuisines,
   selectedDiets,
   onSearchChange,
+  onIngredientSearchChange,
   onCuisineToggle,
   onDietToggle,
   onClearFilters,
@@ -179,12 +183,10 @@ export const RecipeFilters = ({
 
   return (
     <div className="space-y-4">
-      {/* Search Bar */}
-      <SearchInput
-        value={searchQuery}
-        onChange={onSearchChange}
-        placeholder="Search recipes..."
-      />
+      {/* Filter Options */}
+      <div>
+        <h3 className="text-sm font-medium text-gray-700 mb-3">Filter Options</h3>
+      </div>
 
       {/* Cuisines Filter */}
       <FilterSection 

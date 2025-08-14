@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Folder, Recipe } from '../types/recipe';
 import { Plus, Folder as FolderIcon, Trash2, Edit2 } from 'lucide-react';
 import { useToast } from './ui/use-toast';
@@ -12,6 +12,9 @@ interface FolderListProps {
   onFolderCreate: (name: string, description?: string) => void;
   onFolderUpdate: (folderId: string, name: string, description?: string) => void;
   onFolderDelete: (folderId: string) => void;
+  selectedFolder: Folder | null;
+  folderRecipes: any[];
+  onCloseFolder: () => void;
 }
 
 const FolderList: React.FC<FolderListProps> = ({
@@ -20,33 +23,25 @@ const FolderList: React.FC<FolderListProps> = ({
   onFolderCreate,
   onFolderUpdate,
   onFolderDelete,
+  selectedFolder,
+  folderRecipes,
+  onCloseFolder,
 }) => {
   const [isCreating, setIsCreating] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
   const [newFolderDescription, setNewFolderDescription] = useState('');
   const [editingFolder, setEditingFolder] = useState<Folder | null>(null);
-  const [selectedFolder, setSelectedFolder] = useState<Folder | null>(null);
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const { toast } = useToast();
 
-  // Get recipes from local storage when a folder is selected
-  React.useEffect(() => {
-    if (selectedFolder) {
-      try {
-        const storedRecipes = localStorage.getItem('dietary-delight-recipes');
-        if (storedRecipes) {
-          const allRecipes: Recipe[] = JSON.parse(storedRecipes);
-          const folderRecipes = allRecipes.filter(recipe => recipe.folderId === selectedFolder.id);
-          setRecipes(folderRecipes);
-        }
-      } catch (error) {
-        console.error('Failed to load recipes:', error);
-        setRecipes([]);
-      }
+  // Use the recipes passed from parent instead of localStorage
+  useEffect(() => {
+    if (selectedFolder && folderRecipes) {
+      setRecipes(folderRecipes);
     } else {
       setRecipes([]);
     }
-  }, [selectedFolder]);
+  }, [selectedFolder, folderRecipes]);
 
   const handleCreateSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -111,8 +106,13 @@ const FolderList: React.FC<FolderListProps> = ({
   };
 
   const handleFolderClick = (folder: Folder) => {
-    setSelectedFolder(selectedFolder?.id === folder.id ? null : folder);
-    onFolderSelect(folder.id);
+    if (selectedFolder?.id === folder.id) {
+      // If clicking the same folder, close it
+      onCloseFolder();
+    } else {
+      // Select the new folder
+      onFolderSelect(folder.id);
+    }
   };
 
   return (
@@ -258,6 +258,10 @@ const FolderList: React.FC<FolderListProps> = ({
                 {folder.description && (
                   <p className="text-sm text-muted-foreground">{folder.description}</p>
                 )}
+                <div className="mt-2 flex items-center justify-between text-sm text-muted-foreground">
+                  <span>{folder.recipe_count || 0} {folder.recipe_count === 1 ? 'recipe' : 'recipes'}</span>
+                  <span className="text-xs">{new Date(folder.createdAt).toLocaleDateString()}</span>
+                </div>
               </>
             )}
           </div>
@@ -270,7 +274,7 @@ const FolderList: React.FC<FolderListProps> = ({
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-xl font-semibold">Recipes in "{selectedFolder.name}"</h3>
             <button
-              onClick={() => setSelectedFolder(null)}
+              onClick={onCloseFolder}
               className="text-sm text-blue-600 hover:text-blue-800"
             >
               Close Folder

@@ -7,42 +7,28 @@ import Header from '../components/Header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { ShoppingCart, Plus, Trash2, Check, X, Loader2, Lock, DollarSign } from 'lucide-react';
+import { ShoppingCart, Trash2, Check, Loader2, Lock } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ShoppingListItem, Recipe } from '../types/recipe'; // Keep Recipe for now if needed elsewhere
 import { useQuery, useQueryClient } from '@tanstack/react-query'; // Keep if you still need other queries
 import { loadRecipes } from '../utils/storage'; // Keep if you still need to load recipes
 import { v4 as uuidv4 } from 'uuid'; // Keep for unique item IDs if necessary
 
-// Define the structure of the agent-generated shopping list
-interface AgentShoppingList {
-  items: {
-    name: string;
-    category: string;
-    completed: boolean;
-  }[];
-  estimated_cost: string;
-  generated_at: string;
-  meal_plan_id: string;
-}
-
 // Define a structure for individual display items
 interface DisplayShoppingListItem {
   id: string; // Unique ID for React keying and checkbox state
-  category: string;
   name: string;
   checked: boolean;
+  recipeId: string;
+  recipeName: string;
+  recipeImage?: string;
 }
 
 const ShoppingListPage: React.FC = () => {
   const { isAuthenticated, isLoading: authLoading, user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [agentShoppingList, setAgentShoppingList] = useState<AgentShoppingList | null>(null);
   const [displayList, setDisplayList] = useState<DisplayShoppingListItem[]>([]);
-  const [estimatedCost, setEstimatedCost] = useState<string>('');
-  const [servingAmount, setServingAmount] = useState<string>('');
-  const [weeklyBudget, setWeeklyBudget] = useState<string>('');
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -105,37 +91,63 @@ const ShoppingListPage: React.FC = () => {
   useEffect(() => {
     if (!isAuthenticated) return; // Don't load if not authenticated
 
-    const loadAgentShoppingList = () => {
+    const loadShoppingList = () => {
       try {
-        const storedList = localStorage.getItem('agent-shopping-list');
+        // Load manually added recipe ingredients
+        const storedList = localStorage.getItem('shopping-list');
+        console.log('Raw shopping list from localStorage:', storedList);
         if (storedList) {
-          const parsedList = JSON.parse(storedList);
-          setAgentShoppingList(parsedList);
-          setEstimatedCost(parsedList.estimated_cost || '');
+          const items = JSON.parse(storedList);
+          console.log('Parsed shopping list items:', items);
           
-          // Convert to display format
-          const flattenedList: DisplayShoppingListItem[] = parsedList.items.map(item => ({
-            id: uuidv4(),
-            category: item.category,
-            name: item.name,
-            checked: item.completed || false,
-          }));
+          // Filter out any invalid items and ensure they have required properties
+          const validItems: DisplayShoppingListItem[] = items
+            .filter((item: any) => {
+              // Ensure item exists and has all required string properties
+              const isValid = item && 
+                     typeof item.name === 'string' && 
+                     typeof item.recipeId === 'string' && 
+                     typeof item.recipeName === 'string' &&
+                     item.name.trim() !== '' &&
+                     item.recipeId.trim() !== '' &&
+                     item.recipeName.trim() !== '';
+              
+              if (!isValid) {
+                console.log('Filtered out invalid item:', item);
+              }
+              
+              return isValid;
+            })
+            .map((item: any) => ({
+              id: item.id || uuidv4(),
+              name: item.name.trim(),
+              checked: item.completed || false,
+              recipeId: item.recipeId.trim(),
+              recipeName: item.recipeName.trim(),
+              recipeImage: item.recipeImage
+            }));
           
-          // Sort by category then by ingredient name
-          flattenedList.sort((a, b) => {
-            if (a.category < b.category) return -1;
-            if (a.category > b.category) return 1;
-            return a.name.localeCompare(b.name);
+          console.log('Filtered valid items:', validItems);
+          
+          // Sort by recipe name, then by ingredient name (with additional safety checks)
+          validItems.sort((a, b) => {
+            try {
+              const recipeCompare = a.recipeName.localeCompare(b.recipeName);
+              if (recipeCompare !== 0) return recipeCompare;
+              return a.name.localeCompare(b.name);
+            } catch (error) {
+              console.error('Error sorting items:', error, { a, b });
+              return 0; // Don't sort if there's an error
+            }
           });
-          setDisplayList(flattenedList);
-
+          
+          setDisplayList(validItems);
         } else {
-          setAgentShoppingList(null);
           setDisplayList([]);
         }
+
       } catch (error) {
-        console.error('Failed to load agent-generated shopping list:', error);
-        setAgentShoppingList(null);
+        console.error('Failed to load shopping list:', error);
         setDisplayList([]);
         toast({
           title: "Error",
@@ -145,16 +157,31 @@ const ShoppingListPage: React.FC = () => {
       }
     };
     
-    loadAgentShoppingList();
+    loadShoppingList();
   }, [isAuthenticated, toast]);
 
-  // Save display list to localStorage (not strictly necessary if only reading from agent-list)
-  // But good for persistence of checked state
+  // Save display list to localStorage
   const saveDisplayList = (items: DisplayShoppingListItem[]) => {
     setDisplayList(items);
-    // If you want to persist checked state across sessions for the *agent-generated* list
-    // you'd need a more complex structure to map checked state back to categories/ingredients
-    // For simplicity, we'll only persist the checked state locally within this component's lifecycle.
+    
+    // Update the checked state in localStorage
+    try {
+      const storedList = localStorage.getItem('shopping-list');
+      if (storedList) {
+        const manualItems = JSON.parse(storedList);
+        const updatedItems = manualItems.map((item: any) => {
+          const displayItem = items.find(di => di.id === item.id);
+          return {
+            ...item,
+            completed: displayItem?.checked || false
+          };
+        });
+        
+        localStorage.setItem('shopping-list', JSON.stringify(updatedItems));
+      }
+    } catch (error) {
+      console.error('Error updating localStorage:', error);
+    }
   };
 
   const handleToggleItem = (id: string) => {
@@ -166,6 +193,16 @@ const ShoppingListPage: React.FC = () => {
 
   const handleRemoveItem = (id: string) => {
     const updatedList = displayList.filter(item => item.id !== id);
+    
+    // Remove from localStorage
+    try {
+      const storedList = JSON.parse(localStorage.getItem('shopping-list') || '[]');
+      const updatedStoredList = storedList.filter((item: any) => item.id !== id);
+      localStorage.setItem('shopping-list', JSON.stringify(updatedStoredList));
+    } catch (error) {
+      console.error('Error removing item:', error);
+    }
+    
     saveDisplayList(updatedList);
     toast({
       title: "Item removed",
@@ -175,12 +212,50 @@ const ShoppingListPage: React.FC = () => {
 
   const handleClearList = () => {
     if (window.confirm('Are you sure you want to clear your entire shopping list?')) {
-      localStorage.removeItem('agent-shopping-list'); // Clear the stored agent list
-      setAgentShoppingList(null);
+      localStorage.removeItem('shopping-list');
       setDisplayList([]);
       toast({
         title: "Shopping list cleared",
         description: "Your shopping list has been cleared."
+      });
+    }
+  };
+
+  const handleCleanupCorruptedData = () => {
+    try {
+      const storedList = localStorage.getItem('shopping-list');
+      if (storedList) {
+        const items = JSON.parse(storedList);
+        const validItems = items.filter((item: any) => 
+          item && 
+          typeof item.name === 'string' && 
+          typeof item.recipeId === 'string' && 
+          typeof item.recipeName === 'string' &&
+          item.name.trim() !== '' &&
+          item.recipeId.trim() !== '' &&
+          item.recipeName.trim() !== ''
+        );
+        
+        if (validItems.length !== items.length) {
+          localStorage.setItem('shopping-list', JSON.stringify(validItems));
+          setDisplayList([]);
+          toast({
+            title: "Data cleaned up",
+            description: `Removed ${items.length - validItems.length} corrupted items from your shopping list.`
+          });
+        } else {
+          toast({
+            title: "No cleanup needed",
+            description: "Your shopping list data is clean."
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error cleaning up data:', error);
+      toast({
+        title: "Cleanup failed",
+        description: "Failed to clean up corrupted data.",
+        variant: "destructive"
       });
     }
   };
@@ -194,9 +269,9 @@ const ShoppingListPage: React.FC = () => {
     });
   };
 
-  // Group items by category for rendering
+  // Group items by recipe for rendering
   const groupedList = displayList.reduce((acc, item) => {
-    (acc[item.category] = acc[item.category] || []).push(item);
+    (acc[item.recipeName] = acc[item.recipeName] || []).push(item);
     return acc;
   }, {} as Record<string, DisplayShoppingListItem[]>);
 
@@ -208,28 +283,45 @@ const ShoppingListPage: React.FC = () => {
           <div className="flex items-center justify-between mb-8">
             <div className="flex items-center gap-2">
               <ShoppingCart className="text-primary h-6 w-6" />
-              <h1 className="text-3xl font-bold">Shopping List</h1>
-            </div>
-            {displayList.length > 0 && (
-              <div className="flex gap-2">
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={handleClearChecked}
-                  className="flex items-center gap-1"
-                >
-                  <Check className="h-4 w-4" /> Clear Checked
-                </Button>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={handleClearList}
-                  className="flex items-center gap-1 text-destructive hover:text-destructive"
-                >
-                  <Trash2 className="h-4 w-4" /> Clear All
-                </Button>
+              <div>
+                <h1 className="text-3xl font-bold">Shopping List</h1>
+                {displayList.length > 0 && (
+                  <p className="text-gray-600 text-sm">
+                    {displayList.length} ingredients • {Object.keys(groupedList).length} recipes
+                  </p>
+                )}
               </div>
-            )}
+            </div>
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleCleanupCorruptedData}
+                className="flex items-center gap-1"
+              >
+                <Check className="h-4 w-4" /> Cleanup Data
+              </Button>
+              {displayList.length > 0 && (
+                <>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={handleClearChecked}
+                    className="flex items-center gap-1"
+                  >
+                    <Check className="h-4 w-4" /> Clear Checked
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={handleClearList}
+                    className="flex items-center gap-1 text-destructive hover:text-destructive"
+                  >
+                    <Trash2 className="h-4 w-4" /> Clear All
+                  </Button>
+                </>
+              )}
+            </div>
           </div>
 
           {/* Removed manual recipe addition section */}
@@ -260,50 +352,18 @@ const ShoppingListPage: React.FC = () => {
 
           {displayList.length > 0 ? (
             <div className="space-y-6">
-              {/* Budget and Serving Information */}
               <div className="bg-white shadow-sm rounded-lg p-6">
-                <h2 className="text-xl font-semibold mb-4 flex items-center">
-                  <DollarSign className="h-5 w-5 mr-2" />
-                  Shopping Summary
-                </h2>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="text-center p-4 bg-blue-50 rounded-lg">
-                    <div className="text-2xl font-bold text-blue-600">{estimatedCost || 'N/A'}</div>
-                    <div className="text-sm text-gray-600">Estimated Cost</div>
-                  </div>
-                  <div className="text-center p-4 bg-green-50 rounded-lg">
-                    <div className="text-2xl font-bold text-green-600">{servingAmount || 'N/A'}</div>
-                    <div className="text-sm text-gray-600">People to Serve</div>
-                  </div>
-                  <div className="text-center p-4 bg-purple-50 rounded-lg">
-                    <div className="text-2xl font-bold text-purple-600">{weeklyBudget ? `$${weeklyBudget}` : 'N/A'}</div>
-                    <div className="text-sm text-gray-600">Weekly Budget</div>
-                  </div>
-                </div>
-                {weeklyBudget && estimatedCost && (
-                  <div className="mt-4 p-3 bg-gray-50 rounded-lg">
-                    <div className="text-sm text-gray-600">
-                      Budget Status: {parseFloat(estimatedCost.replace(/[^0-9.-]+/g,"")) <= parseFloat(weeklyBudget) ? 
-                        <span className="text-green-600 font-semibold">✓ Within Budget</span> : 
-                        <span className="text-red-600 font-semibold">⚠ Over Budget</span>
-                      }
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="bg-white shadow-sm rounded-lg p-6">
-                <h2 className="text-xl font-semibold mb-4">Generated Shopping List</h2>
+                <h2 className="text-xl font-semibold mb-4">Your Shopping List</h2>
                 <div className="space-y-6">
-                  {Object.keys(groupedList).sort().map(category => (
-                    <div key={category}>
-                      <h3 className="text-lg font-bold text-gray-700 mb-3 border-b pb-2 capitalize">
-                        {category}
+                  {Object.keys(groupedList).sort().map(recipeName => (
+                    <div key={recipeName} className="border rounded-lg p-4">
+                      <h3 className="text-lg font-bold text-gray-700 mb-3 border-b pb-2">
+                        🍳 {recipeName}
                       </h3>
-                      <div className="divide-y">
-                        {groupedList[category].map((item) => (
-                          <div key={item.id} className="py-3 flex items-center justify-between">
-                            <div className="flex items-center gap-2">
+                      <div className="space-y-2">
+                        {groupedList[recipeName].map((item) => (
+                          <div key={item.id} className="flex items-center justify-between py-2 px-3 bg-gray-50 rounded">
+                            <div className="flex items-center gap-3 flex-1">
                               <Checkbox 
                                 id={`item-${item.id}`} 
                                 checked={item.checked}
@@ -311,7 +371,7 @@ const ShoppingListPage: React.FC = () => {
                               />
                               <label 
                                 htmlFor={`item-${item.id}`}
-                                className={`${item.checked ? 'line-through text-gray-500' : ''}`}
+                                className={`${item.checked ? 'line-through text-gray-500' : ''} font-medium`}
                               >
                                 {item.name}
                               </label>
@@ -333,10 +393,14 @@ const ShoppingListPage: React.FC = () => {
           ) : (
             <div className="text-center py-12">
               <ShoppingCart className="mx-auto h-12 w-12 text-gray-400" strokeWidth={1.5} />
-              <h3 className="mt-2 text-lg font-medium text-gray-900">No shopping list generated yet</h3>
+              <h3 className="mt-2 text-lg font-medium text-gray-900">Your shopping list is empty</h3>
               <p className="mt-1 text-gray-500">
-                Go to the <Link to="/meal-planner" className="text-primary hover:underline">Meal Planner</Link> to generate your weekly plan and then create a shopping list.
+                Add ingredients to your shopping list by:
               </p>
+              <div className="mt-4 space-y-2 text-sm text-gray-600">
+                <p>• Clicking "Add to Shopping List" on any recipe page</p>
+                <p>• Browse recipes and add your favorites to build your list</p>
+              </div>
             </div>
           )}
         </div>

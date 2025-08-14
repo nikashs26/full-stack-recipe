@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Search, ChefHat, ThumbsUp, Award, TrendingUp, Clock } from 'lucide-react';
+import { Search, ChefHat, ThumbsUp, Award, TrendingUp, Clock, Star, Users, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Header from '../components/Header';
 import RecipeCard from '../components/RecipeCard';
@@ -147,19 +147,19 @@ const HomePage: React.FC = () => {
 
   // Query for popular recipes based on clicks and reviews
   const { data: popularRecipesData = [], isLoading: isLoadingPopular } = useQuery({
-    queryKey: ['popular-recipes', user?.id],
-    queryFn: () => getHomepagePopularRecipes(user?.id),
+    queryKey: ['popular-recipes', user?.user_id],
+    queryFn: () => getHomepagePopularRecipes(user?.user_id),
     staleTime: 10 * 60 * 1000, // 10 minutes (popular recipes don't change as frequently)
     retry: 1,
   });
 
   // Query for personal popular recipes
   const { data: personalPopularRecipesData = [], isLoading: isLoadingPersonalPopular } = useQuery({
-    queryKey: ['personal-popular-recipes', user?.id],
-    queryFn: () => getHomepagePopularRecipes(user?.id),
+    queryKey: ['personal-popular-recipes', user?.user_id],
+    queryFn: () => getHomepagePopularRecipes(user?.user_id),
     staleTime: 10 * 60 * 1000,
     retry: 1,
-    enabled: !!user?.id && showPersonalPopular, // Only fetch when user is logged in and toggle is on
+    enabled: !!user?.user_id && showPersonalPopular, // Only fetch when user is logged in and toggle is on
   });
 
   // Log any query errors
@@ -456,7 +456,7 @@ const HomePage: React.FC = () => {
     );
     
     // Use real popular recipes data if available, otherwise fall back to random selection
-    if (showPersonalPopular && isAuthenticated && user?.id) {
+    if (showPersonalPopular && isAuthenticated && user?.user_id) {
       // Use personal popular recipes
       if (personalPopularRecipesData && personalPopularRecipesData.length > 0) {
         console.log('👤 Using personal popular recipes data:', personalPopularRecipesData.length);
@@ -465,7 +465,7 @@ const HomePage: React.FC = () => {
         console.log('🔄 No personal popular recipes data, using random selection');
         popularRecipes = [...remainingRecipes].sort(() => Math.random() - 0.5);
       }
-    } else if (popularRecipesData && popularRecipesData.length > 0) {
+    } else if (popularRecipesData && Array.isArray(popularRecipesData) && popularRecipesData.length > 0) {
       console.log('🎯 Using global popular recipes data:', popularRecipesData.length);
       popularRecipes = popularRecipesData.map(recipe => ({ ...recipe, type: 'external' as const }));
     } else {
@@ -507,38 +507,42 @@ const HomePage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       <Header />
       
-      <div className="pt-24 md:pt-28">
+      <div className="pt-20">
         {/* Hero Section */}
-        <section className="relative bg-gradient-to-r from-recipe-accent to-recipe-primary py-16 md:py-24">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center">
-              <h1 className="text-4xl md:text-5xl font-bold text-white mb-4">
+        <section className="relative overflow-hidden bg-gradient-to-br from-recipe-primary via-recipe-primary/90 to-recipe-accent py-20 md:py-32">
+          <div className="absolute inset-0 bg-black/10"></div>
+          <div className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-20" style={{ backgroundImage: 'url(https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTzYG7CW6gEKFIWucy8dyslT0yw3yTHUS8YAQ&s)' }}></div>
+          
+          <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+            <div className="max-w-4xl mx-auto">
+              <h1 className="text-5xl md:text-7xl font-bold text-white mb-6 leading-tight">
                 {welcomeMessage.title}
               </h1>
-              <p className="text-xl text-white/90 mb-8 max-w-3xl mx-auto">
+              <p className="text-xl md:text-2xl text-white/90 mb-10 max-w-3xl mx-auto leading-relaxed">
                 {welcomeMessage.subtitle}
               </p>
-              <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              
+              <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
                 <Link to="/recipes">
-                  <Button size="lg" variant="secondary" className="w-full sm:w-auto">
-                    <Search className="mr-2 h-4 w-4" />
+                  <Button size="lg" variant="secondary" className="w-full sm:w-auto text-lg px-8 py-4 h-auto">
+                    <Search className="mr-3 h-5 w-5" />
                     Browse All Recipes
                   </Button>
                 </Link>
                 {isAuthenticated ? (
                   <Link to="/meal-planner">
-                    <Button size="lg" variant="outline" className="w-full sm:w-auto bg-white/10 text-white hover:bg-white/20">
-                      <ChefHat className="mr-2 h-4 w-4" />
+                    <Button size="lg" variant="outline" className="w-full sm:w-auto text-lg px-8 py-4 h-auto bg-white/20 text-white hover:bg-white/30 border-white/30">
+                      <ChefHat className="mr-3 h-5 w-5" />
                       AI Meal Planner
                     </Button>
                   </Link>
                 ) : (
                   <Link to="/signup">
-                    <Button size="lg" variant="outline" className="w-full sm:w-auto bg-white/10 text-white hover:bg-white/20">
-                      <ChefHat className="mr-2 h-4 w-4" />
+                    <Button size="lg" variant="outline" className="w-full sm:w-auto text-lg px-8 py-4 h-auto bg-white/20 text-white hover:bg-white/30 border-white/30">
+                      <Zap className="mr-3 h-5 w-5" />
                       Sign Up for AI Features
                     </Button>
                   </Link>
@@ -548,72 +552,40 @@ const HomePage: React.FC = () => {
           </div>
         </section>
 
-        {/* Features Section - Authentication Aware */}
-        <section className="py-16 bg-white">
+        {/* Stats Section */}
+        <section className="py-16 bg-white border-b">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-12">
-              <h2 className="text-3xl font-bold text-gray-900 mb-4">
-                {isAuthenticated ? "Your Recipe Features" : "Unlock Premium Features"}
-              </h2>
-              <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-                {isAuthenticated 
-                  ? "Access all your personalized recipe features and AI-powered tools"
-                  : "Sign up to access AI meal planning, personalized recommendations, and more"
-                }
-              </p>
-            </div>
-            
-            <div className="grid md:grid-cols-3 gap-8">
-              <div className="text-center p-6 rounded-lg border">
-                <div className="bg-recipe-primary/10 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Search className="h-8 w-8 text-recipe-primary" />
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
+              <div>
+                <div className="text-3xl md:text-4xl font-bold text-recipe-primary mb-2">
+                  {spoonacularRecipes.length}+
                 </div>
-                <h3 className="text-xl font-semibold mb-2">Recipe Discovery</h3>
-                <p className="text-gray-600 mb-4">
-                  Browse thousands of recipes from our curated collection
-                </p>
-                <p className="text-sm text-green-600 font-medium">✅ Free for everyone</p>
+                <div className="text-gray-600">Recipes Available</div>
               </div>
-
-              <div className={`text-center p-6 rounded-lg border ${!isAuthenticated ? 'opacity-60' : ''}`}>
-                <div className="bg-recipe-primary/10 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <ChefHat className="h-8 w-8 text-recipe-primary" />
+              <div>
+                <div className="text-3xl md:text-4xl font-bold text-recipe-primary mb-2">
+                  {isAuthenticated ? 'AI-Powered' : 'Free'}
                 </div>
-                <h3 className="text-xl font-semibold mb-2">AI Meal Planning</h3>
-                <p className="text-gray-600 mb-4">
-                  Get personalized weekly meal plans based on your preferences
-                </p>
-                {isAuthenticated ? (
-                  <Link to="/meal-planner">
-                    <Button size="sm">Start Planning</Button>
-                  </Link>
-                ) : (
-                  <p className="text-sm text-orange-600 font-medium">Requires sign up</p>
-                )}
+                <div className="text-gray-600">Meal Planning</div>
               </div>
-
-              <div className={`text-center p-6 rounded-lg border ${!isAuthenticated ? 'opacity-60' : ''}`}>
-                <div className="bg-recipe-primary/10 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <TrendingUp className="h-8 w-8 text-recipe-primary" />
+              <div>
+                <div className="text-3xl md:text-4xl font-bold text-recipe-primary mb-2">
+                  Personalized
                 </div>
-                <h3 className="text-xl font-semibold mb-2">Smart Preferences</h3>
-                <p className="text-gray-600 mb-4">
-                  Set dietary restrictions and get tailored recommendations
-                </p>
-                {isAuthenticated ? (
-                  <Link to="/preferences">
-                    <Button size="sm">Set Preferences</Button>
-                  </Link>
-                ) : (
-                  <p className="text-sm text-orange-600 font-medium">Requires sign up</p>
-                )}
+                <div className="text-gray-600">Recommendations</div>
+              </div>
+              <div>
+                <div className="text-3xl md:text-4xl font-bold text-recipe-primary mb-2">
+                  {isAuthenticated ? 'Unlimited' : 'Basic'}
+                </div>
+                <div className="text-gray-600">Access</div>
               </div>
             </div>
           </div>
         </section>
 
         {/* Recipe Sections */}
-        <section className="py-16 bg-gray-50">
+        <section className="py-20">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             
             {/* Recommended Recipes - Only for authenticated users */}
@@ -660,11 +632,30 @@ const HomePage: React.FC = () => {
                 )}
 
                 {!isLoading && organizedRecipes.recommended.length === 0 && (
-                  <div className="text-center py-8 bg-white rounded-lg">
-                    <p className="text-gray-500">No recommendations yet. Set your preferences to get personalized suggestions!</p>
-                    <Link to="/preferences">
-                      <Button className="mt-4">Set Preferences</Button>
-                    </Link>
+                  <div className="text-center py-16 bg-white rounded-2xl shadow-lg">
+                    <div className="w-20 h-20 bg-recipe-primary/10 rounded-full flex items-center justify-center mx-auto mb-6">
+                      <TrendingUp className="h-10 w-10 text-recipe-primary" />
+                    </div>
+                    <h3 className="text-2xl font-semibold text-gray-900 mb-3">No Recommendations Yet</h3>
+                    <p className="text-gray-600 mb-6 max-w-md mx-auto">
+                      {userPreferences 
+                        ? "We're working on finding the perfect recipes for you. Try updating your preferences for better matches!"
+                        : "Set your food preferences, dietary restrictions, and favorite cuisines to unlock personalized recipe suggestions!"
+                      }
+                    </p>
+                    <div className="space-y-3">
+                      <Link to="/preferences">
+                        <Button size="lg">
+                          <TrendingUp className="mr-2 h-4 w-4" />
+                          {userPreferences ? 'Update Preferences' : 'Set Preferences Now'}
+                        </Button>
+                      </Link>
+                      {!userPreferences && (
+                        <div className="text-sm text-gray-500">
+                          <p>💡 <strong>Pro tip:</strong> The more preferences you set, the better your recommendations will be!</p>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
@@ -731,8 +722,12 @@ const HomePage: React.FC = () => {
               )}
 
               {!isLoading && organizedRecipes.popular.length === 0 && (
-                <div className="text-center py-8 bg-white rounded-lg">
-                  <p className="text-gray-500">No popular recipes available at the moment.</p>
+                <div className="text-center py-16 bg-white rounded-2xl shadow-lg">
+                  <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <ThumbsUp className="h-10 w-10 text-gray-400" />
+                  </div>
+                  <h3 className="text-2xl font-semibold text-gray-900 mb-3">No Popular Recipes Yet</h3>
+                  <p className="text-gray-600">Check back soon for trending recipes!</p>
                 </div>
               )}
             </div>
@@ -780,8 +775,12 @@ const HomePage: React.FC = () => {
               )}
 
               {!isLoading && organizedRecipes.newest.length === 0 && (
-                <div className="text-center py-8 bg-white rounded-lg">
-                  <p className="text-gray-500">No new recipes available at the moment.</p>
+                <div className="text-center py-16 bg-white rounded-2xl shadow-lg">
+                  <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <Clock className="h-10 w-10 text-gray-400" />
+                  </div>
+                  <h3 className="text-2xl font-semibold text-gray-900 mb-3">No New Recipes Yet</h3>
+                  <p className="text-gray-600">Check back soon for fresh additions!</p>
                 </div>
               )}
             </div>
@@ -791,26 +790,81 @@ const HomePage: React.FC = () => {
 
         {/* Call to Action for Non-Authenticated Users */}
         {!isAuthenticated && (
-          <section className="py-16 bg-recipe-primary">
+          <section className="py-20 bg-gradient-to-r from-recipe-primary to-recipe-accent">
             <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-              <h2 className="text-3xl font-bold text-white mb-4">
+              <div className="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-8">
+                <Zap className="h-10 w-10 text-white" />
+              </div>
+              <h2 className="text-4xl font-bold text-white mb-6">
                 Ready to Unlock AI-Powered Cooking?
               </h2>
-              <p className="text-xl text-white/90 mb-8">
-                Join thousands of home cooks using AI to plan their meals and discover new recipes
+              <p className="text-xl text-white/90 mb-8 max-w-2xl mx-auto leading-relaxed">
+                Join thousands of home cooks using AI to plan their meals and discover new recipes. 
+                Get personalized recommendations, smart meal planning, and more.
               </p>
+              
+              {/* Preference Setup Guide */}
+              <div className="bg-white/10 rounded-2xl p-6 mb-8 max-w-3xl mx-auto">
+                <h3 className="text-2xl font-semibold text-white mb-4">🚀 Quick Setup Guide</h3>
+                <div className="grid md:grid-cols-3 gap-4 text-left">
+                  <div className="text-center">
+                    <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-3">
+                      <span className="text-white font-bold text-lg">1</span>
+                    </div>
+                    <p className="text-white/90 text-sm">Sign up for your free account</p>
+                  </div>
+                  <div className="text-center">
+                    <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-3">
+                      <span className="text-white font-bold text-lg">2</span>
+                    </div>
+                    <p className="text-white/90 text-sm">Set your food preferences & dietary needs</p>
+                  </div>
+                  <div className="text-center">
+                    <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-3">
+                      <span className="text-white font-bold text-lg">3</span>
+                    </div>
+                    <p className="text-white/90 text-sm">Get personalized recipe recommendations!</p>
+                  </div>
+                </div>
+              </div>
+              
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <Link to="/signup">
-                  <Button size="lg" variant="secondary" className="w-full sm:w-auto">
+                  <Button size="lg" variant="secondary" className="w-full sm:w-auto text-lg px-8 py-4 h-auto">
+                    <Zap className="mr-2 h-4 w-4" />
                     Sign Up Free
                   </Button>
                 </Link>
                 <Link to="/signin">
-                  <Button size="lg" variant="outline" className="w-full sm:w-auto bg-white/10 text-white hover:bg-white/20">
+                  <Button size="lg" variant="outline" className="w-full sm:w-auto text-lg px-8 py-4 h-auto bg-white/20 text-white hover:bg-white/30 border-white/30">
                     Sign In
                   </Button>
                 </Link>
               </div>
+            </div>
+          </section>
+        )}
+
+        {/* Preference Setup Reminder for Authenticated Users */}
+        {isAuthenticated && !userPreferences && (
+          <section className="py-16 bg-gradient-to-r from-orange-500 to-orange-600">
+            <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+              <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-6">
+                <TrendingUp className="h-8 w-8 text-white" />
+              </div>
+              <h2 className="text-3xl font-bold text-white mb-4">
+                Complete Your Profile for Personalized Recommendations!
+              </h2>
+              <p className="text-lg text-white/90 mb-6 max-w-2xl mx-auto">
+                Set your food preferences, dietary restrictions, and favorite cuisines to unlock 
+                AI-powered recipe suggestions tailored just for you.
+              </p>
+              <Link to="/preferences">
+                <Button size="lg" variant="secondary" className="text-lg px-8 py-4 h-auto">
+                  <TrendingUp className="mr-2 h-4 w-4" />
+                  Set Your Preferences Now
+                </Button>
+              </Link>
             </div>
           </section>
         )}

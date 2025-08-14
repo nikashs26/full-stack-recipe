@@ -8,6 +8,10 @@ import { Button } from '@/components/ui/button';
 import RecipeReviews, { Review } from '../components/RecipeReviews';
 import { getReviewsByRecipeId, addReview } from '../utils/chromaReviewUtils';
 import { useToast } from '@/hooks/use-toast';
+import { cleanRecipeDescription } from '../utils/recipeDescriptionCleaner';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Recipe } from '../types/recipe';
 
 type RecipeSource = 'spoonacular' | 'themealdb';
 
@@ -430,10 +434,9 @@ const ExternalRecipeDetailPage: React.FC = () => {
               {recipe.summary && (
                 <div className="mb-6 p-4 bg-gray-50 rounded-lg">
                   <h2 className="text-xl font-semibold mb-2">About This Recipe</h2>
-                  <div 
-                    className="text-gray-700" 
-                    dangerouslySetInnerHTML={{ __html: recipe.summary }}
-                  />
+                  <p className="text-gray-700">
+                    {cleanRecipeDescription(recipe.summary)}
+                  </p>
                 </div>
               )}
 

@@ -6,6 +6,7 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from './ui/hover-card';
 import { ExtendedRecipe, Recipe } from '../types/recipe';
 import { useRecipeClickTracking } from '../utils/clickTracking';
 import { getReliableImageUrl } from '../utils/recipeUtils';
+import { cleanRecipeDescription } from '../utils/recipeDescriptionCleaner';
 
 interface RecipeCardProps {
   recipe: ExtendedRecipe | Recipe;
@@ -445,7 +446,7 @@ const RecipeCard: React.FC<RecipeCardProps> = React.memo(({
           {/* Description */}
           {(recipe.description || ('summary' in recipe && (recipe as any).summary)) && (
             <p className="text-sm text-gray-600 mb-3 line-clamp-3">
-              {recipe.description || (recipe as any).summary}
+              {cleanRecipeDescription(recipe.description || (recipe as any).summary)}
             </p>
           )}
           

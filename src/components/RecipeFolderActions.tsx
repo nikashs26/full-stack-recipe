@@ -8,13 +8,14 @@ import {
   DialogTitle, 
   DialogTrigger, 
   DialogDescription,
-  DialogOverlay,
-  DialogPortal
+  DialogPortal,
+  DialogOverlay
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { FolderPlus, Folder, Loader2, Check } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { apiCall } from '@/utils/apiUtils';
 
 interface Folder {
   id: string;
@@ -38,7 +39,23 @@ export function RecipeFolderActions({ recipeId, recipeType, recipeData }: Recipe
   const [isSaving, setIsSaving] = useState(false);
   const [foldersWithRecipe, setFoldersWithRecipe] = useState<Set<string>>(new Set());
   const { toast } = useToast();
-  const { token, isAuthenticated } = useAuth();
+  const { isAuthenticated } = useAuth();
+
+  // Debug authentication state
+  useEffect(() => {
+    console.log('[RecipeFolderActions] Component mounted');
+    console.log('[RecipeFolderActions] Authentication state:', { isAuthenticated });
+    console.log('[RecipeFolderActions] Recipe ID:', recipeId);
+    console.log('[RecipeFolderActions] Recipe type:', recipeType);
+  }, [isAuthenticated, recipeId, recipeType]);
+
+  // Debug when dialog opens
+  useEffect(() => {
+    if (isOpen) {
+      console.log('[RecipeFolderActions] Dialog opened');
+      console.log('[RecipeFolderActions] Current auth state:', { isAuthenticated });
+    }
+  }, [isOpen, isAuthenticated]);
 
   // Fetch user's folders and check which ones contain the current recipe
   useEffect(() => {
@@ -46,34 +63,27 @@ export function RecipeFolderActions({ recipeId, recipeType, recipeData }: Recipe
       if (!isOpen) return;
       
       try {
-        if (!isAuthenticated || !token) {
+        if (!isAuthenticated) {
+          console.error('User not authenticated when trying to access folders');
           throw new Error('Please sign in to access folders');
         }
         
         console.log('Starting to fetch folders and recipe status...');
+        console.log('User authenticated:', isAuthenticated);
+        console.log('Recipe ID:', recipeId);
+        console.log('Recipe type:', recipeType);
         setIsLoading(true);
         
-        // Fetch folders
+        // Fetch folders using apiCall utility
         console.log('Fetching folders from API...');
         const [foldersResponse, recipeFoldersResponse] = await Promise.all([
-          fetch('http://localhost:5003/api/folders', {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json',
-            },
-            credentials: 'include',
-          }),
-          fetch(`http://localhost:5003/api/recipes/${recipeType}/${recipeId}/folders`, {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json',
-            },
-            credentials: 'include',
-          })
+          apiCall('/folders'),
+          apiCall(`/recipes/${recipeType}/${recipeId}/folders`)
         ]);
         
         console.log('Folders response status:', foldersResponse.status);
         console.log('Recipe folders response status:', recipeFoldersResponse.status);
+        console.log('Folders response headers:', Object.fromEntries(foldersResponse.headers.entries()));
         
         // Handle folders response
         if (!foldersResponse.ok) {
@@ -124,7 +134,11 @@ export function RecipeFolderActions({ recipeId, recipeType, recipeData }: Recipe
         // Normalize folder data and ensure required fields
         const validFolders = foldersData
           .filter((folder: any) => {
-            const isValid = folder && folder.id !== undefined && typeof folder.name === 'string';
+            // Backend returns 'folder_id', frontend expects 'id'
+            const hasId = folder && (folder.id !== undefined || folder.folder_id !== undefined);
+            const hasName = typeof folder.name === 'string';
+            const isValid = hasId && hasName;
+            
             if (!isValid) {
               console.warn('Invalid folder data:', folder);
             }
@@ -132,8 +146,10 @@ export function RecipeFolderActions({ recipeId, recipeType, recipeData }: Recipe
           })
           .map((folder: any) => ({
             ...folder,
+            // Normalize ID field - use folder_id if id doesn't exist
+            id: folder.id || folder.folder_id,
             // Ensure ID is always a string for consistent comparison
-            id: String(folder.id)
+            folder_id: String(folder.id || folder.folder_id)
           }));
         
         console.log('Setting valid folders:', validFolders);
@@ -155,24 +171,19 @@ export function RecipeFolderActions({ recipeId, recipeType, recipeData }: Recipe
     if (isOpen) {
       fetchFoldersAndRecipeStatus();
     }
-  }, [isOpen, toast, recipeId, recipeType, isAuthenticated, token]);
+  }, [isOpen, toast, recipeId, recipeType, isAuthenticated]);
 
   const createNewFolder = async () => {
     if (!newFolderName.trim()) return;
     
     setIsCreating(true);
     try {
-      if (!isAuthenticated || !token) {
+      if (!isAuthenticated) {
         throw new Error('Please sign in to create folders');
       }
       
-      const response = await fetch('http://localhost:5003/api/folders', {
+      const response = await apiCall('/folders', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        credentials: 'include',
         body: JSON.stringify({
           name: newFolderName.trim(),
           description: 'My recipe collection',
@@ -204,13 +215,7 @@ export function RecipeFolderActions({ recipeId, recipeType, recipeData }: Recipe
   // Check if a recipe already exists in a folder
   const isRecipeInFolder = async (folderId: string): Promise<boolean> => {
     try {
-      const response = await fetch(`http://localhost:5003/api/folders/${folderId}/recipes/${recipeId}?type=${recipeType}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-      });
+      const response = await apiCall(`/folders/${folderId}/recipes/${recipeId}?type=${recipeType}`);
       
       if (response.ok) {
         const data = await response.json();
@@ -227,6 +232,8 @@ export function RecipeFolderActions({ recipeId, recipeType, recipeData }: Recipe
     console.log('[addToFolder] Starting with folderId:', folderIdParam);
     console.log('[addToFolder] Current folders:', folders);
     console.log('[addToFolder] Folders with recipe:', [...foldersWithRecipe]);
+    console.log('[addToFolder] User authenticated:', isAuthenticated);
+    console.log('[addToFolder] Recipe data:', recipeData);
     
     if (!folderIdParam) {
       const errorMsg = 'No folderId provided to addToFolder';
@@ -237,7 +244,7 @@ export function RecipeFolderActions({ recipeId, recipeType, recipeData }: Recipe
     setIsSaving(true);
     
     try {
-      if (!isAuthenticated || !token) {
+      if (!isAuthenticated) {
         throw new Error('Please sign in to save recipes');
       }
 
@@ -252,17 +259,14 @@ export function RecipeFolderActions({ recipeId, recipeType, recipeData }: Recipe
       let targetFolder = findFolderById(folderIdParam);
       let resolvedFolderId = targetFolder ? String(targetFolder.id) : folderIdParam;
       
+      console.log('[addToFolder] Target folder found:', targetFolder);
+      console.log('[addToFolder] Resolved folder ID:', resolvedFolderId);
+      
       // Refresh folder list if needed
       if (!targetFolder) {
         console.log('Folder not found in local state, attempting to refresh...');
         try {
-          const response = await fetch('http://localhost:5003/api/folders', {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json',
-            },
-            credentials: 'include',
-          });
+          const response = await apiCall('/folders');
           
           if (response.ok) {
             const refreshedFolders = await response.json();
@@ -313,13 +317,7 @@ export function RecipeFolderActions({ recipeId, recipeType, recipeData }: Recipe
       if (!targetFolder && folders.length > 0) {
         console.log('Folder not found in local state, attempting to refresh...');
         try {
-          const response = await fetch('http://localhost:5003/api/folders', {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json',
-            },
-            credentials: 'include',
-          });
+          const response = await apiCall('/folders');
           
           if (response.ok) {
             const refreshedFolders = await response.json();
@@ -373,23 +371,34 @@ export function RecipeFolderActions({ recipeId, recipeType, recipeData }: Recipe
       };
       
       console.log('Sending payload with recipe type:', recipeType);
+      console.log('Payload:', payload);
+      console.log('Original recipe data keys:', Object.keys(recipeData));
+      console.log('Recipe data sample:', {
+        name: recipeData.name,
+        title: recipeData.title,
+        readyInMinutes: recipeData.readyInMinutes,
+        rating: recipeData.rating,
+        ratings: recipeData.ratings,
+        prepTime: recipeData.prepTime,
+        cookTime: recipeData.cookTime,
+        totalTime: recipeData.totalTime
+      });
       
-      const url = `http://localhost:5003/api/folders/${encodeURIComponent(resolvedFolderId)}/items`;
+      const url = `/folders/${encodeURIComponent(resolvedFolderId)}/items`;
       console.log('Making request to:', url);
       
-      const response = await fetch(url, {
+      const response = await apiCall(url, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        credentials: 'include',
         body: JSON.stringify(payload),
       });
+
+      console.log('Response status:', response.status);
+      console.log('Response headers:', Object.fromEntries(response.headers.entries()));
 
       let responseData;
       try {
         responseData = await response.json();
+        console.log('Response data:', responseData);
       } catch (e) {
         console.error('Failed to parse response:', e);
         throw new Error('Invalid response from server');

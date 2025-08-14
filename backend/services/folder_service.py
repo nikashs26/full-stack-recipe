@@ -40,7 +40,11 @@ class FolderService:
         
         self.folders_collection.add(
             documents=[json.dumps(folder_data)],
-            metadatas=[{"type": "folder"}],
+            metadatas=[{
+                "type": "folder",
+                "user_id": user_id,
+                "folder_id": folder_id
+            }],
             ids=[folder_id]
         )
         
@@ -82,7 +86,11 @@ class FolderService:
         self.folders_collection.update(
             ids=[folder_id],
             documents=[json.dumps(folder_data)],
-            metadatas=[{"type": "folder"}]
+            metadatas=[{
+                "type": "folder",
+                "user_id": user_id,
+                "folder_id": folder_id
+            }]
         )
         
         return folder_data
@@ -167,7 +175,11 @@ class FolderService:
         self.folders_collection.update(
             ids=[folder_id],
             documents=[json.dumps(folder_data)],
-            metadatas=[{"type": "folder"}]
+            metadatas=[{
+                "type": "folder",
+                "user_id": user_id,
+                "folder_id": folder_id
+            }]
         )
         
         return item_data
@@ -203,7 +215,11 @@ class FolderService:
         self.folders_collection.update(
             ids=[folder_id],
             documents=[json.dumps(folder_data)],
-            metadatas=[{"type": "folder"}]
+            metadatas=[{
+                "type": "folder",
+                "user_id": user_id,
+                "folder_id": folder_id
+            }]
         )
         
         return True
@@ -230,11 +246,36 @@ class FolderService:
         
         for doc in items['documents']:
             item_data = json.loads(doc)
+            
+            # Get recipe data with reviews and stats
+            recipe_data = item_data['recipe_data']
+            
+            # Try to get review statistics for this recipe
+            try:
+                from .review_service import ReviewService
+                review_service = ReviewService()
+                review_stats = review_service.get_recipe_stats(
+                    item_data['recipe_id'], 
+                    item_data['recipe_type']
+                )
+                
+                # Enhance recipe data with review information
+                enhanced_recipe_data = {
+                    **recipe_data,
+                    "rating": review_stats.get("average_rating", 0),
+                    "reviewCount": review_stats.get("total_reviews", 0),
+                    "ratingDistribution": review_stats.get("rating_distribution", {})
+                }
+            except Exception as e:
+                # If we can't get review stats, use the original data
+                enhanced_recipe_data = recipe_data
+                print(f"Warning: Could not get review stats for recipe {item_data['recipe_id']}: {e}")
+            
             recipe_items.append({
                 "id": item_data['item_id'],
                 "recipe_id": item_data['recipe_id'],
                 "recipe_type": item_data['recipe_type'],
-                "recipe_data": item_data['recipe_data'],
+                "recipe_data": enhanced_recipe_data,
                 "added_at": item_data['added_at']
             })
         

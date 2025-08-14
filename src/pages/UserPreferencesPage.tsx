@@ -28,6 +28,7 @@ const formSchema = z.object({
   dietaryRestrictions: z.array(z.string()).default([]),
   favoriteCuisines: z.array(z.string()).default([]),
   foodsToAvoid: z.array(z.string()).default([]),
+  allergens: z.array(z.string()).default([]), // Backend expects this field
   cookingSkillLevel: z.enum(['beginner', 'intermediate', 'advanced'] as const).default('beginner'),
   favoriteFoods: z.array(z.string()).default([]), // Changed from tuple to array
   healthGoals: z.array(z.string()).default([]),
@@ -54,11 +55,7 @@ const dietaryOptions: FormOption[] = [
   { id: 'gluten-free', label: 'Gluten Free', description: 'No gluten' },
   { id: 'dairy-free', label: 'Dairy Free', description: 'No dairy' },
   { id: 'nut-free', label: 'Nut Free', description: 'No nuts' },
-  { id: 'keto', label: 'Keto', description: 'Low carb, high fat' },
-  { id: 'paleo', label: 'Paleo', description: 'Whole foods only' },
-  { id: 'pescatarian', label: 'Pescatarian', description: 'Fish but no other meat' },
-  { id: 'low-carb', label: 'Low Carb', description: 'Reduced carbohydrates' },
-  { id: 'low-fat', label: 'Low Fat', description: 'Reduced fat' },
+
 ];
 
 const cuisineOptions: FormOption[] = [
@@ -518,7 +515,12 @@ const UserPreferencesPage = () => {
             .filter(Boolean))]
         : [],
 
+      // Keep foodsToAvoid for form display
       foodsToAvoid: Array.isArray(values.foodsToAvoid)
+        ? values.foodsToAvoid.filter((f): f is string => Boolean(f) && typeof f === 'string')
+        : [],
+      // Map foodsToAvoid to allergens for backend compatibility
+      allergens: Array.isArray(values.foodsToAvoid)
         ? values.foodsToAvoid.filter((f): f is string => Boolean(f) && typeof f === 'string')
         : [],
 
