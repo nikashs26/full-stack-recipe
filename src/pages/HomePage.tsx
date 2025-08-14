@@ -432,124 +432,160 @@ const HomePage: React.FC = () => {
         let filteredRecipes = allCombined;
         
         if (dietaryRestrictions && dietaryRestrictions.length > 0) {
+          console.log('🥗 Filtering recipes for dietary restrictions:', dietaryRestrictions);
           filteredRecipes = allCombined.filter(recipe => {
+            // Check both diets and dietaryRestrictions fields
             const recipeDiets = recipe.diets || [];
+            const recipeDietaryRestrictions = (recipe as any).dietaryRestrictions || [];
+            const allRecipeDietaryInfo = [...recipeDiets, ...recipeDietaryRestrictions];
+            
+            // For each user preference, check if the recipe satisfies it
             return dietaryRestrictions.every(prefDiet => {
               if (!prefDiet) return true;
               const prefLower = prefDiet.toLowerCase().trim();
-              return recipeDiets.some(diet => {
+              
+              // Check if any recipe dietary info matches this preference
+              return allRecipeDietaryInfo.some(diet => {
                 if (!diet) return false;
-                const dietLower = diet.toLowerCase().trim();
-                if (prefLower === 'vegetarian' && dietLower === 'vegetarian') return true;
+                const dietLower = String(diet).toLowerCase().trim();
+                
+                // Handle various ways dietary restrictions might be expressed
+                if (prefLower === 'vegetarian' && (dietLower === 'vegetarian' || dietLower === 'veg')) return true;
                 if (prefLower === 'vegan' && dietLower === 'vegan') return true;
-                if (prefLower === 'gluten-free' && (dietLower === 'gluten-free' || dietLower === 'gluten free')) return true;
-                if (prefLower === 'dairy-free' && (dietLower === 'dairy-free' || dietLower === 'dairy free')) return true;
+                if (prefLower === 'gluten-free' && (dietLower === 'gluten-free' || dietLower === 'gluten free' || dietLower === 'glutenfree')) return true;
+                if (prefLower === 'dairy-free' && (dietLower === 'dairy-free' || dietLower === 'dairy free' || dietLower === 'dairyfree')) return true;
                 if (prefLower === 'keto' && (dietLower === 'ketogenic' || dietLower === 'keto')) return true;
                 if (prefLower === 'paleo' && (dietLower === 'paleo' || dietLower === 'paleolithic')) return true;
+                if (prefLower === 'low-carb' && (dietLower === 'low-carb' || dietLower === 'low carb' || dietLower === 'lowcarb')) return true;
+                if (prefLower === 'low-calorie' && (dietLower === 'low-calorie' || dietLower === 'low calorie' || dietLower === 'lowcalorie')) return true;
+                if (prefLower === 'high-protein' && (dietLower === 'high-protein' || dietLower === 'high protein' || dietLower === 'highprotein')) return true;
+                
                 return false;
               });
             });
           });
+          
+          console.log('🥗 Recipes after dietary restriction filtering:', filteredRecipes.length);
         }
         
-        // Smart recommendation logic: prioritize favorite foods first, then fill with cuisine-appropriate recipes
-        if (favoriteFoods && favoriteFoods.length > 0) {
-          console.log('🍔 Prioritizing favorite foods in recommendations');
-          
-                     // First, find ALL recipes that match favorite foods (regardless of cuisine)
-           const favoriteFoodsNorm: string[] = favoriteFoods.map((f: any) => (f || '').toString().trim().toLowerCase()).filter(Boolean);
-           const allFavoriteFoodMatches = filteredRecipes.filter(recipe => {
-             const titleLower = ((recipe.title || (recipe as any).name || '') as string).toLowerCase();
-             const ingredients = (recipe as any).ingredients || [];
-             const ingredientsLower = Array.isArray(ingredients) 
-               ? ingredients.map(i => String(i).toLowerCase()) 
-               : [];
-             return favoriteFoodsNorm.some(food => 
-               titleLower.includes(food) || 
-               ingredientsLower.some(ing => ing.includes(food))
-             );
-           });
-          
-          console.log(`🍔 Found ${allFavoriteFoodMatches.length} recipes matching favorite foods`);
-          
-          // Take up to 3 favorite food matches first
-          const favoriteFoodRecipes = allFavoriteFoodMatches.slice(0, 3);
-          recommendedRecipes.push(...favoriteFoodRecipes);
-          
-          // Remove these from filtered recipes to avoid duplication
-          const remainingRecipes = filteredRecipes.filter(recipe => 
-            !favoriteFoodRecipes.find(fav => fav.id === recipe.id)
-          );
-          
-          // Now fill remaining slots with cuisine-appropriate recipes
-          if (favoriteCuisines && favoriteCuisines.length > 0) {
-            console.log('🌍 Filling remaining slots with cuisine-appropriate recipes');
-            
-                         // Find recipes that match favorite cuisines
-             const cuisineMatches = remainingRecipes.filter(recipe => {
-               const recipeCuisines = Array.isArray((recipe as any).cuisines) ? (recipe as any).cuisines : [];
-               const recipeTitle = (recipe.title || (recipe as any).name || '').toLowerCase();
-               
-               return favoriteCuisines.some(cuisine => {
-                 if (!cuisine) return false;
-                 const cuisineLower = cuisine.toLowerCase();
-                 return recipeCuisines.some(c => c?.toLowerCase().includes(cuisineLower)) ||
-                        recipeTitle.includes(cuisineLower);
-               });
-             });
-            
-            console.log(`🌍 Found ${cuisineMatches.length} cuisine-appropriate recipes`);
-            
-            // Add cuisine matches until we reach 8 total
-            const remainingSlots = 8 - recommendedRecipes.length;
-            const cuisineRecipes = cuisineMatches.slice(0, remainingSlots);
-            recommendedRecipes.push(...cuisineRecipes);
-            
-            // If we still have slots, fill with other good recipes
-            if (recommendedRecipes.length < 8) {
-              const otherRecipes = remainingRecipes.filter(recipe => 
-                !cuisineRecipes.find(cuisine => cuisine.id === recipe.id)
-              );
-              const remainingSlots2 = 8 - recommendedRecipes.length;
-              recommendedRecipes.push(...otherRecipes.slice(0, remainingSlots2));
-            }
-          } else {
-            // No cuisine preferences, just fill with remaining recipes
-            const remainingSlots = 8 - recommendedRecipes.length;
-            recommendedRecipes.push(...remainingRecipes.slice(0, remainingSlots));
-          }
-          
-          console.log(`🍔 Final recommendations: ${recommendedRecipes.length} total (${favoriteFoodRecipes.length} favorite foods, ${recommendedRecipes.length - favoriteFoodRecipes.length} others)`);
-        } else if (favoriteCuisines && favoriteCuisines.length > 0) {
-          // No favorite foods, but have cuisine preferences
-          console.log('🌍 Using cuisine-based recommendations only');
-          
-          const cuisineMatches = filteredRecipes.filter(recipe => {
+        // Smart recommendation logic: prioritize favorite foods first, then cuisine preferences
+        const favoriteFoodsNorm: string[] = (favoriteFoods || []).map((f: any) => (f || '').toString().trim().toLowerCase()).filter(Boolean);
+        
+        // Step 1: Find recipes that match favorite foods (regardless of cuisine) - RESPECTING DIETARY RESTRICTIONS
+        let favoriteFoodRecipes: any[] = [];
+        if (favoriteFoodsNorm.length > 0) {
+          favoriteFoodRecipes = filteredRecipes.filter(recipe => {
+            const titleLower = ((recipe.title || (recipe as any).name || '') as string).toLowerCase();
+            const ingredients = (recipe as any).ingredients || [];
+            const ingredientsLower = Array.isArray(ingredients) ? 
+              ingredients.map((i: any) => String(i).toLowerCase()) : [];
+            return favoriteFoodsNorm.some(food => 
+              titleLower.includes(food) || 
+              ingredientsLower.some((ing: string) => ing.includes(food))
+            );
+          });
+          console.log('🍔 Found favorite food recipes (respecting dietary restrictions):', favoriteFoodRecipes.length);
+        }
+        
+        // Step 2: Find recipes that match favorite cuisines - RESPECTING DIETARY RESTRICTIONS
+        let cuisineMatchedRecipes: any[] = [];
+        if (favoriteCuisines && favoriteCuisines.length > 0) {
+          cuisineMatchedRecipes = filteredRecipes.filter(recipe => {
             const recipeCuisines = Array.isArray((recipe as any).cuisines) ? (recipe as any).cuisines : [];
             const recipeTitle = (recipe.title || (recipe as any).name || '').toLowerCase();
             
             return favoriteCuisines.some(cuisine => {
               if (!cuisine) return false;
               const cuisineLower = cuisine.toLowerCase();
-              return recipeCuisines.some(c => c?.toLowerCase().includes(cuisineLower)) ||
+              return recipeCuisines.some((c: any) => c?.toLowerCase().includes(cuisineLower)) ||
                      recipeTitle.includes(cuisineLower);
             });
           });
+          console.log('🌍 Found cuisine-matched recipes (respecting dietary restrictions):', cuisineMatchedRecipes.length);
+        }
+        
+        // Step 3: Build recommendations intelligently
+        // Start with favorite food recipes (regardless of cuisine)
+        let finalRecommendations: any[] = [];
+        
+        if (favoriteFoodRecipes.length > 0) {
+          // Take up to 3 favorite food recipes first
+          const favFoodCount = Math.min(3, favoriteFoodRecipes.length);
+          finalRecommendations.push(...favoriteFoodRecipes.slice(0, favFoodCount));
+          console.log(`🍔 Added ${favFoodCount} favorite food recipes to recommendations`);
+        }
+        
+        // Then add cuisine-matched recipes with proper balancing across cuisines
+        if (cuisineMatchedRecipes.length > 0 && favoriteCuisines && favoriteCuisines.length > 1) {
+          const remainingSlots = 8 - finalRecommendations.length;
           
-          // If we have enough cuisine matches, use them
-          if (cuisineMatches.length >= 8) {
-            recommendedRecipes = cuisineMatches.slice(0, 8);
-          } else {
-            // Fill with cuisine matches first, then supplement with others
-            recommendedRecipes = [...cuisineMatches, ...filteredRecipes.filter(r => !cuisineMatches.includes(r))].slice(0, 8);
+          // Filter out recipes we already added as favorite foods
+          const uniqueCuisineRecipes = cuisineMatchedRecipes.filter(recipe => 
+            !finalRecommendations.some(fav => fav.id === recipe.id)
+          );
+          
+          // Group recipes by cuisine for balanced distribution
+          const normalizedSelected = favoriteCuisines.map(c => (c || '').toString().trim().toLowerCase()).filter(Boolean);
+          const groupsByCuisine: Record<string, any[]> = {};
+          
+          for (const c of normalizedSelected) {
+            groupsByCuisine[c] = [];
           }
           
-          console.log(`🌍 Cuisine-based recommendations: ${recommendedRecipes.length} total`);
-        } else {
-          // No preferences, just use top recipes
-          console.log('📊 No preferences, using top recipes');
-          recommendedRecipes = filteredRecipes.slice(0, 8);
+          // Assign recipes to their matching cuisines
+          for (const recipe of uniqueCuisineRecipes) {
+            const recipeCuisines = Array.isArray((recipe as any).cuisines) ? (recipe as any).cuisines : [];
+            const single = (recipe as any).cuisine ? [(recipe as any).cuisine.toString().toLowerCase()] : [];
+            const allRecipeCuisines = [...recipeCuisines, ...single];
+            
+            const matchCuisine = normalizedSelected.find(sel => 
+              allRecipeCuisines.some(rc => rc?.toLowerCase().includes(sel))
+            );
+            
+            if (matchCuisine) {
+              groupsByCuisine[matchCuisine].push(recipe);
+            }
+          }
+          
+          // Round-robin pick from each cuisine to fill remaining slots
+          let added = true;
+          while (finalRecommendations.length < 8 && added) {
+            added = false;
+            for (const cuisine of normalizedSelected) {
+              const cuisineRecipes = groupsByCuisine[cuisine] || [];
+              if (cuisineRecipes.length > 0 && finalRecommendations.length < 8) {
+                finalRecommendations.push(cuisineRecipes.shift()!);
+                added = true;
+              }
+            }
+          }
+          
+          console.log(`🌍 Added ${8 - finalRecommendations.length} cuisine-balanced recipes to recommendations`);
+        } else if (cuisineMatchedRecipes.length > 0) {
+          // Single cuisine: just add what we can
+          const remainingSlots = 8 - finalRecommendations.length;
+          const uniqueCuisineRecipes = cuisineMatchedRecipes.filter(recipe => 
+            !finalRecommendations.some(fav => fav.id === recipe.id)
+          );
+          
+          const cuisineCount = Math.min(remainingSlots, uniqueCuisineRecipes.length);
+          finalRecommendations.push(...uniqueCuisineRecipes.slice(0, cuisineCount));
+          console.log(`🌍 Added ${cuisineCount} single-cuisine recipes to recommendations`);
         }
+        
+        // If we still don't have enough, fill with other good recipes (RESPECTING DIETARY RESTRICTIONS)
+        if (finalRecommendations.length < 8) {
+          const remainingSlots = 8 - finalRecommendations.length;
+          const otherRecipes = filteredRecipes.filter(recipe => 
+            !finalRecommendations.some(rec => rec.id === recipe.id)
+          );
+          
+          const otherCount = Math.min(remainingSlots, otherRecipes.length);
+          finalRecommendations.push(...otherRecipes.slice(0, otherCount));
+          console.log(`🎯 Added ${otherCount} other recipes to fill recommendations (respecting dietary restrictions)`);
+        }
+        
+        recommendedRecipes = finalRecommendations.slice(0, 8);
         console.log('🔄 Final frontend recommendations:', recommendedRecipes.length);
       }
     } else {
@@ -570,7 +606,7 @@ const HomePage: React.FC = () => {
       } else {
         console.log('🔄 No personal popular recipes data, using quality-based selection instead of random');
         // Use quality-based selection from remaining recipes
-        popularRecipes = selectQualityBasedRecipes(remainingRecipes as Recipe[], 4);
+        popularRecipes = selectQualityBasedRecipes(remainingRecipes as any[], 4);
       }
     } else if (popularRecipesData && Array.isArray(popularRecipesData) && popularRecipesData.length > 0) {
       console.log('🎯 Using global popular recipes data:', popularRecipesData.length);
@@ -578,7 +614,7 @@ const HomePage: React.FC = () => {
     } else {
       console.log('🔄 No popular recipes data, using quality-based selection instead of random');
               // Use quality-based selection from remaining recipes
-        popularRecipes = selectQualityBasedRecipes(remainingRecipes as Recipe[], 4);
+        popularRecipes = selectQualityBasedRecipes(remainingRecipes as any[], 4);
     }
     
     // Newest recipes = reverse order of remaining
