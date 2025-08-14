@@ -1,6 +1,6 @@
 
 import { Recipe } from '../types/recipe';
-import { initialRecipes } from '../data/recipes';
+
 // Local storage based recipe management
 // This file handles recipe storage using browser's localStorage as a fallback
 

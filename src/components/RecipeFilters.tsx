@@ -13,10 +13,11 @@ type FilterOption = {
   count?: number;
 };
 
-// Common cuisines that are actually used in the app
+// Common cuisines that are actually used in the app - updated to match UserPreferencesPage
 const COMMON_CUISINES = [
-  'american', 'british', 'chinese', 'french', 'greek', 'indian', 'italian', 
-  'japanese', 'mexican', 'spanish', 'thai', 'vietnamese'
+  'american', 'british', 'chinese', 'french', 'greek', 'indian', 'irish', 'italian', 
+  'japanese', 'mexican', 'moroccan', 'spanish', 'thai', 'vietnamese', 'mediterranean', 
+  'korean', 'caribbean', 'cajun'
 ];
 
 // Helper function to find similar cuisines
@@ -38,12 +39,19 @@ const findSimilarCuisine = (cuisine: string): string | null => {
     'france': 'french',
     'greece': 'greek',
     'india': 'indian',
+    'ireland': 'irish',
     'italy': 'italian',
     'japan': 'japanese',
     'mexico': 'mexican',
+    'morocco': 'moroccan',
     'spain': 'spanish',
     'thailand': 'thai',
     'vietnam': 'vietnamese',
+    'mediterranean': 'mediterranean',
+    'korea': 'korean',
+    'caribbean': 'caribbean',
+    'cajun': 'cajun',
+  
   };
   
   // Check for variations
@@ -57,11 +65,14 @@ const CUISINE_OPTIONS: FilterOption[] = COMMON_CUISINES.map(cuisine => ({
   icon: <ChefHat className="w-4 h-4" />
 }));
 
+// Updated diet options to match what the backend and existing recipe data actually use
 const DIET_OPTIONS: FilterOption[] = [
   { value: 'vegetarian', label: 'Vegetarian', icon: <Leaf className="w-4 h-4" /> },
   { value: 'vegan', label: 'Vegan', icon: <Leaf className="w-4 h-4" /> },
   { value: 'gluten-free', label: 'Gluten Free', icon: <Leaf className="w-4 h-4" /> },
   { value: 'dairy-free', label: 'Dairy Free', icon: <Leaf className="w-4 h-4" /> },
+  { value: 'nut-free', label: 'Nut Free', icon: <Leaf className="w-4 h-4" /> },
+ 
 ];
 
 interface RecipeFiltersProps {
@@ -107,12 +118,12 @@ export const RecipeFilters = ({
       onCuisineToggle(matchedCuisine);
       // Clear the input after matching
       e.target.value = '';
-      onSearchChange({ target: { value: '' } } as React.ChangeEvent<HTMLInputElement>);
+      onSearchChange('');
       return;
     }
     
     // Otherwise, proceed with normal search
-    onSearchChange(e);
+    onSearchChange(value);
   };
 
   const FilterSection = ({ 
@@ -195,7 +206,8 @@ export const RecipeFilters = ({
         onClear={() => selectedCuisines.forEach(c => onCuisineToggle(c))}
       >
         <div className="space-y-4">
-          <div className="flex flex-wrap gap-2">
+          {/* Cuisine options in a compact grid */}
+          <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
             {CUISINE_OPTIONS.map((option) => (
               <FilterChip
                 key={option.value}
@@ -207,6 +219,7 @@ export const RecipeFilters = ({
             ))}
           </div>
           
+          {/* Custom cuisine input */}
           <div className="flex gap-2">
             <Input
               type="text"
@@ -226,14 +239,7 @@ export const RecipeFilters = ({
               className="flex-1 h-9 text-sm"
             />
             <Button 
-              onClick={(e) => {
-                e.preventDefault();
-                const trimmedCuisine = customCuisine.trim();
-                if (trimmedCuisine && !selectedCuisines.includes(trimmedCuisine)) {
-                  onCuisineToggle(trimmedCuisine);
-                  setCustomCuisine('');
-                }
-              }}
+              onClick={handleAddCustomCuisine}
               size="sm" 
               variant="outline"
               disabled={!customCuisine.trim()}

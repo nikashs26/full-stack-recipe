@@ -907,18 +907,14 @@ class RecipeService:
                 
                 scored_recipes.append((recipe, score))
             
-            # Sort by score (highest first)
+            # Sort by score (highest first) - this ensures preference-based ordering
             scored_recipes.sort(key=lambda x: x[1], reverse=True)
             
-            # Balance the results to ensure even distribution
+            # Apply cuisine balancing for display order (NOT quantity limits)
             if normalized_cuisines and len(normalized_cuisines) > 1:
-                balanced_recipes = []
-                cuisine_counts = {cuisine: 0 for cuisine in normalized_cuisines}
-                max_per_cuisine = max(1, limit // len(normalized_cuisines))  # Ensure even distribution
+                logger.info(f"Applying cuisine balancing for {len(normalized_cuisines)} cuisines (ordering only, no quantity limits)")
                 
-                logger.info(f"Balancing {len(normalized_cuisines)} cuisines with max {max_per_cuisine} per cuisine")
-                
-                # Group recipes by cuisine for better balancing
+                # Group recipes by cuisine for better ordering
                 cuisine_groups = {cuisine: [] for cuisine in normalized_cuisines}
                 other_recipes = []
                 
@@ -945,48 +941,28 @@ class RecipeService:
                 for cuisine in normalized_cuisines:
                     cuisine_groups[cuisine].sort(key=lambda x: x[1], reverse=True)
                 
-                # Round-robin selection to ensure even distribution
-                round_num = 0
-                while len(balanced_recipes) < limit:
-                    added_in_round = False
-                    
+                # Create balanced ordering (round-robin) but keep ALL recipes
+                balanced_recipes = []
+                max_recipes_per_cuisine = max(len(group) for group in cuisine_groups.values()) if cuisine_groups else 0
+                
+                # Round-robin selection to ensure even distribution in ordering
+                for round_num in range(max_recipes_per_cuisine):
                     for cuisine in normalized_cuisines:
-                        if len(balanced_recipes) >= limit:
-                            break
-                        if cuisine_counts[cuisine] < max_per_cuisine and round_num < len(cuisine_groups[cuisine]):
+                        if round_num < len(cuisine_groups[cuisine]):
                             recipe, score = cuisine_groups[cuisine][round_num]
                             balanced_recipes.append(recipe)
-                            cuisine_counts[cuisine] += 1
-                            added_in_round = True
-                            logger.debug(f"Added {recipe.get('title', 'Unknown')} for {cuisine} cuisine (round {round_num}, count: {cuisine_counts[cuisine]})")
-                    
-                    if not added_in_round:
-                        break  # No more recipes to add
-                    
-                    round_num += 1
                 
-                # Fill remaining slots with any remaining recipes, still respecting cuisine limits
+                # Add remaining recipes from each cuisine group
                 for cuisine in normalized_cuisines:
-                    if len(balanced_recipes) >= limit:
-                        break
-                    
-                    start_idx = cuisine_counts[cuisine]
-                    for i in range(start_idx, len(cuisine_groups[cuisine])):
-                        if len(balanced_recipes) >= limit:
-                            break
-                        if cuisine_counts[cuisine] < max_per_cuisine:
-                            recipe, score = cuisine_groups[cuisine][i]
+                    for recipe, score in cuisine_groups[cuisine]:
+                        if recipe not in balanced_recipes:
                             balanced_recipes.append(recipe)
-                            cuisine_counts[cuisine] += 1
                 
-                # Add other recipes if we still have space
-                for recipe, score in other_recipes:
-                    if len(balanced_recipes) >= limit:
-                        break
-                    balanced_recipes.append(recipe)
+                # Add other recipes at the end
+                balanced_recipes.extend(other_recipes)
                 
                 all_recipes = balanced_recipes
-                logger.info(f"Balanced results: {len(all_recipes)} recipes with cuisine distribution: {cuisine_counts}")
+                logger.info(f"Applied cuisine balancing: {len(all_recipes)} recipes with preference-based ordering")
             else:
                 # No balancing needed, just use scored results
                 all_recipes = [recipe for recipe, score in scored_recipes]
@@ -1002,6 +978,10 @@ class RecipeService:
         logger.info(f"Cuisines: {cuisines}")
         logger.info(f"Dietary restrictions: {dietary_restrictions}")
         logger.info(f"Foods to avoid: {foods_to_avoid}")
+        
+        # Track cuisine matching statistics
+        cuisine_match_counts = {cuisine: 0 for cuisine in (cuisines or [])}
+        total_cuisine_matches = 0
         
         for idx, recipe in enumerate(all_recipes, 1):
             if not isinstance(recipe, dict) or 'id' not in recipe:
@@ -1069,9 +1049,23 @@ class RecipeService:
             matches_cuisine = self._matches_cuisine(recipe, cuisines) if cuisines else True
             matches_diet = self._matches_dietary_restrictions(recipe, dietary_restrictions) if dietary_restrictions else True
             
+            # Track cuisine matches for statistics
+            if cuisines and matches_cuisine:
+                total_cuisine_matches += 1
+                # Find which specific cuisine matched
+                recipe_cuisines = set()
+                if 'cuisines' in recipe and isinstance(recipe['cuisines'], list):
+                    recipe_cuisines.update(c.lower() for c in recipe['cuisines'] if c and isinstance(c, str))
+                if 'cuisine' in recipe and isinstance(recipe['cuisine'], list):
+                    recipe_cuisines.update(c.lower() for c in recipe['cuisine'] if c and isinstance(c, str))
+                
+                for cuisine in cuisines:
+                    if cuisine.lower() in recipe_cuisines:
+                        cuisine_match_counts[cuisine] += 1
+                        break
+            
             # Include recipe only if it matches all criteria
             if all([matches_query, has_ingredient, matches_cuisine, matches_diet]):
-                
                 filtered_recipes.append(recipe)
             else:
                 logger.debug(f"❌ Excluding recipe - Criteria not met: {recipe_name}")
@@ -1087,6 +1081,13 @@ class RecipeService:
         logger.info(f"\n=== Filtering complete ===")
         logger.info(f"Total recipes processed: {total_recipes}")
         logger.info(f"Recipes after filtering: {len(filtered_recipes)}")
+        
+        # Log cuisine matching statistics
+        if cuisines:
+            logger.info(f"Cuisine filtering statistics:")
+            logger.info(f"  Total recipes matching any cuisine: {total_cuisine_matches}")
+            for cuisine, count in cuisine_match_counts.items():
+                logger.info(f"  {cuisine}: {count} recipes")
         
         # Apply offset and limit
         start_idx = min(offset, len(filtered_recipes))

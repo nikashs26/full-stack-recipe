@@ -3,6 +3,7 @@ from flask_cors import CORS
 import os
 from dotenv import load_dotenv
 from services.recipe_cache_service import RecipeCacheService
+from services.email_service import EmailService
 from routes.recipe_routes import register_recipe_routes
 from routes.auth_routes import auth_bp
 from routes.preferences import preferences_bp
@@ -38,6 +39,10 @@ cors = CORS(app,
 
 # Initialize services
 recipe_cache = RecipeCacheService()
+
+# Initialize email service with the Flask app
+email_service = EmailService(app)
+print("✓ Email service initialized")
 
 # Register routes
 app = register_recipe_routes(app, recipe_cache)

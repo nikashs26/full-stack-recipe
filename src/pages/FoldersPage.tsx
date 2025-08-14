@@ -67,58 +67,144 @@ const FoldersPage: React.FC = () => {
           console.log('Processing recipe data:', recipeData);
           console.log('Recipe data keys:', Object.keys(recipeData));
           
-          // Helper function to get value from multiple possible field names
-          const getFieldValue = (fieldNames: string[], fallback?: any) => {
-            for (const fieldName of fieldNames) {
-              if (recipeData[fieldName] !== undefined && recipeData[fieldName] !== null) {
-                return recipeData[fieldName];
+            // Helper function to get value from multiple possible field names
+            const getFieldValue = (fieldNames: string[], fallback?: any) => {
+              for (const fieldName of fieldNames) {
+                if (recipeData[fieldName] !== undefined && recipeData[fieldName] !== null) {
+                  return recipeData[fieldName];
+                }
               }
-            }
-            return fallback;
-          };
-          
-          // Helper function to get nested field value
-          const getNestedFieldValue = (fieldPath: string, fallback?: any) => {
-            const parts = fieldPath.split('.');
-            let value = recipeData;
-            for (const part of parts) {
-              if (value && typeof value === 'object' && part in value) {
-                value = value[part];
+              return fallback;
+            };
+            
+            // Helper function to get nested field value
+            const getNestedFieldValue = (fieldPath: string, fallback?: any) => {
+              const parts = fieldPath.split('.');
+              let value = recipeData;
+              for (const part of parts) {
+                if (value && typeof value === 'object' && part in value) {
+                  value = value[part];
+                } else {
+                  return fallback;
+                }
+              }
+              return value !== undefined && value !== null ? value : fallback;
+            };
+            
+            // Debug: Log the actual recipe data structure
+            console.log('Recipe data structure for item:', {
+              recipeId: item.recipe_id,
+              recipeType: item.recipe_type,
+              availableKeys: Object.keys(recipeData),
+              nameValue: recipeData.name,
+              titleValue: recipeData.title,
+              descriptionValue: recipeData.description,
+              summaryValue: recipeData.summary,
+              strMeal: recipeData.strMeal,
+              strArea: recipeData.strArea,
+              strCategory: recipeData.strCategory,
+              rawRecipeData: recipeData
+            });
+            
+            // Enhanced field mapping with more comprehensive fallbacks
+            let recipeName = getFieldValue([
+              'name', 'title', 'strMeal', 'recipeName', 'recipe_name', 'recipe_title'
+            ], '');
+            
+            // If no name found, try to extract from other fields or generate a descriptive name
+            if (!recipeName) {
+              // Try to get cuisine or type to create a descriptive name
+              const cuisine = getFieldValue(['cuisine', 'cuisines.0', 'strArea'], '');
+              const type = getFieldValue(['type', 'category', 'strCategory'], '');
+              
+              if (cuisine && type) {
+                recipeName = `${cuisine} ${type}`;
+              } else if (cuisine) {
+                recipeName = `${cuisine} Recipe`;
+              } else if (type) {
+                recipeName = `${type} Recipe`;
               } else {
-                return fallback;
+                recipeName = 'Untitled Recipe';
               }
             }
-            return value !== undefined && value !== null ? value : fallback;
-          };
+            
+            const recipeDescription = getFieldValue([
+              'description', 'summary', 'strInstructions', 'instructions', 'strDescription'
+            ], '') || `A delicious ${recipeName.toLowerCase()} recipe.`;
+            
+            const recipeImage = getFieldValue([
+              'image', 'imageUrl', 'strMealThumb', 'strMealThumbnail', 'thumbnail', 'photo'
+            ], '');
+            
+            const recipeIngredients = recipeData.ingredients || 
+                                    recipeData.extendedIngredients || 
+                                    recipeData.strIngredients || 
+                                    [];
+            
+            const recipeInstructions = recipeData.instructions || 
+                                     recipeData.strInstructions || 
+                                     recipeData.directions || 
+                                     [];
+            
+            let recipeCuisines = recipeData.cuisines || 
+                                recipeData.cuisine || 
+                                recipeData.strArea || 
+                                [];
+            
+            // Convert single cuisine to array if needed
+            if (typeof recipeCuisines === 'string') {
+              recipeCuisines = [recipeCuisines];
+            } else if (!Array.isArray(recipeCuisines)) {
+              recipeCuisines = [];
+            }
           
           return {
             id: item.recipe_id || item.id,
-            name: getFieldValue(['name', 'title'], 'Untitled Recipe'),
-            title: getFieldValue(['title', 'name'], 'Untitled Recipe'),
-            description: getFieldValue(['description', 'summary'], ''),
-            image: getFieldValue(['image', 'imageUrl', 'strMealThumb'], ''),
-            ingredients: recipeData.ingredients || [],
-            instructions: recipeData.instructions || [],
-            cuisine: getFieldValue(['cuisine', 'cuisines.0'], ''),
-            cuisines: recipeData.cuisines || [recipeData.cuisine].filter(Boolean),
-            dietaryRestrictions: recipeData.dietaryRestrictions || recipeData.diets || [],
-            servings: recipeData.servings,
+            name: recipeName,
+            title: recipeName,
+            description: recipeDescription,
+            image: recipeImage,
+            ingredients: recipeIngredients,
+            instructions: recipeInstructions,
+            cuisine: Array.isArray(recipeCuisines) ? recipeCuisines[0] : recipeCuisines,
+            cuisines: recipeCuisines,
+            dietaryRestrictions: recipeData.dietaryRestrictions || 
+                               recipeData.diets || 
+                               recipeData.strTags || 
+                               [],
+            servings: recipeData.servings || recipeData.strServings || 4,
             
             // Time fields with comprehensive fallbacks
-            prepTime: getFieldValue(['prepTime', 'prep_time', 'preparationMinutes', 'strPrepTime'], undefined),
-            cookTime: getFieldValue(['cookTime', 'cook_time', 'cookingMinutes', 'strCookTime'], undefined),
-            totalTime: getFieldValue(['totalTime', 'total_time', 'totalMinutes', 'strTotalTime'], undefined),
-            readyInMinutes: getFieldValue(['readyInMinutes', 'ready_in_minutes', 'readyInMinutes', 'totalTime', 'total_time', 'strTotalTime'], undefined),
+            prepTime: getFieldValue([
+              'prepTime', 'prep_time', 'preparationMinutes', 'strPrepTime', 'prepTimeMinutes'
+            ], undefined),
+            cookTime: getFieldValue([
+              'cookTime', 'cook_time', 'cookingMinutes', 'strCookTime', 'cookTimeMinutes'
+            ], undefined),
+            totalTime: getFieldValue([
+              'totalTime', 'total_time', 'totalMinutes', 'strTotalTime', 'readyInMinutes', 'ready_in_minutes'
+            ], undefined),
+            readyInMinutes: getFieldValue([
+              'readyInMinutes', 'ready_in_minutes', 'totalTime', 'total_time', 'strTotalTime', 'strPrepTime'
+            ], undefined),
             
-            difficulty: recipeData.difficulty,
-            nutrition: recipeData.nutrition,
-            macrosPerServing: recipeData.macrosPerServing,
+            difficulty: recipeData.difficulty || recipeData.strDifficulty || 'medium',
+            nutrition: recipeData.nutrition || {},
+            macrosPerServing: recipeData.macrosPerServing || recipeData.macros || {},
             
             // Rating fields with comprehensive fallbacks
-            rating: getFieldValue(['rating', 'score', 'strRating'], undefined),
-            ratings: getFieldValue(['ratings', 'scores'], undefined),
-            averageRating: getFieldValue(['averageRating', 'avgRating', 'rating', 'score', 'strRating'], undefined),
-            reviewCount: getFieldValue(['reviewCount', 'reviews.length', 'ratingCount'], 0),
+            rating: getFieldValue([
+              'rating', 'score', 'strRating', 'averageRating', 'avgRating'
+            ], undefined),
+            ratings: getFieldValue([
+              'ratings', 'scores', 'ratingCount', 'reviewCount'
+            ], undefined),
+            averageRating: getFieldValue([
+              'averageRating', 'avgRating', 'rating', 'score', 'strRating'
+            ], undefined),
+            reviewCount: getFieldValue([
+              'reviewCount', 'ratingCount', 'ratings'
+            ], 0),
             
             isFavorite: recipeData.isFavorite || false,
             folderId: selectedFolder.id,
@@ -127,17 +213,27 @@ const FoldersPage: React.FC = () => {
             type: item.recipe_type || 'manual',
             
             // Additional fields that might exist
-            source: recipeData.source,
-            sourceUrl: recipeData.sourceUrl,
-            summary: recipeData.summary,
-            calories: getFieldValue(['calories', 'nutrition.calories'], undefined),
-            protein: getFieldValue(['protein', 'nutrition.protein'], undefined),
-            carbs: getFieldValue(['carbs', 'nutrition.carbs', 'nutrition.carbohydrates'], undefined),
-            fat: getFieldValue(['fat', 'nutrition.fat'], undefined)
+            source: recipeData.source || recipeData.strSource || '',
+            sourceUrl: recipeData.sourceUrl || recipeData.strSource || '',
+            summary: recipeData.summary || recipeData.description || '',
+            calories: getFieldValue([
+              'calories', 'nutrition.calories', 'strCalories', 'energy'
+            ], undefined),
+            protein: getFieldValue([
+              'protein', 'nutrition.protein', 'strProtein', 'macros.protein'
+            ], undefined),
+            carbs: getFieldValue([
+              'carbs', 'nutrition.carbs', 'nutrition.carbohydrates', 'strCarbs', 'macros.carbs'
+            ], undefined),
+            fat: getFieldValue([
+              'fat', 'nutrition.fat', 'strFat', 'macros.fat'
+            ], undefined)
           };
         });
         
         console.log('Transformed recipes:', recipes);
+        console.log('Raw recipe data from backend:', folderData);
+        console.log('Sample recipe item structure:', folderData?.items?.[0]);
         return recipes;
       } catch (error) {
         console.error('Error fetching folder recipes:', error);

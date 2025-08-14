@@ -133,15 +133,7 @@ const ManualRecipeDetailPage: React.FC = () => {
   ];
 
   // Use actual cooking instructions if available, otherwise provide helpful guidance
-  const instructions = recipe.cooking_instructions 
-    ? recipe.cooking_instructions.split('\n').filter(instruction => instruction.trim())
-    : [
-        'This is a curated recipe from our popular collection.',
-        'For detailed cooking instructions, please refer to traditional preparation methods.',
-        'Season to taste and adjust cooking time based on your preferences.',
-        'We\'re working on adding complete step-by-step instructions soon!'
-      ];
-
+ 
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />

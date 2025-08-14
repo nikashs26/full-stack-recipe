@@ -1,6 +1,5 @@
-
 import React from 'react';
-import { Search, PlusCircle, Filter, LayoutGrid } from 'lucide-react';
+import { Search, PlusCircle, Filter, LayoutGrid, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 interface FilterBarProps {
@@ -29,39 +28,57 @@ const FilterBar: React.FC<FilterBarProps> = ({
   onClearFilters
 }) => {
   return (
-    <div className="bg-white rounded-lg shadow-md p-4 mb-6 animate-fade-in">
-      <div className="flex flex-col space-y-3 md:space-y-4">
+    <div className="rounded-2xl bg-white/80 backdrop-blur p-4 md:p-5 ring-1 ring-gray-200 shadow-sm mb-6 animate-fade-in">
+      <div className="flex flex-col gap-3 md:gap-4">
         {/* Recipe Name Search */}
         <div className="relative flex-grow">
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <Search className="h-5 w-5 text-gray-400" aria-hidden="true" />
-          </div>
-          <input 
+          <Search className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" aria-hidden="true" />
+          {searchTerm && (
+            <button
+              type="button"
+              onClick={(e) => { e.preventDefault(); onSearchChange({ target: { value: '' } } as any); }}
+              aria-label="Clear name search"
+              className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+          <input
             type="text"
-            placeholder="Search recipes by name..." 
-            className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-recipe-primary focus:border-recipe-primary transition duration-150 ease-in-out sm:text-sm"
+            placeholder="Search recipes by name…"
+            className="block w-full h-12 md:h-14 pl-11 pr-10 rounded-full border border-gray-200 bg-white placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 text-base"
             value={searchTerm}
             onChange={onSearchChange}
+            aria-label="Search recipes by name"
           />
         </div>
-        
+
         {/* Ingredient Search */}
         <div className="relative flex-grow">
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <LayoutGrid className="h-5 w-5 text-gray-400" aria-hidden="true" />
-          </div>
-          <input 
+          <LayoutGrid className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" aria-hidden="true" />
+          {ingredientTerm && (
+            <button
+              type="button"
+              onClick={(e) => { e.preventDefault(); onIngredientChange({ target: { value: '' } } as any); }}
+              aria-label="Clear ingredient search"
+              className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+          <input
             type="text"
-            placeholder="Search by ingredient (e.g., chicken, tomato)..." 
-            className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-recipe-primary focus:border-recipe-primary transition duration-150 ease-in-out sm:text-sm"
+            placeholder="Search by ingredient (e.g., chicken, tomato)…"
+            className="block w-full h-12 md:h-14 pl-11 pr-10 rounded-full border border-gray-200 bg-white placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 text-base"
             value={ingredientTerm}
             onChange={onIngredientChange}
+            aria-label="Search by ingredient"
           />
         </div>
-        
-        <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-3">
-          <select 
-            className="block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-recipe-primary focus:border-recipe-primary sm:text-sm"
+
+        <div className="flex flex-col sm:flex-row gap-3">
+          <select
+            className="block w-full h-12 px-4 border border-gray-200 bg-white rounded-full shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 text-sm md:text-base"
             value={dietaryFilter}
             onChange={onDietaryFilterChange}
             aria-label="Filter by dietary restriction"
@@ -72,9 +89,9 @@ const FilterBar: React.FC<FilterBarProps> = ({
             <option value="gluten-free">Gluten-Free</option>
             <option value="carnivore">Carnivore (don't blame us for your bathroom situation)</option>
           </select>
-          
-          <select 
-            className="block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-recipe-primary focus:border-recipe-primary sm:text-sm"
+
+          <select
+            className="block w-full h-12 px-4 border border-gray-200 bg-white rounded-full shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 text-sm md:text-base"
             value={cuisineFilter}
             onChange={onCuisineFilterChange}
             aria-label="Filter by cuisine"
@@ -84,23 +101,25 @@ const FilterBar: React.FC<FilterBarProps> = ({
               <option key={cuisine} value={cuisine}>{cuisine}</option>
             ))}
           </select>
-          
+
           {(searchTerm || ingredientTerm || dietaryFilter || cuisineFilter) && (
             <button
               onClick={onClearFilters}
-              className="inline-flex items-center justify-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-recipe-primary"
+              className="inline-flex items-center justify-center px-4 h-12 border border-gray-200 text-sm font-medium rounded-full text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-100"
             >
               Clear
             </button>
           )}
         </div>
-        
-        <Link
-          to="/add-recipe"
-          className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-recipe-primary hover:bg-recipe-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-recipe-primary transition-colors"
-        >
-          <PlusCircle className="mr-2 h-5 w-5" /> Add Recipe
-        </Link>
+
+        <div className="flex justify-end">
+          <Link
+            to="/add-recipe"
+            className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-full text-white bg-recipe-primary hover:bg-recipe-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-recipe-primary transition-colors"
+          >
+            <PlusCircle className="mr-2 h-5 w-5" /> Add Recipe
+          </Link>
+        </div>
       </div>
     </div>
   );

@@ -34,6 +34,21 @@
     z-index: -10;
   }
   
+  /* Test background - simple solid color to verify CSS is working */
+  .bg-kitchen-test {
+    background-color: #4a90e2;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: -10;
+  }
+  
   .search-input {
     @apply pl-10 pr-4 py-6 text-base rounded-xl shadow-sm focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 w-full border-0 bg-white/90 hover:bg-white transition-colors duration-200;
   }

@@ -1,16 +1,18 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { fetchManualRecipes } from '../lib/manualRecipes';
-import { DietaryRestriction, Recipe as RecipeType } from '../types/recipe';
-import { Loader2, Search, ChefHat, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Utensils } from 'lucide-react';
-import Header from '../components/Header';
+import { Search, X, Utensils, ChevronLeft, ChevronRight, ChefHat, Leaf, Clock, Star, Heart, FolderPlus, Share2, Filter, Plus, Minus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import RecipeCard from '@/components/RecipeCard';
 import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { RecipeFilters } from '@/components/RecipeFilters';
-import { useDebounce } from '../hooks/useDebounce';
+import RecipeCard from '@/components/RecipeCard';
+import { fetchManualRecipes } from '@/lib/manualRecipes';
+import { DietaryRestriction, ExtendedRecipe } from '@/types/recipe';
+import { useAuth } from '@/context/AuthContext';
+import { useToast } from '@/hooks/use-toast';
 
 // Recipe type definitions
 type BaseRecipe = {
@@ -84,12 +86,22 @@ const RecipesPage: React.FC = () => {
   const [selectedCuisines, setSelectedCuisines] = useState<string[]>([]);
   const [selectedDiets, setSelectedDiets] = useState<string[]>([]);
   const [showLoading, setShowLoading] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
+  const [currentPage, setCurrentPage] = useState(() => {
+    // Try to restore the current page from localStorage
+    const savedPage = localStorage.getItem('recipes-current-page');
+    return savedPage ? parseInt(savedPage, 10) : 1;
+  });
   const [gotoPage, setGotoPage] = useState<string>("");
   const [totalPages, setTotalPages] = useState(1);
   const recipesPerPage = 20;
   
-  const debouncedSearchQuery = useDebounce(searchQuery, 500);
+  // Remove debounced search - we'll only search on explicit action
+  // const debouncedSearchQuery = useDebounce(searchQuery, 500);
+  
+  // Update current page (localStorage is handled by useEffect)
+  const updateCurrentPage = useCallback((page: number) => {
+    setCurrentPage(page);
+  }, []);
 
   // Fetch paginated recipes from ChromaDB with search and filters
   const { 
@@ -97,16 +109,23 @@ const RecipesPage: React.FC = () => {
     isLoading: isLoadingRecipes, 
     isFetching 
   } = useQuery<{ recipes: Recipe[], total: number }>({
-    queryKey: ['recipes', debouncedSearchQuery, ingredientSearch, selectedCuisines, selectedDiets, currentPage],
+    queryKey: ['recipes', searchQuery, ingredientSearch, selectedCuisines, selectedDiets, currentPage],
     queryFn: async () => {
       try {
         // Always use pagination for consistent behavior
-        const result = await fetchManualRecipes(debouncedSearchQuery, ingredientSearch, {
+        const result = await fetchManualRecipes(searchQuery, ingredientSearch, {
           page: currentPage,
           pageSize: recipesPerPage, // Always use 20 recipes per page
           cuisines: selectedCuisines,
           diets: selectedDiets
         });
+        
+        console.log('Raw result from fetchManualRecipes:', result);
+        console.log('Result keys:', Object.keys(result));
+        console.log('Result.recipes:', result.recipes);
+        console.log('Result.total:', result.total);
+        console.log('Selected cuisines being sent to backend:', selectedCuisines);
+        console.log('Selected diets being sent to backend:', selectedDiets);
         
         // Update total pages based on the response
         const totalRecipes = result.total || 0;
@@ -128,19 +147,40 @@ const RecipesPage: React.FC = () => {
     refetchOnWindowFocus: false,
   });
 
-  // Handle recipe name search input change with debounce and reset to first page
+  // Handle recipe name search input change - only update local state, don't trigger search
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(e.target.value);
-    setSearchQuery(e.target.value);
-    console.log('Search changed, resetting to page 1');
-    setCurrentPage(1);
+    // Don't update searchQuery here - only update it when search is explicitly triggered
+    console.log('Search term changed, but not triggering search yet');
   };
 
-  // Handle ingredient search input change
+  // Handle ingredient search input change - only update local state, don't trigger search
   const handleIngredientSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setIngredientSearch(e.target.value);
-    console.log('Ingredient search changed, resetting to page 1');
-    setCurrentPage(1);
+    console.log('Ingredient search changed, but not triggering search yet');
+  };
+
+  // Handle search button click or Enter key press
+  const handleSearchSubmit = () => {
+    setSearchQuery(searchTerm);
+    updateCurrentPage(1);
+    console.log('Search submitted, triggering search');
+  };
+
+  // Handle Enter key press in search input
+  const handleSearchKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleSearchSubmit();
+    }
+  };
+
+  // Handle Enter key press in ingredient input
+  const handleIngredientKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleSearchSubmit();
+    }
   };
 
   // Toggle cuisine filter and reset to first page
@@ -150,7 +190,7 @@ const RecipesPage: React.FC = () => {
         ? prev.filter(c => c !== cuisine) 
         : [...prev, cuisine]
     );
-    setCurrentPage(1);
+    updateCurrentPage(1);
   };
 
   // Toggle diet filter and reset to first page
@@ -160,7 +200,7 @@ const RecipesPage: React.FC = () => {
         ? prev.filter(d => d !== diet) 
         : [...prev, diet]
     );
-    setCurrentPage(1);
+    updateCurrentPage(1);
   };
 
   const clearAllFilters = useCallback(() => {
@@ -169,7 +209,9 @@ const RecipesPage: React.FC = () => {
     setSearchQuery("");
     setSearchTerm("");
     setIngredientSearch("");
-  }, []);
+    // Reset to page 1 when clearing all filters
+    updateCurrentPage(1);
+  }, [updateCurrentPage]);
 
   // Normalize recipes to a common format
   const normalizedRecipes = useMemo<NormalizedRecipe[]>(() => {
@@ -302,8 +344,8 @@ const RecipesPage: React.FC = () => {
   const handleSearch = useCallback((term: string) => {
     setSearchTerm(term);
     setSearchQuery(term);
-    setCurrentPage(1);
-  }, []);
+    updateCurrentPage(1);
+  }, [updateCurrentPage]);
 
   // Show loading state only when we have a search query and data is being fetched
   const isLoading = useMemo(() => 
@@ -319,6 +361,26 @@ const RecipesPage: React.FC = () => {
       setShowLoading(false);
     }
   }, [isLoading]);
+  
+  // Restore current page from localStorage when component mounts
+  useEffect(() => {
+    const savedPage = localStorage.getItem('recipes-current-page');
+    if (savedPage) {
+      const page = parseInt(savedPage, 10);
+      if (page > 0) {
+        console.log('Restoring saved page from localStorage:', page);
+        setCurrentPage(page);
+      }
+    }
+  }, []);
+  
+  // Save current page to localStorage whenever it changes
+  useEffect(() => {
+    if (currentPage > 0) {
+      console.log('Saving current page to localStorage:', currentPage);
+      localStorage.setItem('recipes-current-page', currentPage.toString());
+    }
+  }, [currentPage]);
 
   const renderRecipeCard = useCallback((recipe: NormalizedRecipe, index: number) => {
     // Helper function to convert string to DietaryRestriction enum
@@ -382,18 +444,17 @@ const RecipesPage: React.FC = () => {
       restrictionCount: convertedRestrictions.length
     });
 
-    const recipeForCard: RecipeType = {
+    const recipeForCard: ExtendedRecipe = {
       id: recipe.id.toString(),
       title: recipe.title,
       name: recipe.title,
       image: recipe.imageUrl || 'https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?auto=format&fit=crop&w=400&h=300&q=80',
       imageUrl: recipe.imageUrl || 'https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?auto=format&fit=crop&w=400&h=300&q=80',
       cuisines: Array.isArray(recipe.cuisines) ? recipe.cuisines : [],
-      cuisine: Array.isArray(recipe.cuisines) && recipe.cuisines.length > 0 ? recipe.cuisines[0] : '',
       dietaryRestrictions: (recipe.dietaryRestrictions || [])
         .map(convertToDietaryRestriction)
         .filter((d): d is DietaryRestriction => d !== null),
-      diets: recipe.dietaryRestrictions || [],
+      diets: Array.isArray(recipe.dietaryRestrictions) ? recipe.dietaryRestrictions : [],
       ingredients: Array.isArray(recipe.ingredients) ? recipe.ingredients : [],
       instructions: Array.isArray(recipe.instructions) 
         ? recipe.instructions 
@@ -404,7 +465,7 @@ const RecipesPage: React.FC = () => {
       cookingTime: recipe.ready_in_minutes ? `${recipe.ready_in_minutes} minutes` : 'Not specified',
       servings: recipe.servings || 4,
       source: recipe.type === 'spoonacular' ? 'spoonacular' : 'local',
-      type: recipe.type || 'saved',
+      type: (recipe.type === 'saved' ? 'manual' : recipe.type) || 'manual',
       ratings: [],
       comments: [],
 
@@ -447,51 +508,67 @@ const RecipesPage: React.FC = () => {
             
             {/* Search Container */}
             <div className="w-full max-w-4xl mx-auto">
-              <div className="bg-white/95 backdrop-blur-sm rounded-2xl p-6 shadow-xl border border-white/30">
-                <div className="space-y-4 mb-4">
+              <div className="bg-white/90 backdrop-blur rounded-2xl p-6 shadow-xl border border-white/30">
+                <div className="space-y-4 mb-2">
                   {/* Recipe Name Search */}
                   <div className="relative">
-                    <label htmlFor="recipe-name-search" className="block text-sm font-medium text-gray-700 mb-2">
+                    <label htmlFor="recipe-name-search" className="block text-sm font-medium text-gray-100 mb-2 sr-only">
                       Recipe Name Search
                     </label>
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                    <Search className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                    {searchTerm && (
+                      <button
+                        type="button"
+                        onClick={() => handleSearchChange({ target: { value: '' } } as any)}
+                        aria-label="Clear name search"
+                        className="absolute right-28 top-1/2 -translate-y-1/2 p-1 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    )}
                     <Input
                       id="recipe-name-search"
                       type="text"
-                      placeholder="Search recipes by name..."
-                      className="pl-10 pr-4 py-6 text-base rounded-xl shadow-sm focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 w-full border-0 bg-white/90 hover:bg-white transition-colors duration-200"
+                      placeholder="Search recipes by name…"
+                      className="h-14 pl-12 pr-32 text-base rounded-full border border-gray-200 bg-white placeholder:text-gray-400 focus-visible:ring-4 focus-visible:ring-blue-100 focus-visible:ring-offset-0 focus-visible:border-blue-500 w-full"
                       value={searchTerm}
                       onChange={handleSearchChange}
+                      onKeyPress={handleSearchKeyPress}
                     />
+                    <Button
+                      onClick={handleSearchSubmit}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 px-5 h-10 rounded-full bg-gradient-to-r from-primary to-amber-600 hover:from-primary/90 hover:to-amber-600/90 text-white shadow"
+                    >
+                      <Search className="mr-2 h-4 w-4" />
+                      Find
+                    </Button>
                   </div>
                   {/* Ingredient Search */}
                   <div className="relative">
-                    <label htmlFor="ingredient-search" className="block text-sm font-medium text-gray-700 mb-2">
+                    <label htmlFor="ingredient-search" className="block text-sm font-medium text-gray-100 mb-2 sr-only">
                       Ingredient Search
                     </label>
-                    <Utensils className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                    <Utensils className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                    {ingredientSearch && (
+                      <button
+                        type="button"
+                        onClick={() => handleIngredientSearchChange({ target: { value: '' } } as any)}
+                        aria-label="Clear ingredient search"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    )}
                     <Input
                       id="ingredient-search"
                       type="text"
-                      placeholder="Filter by ingredients..."
-                      className="pl-10 pr-4 py-6 text-base rounded-xl shadow-sm focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 w-full border-0 bg-white/90 hover:bg-white transition-colors duration-200"
+                      placeholder="Filter by ingredients…"
+                      className="h-14 pl-12 pr-10 text-base rounded-full border border-gray-200 bg-white placeholder:text-gray-400 focus-visible:ring-4 focus-visible:ring-blue-100 focus-visible:ring-offset-0 focus-visible:border-blue-500 w-full"
                       value={ingredientSearch}
                       onChange={handleIngredientSearchChange}
+                      onKeyPress={handleIngredientKeyPress}
                     />
                   </div>
-                </div>
-                <div className="flex justify-center">
-                  <Button 
-                    onClick={() => {
-                      // Trigger search with current values
-                      setSearchQuery(searchTerm);
-                      setCurrentPage(1);
-                    }}
-                    className="px-8 py-6 text-lg font-medium rounded-xl bg-gradient-to-r from-primary to-amber-600 hover:from-primary/90 hover:to-amber-600/90 text-white shadow-lg hover:shadow-xl transition-all duration-200 w-full md:w-auto"
-                  >
-                    <Search className="mr-2 h-5 w-5" />
-                    Find Recipes
-                  </Button>
                 </div>
               </div>
             </div>
@@ -623,7 +700,7 @@ const RecipesPage: React.FC = () => {
                 <Button
                   onClick={() => {
                     console.log('Previous button clicked, current page:', currentPage);
-                    setCurrentPage(prev => Math.max(1, prev - 1));
+                    updateCurrentPage(Math.max(1, currentPage - 1));
                   }}
                   disabled={currentPage === 1 || isLoadingRecipes}
                   variant="outline"
@@ -634,7 +711,7 @@ const RecipesPage: React.FC = () => {
                 <Button
                   onClick={() => {
                     console.log('Next button clicked, current page:', currentPage);
-                    setCurrentPage(prev => Math.min(totalPages, prev + 1));
+                    updateCurrentPage(Math.min(totalPages, currentPage + 1));
                   }}
                   disabled={currentPage === totalPages || isLoadingRecipes}
                   variant="outline"
@@ -651,7 +728,7 @@ const RecipesPage: React.FC = () => {
                   <Button
                     onClick={() => {
                       console.log('Previous button clicked, current page:', currentPage);
-                      setCurrentPage(prev => Math.max(1, prev - 1));
+                      updateCurrentPage(Math.max(1, currentPage - 1));
                     }}
                     disabled={currentPage === 1 || isLoadingRecipes}
                     variant="outline"
@@ -706,7 +783,7 @@ const RecipesPage: React.FC = () => {
                                 onClick={() => {
                                   if (currentPage !== pageNum) {
                                     console.log(`Page ${pageNum} clicked, current page:`, currentPage);
-                                    setCurrentPage(pageNum);
+                                    updateCurrentPage(pageNum);
                                   }
                                 }}
                                 disabled={isLoadingRecipes}
@@ -732,7 +809,7 @@ const RecipesPage: React.FC = () => {
                           const n = parseInt(gotoPage || '');
                           if (!isNaN(n)) {
                             const clamped = Math.max(1, Math.min(totalPages, n));
-                            setCurrentPage(clamped);
+                            updateCurrentPage(clamped);
                           }
                         }
                       }}
@@ -746,7 +823,7 @@ const RecipesPage: React.FC = () => {
                         const n = parseInt(gotoPage || '');
                         if (!isNaN(n)) {
                           const clamped = Math.max(1, Math.min(totalPages, n));
-                          setCurrentPage(clamped);
+                          updateCurrentPage(clamped);
                         }
                       }}
                     >
@@ -758,7 +835,7 @@ const RecipesPage: React.FC = () => {
                   <Button
                     onClick={() => {
                       console.log('Next button clicked, current page:', currentPage);
-                      setCurrentPage(prev => Math.min(totalPages, prev + 1));
+                      updateCurrentPage(Math.min(totalPages, currentPage + 1));
                     }}
                     disabled={currentPage === totalPages || isLoadingRecipes}
                     variant="outline"

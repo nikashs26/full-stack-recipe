@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 from services.user_service import UserService
 from services.email_service import EmailService
 from middleware.auth_middleware import require_auth, get_current_user_id
@@ -10,7 +10,18 @@ import json
 
 auth_bp = Blueprint('auth', __name__)
 user_service = UserService()
-email_service = EmailService()
+
+# Get the email service from the current app context
+def get_email_service():
+    """Get the email service from the current app context"""
+    if hasattr(current_app, 'extensions') and 'mail' in current_app.extensions:
+        # Create email service with the current app
+        email_service = EmailService()
+        email_service.init_app(current_app)
+        return email_service
+    else:
+        # Fallback to uninitialized service (development mode)
+        return EmailService()
 
 
 def validate_email(email: str) -> bool:
@@ -70,6 +81,7 @@ def register():
             return jsonify({"error": result["error"]}), 400
         
         # Send verification email
+        email_service = get_email_service() # Get the service here
         email_result = email_service.send_verification_email(
             email, 
             result["verification_token"], 
@@ -149,6 +161,7 @@ def verify_email():
         # Send welcome email
         user = user_service.get_user_by_id(result["user_id"])
         if user:
+            email_service = get_email_service() # Get the service here
             email_service.send_welcome_email(user["email"], user.get("full_name", ""))
         
         return jsonify({
@@ -176,6 +189,7 @@ def verify_email_get(token):
         # Send welcome email
         user = user_service.get_user_by_id(result["user_id"])
         if user:
+            email_service = get_email_service() # Get the service here
             email_service.send_welcome_email(user["email"], user.get("full_name", ""))
         
         return jsonify({
@@ -213,6 +227,7 @@ def resend_verification():
         # Send new verification email
         user = user_service.get_user_by_email(email)
         if user:
+            email_service = get_email_service() # Get the service here
             email_result = email_service.send_verification_email(
                 email, 
                 result["verification_token"], 

@@ -35,15 +35,19 @@ class EmailService:
         """Send email verification email"""
         try:
             if not self.mail:
-                # For development, return success without actually sending
+                # Email service not configured - return success with development info
+                frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:8081')
+                verification_url = f"{frontend_url}/verify-email?token={verification_token}"
+                
                 return {
                     "success": True,
-                    "message": f"Development mode: Verification token is {verification_token}",
-                    "verification_url": f"http://localhost:8080/verify-email?token={verification_token}"
+                    "message": "Email service not configured. User registered successfully.",
+                    "verification_url": verification_url,
+                    "dev_mode": True
                 }
             
             # Create verification URL
-            frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:8080')
+            frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:8081')
             verification_url = f"{frontend_url}/verify-email?token={verification_token}"
             
             # Create email message
@@ -145,16 +149,22 @@ class EmailService:
             }
             
         except Exception as e:
+            # If email sending fails, still return success for user registration
+            frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:8081')
+            verification_url = f"{frontend_url}/verify-email?token={verification_token}"
+            
             return {
-                "success": False,
-                "error": f"Failed to send verification email: {str(e)}"
+                "success": True,
+                "message": f"User registered successfully. Email sending failed: {str(e)}",
+                "verification_url": verification_url,
+                "email_error": str(e)
             }
     
     def send_welcome_email(self, email: str, full_name: str = "") -> Dict[str, Any]:
         """Send welcome email after successful verification"""
         try:
             if not self.mail:
-                return {"success": True, "message": "Development mode: Welcome email skipped"}
+                return {"success": True, "message": "Email service not configured. Welcome message skipped."}
             
             subject = "Welcome to Recipe App! 🎉"
             recipient_name = full_name if full_name else email.split('@')[0]
@@ -203,7 +213,7 @@ class EmailService:
                         </div>
                         
                         <p style="text-align: center; margin: 30px 0;">
-                            <a href="{os.getenv('FRONTEND_URL', 'http://localhost:8080')}/preferences" class="button">Set Your Preferences</a>
+                            <a href="{os.getenv('FRONTEND_URL', 'http://localhost:8081')}/preferences" class="button">Set Your Preferences</a>
                         </p>
                         
                         <p>Ready to start your personalized cooking adventure? Sign in and explore all the features we have to offer!</p>
@@ -230,4 +240,4 @@ class EmailService:
             return {"success": True, "message": "Welcome email sent successfully"}
             
         except Exception as e:
-            return {"success": False, "error": f"Failed to send welcome email: {str(e)}"} 
+            return {"success": True, "message": f"Welcome message skipped due to email error: {str(e)}"} 

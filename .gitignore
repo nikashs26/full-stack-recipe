@@ -44,3 +44,5 @@ backend/chroma_db/
 backend/cookies.txt
 *.tmp
 *.temp
+
+users.json
