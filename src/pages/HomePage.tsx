@@ -471,48 +471,118 @@ const HomePage: React.FC = () => {
         // Smart recommendation logic: prioritize favorite foods first, then cuisine preferences
         const favoriteFoodsNorm: string[] = (favoriteFoods || []).map((f: any) => (f || '').toString().trim().toLowerCase()).filter(Boolean);
         
-        // Step 1: Find recipes that match favorite foods (regardless of cuisine) - RESPECTING DIETARY RESTRICTIONS
-        let favoriteFoodRecipes: any[] = [];
+        // Step 1: Find recipes that match favorite foods WITHIN preferred cuisines first
+        let favoriteFoodInCuisineRecipes: any[] = [];
+        let favoriteFoodOutsideCuisineRecipes: any[] = [];
+        
         if (favoriteFoodsNorm.length > 0) {
-          favoriteFoodRecipes = filteredRecipes.filter(recipe => {
+          // First, find favorite foods that are ALSO within preferred cuisines
+          if (favoriteCuisines && favoriteCuisines.length > 0) {
+            favoriteFoodInCuisineRecipes = filteredRecipes.filter(recipe => {
+              // Check if it's a favorite food
+              const titleLower = ((recipe.title || (recipe as any).name || '') as string).toLowerCase();
+              const ingredients = (recipe as any).ingredients || [];
+              const ingredientsLower = Array.isArray(ingredients) ? 
+                ingredients.map((i: any) => String(i).toLowerCase()) : [];
+              const isFavoriteFood = favoriteFoodsNorm.some(food => 
+                titleLower.includes(food) || 
+                ingredientsLower.some((ing: string) => ing.includes(food))
+              );
+              
+              if (!isFavoriteFood) return false;
+              
+              // Check if it's also within preferred cuisines
+              const recipeCuisines = Array.isArray((recipe as any).cuisines) ? (recipe as any).cuisines : [];
+              const recipeTitle = (recipe.title || (recipe as any).name || '').toLowerCase();
+              
+              return favoriteCuisines.some(cuisine => {
+                if (!cuisine) return false;
+                const cuisineLower = cuisine.toLowerCase();
+                return recipeCuisines.some((c: any) => c?.toLowerCase().includes(cuisineLower)) ||
+                       recipeTitle.includes(cuisineLower);
+              });
+            });
+            console.log('🍔🌍 Found favorite food recipes WITHIN preferred cuisines:', favoriteFoodInCuisineRecipes.length);
+          }
+          
+          // Then, find favorite foods that are OUTSIDE preferred cuisines (as fallback)
+          favoriteFoodOutsideCuisineRecipes = filteredRecipes.filter(recipe => {
+            // Check if it's a favorite food
             const titleLower = ((recipe.title || (recipe as any).name || '') as string).toLowerCase();
             const ingredients = (recipe as any).ingredients || [];
             const ingredientsLower = Array.isArray(ingredients) ? 
               ingredients.map((i: any) => String(i).toLowerCase()) : [];
-            return favoriteFoodsNorm.some(food => 
+            const isFavoriteFood = favoriteFoodsNorm.some(food => 
               titleLower.includes(food) || 
               ingredientsLower.some((ing: string) => ing.includes(food))
             );
-          });
-          console.log('🍔 Found favorite food recipes (respecting dietary restrictions):', favoriteFoodRecipes.length);
-        }
-        
-        // Step 2: Find recipes that match favorite cuisines - RESPECTING DIETARY RESTRICTIONS
-        let cuisineMatchedRecipes: any[] = [];
-        if (favoriteCuisines && favoriteCuisines.length > 0) {
-          cuisineMatchedRecipes = filteredRecipes.filter(recipe => {
+            
+            if (!isFavoriteFood) return false;
+            
+            // Check if it's NOT within preferred cuisines
             const recipeCuisines = Array.isArray((recipe as any).cuisines) ? (recipe as any).cuisines : [];
             const recipeTitle = (recipe.title || (recipe as any).name || '').toLowerCase();
             
-            return favoriteCuisines.some(cuisine => {
+            const isInPreferredCuisine = favoriteCuisines && favoriteCuisines.length > 0 && favoriteCuisines.some(cuisine => {
               if (!cuisine) return false;
               const cuisineLower = cuisine.toLowerCase();
               return recipeCuisines.some((c: any) => c?.toLowerCase().includes(cuisineLower)) ||
                      recipeTitle.includes(cuisineLower);
             });
+            
+            return !isInPreferredCuisine;
           });
-          console.log('🌍 Found cuisine-matched recipes (respecting dietary restrictions):', cuisineMatchedRecipes.length);
+          console.log('🍔🌍 Found favorite food recipes OUTSIDE preferred cuisines:', favoriteFoodOutsideCuisineRecipes.length);
         }
         
-        // Step 3: Build recommendations intelligently
-        // Start with favorite food recipes (regardless of cuisine)
+        // Step 2: Find recipes that match favorite cuisines (but aren't favorite foods) - RESPECTING DIETARY RESTRICTIONS
+        let cuisineMatchedRecipes: any[] = [];
+        if (favoriteCuisines && favoriteCuisines.length > 0) {
+          cuisineMatchedRecipes = filteredRecipes.filter(recipe => {
+            // Check if it's within preferred cuisines
+            const recipeCuisines = Array.isArray((recipe as any).cuisines) ? (recipe as any).cuisines : [];
+            const recipeTitle = (recipe.title || (recipe as any).name || '').toLowerCase();
+            
+            const isInPreferredCuisine = favoriteCuisines.some(cuisine => {
+              if (!cuisine) return false;
+              const cuisineLower = cuisine.toLowerCase();
+              return recipeCuisines.some((c: any) => c?.toLowerCase().includes(cuisineLower)) ||
+                     recipeTitle.includes(cuisineLower);
+            });
+            
+            if (!isInPreferredCuisine) return false;
+            
+            // Check that it's NOT already a favorite food (to avoid duplicates)
+            const titleLower = ((recipe.title || (recipe as any).name || '') as string).toLowerCase();
+            const ingredients = (recipe as any).ingredients || [];
+            const ingredientsLower = Array.isArray(ingredients) ? 
+              ingredients.map((i: any) => String(i).toLowerCase()) : [];
+            const isFavoriteFood = favoriteFoodsNorm.some(food => 
+              titleLower.includes(food) || 
+              ingredientsLower.some((ing: string) => ing.includes(food))
+            );
+            
+            return !isFavoriteFood;
+          });
+          console.log('🌍 Found cuisine-matched recipes (excluding favorite foods):', cuisineMatchedRecipes.length);
+        }
+        
+        // Step 3: Build recommendations intelligently with priority order
         let finalRecommendations: any[] = [];
         
-        if (favoriteFoodRecipes.length > 0) {
-          // Take up to 3 favorite food recipes first
-          const favFoodCount = Math.min(3, favoriteFoodRecipes.length);
-          finalRecommendations.push(...favoriteFoodRecipes.slice(0, favFoodCount));
-          console.log(`🍔 Added ${favFoodCount} favorite food recipes to recommendations`);
+        // Priority 1: Favorite foods WITHIN preferred cuisines (up to 3)
+        if (favoriteFoodInCuisineRecipes.length > 0) {
+          const favFoodInCuisineCount = Math.min(3, favoriteFoodInCuisineRecipes.length);
+          finalRecommendations.push(...favoriteFoodInCuisineRecipes.slice(0, favFoodInCuisineCount));
+          console.log(`🍔🌍 Added ${favFoodInCuisineCount} favorite food recipes WITHIN preferred cuisines`);
+        }
+        
+        // Priority 2: If we still have room, add favorite foods OUTSIDE preferred cuisines (up to 2)
+        if (finalRecommendations.length < 5 && favoriteFoodOutsideCuisineRecipes.length > 0) {
+          const remainingSlots = Math.min(2, 5 - finalRecommendations.length);
+          const favFoodOutsideCuisineCount = Math.min(remainingSlots, favoriteFoodOutsideCuisineRecipes.length);
+          finalRecommendations.push(...favoriteFoodOutsideCuisineRecipes.slice(0, favFoodOutsideCuisineCount));
+          console.log(`🍔🌍 Added ${favFoodOutsideCuisineCount} favorite food recipes OUTSIDE preferred cuisines`);
         }
         
         // Then add cuisine-matched recipes with proper balancing across cuisines
