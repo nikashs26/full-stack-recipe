@@ -277,7 +277,7 @@ const MealPlannerPage: React.FC = () => {
           <div className="text-center mb-8">
             <div className="flex items-center justify-center gap-2 mb-4">
               <ChefHat className="h-8 w-8 text-orange-500" />
-              <h1 className="text-3xl font-bold text-gray-900">🤖 AI Meal Planner</h1>
+              <h1 className="text-3xl text-gray-900">🤖 AI Meal Planner</h1>
             </div>
             <p className="text-lg text-gray-600 max-w-2xl mx-auto">
               Welcome back, {user?.full_name || user?.email}! Generate personalized weekly meal plans based on your preferences.

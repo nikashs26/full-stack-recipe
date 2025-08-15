@@ -133,46 +133,90 @@ export function clearOldClickTrackingData() {
  */
 export async function getPopularRecipesFromCurrentData(limit: number = 10): Promise<RecipePopularity[]> {
   try {
-    // Get current recipe data from localStorage
-    const recipeData = JSON.parse(localStorage.getItem('dietary-delight-recipes') || '[]');
+    // Get current recipe data from backend API
+    const response = await fetch('http://localhost:5003/get_recipes');
+    if (!response.ok) {
+      console.error('Failed to fetch recipes from backend for popularity calculation');
+      return [];
+    }
+    
+    const data = await response.json();
+    const recipeData = data.results || [];
     
     if (recipeData.length === 0) {
-      console.log('No current recipe data found');
+      console.log('No current recipe data found from backend');
       return [];
     }
 
-    console.log('📊 Processing current recipe data for popularity:', recipeData.length, 'recipes');
+    console.log('📊 Processing backend recipe data for popularity:', recipeData.length, 'recipes');
 
-    // Calculate popularity based on ratings only (since clicks are from old data)
+    // Calculate popularity based on reviews from the backend review system
     const popularityData: RecipePopularity[] = [];
     
-    recipeData.forEach((recipe: any) => {
-      if (recipe.ratings && Array.isArray(recipe.ratings) && recipe.ratings.length > 0) {
-        const totalReviews = recipe.ratings.length;
-        const totalRating = recipe.ratings.reduce((sum: number, rating: number) => sum + rating, 0);
-        const averageRating = totalRating / totalReviews;
+    // Process each recipe to get its review data
+    for (const recipe of recipeData) {
+      try {
+        // Fetch reviews for this recipe from the backend
+        // Look for both 'external' and 'local' types since existing reviews may have been saved with the wrong type
+        let totalReviews = 0;
+        let totalRating = 0;
         
-        // Calculate popularity score based on ratings and review count
-        // Formula: (reviews * 0.5) + (average_rating * 0.5)
-        const popularityScore = (totalReviews * 0.5) + (averageRating * 0.5);
+        // Try external type first (correct type for backend recipes)
+        const externalReviewsResponse = await fetch(`http://localhost:5003/api/reviews/external/${recipe.id}`);
+        if (externalReviewsResponse.ok) {
+          const externalReviewsData = await externalReviewsResponse.json();
+          const externalReviews = externalReviewsData.reviews || [];
+          totalReviews += externalReviews.length;
+          totalRating += externalReviews.reduce((sum: number, review: any) => sum + (review.rating || 0), 0);
+        }
         
-        popularityData.push({
-          recipe_id: recipe.id,
-          recipe_type: 'manual',
-          total_clicks: 0, // No click data for current recipes
-          total_reviews: totalReviews,
-          average_rating: averageRating,
-          popularity_score: popularityScore
-        });
+        // Also check local type (for existing reviews that were saved with wrong type)
+        const localReviewsResponse = await fetch(`http://localhost:5003/api/reviews/local/${recipe.id}`);
+        if (localReviewsResponse.ok) {
+          const localReviewsData = await localReviewsResponse.json();
+          const localReviews = localReviewsData.reviews || [];
+          totalReviews += localReviews.length;
+          totalRating += localReviews.reduce((sum: number, review: any) => sum + (review.rating || 0), 0);
+        }
+        
+        if (totalReviews > 0) {
+          const averageRating = totalRating / totalReviews;
+          
+          // Calculate popularity score based on reviews and rating
+          // Formula: (reviews * 0.7) + (average_rating * 0.3)
+          // This heavily prioritizes recipes with more reviews first
+          const popularityScore = (totalReviews * 0.7) + (averageRating * 0.3);
+          
+          popularityData.push({
+            recipe_id: recipe.id,
+            recipe_type: 'external', // Backend recipes are external
+            total_clicks: 0, // No click data for current recipes
+            total_reviews: totalReviews,
+            average_rating: averageRating,
+            popularity_score: popularityScore
+          });
+        }
+      } catch (error) {
+        // If we can't fetch reviews for a recipe, skip it
+        console.log(`Could not fetch reviews for recipe ${recipe.id}:`, error);
+        continue;
       }
-    });
+    }
 
-    // Sort by popularity score and return top recipes
+    // Sort by popularity score (highest first)
+    // This will naturally prioritize recipes with more reviews first due to the formula
     const sortedRecipes = popularityData
-      .sort((a, b) => b.popularity_score - a.popularity_score)
+      .sort((a, b) => {
+        // First sort by review count (highest first)
+        if (a.total_reviews !== b.total_reviews) {
+          return b.total_reviews - a.total_reviews;
+        }
+        // If review counts are equal, sort by average rating (highest first)
+        return b.average_rating - a.average_rating;
+      })
       .slice(0, limit);
 
-    console.log('🏆 Top popular recipes from current data:', sortedRecipes.map(r => ({
+    console.log('🏆 Top popular recipes from backend data:', sortedRecipes.map(r => ({
       recipe_id: r.recipe_id,
       reviews: r.total_reviews,
       avg_rating: r.average_rating.toFixed(1),
@@ -182,7 +226,7 @@ export async function getPopularRecipesFromCurrentData(limit: number = 10): Prom
     return sortedRecipes;
 
   } catch (error) {
-    console.error('Exception getting popular recipes from current data:', error);
+    console.error('Exception getting popular recipes from backend data:', error);
     return [];
   }
 }
@@ -215,14 +259,20 @@ export async function getPopularRecipes(limit: number = 10): Promise<RecipePopul
     // Get all clicks data from localStorage
     const clicksData = JSON.parse(localStorage.getItem('recipe_clicks') || '[]');
 
-    // Get recipe data from localStorage to extract ratings
-    const recipeData = JSON.parse(localStorage.getItem('dietary-delight-recipes') || '[]');
+    // Get recipe data from backend API
+    const response = await fetch('http://localhost:5003/get_recipes');
+    if (!response.ok) {
+      console.error('Failed to fetch recipes from backend for popularity calculation');
+      return [];
+    }
+    
+    const data = await response.json();
+    const recipeData = data.results || [];
 
-    console.log('📊 Popularity data from localStorage:', {
+    console.log('📊 Popularity data from localStorage and backend:', {
       totalClicks: clicksData?.length || 0,
       totalRecipes: recipeData?.length || 0,
-      uniqueRecipesWithClicks: new Set(clicksData?.map((c: any) => `${c.recipe_id}-${c.recipe_type}`)).size,
-      recipesWithRatings: recipeData?.filter((r: any) => r.ratings && r.ratings.length > 0)?.length || 0
+      uniqueRecipesWithClicks: new Set(clicksData?.map((c: any) => `${c.recipe_id}-${c.recipe_type}`)).size
     });
 
     // Group clicks by recipe
@@ -232,61 +282,65 @@ export async function getPopularRecipes(limit: number = 10): Promise<RecipePopul
       clicksByRecipe.set(key, (clicksByRecipe.get(key) || 0) + 1);
     });
 
-    // Extract ratings from recipe data
-    const reviewsByRecipe = new Map<string, { count: number; totalRating: number }>();
-    recipeData?.forEach((recipe: any) => {
-      if (recipe.ratings && Array.isArray(recipe.ratings) && recipe.ratings.length > 0) {
-        const key = `${recipe.id}-manual`; // Assuming these are manual recipes
-        const totalRating = recipe.ratings.reduce((sum: number, rating: number) => sum + rating, 0);
-        const count = recipe.ratings.length;
-        const averageRating = totalRating / count;
-        
-        reviewsByRecipe.set(key, { 
-          count, 
-          totalRating: totalRating 
-        });
-      }
-    });
-
     // Calculate popularity for each recipe
     const popularityData: RecipePopularity[] = [];
     
-    // Combine all unique recipes from both clicks and reviews
-    const allRecipeKeys = new Set([
-      ...clicksByRecipe.keys(),
-      ...reviewsByRecipe.keys()
-    ]);
+    // Process each recipe to get its review data and clicks
+    for (const recipe of recipeData) {
+      try {
+        // Get clicks for this recipe
+        const recipeKey = `${recipe.id}-external`;
+        const totalClicks = clicksByRecipe.get(recipeKey) || 0;
+        
+        // Fetch reviews for this recipe from the backend
+        const reviewsResponse = await fetch(`http://localhost:5003/api/reviews/external/${recipe.id}`);
+        let totalReviews = 0;
+        let averageRating = 0;
+        
+        if (reviewsResponse.ok) {
+          const reviewsData = await reviewsResponse.json();
+          const reviews = reviewsData.reviews || [];
+          
+          if (reviews.length > 0) {
+            totalReviews = reviews.length;
+            const totalRating = reviews.reduce((sum: number, review: any) => sum + (review.rating || 0), 0);
+            averageRating = totalRating / totalReviews;
+          }
+        }
+        
+        // Calculate popularity score with enhanced formula
+        // Formula: (clicks * 0.25) + (reviews * 0.35) + (average_rating * 0.25) + (engagement_bonus * 0.15)
+        // Engagement bonus rewards recipes with both clicks AND reviews
+        const engagementBonus = (totalClicks > 0 && totalReviews > 0) ? 
+          Math.min(totalClicks, totalReviews) * 0.5 : 0;
+        
+        const popularityScore = (totalClicks * 0.25) + (totalReviews * 0.35) + (averageRating * 0.25) + engagementBonus;
 
-    console.log('🔍 All recipe keys:', Array.from(allRecipeKeys));
-
-    allRecipeKeys.forEach(key => {
-      const [recipeId, recipeType] = key.split('-');
-      const totalClicks = clicksByRecipe.get(key) || 0;
-      const reviewData = reviewsByRecipe.get(key);
-      const totalReviews = reviewData?.count || 0;
-      const averageRating = reviewData ? reviewData.totalRating / reviewData.count : 0;
-      
-      // Calculate popularity score with enhanced formula
-      // Formula: (clicks * 0.25) + (reviews * 0.35) + (average_rating * 0.25) + (engagement_bonus * 0.15)
-      // Engagement bonus rewards recipes with both clicks AND reviews
-      const engagementBonus = (totalClicks > 0 && totalReviews > 0) ? 
-        Math.min(totalClicks, totalReviews) * 0.5 : 0;
-      
-      const popularityScore = (totalClicks * 0.25) + (totalReviews * 0.35) + (averageRating * 0.25) + engagementBonus;
-
-      popularityData.push({
-        recipe_id: recipeId,
-        recipe_type: recipeType,
-        total_clicks: totalClicks,
-        total_reviews: totalReviews,
-        average_rating: averageRating,
-        popularity_score: popularityScore
-      });
-    });
+        popularityData.push({
+          recipe_id: recipe.id,
+          recipe_type: 'external',
+          total_clicks: totalClicks,
+          total_reviews: totalReviews,
+          average_rating: averageRating,
+          popularity_score: popularityScore
+        });
+      } catch (error) {
+        // If we can't process a recipe, skip it
+        console.log(`Could not process recipe ${recipe.id} for popularity:`, error);
+        continue;
+      }
+    }
 
     // Sort by popularity score and return top recipes
     const sortedRecipes = popularityData
-      .sort((a, b) => b.popularity_score - a.popularity_score)
+      .sort((a, b) => {
+        // First sort by review count (highest first)
+        if (a.total_reviews !== b.total_reviews) {
+          return b.total_reviews - a.total_reviews;
+        }
+        // If review counts are equal, sort by average rating (highest first)
+        return b.average_rating - a.average_rating;
+      })
       .slice(0, limit);
 
     console.log('🏆 Top popular recipes:', sortedRecipes.map(r => ({
@@ -320,10 +374,17 @@ export async function getPersonalPopularRecipes(userId: string, limit: number = 
     const clicksData = JSON.parse(localStorage.getItem('recipe_clicks') || '[]');
     const userClicks = clicksData.filter((click: any) => click.user_id === userId);
 
-    // Get recipe data from localStorage to extract ratings
-    const recipeData = JSON.parse(localStorage.getItem('dietary-delight-recipes') || '[]');
+    // Get recipe data from backend API
+    const response = await fetch('http://localhost:5003/get_recipes');
+    if (!response.ok) {
+      console.error('Failed to fetch recipes from backend for personal popularity calculation');
+      return [];
+    }
+    
+    const data = await response.json();
+    const recipeData = data.results || [];
 
-    console.log('👤 Personal popularity data from localStorage:', {
+    console.log('👤 Personal popularity data from localStorage and backend:', {
       userClicks: userClicks?.length || 0,
       totalRecipes: recipeData?.length || 0,
       userId
@@ -336,58 +397,65 @@ export async function getPersonalPopularRecipes(userId: string, limit: number = 
       clicksByRecipe.set(key, (clicksByRecipe.get(key) || 0) + 1);
     });
 
-    // Extract ratings from recipe data
-    const reviewsByRecipe = new Map<string, { count: number; totalRating: number }>();
-    recipeData?.forEach((recipe: any) => {
-      if (recipe.ratings && Array.isArray(recipe.ratings) && recipe.ratings.length > 0) {
-        const key = `${recipe.id}-manual`; // Assuming these are manual recipes
-        const totalRating = recipe.ratings.reduce((sum: number, rating: number) => sum + rating, 0);
-        const count = recipe.ratings.length;
-        
-        reviewsByRecipe.set(key, { 
-          count, 
-          totalRating: totalRating 
-        });
-      }
-    });
-
     // Calculate popularity for each recipe
     const popularityData: RecipePopularity[] = [];
     
-    // Combine all unique recipes from both clicks and reviews
-    const allRecipeKeys = new Set([
-      ...clicksByRecipe.keys(),
-      ...reviewsByRecipe.keys()
-    ]);
+    // Process each recipe to get its review data and clicks
+    for (const recipe of recipeData) {
+      try {
+        // Get clicks for this recipe by this user
+        const recipeKey = `${recipe.id}-external`;
+        const totalClicks = clicksByRecipe.get(recipeKey) || 0;
+        
+        // Fetch reviews for this recipe from the backend
+        const reviewsResponse = await fetch(`http://localhost:5003/api/reviews/external/${recipe.id}`);
+        let totalReviews = 0;
+        let averageRating = 0;
+        
+        if (reviewsResponse.ok) {
+          const reviewsData = await reviewsResponse.json();
+          const reviews = reviewsData.reviews || [];
+          
+          if (reviews.length > 0) {
+            totalReviews = reviews.length;
+            const totalRating = reviews.reduce((sum: number, review: any) => sum + (review.rating || 0), 0);
+            averageRating = totalRating / totalReviews;
+          }
+        }
+        
+        // Calculate popularity score with enhanced formula
+        // Formula: (clicks * 0.25) + (reviews * 0.35) + (average_rating * 0.25) + (engagement_bonus * 0.15)
+        // Engagement bonus rewards recipes with both clicks AND reviews
+        const engagementBonus = (totalClicks > 0 && totalReviews > 0) ? 
+          Math.min(totalClicks, totalReviews) * 0.5 : 0;
+        
+        const popularityScore = (totalClicks * 0.25) + (totalReviews * 0.35) + (averageRating * 0.25) + engagementBonus;
 
-    allRecipeKeys.forEach(key => {
-      const [recipeId, recipeType] = key.split('-');
-      const totalClicks = clicksByRecipe.get(key) || 0;
-      const reviewData = reviewsByRecipe.get(key);
-      const totalReviews = reviewData?.count || 0;
-      const averageRating = reviewData ? reviewData.totalRating / reviewData.count : 0;
-      
-      // Calculate popularity score with enhanced formula
-      // Formula: (clicks * 0.25) + (reviews * 0.35) + (average_rating * 0.25) + (engagement_bonus * 0.15)
-      // Engagement bonus rewards recipes with both clicks AND reviews
-      const engagementBonus = (totalClicks > 0 && totalReviews > 0) ? 
-        Math.min(totalClicks, totalReviews) * 0.5 : 0;
-      
-      const popularityScore = (totalClicks * 0.25) + (totalReviews * 0.35) + (averageRating * 0.25) + engagementBonus;
-
-      popularityData.push({
-        recipe_id: recipeId,
-        recipe_type: recipeType,
-        total_clicks: totalClicks,
-        total_reviews: totalReviews,
-        average_rating: averageRating,
-        popularity_score: popularityScore
-      });
-    });
+        popularityData.push({
+          recipe_id: recipe.id,
+          recipe_type: 'external',
+          total_clicks: totalClicks,
+          total_reviews: totalReviews,
+          average_rating: averageRating,
+          popularity_score: popularityScore
+        });
+      } catch (error) {
+        // If we can't process a recipe, skip it
+        console.log(`Could not process recipe ${recipe.id} for personal popularity:`, error);
+        continue;
+      }
+    }
 
     // Sort by popularity score and return top recipes
     return popularityData
-      .sort((a, b) => b.popularity_score - a.popularity_score)
+      .sort((a, b) => {
+        // First sort by review count (highest first)
+        if (a.total_reviews !== b.total_reviews) {
+          return b.total_reviews - a.total_reviews;
+        }
+        // If review counts are equal, sort by average rating (highest first)
+        return b.average_rating - a.average_rating;
+      })
       .slice(0, limit);
 
   } catch (error) {

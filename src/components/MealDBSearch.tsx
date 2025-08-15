@@ -68,7 +68,7 @@ const MealDBSearch: React.FC<MealDBSearchProps> = ({ onSearch }) => {
               return isVegetarian;
             } else if (dietaryPreference === 'vegan') {
               // Check for non-vegan ingredients
-              const isVegan = !/\b(meat|chicken|beef|pork|fish|shrimp|bacon|sausage|steak|ham|turkey|duck|goose|venison|lamb|egg|cheese|milk|butter|yogurt|honey|gelatin)\b/i
+              const isVegan = !/\b(meat|chicken|beef|pork|fish|shrimp|bacon|sausage|steak|ham|turkey|duck|goose|venison|lamb|egg|cheese|mozzerella|milk|butter|yogurt|honey|gelatin)\b/i
                 .test((recipe.instructions || '') + ' ' + (recipe.ingredients?.join(' ') || ''));
               return isVegan;
             } else if (dietaryPreference === 'gluten-free') {

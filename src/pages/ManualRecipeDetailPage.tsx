@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Clock, ChefHat, Star } from 'lucide-react';
+import { ArrowLeft, Clock, ChefHat, Star, Info } from 'lucide-react';
 import Header from '../components/Header';
 import { fetchManualRecipeById } from '../lib/manualRecipes';
 import { Button } from '@/components/ui/button';
@@ -123,17 +123,49 @@ const ManualRecipeDetailPage: React.FC = () => {
   };
 
   const avgRating = Number(getAverageRating());
-  const cuisine = recipe.cuisine?.[0] || 'International';
+  // Enhanced cuisine display with proper fallback
+  const cuisine = (() => {
+    // Try the cuisine field (which is string[] in ManualRecipe)
+    if (recipe.cuisine && Array.isArray(recipe.cuisine) && recipe.cuisine.length > 0) {
+      return recipe.cuisine[0];
+    }
+    
+    // If no cuisine found, return empty string instead of "International"
+    return '';
+  })();
 
   // Use actual ingredients from recipe or provide realistic defaults
-  const ingredients = [
-    'Check the original recipe source for detailed ingredients',
-    'This curated recipe includes traditional ingredients for ' + recipe.title,
-    'Seasonings and spices as per traditional preparation'
-  ];
+  const ingredients = (() => {
+    if (recipe.ingredients && Array.isArray(recipe.ingredients) && recipe.ingredients.length > 0) {
+      return recipe.ingredients.map(ing => {
+        if (typeof ing === 'string') {
+          return ing;
+        }
+        // Handle ingredient objects
+        if (ing.name) {
+          const parts = [];
+          if (ing.amount) parts.push(ing.amount);
+          if (ing.unit) parts.push(ing.unit);
+          if (ing.name) parts.push(ing.name);
+          return parts.join(' ');
+        }
+        return 'Ingredient';
+      });
+    }
+    return [];
+  })();
 
   // Use actual cooking instructions if available, otherwise provide helpful guidance
- 
+  const instructions = (() => {
+    if (recipe.instructions && Array.isArray(recipe.instructions) && recipe.instructions.length > 0) {
+      return recipe.instructions;
+    }
+    if (recipe.instructions && typeof recipe.instructions === 'string') {
+      return [recipe.instructions];
+    }
+    return [];
+  })();
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
@@ -164,7 +196,7 @@ const ManualRecipeDetailPage: React.FC = () => {
               <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex flex-col justify-end p-6">
                 <h1 className="text-white text-3xl md:text-4xl font-bold">{recipe.title}</h1>
                 <div className="flex items-center text-white mt-2">
-                  <span className="text-sm">{cuisine}</span>
+                  {cuisine && <span className="text-sm">{cuisine}</span>}
                   {recipe.ready_in_minutes && (
                     <div className="ml-4 flex items-center">
                       <Clock className="h-4 w-4" />
@@ -191,18 +223,36 @@ const ManualRecipeDetailPage: React.FC = () => {
               )}
 
               <h2 className="text-2xl font-semibold mb-4">Ingredients</h2>
-              <ul className="list-disc list-inside mb-6 space-y-1">
-                {ingredients.map((ingredient, index) => (
-                  <li key={index} className="text-gray-700">{ingredient}</li>
-                ))}
-              </ul>
+              {ingredients.length > 0 ? (
+                <ul className="list-disc list-inside mb-6 space-y-1">
+                  {ingredients.map((ingredient, index) => (
+                    <li key={index} className="text-gray-700">{ingredient}</li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <p className="text-yellow-800">
+                    <Info className="inline mr-2 h-4 w-4" />
+                    Ingredients information is not available for this recipe. Please check the original source for complete ingredient details.
+                  </p>
+                </div>
+              )}
 
               <h2 className="text-2xl font-semibold mb-4">Instructions</h2>
-              <ol className="list-decimal list-inside space-y-3 mb-6">
-                {instructions.map((instruction, index) => (
-                  <li key={index} className="text-gray-700 leading-relaxed">{instruction}</li>
-                ))}
-              </ol>
+              {instructions.length > 0 ? (
+                <ol className="list-decimal list-inside space-y-3 mb-6">
+                  {instructions.map((instruction, index) => (
+                    <li key={index} className="text-gray-700 leading-relaxed">{instruction}</li>
+                  ))}
+                </ol>
+              ) : (
+                <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <p className="text-yellow-800">
+                    <Info className="inline mr-2 h-4 w-4" />
+                    Cooking instructions are not available for this recipe. Please check the original source for complete preparation steps.
+                  </p>
+                </div>
+              )}
 
               {/* Dietary information */}
               {recipe.diets && recipe.diets.length > 0 && (

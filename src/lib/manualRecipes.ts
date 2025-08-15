@@ -7,9 +7,15 @@ export interface ManualRecipe {
   title: string;
   description?: string;
   ready_in_minutes?: number;
-  cuisine?: string[];
-  diets?: string[];
+  cuisine?: string[] | string;
+  cuisines?: string[] | string;
+  diets?: string[] | string;
+  tags?: string[] | string;
+  dietary_restrictions?: string[];
+  dish_types?: string[] | string;
   image?: string;
+  ingredients?: Array<{ name: string; amount?: string | number; unit?: string }>;
+  instructions?: string | string[];
   created_at?: string;
   updated_at?: string;
 }
@@ -158,12 +164,77 @@ export const fetchManualRecipes = async (
           diets = recipe.diets
             .map((d: any) => (typeof d === 'string' ? d.trim().toLowerCase() : ''))
             .filter(Boolean);
+        } else if (typeof recipe.diets === 'string' && recipe.diets.trim()) {
+          // Handle case where diets is a comma-separated string
+          diets = recipe.diets.split(',').map(d => d.trim().toLowerCase()).filter(Boolean);
         }
         
-        // Normalize cuisines
-        const cuisines = Array.isArray(recipe.cuisines) 
-          ? recipe.cuisines.map((c: any) => typeof c === 'string' ? c.trim() : '').filter(Boolean)
-          : [];
+        // Also check dietary_restrictions field
+        if (Array.isArray(recipe.dietary_restrictions)) {
+          const restrictions = recipe.dietary_restrictions
+            .map((d: any) => (typeof d === 'string' ? d.trim().toLowerCase() : ''))
+            .filter(Boolean);
+          // Merge with diets, avoiding duplicates
+          diets = [...new Set([...diets, ...restrictions])];
+        }
+        
+        // Normalize tags
+        let tags: string[] = [];
+        if (Array.isArray(recipe.tags)) {
+          tags = recipe.tags
+            .map((t: any) => (typeof t === 'string' ? t.trim() : ''))
+            .filter(Boolean);
+        } else if (typeof recipe.tags === 'string' && recipe.tags.trim()) {
+          // Handle case where tags is a comma-separated string
+          tags = recipe.tags.split(',').map(t => t.trim()).filter(Boolean);
+        }
+        
+        // Normalize dish types
+        let dishTypes: string[] = [];
+        if (Array.isArray(recipe.dish_types)) {
+          dishTypes = recipe.dish_types
+            .map((t: any) => (typeof t === 'string' ? t.trim() : ''))
+            .filter(Boolean);
+        } else if (typeof recipe.dish_types === 'string' && recipe.dish_types.trim()) {
+          // Handle case where dish_types is a comma-separated string
+          dishTypes = recipe.dish_types.split(',').map(t => t.trim()).filter(Boolean);
+        }
+        
+        // Normalize cuisines - check both cuisine and cuisines fields
+        let cuisines: string[] = [];
+        
+        // First try to get cuisines from the cuisines field
+        if (recipe.cuisines) {
+          if (Array.isArray(recipe.cuisines)) {
+            cuisines = recipe.cuisines
+              .map((c: any) => typeof c === 'string' ? c.trim() : '')
+              .filter(Boolean);
+          } else if (typeof recipe.cuisines === 'string' && recipe.cuisines.trim()) {
+            cuisines = [recipe.cuisines.trim()];
+          }
+        }
+        
+        // If no cuisines found, try the cuisine field
+        if (cuisines.length === 0 && recipe.cuisine) {
+          if (Array.isArray(recipe.cuisine)) {
+            cuisines = recipe.cuisine
+              .map((c: any) => typeof c === 'string' ? c.trim() : '')
+              .filter(Boolean);
+          } else if (typeof recipe.cuisine === 'string' && recipe.cuisine.trim()) {
+            cuisines = [recipe.cuisine.trim()];
+          }
+        }
+        
+        // If still no cuisines found, try to extract from tags or other fields
+        if (cuisines.length === 0 && recipe.tags && Array.isArray(recipe.tags)) {
+          const cuisineTags = ['italian', 'mexican', 'chinese', 'indian', 'japanese', 'thai', 'french', 'greek', 'spanish', 'mediterranean', 'american'];
+          for (const tag of recipe.tags) {
+            if (typeof tag === 'string' && cuisineTags.includes(tag.toLowerCase())) {
+              cuisines = [tag];
+              break;
+            }
+          }
+        }
           
         // Handle image URL - try multiple possible fields
         let imageUrl = '';
@@ -185,8 +256,11 @@ export const fetchManualRecipes = async (
           title: recipe.title || 'Untitled Recipe',
           description: recipe.summary || recipe.description || '',
           ready_in_minutes: recipe.ready_in_minutes || recipe.readyInMinutes || 30,
-          cuisine: cuisines.length ? cuisines : ['International'],
+          cuisine: cuisines.length > 0 ? cuisines : [],
           diets: diets,
+          tags: tags,
+          dietary_restrictions: diets, // Use the merged diets array
+          dish_types: dishTypes,
           image: imageUrl,
           ingredients: Array.isArray(recipe.ingredients) 
             ? recipe.ingredients.map((ing: any) => ({
@@ -290,8 +364,31 @@ export const fetchManualRecipeById = async (id: number | string): Promise<Manual
       description: recipe.summary || recipe.description || '',
       ready_in_minutes: recipe.readyInMinutes || 30,
       cuisine: recipe.cuisines || [],
+      cuisines: recipe.cuisines || [],
       diets: recipe.diets || [],
       image: recipe.image || '/placeholder.svg',
+      ingredients: Array.isArray(recipe.ingredients) 
+        ? recipe.ingredients.map((ing: any) => ({
+            name: ing.name || '',
+            amount: ing.amount?.toString() || '',
+            unit: ing.unit || ''
+          }))
+        : Array.isArray(recipe.extendedIngredients)
+        ? recipe.extendedIngredients.map((ing: any) => ({
+            name: ing.name || '',
+            amount: ing.amount?.toString() || '',
+            unit: ing.unit || ''
+          }))
+        : [],
+      instructions: Array.isArray(recipe.instructions) 
+        ? recipe.instructions
+        : recipe.instructions 
+        ? [recipe.instructions]
+        : recipe.analyzedInstructions && Array.isArray(recipe.analyzedInstructions)
+        ? recipe.analyzedInstructions.flatMap((section: any) => 
+            section.steps?.map((step: any) => step.step).filter(Boolean) || []
+          )
+        : [],
       created_at: recipe.added_at ? new Date(recipe.added_at * 1000).toISOString() : new Date().toISOString(),
       updated_at: recipe.added_at ? new Date(recipe.added_at * 1000).toISOString() : new Date().toISOString()
     };

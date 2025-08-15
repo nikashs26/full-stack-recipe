@@ -307,7 +307,9 @@ const RecipeDetailPage: React.FC = () => {
               <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex flex-col justify-end p-6">
                 <h1 className="text-white text-3xl md:text-4xl font-bold">{recipe.title || recipe.name}</h1>
                 <div className="flex items-center text-white mt-2">
-                  <span className="text-sm">{recipe.cuisines?.[0] || recipe.cuisine}</span>
+                  {(recipe.cuisines?.[0] || recipe.cuisine) && (
+                    <span className="text-sm">{recipe.cuisines?.[0] || recipe.cuisine}</span>
+                  )}
                   {avgRating > 0 && (
                     <div className="ml-4 flex items-center">
                       <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
@@ -354,7 +356,7 @@ const RecipeDetailPage: React.FC = () => {
                 <h2 className="text-xl font-semibold mb-2">About This Recipe</h2>
                 <p className="text-gray-700">
                   {recipe.description || (recipe.summary ? cleanRecipeDescription(recipe.summary) : 
-                   `${recipe.title || recipe.name} is a delicious ${recipe.cuisines?.[0] || recipe.cuisine || 'international'} dish. This recipe features ${recipe.ingredients?.length || 0} ingredients and creates a flavorful meal that's perfect for any occasion.`)}
+                   `${recipe.title || recipe.name} is a delicious ${recipe.cuisines?.[0] || recipe.cuisine || ''} dish. This recipe features ${recipe.ingredients?.length || 0} ingredients and creates a flavorful meal that's perfect for any occasion.`)}
                 </p>
               </div>
               

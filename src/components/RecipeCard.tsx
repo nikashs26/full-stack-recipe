@@ -257,10 +257,9 @@ const RecipeCard: React.FC<RecipeCardProps> = React.memo(({
   // Handle source-specific navigation
   const getRecipePath = React.useCallback((): string => {
     const id = recipe.id !== null && recipe.id !== undefined ? String(recipe.id) : '';
-    if (isExternal) {
-      return `/external-recipes/${encodeURIComponent(id)}`;
-    }
-    return `/recipes/${id}`;
+    const path = isExternal ? `/external-recipe/${encodeURIComponent(id)}` : `/recipes/${id}`;
+    console.log('RecipeCard routing:', { id, isExternal, path, recipeType: (recipe as any).type });
+    return path;
   }, [recipe.id, isExternal]);
   
   // Handle card click
@@ -288,7 +287,7 @@ const RecipeCard: React.FC<RecipeCardProps> = React.memo(({
             onClick={(e) => {
               e.stopPropagation();
               // Track the recipe click
-              const recipeType = isExternal ? 'external' : 'manual';
+              const recipeType = isExternal ? 'external' : 'local';
               trackClick(String(recipe.id), recipeType);
             }} 
             className="flex flex-col h-full"

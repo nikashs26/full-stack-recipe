@@ -66,7 +66,7 @@ const Header: React.FC = () => {
                 to="/meal-planner" 
                 className="text-gray-600 hover:text-recipe-primary transition-colors font-medium"
               >
-                🤖 AI Meal Planner
+                AI Meal Planner
               </Link>
             </li>
             <li>
@@ -124,7 +124,7 @@ const Header: React.FC = () => {
               className="block text-gray-600 hover:text-recipe-primary font-medium"
               onClick={() => setMobileMenuOpen(false)}
             >
-              🤖 AI Meal Planner
+              AI Meal Planner
             </Link>
             <Link 
               to="/shopping-list"

@@ -87,7 +87,7 @@ const UserMenu: React.FC = () => {
               onClick={() => setIsOpen(false)}
             >
               <ChefHat className="mr-2 h-4 w-4" />
-              🤖 AI Meal Planner
+              AI Meal Planner
             </Link>
             <Link
               to="/shopping-list"

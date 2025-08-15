@@ -198,7 +198,7 @@ class EmailService:
                         <p>You now have access to all our amazing features:</p>
                         
                         <div class="feature">
-                            <h3>🤖 AI Meal Planning</h3>
+                            <h3>AI Meal Planning</h3>
                             <p>Get personalized weekly meal plans based on your dietary preferences, cooking skills, and favorite cuisines.</p>
                         </div>
                         

@@ -599,7 +599,7 @@ class RecipeService:
         logger.debug(f"- Looking for: {cuisines}")
         logger.debug(f"- Recipe has: {recipe_cuisines}")
             
-        # Special handling for American cuisine to include regional American cuisines
+        # Check if recipe matches ANY of the selected cuisines
         for cuisine in cuisines:
             cuisine_lower = cuisine.lower()
             if cuisine_lower == 'american':

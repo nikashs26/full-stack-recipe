@@ -1,13 +1,13 @@
 
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { ManualRecipe } from '../types/manualRecipe';
+import { Recipe } from '../types/recipe';
 import { ChefHat, Clock } from 'lucide-react';
 import { getDietaryTags } from '../utils/recipeUtils';
 import { DietaryRestriction } from '../types/recipe';
 
 interface ManualRecipeCardProps {
-  recipe: ManualRecipe;
+  recipe: Recipe;
 }
 
 const ManualRecipeCard: React.FC<ManualRecipeCardProps> = ({ recipe }) => {
@@ -59,12 +59,65 @@ const ManualRecipeCard: React.FC<ManualRecipeCardProps> = ({ recipe }) => {
 
   // Enhanced cuisine display with proper type checking
   const displayCuisines = (() => {
-    if (!recipe.cuisine) return ["International"];
-    // Handle case where cuisine might be a single string
-    if (typeof recipe.cuisine === 'string') return [recipe.cuisine];
-    // Ensure it's an array
-    const cuisines = Array.isArray(recipe.cuisine) ? recipe.cuisine : [];
-    return cuisines.length > 0 ? cuisines.slice(0, 2) : ["International"];
+    // First try to get cuisines from the cuisines field
+    if (recipe.cuisines && Array.isArray(recipe.cuisines) && recipe.cuisines.length > 0) {
+      return recipe.cuisines.slice(0, 2);
+    }
+    
+    // Then try the cuisine field (which can be string[] or string in ManualRecipe)
+    if (recipe.cuisine) {
+      if (Array.isArray(recipe.cuisine) && recipe.cuisine.length > 0) {
+        return recipe.cuisine.slice(0, 2);
+      } else if (typeof recipe.cuisine === 'string' && recipe.cuisine.trim()) {
+        return [recipe.cuisine.trim()];
+      }
+    }
+    
+    // If no cuisine found, return empty array instead of ["International"]
+    return [];
+  })();
+
+  // Get all available tags for display
+  const getAllTags = (() => {
+    const allTags: string[] = [];
+    
+    // Add cuisine tags
+    allTags.push(...displayCuisines);
+    
+    // Add diet tags
+    if (recipe.diets) {
+      if (Array.isArray(recipe.diets)) {
+        allTags.push(...recipe.diets);
+      } else if (typeof recipe.diets === 'string') {
+        allTags.push(recipe.diets);
+      }
+    }
+    
+    // Add dietary restrictions (camelCase from Recipe interface)
+    if (recipe.dietaryRestrictions && Array.isArray(recipe.dietaryRestrictions)) {
+      allTags.push(...recipe.dietaryRestrictions);
+    }
+    
+    // Add general tags
+    if (recipe.tags) {
+      if (Array.isArray(recipe.tags)) {
+        allTags.push(...recipe.tags);
+      } else if (typeof recipe.tags === 'string') {
+        allTags.push(recipe.tags);
+      }
+    }
+    
+    // Add dish types
+    if (recipe.dish_types) {
+      if (Array.isArray(recipe.dish_types)) {
+        allTags.push(...recipe.dish_types);
+      } else if (typeof recipe.dish_types === 'string') {
+        allTags.push(recipe.dish_types);
+      }
+    }
+    
+    // Remove duplicates and filter out empty strings
+    return [...new Set(allTags)].filter(tag => tag && tag.trim()).slice(0, 6); // Limit to 6 tags
   })();
 
   return (
@@ -120,6 +173,20 @@ const ManualRecipeCard: React.FC<ManualRecipeCardProps> = ({ recipe }) => {
             </span>
           ))}
         </div>
+        
+        {/* Display all available tags */}
+        {getAllTags.length > 0 && (
+          <div className="flex flex-wrap gap-1 mb-3">
+            {getAllTags.map((tag, index) => (
+              <span 
+                key={index}
+                className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded-full"
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
+        )}
         
         {recipe.ready_in_minutes && (
           <div className="flex items-center text-gray-600 text-sm">

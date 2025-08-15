@@ -17,94 +17,96 @@ SPOONACULAR_API_KEY = os.getenv('SPOONACULAR_API_KEY', 'fe61cea1027f4164a8fbf96f
 BASE_URL = 'https://api.spoonacular.com/recipes'
 
 def parse_instructions(instructions_text: str) -> list:
-    """Parse recipe instructions into individual steps"""
+    """Parse recipe instructions into individual steps with intelligent splitting"""
     if not instructions_text:
         return ['No instructions provided.']
     
     # Clean up the instructions - preserve original structure but normalize whitespace
     instructions_text = instructions_text.replace('\r\n', '\n').replace('\r', '\n')
     
-    # First, try to split by actual numbered steps (e.g., "1.", "1)", "Step 1:")
-    # Look for actual step numbers at the beginning of lines or after periods
-    # This pattern is more conservative and won't split on measurements
-    step_pattern = r'(?:\n\s*\d+[.)]|\A\s*\d+[.)])'
+    # First, try to find actual numbered steps that are clearly recipe steps
+    # Look for patterns like "1.", "1)", "Step 1:", etc. at the beginning of lines
+    # But avoid splitting on measurements like "1 tablespoon", "2 minutes", etc.
     
-    # Split by the step pattern
-    raw_steps = re.split(f'({step_pattern})', instructions_text, flags=re.MULTILINE)
+    # More intelligent step detection - look for step numbers that are followed by cooking actions
+    # and not by measurements or ingredient amounts
+    step_pattern = r'(?:\n\s*|^)\s*(\d+)[.)]\s*(?=[A-Z][a-z]+)'
     
-    # Clean up the split results
-    steps = []
-    current_step = ''
+    # Find all potential step numbers and their positions
+    step_matches = list(re.finditer(step_pattern, instructions_text, re.MULTILINE))
     
-    for i, part in enumerate(raw_steps):
-        part = part.strip()
-        if not part:
-            continue
+    if len(step_matches) > 1:
+        # We found multiple step numbers, split on them
+        steps = []
+        last_end = 0
+        
+        for match in step_matches:
+            step_num = match.group(1)
+            step_start = match.start()
             
-        # If this part is a step number/indicator
-        if re.match(f'^{step_pattern}$', part, flags=re.MULTILINE):
-            if current_step:  # Save the previous step if exists
-                steps.append(current_step.strip())
-            current_step = part + ' '  # Start new step with the number
-        else:
-            current_step += part + ' '
-    
-    # Add the last step if it exists
-    if current_step.strip():
-        steps.append(current_step.strip())
-    
-    # If we couldn't split by numbers, try other methods
-    if len(steps) <= 1:
-        # Try splitting by double newlines first (preserve natural paragraph breaks)
-        steps = [s.strip() for s in instructions_text.split('\n\n') if s.strip()]
+            # Get the text from the last step to this one
+            if step_start > last_end:
+                step_text = instructions_text[last_end:step_start].strip()
+                if step_text:
+                    steps.append(step_text)
+            
+            # Start new step with the step number
+            last_end = step_start
         
-        # If that doesn't work, try splitting by single newlines that look like step separators
-        if len(steps) <= 1:
-            # Look for newlines that are followed by capital letters (likely new steps)
-            steps = [s.strip() for s in re.split(r'\n(?=\s*[A-Z])', instructions_text) if s.strip()]
-    
-    # Clean up each step - remove leading numbers and normalize
-    cleaned_steps = []
-    for step in steps:
-        if step:
-            # Remove leading step numbers
-            cleaned_step = re.sub(r'^\s*\d+[.)]?\s*', '', step).strip()
-            if cleaned_step:
-                # Normalize whitespace within the step
-                cleaned_step = ' '.join(cleaned_step.split())
-                cleaned_steps.append(cleaned_step)
-    
-    # If we still don't have multiple steps, try to split by cooking action keywords
-    if len(cleaned_steps) <= 1 and instructions_text:
-        # Look for common cooking instruction patterns that indicate new steps
-        cooking_keywords = [
-            'preheat', 'heat', 'add', 'stir', 'mix', 'combine', 'pour', 'bake', 'cook', 'fry',
-            'grill', 'roast', 'boil', 'simmer', 'season', 'salt', 'pepper', 'drain', 'remove',
-            'serve', 'garnish', 'decorate', 'cool', 'chill', 'refrigerate', 'freeze', 'place',
-            'transfer', 'return', 'bring', 'lower', 'cover', 'uncover', 'flip', 'turn'
-        ]
+        # Add the last step
+        if last_end < len(instructions_text):
+            last_step = instructions_text[last_end:].strip()
+            if last_step:
+                steps.append(last_step)
         
-        # Split by sentences that contain cooking keywords
-        sentences = re.split(r'[.!?]+', instructions_text)
-        for sentence in sentences:
-            sentence = sentence.strip()
-            if sentence and len(sentence) > 15:  # Only meaningful sentences
-                # Check if sentence contains cooking keywords
-                if any(keyword in sentence.lower() for keyword in cooking_keywords):
-                    cleaned_steps.append(sentence)
+        # Clean up steps
+        cleaned_steps = []
+        for step in steps:
+            if step:
+                # Remove leading step numbers and clean up
+                cleaned_step = re.sub(r'^\s*\d+[.)]?\s*', '', step).strip()
+                if cleaned_step:
+                    # Normalize whitespace within the step
+                    cleaned_step = ' '.join(cleaned_step.split())
+                    cleaned_steps.append(cleaned_step)
+        
+        if cleaned_steps:
+            return cleaned_steps
     
-    # If all else fails, try to split by periods that end sentences
-    if len(cleaned_steps) <= 1:
-        # More intelligent sentence splitting that doesn't break on measurements
-        # Look for periods followed by space and capital letter, but avoid breaking on measurements
-        sentences = re.split(r'(?<=[.!?])\s+(?=[A-Z][a-z])', instructions_text)
-        cleaned_steps = [s.strip() for s in sentences if s.strip() and len(s.strip()) > 20]
+    # If we couldn't find clear step numbers, try other methods
+    # Try splitting by double newlines first (preserve natural paragraph breaks)
+    steps = [s.strip() for s in instructions_text.split('\n\n') if s.strip()]
     
-    # Ensure we have at least one step
-    if not cleaned_steps:
-        cleaned_steps = [instructions_text.strip()]
+    if len(steps) > 1:
+        # Clean up and return
+        return [' '.join(step.split()) for step in steps if step.strip()]
     
-    return cleaned_steps
+    # Try splitting by single newlines that look like step separators
+    # Look for newlines that are followed by capital letters (likely new steps)
+    steps = [s.strip() for s in re.split(r'\n(?=\s*[A-Z])', instructions_text) if s.strip()]
+    
+    if len(steps) > 1:
+        # Clean up and return
+        return [' '.join(step.split()) for step in steps if step.strip()]
+    
+    # If all else fails, try intelligent sentence splitting
+    # Split by periods that end sentences, but avoid breaking on measurements
+    # Look for periods followed by space and capital letter
+    sentences = re.split(r'(?<=[.!?])\s+(?=[A-Z][a-z])', instructions_text)
+    cleaned_sentences = []
+    
+    for sentence in sentences:
+        sentence = sentence.strip()
+        if sentence and len(sentence) > 20:  # Only meaningful sentences
+            # Clean up whitespace
+            cleaned_sentence = ' '.join(sentence.split())
+            cleaned_sentences.append(cleaned_sentence)
+    
+    if len(cleaned_sentences) > 1:
+        return cleaned_sentences
+    
+    # If we still can't split meaningfully, return the original text as a single step
+    return [' '.join(instructions_text.split())]
 
 def format_instructions(recipe_data):
     """Format recipe instructions properly"""

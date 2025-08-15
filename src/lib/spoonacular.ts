@@ -72,6 +72,34 @@ export const fetchRecipes = async (query: string = "", ingredient: string = "", 
                     // If recipe is a string, try to parse it as JSON
                     const recipeData = typeof recipe === 'string' ? JSON.parse(recipe) : recipe;
                     
+                    // Ensure ingredients are properly formatted
+                    let ingredients = [];
+                    if (Array.isArray(recipeData.ingredients) && recipeData.ingredients.length > 0) {
+                        ingredients = recipeData.ingredients;
+                    } else if (Array.isArray(recipeData.extendedIngredients) && recipeData.extendedIngredients.length > 0) {
+                        // Handle Spoonacular format
+                        ingredients = recipeData.extendedIngredients.map((ing: any) => ({
+                            name: ing.name || ing.original || 'Unknown ingredient',
+                            amount: ing.amount || ing.measures?.metric?.amount || '',
+                            unit: ing.unit || ing.measures?.metric?.unitShort || '',
+                            original: ing.original || ''
+                        }));
+                    }
+                    
+                    // Ensure instructions are properly formatted
+                    let instructions = [];
+                    if (Array.isArray(recipeData.instructions) && recipeData.instructions.length > 0) {
+                        instructions = recipeData.instructions;
+                    } else if (recipeData.strInstructions) {
+                        // Handle TheMealDB format
+                        instructions = recipeData.strInstructions.split('\n').filter((step: string) => step.trim());
+                    } else if (Array.isArray(recipeData.analyzedInstructions) && recipeData.analyzedInstructions.length > 0) {
+                        // Handle Spoonacular analyzed instructions
+                        instructions = recipeData.analyzedInstructions.flatMap((section: any) => 
+                            section.steps?.map((step: any) => step.step).filter(Boolean) || []
+                        );
+                    }
+                    
                     return {
                         id: recipeData.id || `recipe-${Math.random().toString(36).substr(2, 9)}`,
                         title: recipeData.title || recipeData.strMeal || 'Untitled Recipe',
@@ -81,9 +109,8 @@ export const fetchRecipes = async (query: string = "", ingredient: string = "", 
                                  (recipeData.strArea ? [recipeData.strArea] : [])),
                         diets: Array.isArray(recipeData.diets) ? recipeData.diets : [],
                         readyInMinutes: recipeData.readyInMinutes || 30,
-                        instructions: Array.isArray(recipeData.instructions) ? recipeData.instructions : 
-                                     (recipeData.strInstructions ? [recipeData.strInstructions] : []),
-                        ingredients: Array.isArray(recipeData.ingredients) ? recipeData.ingredients : [],
+                        instructions: instructions,
+                        ingredients: ingredients,
                         source: 'external',
                         // Include any other fields that might be needed
                         ...recipeData
@@ -117,60 +144,8 @@ export const fetchRecipes = async (query: string = "", ingredient: string = "", 
     }
 };
 
-// Helper function to filter fallback recipes
-const filterFallbackRecipes = (query: string = "", ingredient: string = "") => {
-    if (!query && !ingredient) {
-        // Return all fallback recipes if no search criteria
-        return FALLBACK_RECIPES;
-    }
-    
-    return FALLBACK_RECIPES.filter(recipe => {
-        const matchesQuery = query ? 
-            recipe.title.toLowerCase().includes(query.toLowerCase()) ||
-            recipe.cuisines.some(cuisine => cuisine.toLowerCase().includes(query.toLowerCase())) : 
-            true;
-            
-        const matchesIngredient = ingredient ? 
-            // This is a simplification as we don't have ingredients in our fallback data
-            recipe.title.toLowerCase().includes(ingredient.toLowerCase()) : 
-            true;
-        
-        // Use actual cuisine data for filtering
-        if (query) {
-            const recipeCuisines = recipe.cuisines || [];
-            
-            // Primary check: Does the recipe's cuisine array contain the requested cuisine?
-            const directCuisineMatch = recipeCuisines.some(cuisine => 
-                cuisine.toLowerCase() === query.toLowerCase()
-            );
-            
-            // Secondary check: Does the recipe title contain the cuisine/query?
-            const titleMatch = recipe.title.toLowerCase().includes(query.toLowerCase());
-            
-            // If it's a direct match, accept it
-            if (directCuisineMatch || titleMatch) {
-                console.log(`✅ Fallback recipe "${recipe.title}" matches ${query} (cuisines: ${recipeCuisines.join(', ')})`);
-                return matchesIngredient;
-            }
-            
-            // If no direct match, reject it
-            console.log(`❌ Fallback recipe "${recipe.title}" does not match ${query} (cuisines: ${recipeCuisines.join(', ')})`);
-            return false;
-        }
-            
-        return matchesQuery && matchesIngredient;
-    });
-};
-
 export const fetchRecipeById = async (recipeId: number | string) => {
     console.log(`Fetching recipe by ID: ${recipeId}`);
-    
-    // Check if this is a fallback recipe ID
-    const fallbackRecipe = FALLBACK_RECIPES.find(recipe => recipe.id === parseInt(recipeId.toString()));
-    if (fallbackRecipe) {
-        console.log("Found fallback recipe, returning detailed information");
-        return getDetailedFallbackRecipe(fallbackRecipe);
-    }
     
     try {
         // Try to fetch from API first
@@ -209,6 +184,43 @@ export const fetchRecipeById = async (recipeId: number | string) => {
 
 // Helper function to create detailed recipe information for fallback recipes
 const getDetailedFallbackRecipe = (recipe: any) => {
+    // If we have actual recipe data with ingredients and instructions, use it
+    if (recipe.ingredients && recipe.ingredients.length > 0 && 
+        recipe.instructions && recipe.instructions.length > 0) {
+        return {
+            ...recipe,
+            summary: recipe.summary || `A delicious ${recipe.title.toLowerCase()} recipe with authentic flavors and fresh ingredients.`
+        };
+    }
+
+    // If we have ingredients but no instructions, create basic instructions
+    if (recipe.ingredients && recipe.ingredients.length > 0) {
+        return {
+            ...recipe,
+            summary: recipe.summary || `A delicious ${recipe.title.toLowerCase()} recipe with authentic flavors and fresh ingredients.`,
+            instructions: [
+                "Prepare all ingredients according to recipe requirements.",
+                "Follow traditional cooking methods for this dish.",
+                "Season to taste and serve hot.",
+                "Enjoy your homemade meal!"
+            ]
+        };
+    }
+
+    // If we have instructions but no ingredients, create basic ingredients
+    if (recipe.instructions && recipe.instructions.length > 0) {
+        return {
+            ...recipe,
+            summary: recipe.summary || `A delicious ${recipe.title.toLowerCase()} recipe with authentic flavors and fresh ingredients.`,
+            ingredients: [
+                { name: "Main ingredient", amount: 1, unit: "portion" },
+                { name: "Seasonings", amount: 1, unit: "as needed" },
+                { name: "Additional ingredients", amount: 1, unit: "as required" }
+            ]
+        };
+    }
+
+    // Only use hardcoded fallbacks for specific known recipes
     const detailedRecipes = {
         101: {
             ...recipe,
@@ -294,20 +306,18 @@ const getDetailedFallbackRecipe = (recipe: any) => {
         }
     };
     
-    return detailedRecipes[recipe.id] || {
+    // If we have a specific hardcoded recipe, use it
+    if (detailedRecipes[recipe.id]) {
+        return detailedRecipes[recipe.id];
+    }
+
+    // For all other recipes, use the actual data or create minimal fallbacks
+    // Don't generate placeholder text - use what's actually available
+    return {
         ...recipe,
-        summary: `A delicious ${recipe.title.toLowerCase()} recipe with authentic flavors and fresh ingredients.`,
-        ingredients: [
-            { name: "Main ingredient", amount: 1, unit: "portion" },
-            { name: "Seasonings", amount: 1, unit: "as needed" },
-            { name: "Additional ingredients", amount: 1, unit: "as required" }
-        ],
-        instructions: [
-            "Prepare all ingredients according to recipe requirements.",
-            "Follow traditional cooking methods for this dish.",
-            "Season to taste and serve hot.",
-            "Enjoy your homemade meal!"
-        ]
+        summary: recipe.summary || `A delicious ${recipe.title.toLowerCase()} recipe with authentic flavors and fresh ingredients.`,
+        ingredients: recipe.ingredients || [],
+        instructions: recipe.instructions || []
     };
 };
 

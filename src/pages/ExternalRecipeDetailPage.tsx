@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Clock, ChefHat, Star, Utensils, Globe } from 'lucide-react';
+import { ArrowLeft, Clock, ChefHat, Star, Utensils, Globe, Info } from 'lucide-react';
 import Header from '../components/Header';
 import { fetchRecipeById } from '../lib/spoonacular';
 import { Button } from '@/components/ui/button';
@@ -32,7 +32,13 @@ const ExternalRecipeDetailPage: React.FC = () => {
   const { data: recipe, isLoading, error } = useQuery({
     queryKey: ['external-recipe', source, id],
     queryFn: async () => {
-      if (source === 'themealdb') {
+      // Check if this is a backend recipe (starts with 'mealdb_' or is a number)
+      if (id && (id.startsWith('mealdb_') || /^\d+$/.test(id))) {
+        // This is a backend recipe, fetch from the general backend endpoint
+        const response = await fetch(`http://localhost:5003/get_recipe_by_id?id=${id}`);
+        if (!response.ok) throw new Error('Failed to fetch recipe from backend');
+        return await response.json();
+      } else if (source === 'themealdb') {
         const response = await fetch(`http://localhost:5003/api/mealdb/recipe/${id}`);
         if (!response.ok) throw new Error('Failed to fetch recipe from TheMealDB');
         return await response.json();
@@ -149,12 +155,12 @@ const ExternalRecipeDetailPage: React.FC = () => {
   // Get the cuisine for display
   const cuisine = (() => {
     if (source === 'themealdb') {
-      return recipe.strArea || 'International';
+      return recipe.strArea || '';
     }
     if (recipe.cuisines && recipe.cuisines.length > 0) {
       return Array.isArray(recipe.cuisines) ? recipe.cuisines[0] : recipe.cuisines;
     }
-    return 'International';
+    return '';
   })();
 
   // Get the recipe name
@@ -267,7 +273,34 @@ const ExternalRecipeDetailPage: React.FC = () => {
   const ingredients = (() => {
     console.log('Full recipe data for ingredients:', recipe);
     
-    // Try extendedIngredients first
+    // First try the normalized ingredients array (backend format)
+    if (recipe?.ingredients && Array.isArray(recipe.ingredients) && recipe.ingredients.length > 0) {
+      console.log('Found normalized ingredients:', recipe.ingredients);
+      const parsedIngredients = recipe.ingredients.map(ing => {
+        if (typeof ing === 'string') {
+          return ing.trim();
+        }
+        if (ing.original && ing.original.trim()) return ing.original.trim();
+        if (ing.originalString && ing.originalString.trim()) return ing.originalString.trim();
+        
+        // Only construct if we have meaningful data
+        const parts = [];
+        if (ing.amount && ing.amount > 0) {
+          const amount = ing.amount % 1 === 0 ? ing.amount.toString() : ing.amount.toFixed(2).replace(/\.?0+$/, '');
+          parts.push(amount);
+        }
+        if (ing.unit && ing.unit.trim()) parts.push(ing.unit.trim());
+        if (ing.name && ing.name.trim()) parts.push(ing.name.trim());
+        
+        return parts.length > 1 ? parts.join(' ') : ing.name || 'Ingredient';
+      }).filter(ingredient => ingredient && ingredient.trim().length > 0);
+      
+      if (parsedIngredients.length > 0) {
+        return parsedIngredients;
+      }
+    }
+    
+    // Try extendedIngredients as fallback (Spoonacular format)
     if (recipe?.extendedIngredients && Array.isArray(recipe.extendedIngredients) && recipe.extendedIngredients.length > 0) {
       console.log('Found extendedIngredients:', recipe.extendedIngredients);
       const parsedIngredients = recipe.extendedIngredients.map(ing => {
@@ -291,16 +324,22 @@ const ExternalRecipeDetailPage: React.FC = () => {
       }
     }
     
-    // Fallback to generated ingredients
-    console.log('Using fallback ingredients for:', recipe.title);
-    return generateFallbackIngredients(recipe.title || '');
+    // If no ingredients found, return empty array instead of placeholder text
+    console.log('No ingredients found for recipe:', recipe.title);
+    return [];
   })();
 
   // Better instruction parsing with fallback
   const instructions = (() => {
     console.log('Full recipe data for instructions:', recipe);
     
-    // Try analyzedInstructions first
+    // First try the normalized instructions array (backend format)
+    if (recipe?.instructions && Array.isArray(recipe.instructions) && recipe.instructions.length > 0) {
+      console.log('Found normalized instructions:', recipe.instructions);
+      return recipe.instructions.filter(instruction => instruction && instruction.trim().length > 0);
+    }
+    
+    // Try analyzedInstructions as fallback (Spoonacular format)
     if (recipe?.analyzedInstructions && Array.isArray(recipe.analyzedInstructions) && recipe.analyzedInstructions.length > 0) {
       console.log('Found analyzedInstructions:', recipe.analyzedInstructions);
       const allSteps = [];
@@ -320,7 +359,7 @@ const ExternalRecipeDetailPage: React.FC = () => {
       }
     }
     
-    // Try the instructions field
+    // Try the instructions field as string
     if (recipe?.instructions && typeof recipe.instructions === 'string' && recipe.instructions.trim().length > 20) {
       console.log('Found instructions field:', recipe.instructions);
       
@@ -336,26 +375,60 @@ const ExternalRecipeDetailPage: React.FC = () => {
       if (cleanInstructions.length > 20) {
         // More intelligent splitting that looks for actual step numbers, not just any number
         // Look for numbers at the beginning of lines or after periods, but not in the middle of sentences
-        const stepPattern = /(?:\b(?:Step\s*)?\d+[.)]|\n\s*\d+[.)]|^\s*\d+[.)])/;
-        const numberedSteps = cleanInstructions.split(stepPattern).filter(step => step.trim().length > 15);
-        if (numberedSteps.length > 1) {
-          return numberedSteps.slice(1);
-        } else {
-          // More intelligent sentence splitting that doesn't break on measurements
-          // Look for periods followed by space and capital letter, but avoid breaking on measurements
-          const sentences = cleanInstructions.split(/\.\s+(?=[A-Z][a-z])/).filter(step => step.trim().length > 20);
-          if (sentences.length > 1) {
-            return sentences.map(sentence => sentence.endsWith('.') ? sentence : sentence + '.');
-          } else {
-            return [cleanInstructions];
+        // Use a more conservative pattern that avoids splitting on measurements
+        const stepPattern = /(?:\n\s*|^)\s*\d+[.)]\s*(?=[A-Z][a-z]+)/;
+        
+        // Find all potential step numbers and their positions
+        const stepMatches = Array.from(cleanInstructions.matchAll(stepPattern));
+        
+        if (stepMatches.length > 1) {
+          // We found multiple step numbers, split on them
+          const steps = [];
+          let lastEnd = 0;
+          
+          for (const match of stepMatches) {
+            const stepStart = (match as RegExpMatchArray).index!;
+            
+            // Get the text from the last step to this one
+            if (stepStart > lastEnd) {
+              const stepText = cleanInstructions.slice(lastEnd, stepStart).trim();
+              if (stepText) {
+                steps.push(stepText);
+              }
+            }
+            
+            // Start new step with the step number
+            lastEnd = stepStart;
           }
+          
+          // Add the last step
+          if (lastEnd < cleanInstructions.length) {
+            const lastStep = cleanInstructions.slice(lastEnd).trim();
+            if (lastStep) {
+              steps.push(lastStep);
+            }
+          }
+          
+          if (steps.length > 1) {
+            return steps.map(step => step.replace(/^\s*\d+[.)]?\s*/, '').trim()).filter(step => step.length > 15);
+          }
+        }
+        
+        // If we couldn't split by step numbers, try sentence splitting
+        // More intelligent sentence splitting that doesn't break on measurements
+        // Look for periods followed by space and capital letter, but avoid breaking on measurements
+        const sentences = cleanInstructions.split(/\.\s+(?=[A-Z][a-z])/).filter(step => step.trim().length > 20);
+        if (sentences.length > 1) {
+          return sentences.map(sentence => sentence.endsWith('.') ? sentence : sentence + '.');
+        } else {
+          return [cleanInstructions];
         }
       }
     }
     
-    // Fallback to generated instructions
-    console.log('Using fallback instructions for:', recipe.title);
-    return generateFallbackInstructions(recipe.title || '');
+    // If no instructions found, return empty array instead of placeholder text
+    console.log('No instructions found for recipe:', recipe.title);
+    return [];
   })();
 
   // Get the prep time
@@ -411,11 +484,15 @@ const ExternalRecipeDetailPage: React.FC = () => {
                     <ChefHat className="mr-1 h-4 w-4" />
                     <span>{getServings()} {getServings() === 1 ? 'serving' : 'servings'}</span>
                   </div>
-                  <span>•</span>
-                  <div className="flex items-center">
-                    <Globe className="mr-1 h-4 w-4" />
-                    <span>{cuisine}</span>
-                  </div>
+                  {cuisine && (
+                    <>
+                      <span>•</span>
+                      <div className="flex items-center">
+                        <Globe className="mr-1 h-4 w-4" />
+                        <span>{cuisine}</span>
+                      </div>
+                    </>
+                  )}
                   {source === 'themealdb' && (
                     <>
                       <span>•</span>
@@ -441,18 +518,36 @@ const ExternalRecipeDetailPage: React.FC = () => {
               )}
 
               <h2 className="text-2xl font-semibold mb-4">Ingredients</h2>
-              <ul className="list-disc list-inside mb-6 space-y-1">
-                {ingredients.map((ingredient, index) => (
-                  <li key={index} className="text-gray-700">{ingredient}</li>
-                ))}
-              </ul>
+              {ingredients.length > 0 ? (
+                <ul className="list-disc list-inside mb-6 space-y-1">
+                  {ingredients.map((ingredient, index) => (
+                    <li key={index} className="text-gray-700">{ingredient}</li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <p className="text-yellow-800">
+                    <Info className="inline mr-2 h-4 w-4" />
+                    Ingredients information is not available for this recipe. Please check the original source for complete ingredient details.
+                  </p>
+                </div>
+              )}
 
               <h2 className="text-2xl font-semibold mb-4">Instructions</h2>
-              <ol className="list-decimal list-inside space-y-3 mb-6">
-                {instructions.map((instruction, index) => (
-                  <li key={index} className="text-gray-700 leading-relaxed">{instruction}</li>
-                ))}
-              </ol>
+              {instructions.length > 0 ? (
+                <ol className="list-decimal list-inside space-y-3 mb-6">
+                  {instructions.map((instruction, index) => (
+                    <li key={index} className="text-gray-700 leading-relaxed">{instruction}</li>
+                  ))}
+                </ol>
+              ) : (
+                <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <p className="text-yellow-800">
+                    <Info className="inline mr-2 h-4 w-4" />
+                    Cooking instructions are not available for this recipe. Please check the original source for complete preparation steps.
+                  </p>
+                </div>
+              )}
               
               {/* Source URL if available */}
               {recipe.sourceUrl && (

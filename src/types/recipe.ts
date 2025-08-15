@@ -120,6 +120,9 @@ export interface Recipe extends BaseRecipe {
   dietaryRestrictions: DietaryRestriction[];
   cuisine?: string;
   cuisines?: string[];
+  // Additional tag fields from backend
+  tags?: string[] | string;
+  dish_types?: string[] | string;
   type: 'manual' | 'spoonacular' | 'saved';
   ready_in_minutes?: number;
   cooking_instructions?: string;

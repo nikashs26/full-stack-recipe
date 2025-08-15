@@ -697,6 +697,13 @@ const HomePage: React.FC = () => {
     };
   }, [spoonacularRecipes, manualRecipes, savedRecipes, popularRecipesData, isAuthenticated, userPreferences, showPersonalPopular, personalPopularRecipesData, backendRecommendations]);
 
+  // Debug logging for organizedRecipes
+  console.log('🔍 Organized recipes debug:', {
+    popular: organizedRecipes.popular.map(r => ({ id: r.id, type: r.type, title: r.title || r.name })),
+    recommended: organizedRecipes.recommended.map(r => ({ id: r.id, type: r.type, title: r.title || r.name })),
+    newest: organizedRecipes.newest.map(r => ({ id: r.id, type: r.type, title: r.title || r.name }))
+  });
+
   const isLoading = isLoadingBackend || isLoadingManual || isLoadingPopular || (showPersonalPopular && isLoadingPersonalPopular) || isLoadingRecommendations;
 
   // Welcome message based on authentication status
@@ -831,6 +838,7 @@ const HomePage: React.FC = () => {
                 ) : (
                   <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
                     {organizedRecipes.recommended.map((recipe, index) => {
+                      console.log('Recommended recipe:', { id: recipe.id, type: recipe.type, isExternal: recipe.type === 'external' });
                       if (recipe.type === 'manual') {
                         return <ManualRecipeCard key={`recommended-${recipe.id}-${index}`} recipe={recipe} />;
                       }
@@ -838,6 +846,7 @@ const HomePage: React.FC = () => {
                         <RecipeCard 
                           key={`recommended-${recipe.id}-${index}`} 
                           recipe={recipe} 
+                          isExternal={recipe.type === 'external'}
                           onDelete={handleDeleteRecipe}
                         />
                       );
@@ -921,6 +930,7 @@ const HomePage: React.FC = () => {
               ) : (
                 <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
                   {organizedRecipes.popular.map((recipe, index) => {
+                    console.log('Popular recipe:', { id: recipe.id, type: recipe.type, isExternal: recipe.type === 'external' });
                     if (recipe.type === 'manual') {
                       return <ManualRecipeCard key={`popular-${recipe.id}-${index}`} recipe={recipe} />;
                     }
@@ -928,6 +938,7 @@ const HomePage: React.FC = () => {
                       <RecipeCard 
                         key={`popular-${recipe.id}-${index}`} 
                         recipe={recipe} 
+                        isExternal={recipe.type === 'external'}
                         onDelete={handleDeleteRecipe}
                       />
                     );
@@ -974,6 +985,7 @@ const HomePage: React.FC = () => {
               ) : (
                 <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
                   {organizedRecipes.newest.map((recipe, index) => {
+                    console.log('Newest recipe:', { id: recipe.id, type: recipe.type, isExternal: recipe.type === 'external' });
                     if (recipe.type === 'manual') {
                       return <ManualRecipeCard key={`newest-${recipe.id}-${index}`} recipe={recipe} />;
                     }
@@ -981,6 +993,7 @@ const HomePage: React.FC = () => {
                       <RecipeCard 
                         key={`newest-${recipe.id}-${index}`} 
                         recipe={recipe} 
+                        isExternal={recipe.type === 'external'}
                         onDelete={handleDeleteRecipe}
                       />
                     );
