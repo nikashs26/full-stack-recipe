@@ -77,7 +77,7 @@ export function RecipeFolderActions({ recipeId, recipeType, recipeData }: Recipe
         // Fetch folders using apiCall utility
         console.log('Fetching folders from API...');
         const [foldersResponse, recipeFoldersResponse] = await Promise.all([
-          apiCall('/folders'),
+          apiCall('/api/folders'),
           apiCall(`/recipes/${recipeType}/${recipeId}/folders`)
         ]);
         
@@ -182,7 +182,7 @@ export function RecipeFolderActions({ recipeId, recipeType, recipeData }: Recipe
         throw new Error('Please sign in to create folders');
       }
       
-      const response = await apiCall('/folders', {
+              const response = await apiCall('/api/folders', {
         method: 'POST',
         body: JSON.stringify({
           name: newFolderName.trim(),
@@ -266,7 +266,7 @@ export function RecipeFolderActions({ recipeId, recipeType, recipeData }: Recipe
       if (!targetFolder) {
         console.log('Folder not found in local state, attempting to refresh...');
         try {
-          const response = await apiCall('/folders');
+          const response = await apiCall('/api/folders');
           
           if (response.ok) {
             const refreshedFolders = await response.json();
@@ -317,7 +317,7 @@ export function RecipeFolderActions({ recipeId, recipeType, recipeData }: Recipe
       if (!targetFolder && folders.length > 0) {
         console.log('Folder not found in local state, attempting to refresh...');
         try {
-          const response = await apiCall('/folders');
+          const response = await apiCall('/api/folders');
           
           if (response.ok) {
             const refreshedFolders = await response.json();

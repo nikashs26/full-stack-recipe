@@ -112,7 +112,7 @@ const loadUserPreferences = async (): Promise<UserPreferences> => {
     console.log('Loading user preferences...');
     
     // First try the authenticated endpoint
-    let response = await apiCall('/preferences', {
+            let response = await apiCall('/api/preferences', {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
@@ -234,7 +234,7 @@ const saveUserPreferences = async (data: UserPreferences, toast: any) => {
     console.log('Saving preferences with payload:', payload);
 
     // Use the apiCall utility which handles authentication and token refresh
-    const response = await apiCall('/preferences', {
+            const response = await apiCall('/api/preferences', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -333,6 +333,19 @@ const UserPreferencesPage = () => {
     resolver: zodResolver(formSchema),
     defaultValues,
   });
+
+  // Authentication guard - redirect to sign in if not authenticated
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      toast({
+        title: 'Authentication Required',
+        description: 'Please sign in to access your preferences.',
+        variant: 'destructive',
+      });
+      navigate('/signin');
+      return;
+    }
+  }, [isAuthenticated, authLoading, navigate, toast]);
   
   const handleAddCustomCuisine = () => {
     const cuisine = customCuisine.trim();
@@ -483,10 +496,15 @@ const UserPreferencesPage = () => {
       }
     };
 
-    // Always try to load preferences, even if not authenticated
-    console.log('useEffect - Loading preferences');
-    loadPreferences();
-  }, [form, toast]);
+    // Only load preferences if authenticated
+    if (isAuthenticated && !authLoading) {
+      console.log('useEffect - Loading preferences (authenticated)');
+      loadPreferences();
+    } else if (!authLoading) {
+      // If not authenticated, just set loading to false
+      setIsLoading(false);
+    }
+  }, [form, toast, isAuthenticated, authLoading]);
 
   // Type guard to check if a value is a valid cooking skill level
   const isCookingSkillLevel = (value: unknown): value is 'beginner' | 'intermediate' | 'advanced' => {
@@ -555,6 +573,17 @@ const UserPreferencesPage = () => {
 
   // Handle form submission
   const onSubmit = async (values: FormValues) => {
+    // Check if user is authenticated before submitting
+    if (!isAuthenticated) {
+      toast({
+        title: 'Authentication Required',
+        description: 'Please sign in to save your preferences.',
+        variant: 'destructive',
+      });
+      navigate('/signin');
+      return;
+    }
+
     try {
       setIsSaving(true);
       
@@ -610,7 +639,18 @@ const UserPreferencesPage = () => {
     }
   };
 
-  // Render loading state
+  // Render loading states
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="flex flex-col items-center space-y-4">
+          <Loader2 className="h-8 w-8 animate-spin text-gray-500" />
+          <p className="text-gray-500">Checking authentication...</p>
+        </div>
+      </div>
+    );
+  }
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -618,6 +658,27 @@ const UserPreferencesPage = () => {
           <Loader2 className="h-8 w-8 animate-spin text-gray-500" />
           <p className="text-gray-500">Loading your preferences...</p>
         </div>
+      </div>
+    );
+  }
+
+  // Don't render the form if not authenticated
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Header />
+        <main className="pt-24 md:pt-28">
+          <div className="max-w-2xl mx-auto px-4 sm:px-6 py-12 text-center">
+            <h1 className="text-3xl font-bold mb-4">Authentication Required</h1>
+            <p className="text-gray-500 mb-6">Please sign in to access your preferences.</p>
+            <button
+              onClick={() => navigate('/signin')}
+              className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Sign In
+            </button>
+          </div>
+        </main>
       </div>
     );
   }

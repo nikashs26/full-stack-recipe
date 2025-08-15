@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Search, ChefHat, ThumbsUp, Award, TrendingUp, Clock, Star, Users, Zap } from 'lucide-react';
+import { Search, ChefHat, ThumbsUp, Award, TrendingUp, Clock, Star, Users, Zap, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Header from '../components/Header';
 import RecipeCard from '../components/RecipeCard';
@@ -25,6 +25,28 @@ const HomePage: React.FC = () => {
   
   // State for popular recipes toggle
   const [showPersonalPopular, setShowPersonalPopular] = useState(false);
+  
+    // State for refresh feedback
+  const [refreshFeedback, setRefreshFeedback] = useState<string>('');
+  
+  // State for refresh counter to force new queries
+  const [refreshCounter, setRefreshCounter] = useState<number>(0);
+  
+  // Handle refresh recommendations with feedback
+  const handleRefreshRecommendations = async () => {
+    setRefreshFeedback('Refreshing recommendations...');
+    try {
+      // Increment refresh counter to force a completely new query
+      setRefreshCounter(prev => prev + 1);
+      setRefreshFeedback('Recommendations refreshed!');
+      // Clear feedback after 3 seconds
+      setTimeout(() => setRefreshFeedback(''), 3000);
+    } catch (error) {
+      setRefreshFeedback('Failed to refresh recommendations');
+      // Clear error feedback after 3 seconds
+      setTimeout(() => setRefreshFeedback(''), 3000);
+    }
+  };
 
   // Load user preferences when authenticated
   useEffect(() => {
@@ -37,13 +59,12 @@ const HomePage: React.FC = () => {
 
     const loadPreferences = async () => {
       try {
-        const token = localStorage.getItem('auth_token');
-        console.log('🔑 Loading preferences with token:', token ? 'present' : 'missing');
+        console.log('🔑 Loading preferences using apiCall utility');
         
-        const response = await fetch('http://localhost:5003/api/preferences', {
+        const response = await apiCall('/api/preferences', {
+          method: 'GET',
           headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
+            'Accept': 'application/json'
           }
         });
 
@@ -71,19 +92,44 @@ const HomePage: React.FC = () => {
     loadPreferences();
   }, [isAuthenticated]);
 
-  // Load recipes using React Query for better caching - use direct backend endpoint for all recipes
+  // Load recipes using React Query for better caching
+  // For authenticated users with preferences, use recommendations endpoint
+  // For unauthenticated users, use general recipes endpoint
   const { data: backendRecipes = [], isLoading: isLoadingBackend, error: backendError } = useQuery({
-    queryKey: ['backend-recipes'],
+    queryKey: ['backend-recipes', isAuthenticated, userPreferences],
     queryFn: async () => {
       try {
-        const response = await fetch('http://localhost:5003/get_recipes');
-        if (!response.ok) {
-          const errorData = await response.text();
-          console.error('Backend error response:', errorData);
-          throw new Error('Failed to fetch recipes');
+        // For authenticated users with preferences, get recommendations instead of all recipes
+        if (isAuthenticated && userPreferences) {
+          console.log('🔍 Authenticated user with preferences - using recommendations endpoint');
+          const response = await fetch('http://localhost:5003/api/recommendations?limit=20');
+          if (!response.ok) {
+            const errorData = await response.text();
+            console.error('Recommendations error response:', errorData);
+            throw new Error('Failed to fetch recommendations');
+          }
+          const data = await response.json();
+          console.log('🔍 HomePage backend recommendations raw data:', data);
+          console.log('🔍 HomePage backend recommendations array:', data.recommendations);
+          console.log('🔍 HomePage first recipe details:', data.recommendations?.[0] ? {
+            id: data.recommendations[0].id,
+            title: data.recommendations[0].title,
+            name: data.recommendations[0].name,
+            cuisine: data.recommendations[0].cuisine
+          } : 'No recipes');
+          return data.recommendations || [];
+        } else {
+          // For unauthenticated users or users without preferences, get general recipes
+          console.log('🔍 Unauthenticated user or no preferences - using general recipes endpoint');
+          const response = await fetch('http://localhost:5003/get_recipes');
+          if (!response.ok) {
+            const errorData = await response.text();
+            console.error('Backend error response:', errorData);
+            throw new Error('Failed to fetch recipes');
+          }
+          const data = await response.json();
+          return data.results || [];
         }
-        const data = await response.json();
-        return data.results || [];
       } catch (error) {
         console.error('Error fetching backend recipes:', error);
         return [];
@@ -91,11 +137,12 @@ const HomePage: React.FC = () => {
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
     retry: 1, // Only retry once on failure
+    enabled: true, // Always enabled
   });
 
   // Query for backend recommendations when user has preferences
-  const { data: backendRecommendations = [], isLoading: isLoadingRecommendations } = useQuery({
-    queryKey: ['backend-recommendations', userPreferences],
+  const { data: backendRecommendations = [], isLoading: isLoadingRecommendations, refetch: refetchRecommendations } = useQuery({
+    queryKey: ['backend-recommendations', userPreferences, refreshCounter], // Add refresh counter for unique queries
     queryFn: async () => {
       if (!userPreferences) {
         console.log('❌ No user preferences available for backend recommendations');
@@ -105,16 +152,12 @@ const HomePage: React.FC = () => {
       console.log('🔍 Fetching backend recommendations with preferences:', userPreferences);
       
       try {
-        const token = localStorage.getItem('auth_token');
-        if (!token) {
-          console.error('❌ No auth token available for backend recommendations');
-          return [];
-        }
+        console.log('🔍 Fetching backend recommendations using apiCall utility');
         
-        const response = await fetch('http://localhost:5003/recommendations?limit=8', {
+        const response = await apiCall('/api/recommendations?limit=8', {
+          method: 'GET',
           headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
+            'Accept': 'application/json'
           }
         });
         console.log('📡 Backend response status:', response.status);
@@ -411,7 +454,23 @@ const HomePage: React.FC = () => {
         console.log('🎯 Final distributed recommendations:', distributedRecipes.length);
         console.log('📊 Final cuisine distribution:', distributedRecipes.map(r => r.cuisine));
         
+        // Debug: Check recipe data before and after processing
+        console.log('🔍 First recipe before processing:', distributedRecipes[0] ? {
+          id: distributedRecipes[0].id,
+          title: distributedRecipes[0].title,
+          name: distributedRecipes[0].name,
+          cuisine: distributedRecipes[0].cuisine
+        } : 'No recipes');
+        
         recommendedRecipes = distributedRecipes.map(recipe => ({ ...recipe, type: 'external' as const }));
+        
+        // Debug: Check recipe data after processing
+        console.log('🔍 First recipe after processing:', recommendedRecipes[0] ? {
+          id: recommendedRecipes[0].id,
+          title: recommendedRecipes[0].title,
+          name: recommendedRecipes[0].name,
+          cuisine: recommendedRecipes[0].cuisine
+        } : 'No recipes');
       } else if (isLoadingRecommendations) {
         console.log('⏳ Backend recommendations still loading...');
         // Don't set recommendedRecipes yet, wait for loading to complete
@@ -471,42 +530,11 @@ const HomePage: React.FC = () => {
         // Smart recommendation logic: prioritize favorite foods first, then cuisine preferences
         const favoriteFoodsNorm: string[] = (favoriteFoods || []).map((f: any) => (f || '').toString().trim().toLowerCase()).filter(Boolean);
         
-        // Step 1: Find recipes that match favorite foods WITHIN preferred cuisines first
-        let favoriteFoodInCuisineRecipes: any[] = [];
-        let favoriteFoodOutsideCuisineRecipes: any[] = [];
+        // Step 1: Find ALL recipes that match favorite foods (from any cuisine)
+        let favoriteFoodRecipes: any[] = [];
         
         if (favoriteFoodsNorm.length > 0) {
-          // First, find favorite foods that are ALSO within preferred cuisines
-          if (favoriteCuisines && favoriteCuisines.length > 0) {
-            favoriteFoodInCuisineRecipes = filteredRecipes.filter(recipe => {
-              // Check if it's a favorite food
-              const titleLower = ((recipe.title || (recipe as any).name || '') as string).toLowerCase();
-              const ingredients = (recipe as any).ingredients || [];
-              const ingredientsLower = Array.isArray(ingredients) ? 
-                ingredients.map((i: any) => String(i).toLowerCase()) : [];
-              const isFavoriteFood = favoriteFoodsNorm.some(food => 
-                titleLower.includes(food) || 
-                ingredientsLower.some((ing: string) => ing.includes(food))
-              );
-              
-              if (!isFavoriteFood) return false;
-              
-              // Check if it's also within preferred cuisines
-              const recipeCuisines = Array.isArray((recipe as any).cuisines) ? (recipe as any).cuisines : [];
-              const recipeTitle = (recipe.title || (recipe as any).name || '').toLowerCase();
-              
-              return favoriteCuisines.some(cuisine => {
-                if (!cuisine) return false;
-                const cuisineLower = cuisine.toLowerCase();
-                return recipeCuisines.some((c: any) => c?.toLowerCase().includes(cuisineLower)) ||
-                       recipeTitle.includes(cuisineLower);
-              });
-            });
-            console.log('🍔🌍 Found favorite food recipes WITHIN preferred cuisines:', favoriteFoodInCuisineRecipes.length);
-          }
-          
-          // Then, find favorite foods that are OUTSIDE preferred cuisines (as fallback)
-          favoriteFoodOutsideCuisineRecipes = filteredRecipes.filter(recipe => {
+          favoriteFoodRecipes = filteredRecipes.filter(recipe => {
             // Check if it's a favorite food
             const titleLower = ((recipe.title || (recipe as any).name || '') as string).toLowerCase();
             const ingredients = (recipe as any).ingredients || [];
@@ -517,22 +545,9 @@ const HomePage: React.FC = () => {
               ingredientsLower.some((ing: string) => ing.includes(food))
             );
             
-            if (!isFavoriteFood) return false;
-            
-            // Check if it's NOT within preferred cuisines
-            const recipeCuisines = Array.isArray((recipe as any).cuisines) ? (recipe as any).cuisines : [];
-            const recipeTitle = (recipe.title || (recipe as any).name || '').toLowerCase();
-            
-            const isInPreferredCuisine = favoriteCuisines && favoriteCuisines.length > 0 && favoriteCuisines.some(cuisine => {
-              if (!cuisine) return false;
-              const cuisineLower = cuisine.toLowerCase();
-              return recipeCuisines.some((c: any) => c?.toLowerCase().includes(cuisineLower)) ||
-                     recipeTitle.includes(cuisineLower);
-            });
-            
-            return !isInPreferredCuisine;
+            return isFavoriteFood;
           });
-          console.log('🍔🌍 Found favorite food recipes OUTSIDE preferred cuisines:', favoriteFoodOutsideCuisineRecipes.length);
+          console.log('🍔 Found favorite food recipes from any cuisine:', favoriteFoodRecipes.length);
         }
         
         // Step 2: Find recipes that match favorite cuisines (but aren't favorite foods) - RESPECTING DIETARY RESTRICTIONS
@@ -570,22 +585,14 @@ const HomePage: React.FC = () => {
         // Step 3: Build recommendations intelligently with priority order
         let finalRecommendations: any[] = [];
         
-        // Priority 1: Favorite foods WITHIN preferred cuisines (up to 3)
-        if (favoriteFoodInCuisineRecipes.length > 0) {
-          const favFoodInCuisineCount = Math.min(3, favoriteFoodInCuisineRecipes.length);
-          finalRecommendations.push(...favoriteFoodInCuisineRecipes.slice(0, favFoodInCuisineCount));
-          console.log(`🍔🌍 Added ${favFoodInCuisineCount} favorite food recipes WITHIN preferred cuisines`);
+        // Priority 1: Favorite foods from any cuisine (up to 4 - more flexible now)
+        if (favoriteFoodRecipes.length > 0) {
+          const favFoodCount = Math.min(4, favoriteFoodRecipes.length);
+          finalRecommendations.push(...favoriteFoodRecipes.slice(0, favFoodCount));
+          console.log(`🍔 Added ${favFoodCount} favorite food recipes from any cuisine`);
         }
         
-        // Priority 2: If we still have room, add favorite foods OUTSIDE preferred cuisines (up to 2)
-        if (finalRecommendations.length < 5 && favoriteFoodOutsideCuisineRecipes.length > 0) {
-          const remainingSlots = Math.min(2, 5 - finalRecommendations.length);
-          const favFoodOutsideCuisineCount = Math.min(remainingSlots, favoriteFoodOutsideCuisineRecipes.length);
-          finalRecommendations.push(...favoriteFoodOutsideCuisineRecipes.slice(0, favFoodOutsideCuisineCount));
-          console.log(`🍔🌍 Added ${favFoodOutsideCuisineCount} favorite food recipes OUTSIDE preferred cuisines`);
-        }
-        
-        // Then add cuisine-matched recipes with proper balancing across cuisines
+        // Priority 2: Then add cuisine-matched recipes with proper balancing across cuisines
         if (cuisineMatchedRecipes.length > 0 && favoriteCuisines && favoriteCuisines.length > 1) {
           const remainingSlots = 8 - finalRecommendations.length;
           
@@ -643,16 +650,23 @@ const HomePage: React.FC = () => {
           console.log(`🌍 Added ${cuisineCount} single-cuisine recipes to recommendations`);
         }
         
-        // If we still don't have enough, fill with other good recipes (RESPECTING DIETARY RESTRICTIONS)
-        if (finalRecommendations.length < 8) {
+        // If we still don't have enough, only fill with additional cuisine-matched recipes
+        // DO NOT fall back to random recipes to avoid showing nonsense recommendations
+        if (finalRecommendations.length < 8 && cuisineMatchedRecipes.length > 0) {
           const remainingSlots = 8 - finalRecommendations.length;
-          const otherRecipes = filteredRecipes.filter(recipe => 
+          const additionalCuisineRecipes = cuisineMatchedRecipes.filter(recipe => 
             !finalRecommendations.some(rec => rec.id === recipe.id)
           );
           
-          const otherCount = Math.min(remainingSlots, otherRecipes.length);
-          finalRecommendations.push(...otherRecipes.slice(0, otherCount));
-          console.log(`🎯 Added ${otherCount} other recipes to fill recommendations (respecting dietary restrictions)`);
+          const additionalCount = Math.min(remainingSlots, additionalCuisineRecipes.length);
+          finalRecommendations.push(...additionalCuisineRecipes.slice(0, additionalCount));
+          console.log(`🌍 Added ${additionalCount} additional cuisine-matched recipes to fill recommendations`);
+        }
+        
+        // If we still don't have enough, that's okay - better to show fewer quality recommendations
+        // than to show random nonsense recipes
+        if (finalRecommendations.length < 8) {
+          console.log(`⚠️ Only found ${finalRecommendations.length} quality recommendations (target: 8). Not filling with random recipes.`);
         }
         
         recommendedRecipes = finalRecommendations.slice(0, 8);
@@ -817,13 +831,43 @@ const HomePage: React.FC = () => {
                     <h2 className="text-3xl font-bold text-gray-900 mb-2">Recommended for You</h2>
                     <p className="text-gray-600">Personalized recipe suggestions based on your preferences</p>
                   </div>
-                  <Link to="/preferences">
-                    <Button variant="outline">
-                      <TrendingUp className="mr-2 h-4 w-4" />
-                      Update Preferences
+                  <div className="flex items-center space-x-3">
+                    <Button
+                      onClick={handleRefreshRecommendations}
+                      disabled={isLoadingRecommendations}
+                      variant="outline"
+                      size="sm"
+                    >
+                      {isLoadingRecommendations ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <svg className="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                      )}
+                      Refresh
                     </Button>
-                  </Link>
+                    <Link to="/preferences">
+                      <Button variant="outline">
+                        <TrendingUp className="mr-2 h-4 w-4" />
+                        Update Preferences
+                      </Button>
+                    </Link>
+                  </div>
                 </div>
+                
+                {/* Refresh feedback */}
+                {refreshFeedback && (
+                  <div className={`text-sm font-medium mb-4 px-4 py-2 rounded-md ${
+                    refreshFeedback.includes('Failed') 
+                      ? 'bg-red-100 text-red-700 border border-red-200' 
+                      : refreshFeedback.includes('Refreshing')
+                      ? 'bg-blue-100 text-blue-700 border border-blue-200'
+                      : 'bg-green-100 text-green-700 border border-green-200'
+                  }`}>
+                    {refreshFeedback}
+                  </div>
+                )}
 
                 {isLoading ? (
                   <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">

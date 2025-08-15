@@ -94,7 +94,7 @@ export const fetchManualRecipes = async (
     console.log('Fetching recipes from:', url);
     
     // Get the authentication token from localStorage
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('auth_token');
     
     const headers: HeadersInit = {
       'Accept': 'application/json',

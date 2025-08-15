@@ -373,15 +373,41 @@ def check_auth():
 
 
 @auth_bp.route('/refresh', methods=['POST'])
-@require_auth
 def refresh_token():
-    """Refresh JWT token"""
+    """Refresh JWT token using existing token (even if expired)"""
     try:
-        user_id = get_current_user_id()
-        user = user_service.get_user_by_id(user_id)
+        # Get the token from the Authorization header
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({'error': 'No valid authorization header provided'}), 401
         
+        token = auth_header.split(' ')[1]
+        if not token or token in ['null', 'undefined']:
+            return jsonify({'error': 'Invalid token'}), 401
+        
+        # Try to decode the token (even if expired)
+        try:
+            # Decode without verification to get user info
+            import jwt
+            jwt_secret = user_service._get_jwt_secret()
+            payload = jwt.decode(token, jwt_secret, algorithms=['HS256'], options={'verify_exp': False})
+            user_id = payload.get('user_id')
+            email = payload.get('email')
+            
+            if not user_id or not email:
+                return jsonify({'error': 'Invalid token payload'}), 401
+                
+        except jwt.InvalidTokenError:
+            return jsonify({'error': 'Invalid token format'}), 401
+        
+        # Get user from database
+        user = user_service.get_user_by_id(user_id)
         if not user:
             return jsonify({"error": "User not found"}), 404
+        
+        # Check if user is verified
+        if not user.get('is_verified', False):
+            return jsonify({"error": "Email not verified"}), 401
         
         # Generate new token
         new_token = user_service.generate_jwt_token(user['user_id'], user['email'])

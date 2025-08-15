@@ -123,7 +123,7 @@ class ReviewService:
                 # Sort by date (newest first)
                 reviews.sort(key=lambda x: x['date'], reverse=True)
             
-            print(f"📋 Found {len(reviews)} reviews for recipe {recipe_id} ({recipe_type})")
+
             return reviews
             
         except Exception as e:

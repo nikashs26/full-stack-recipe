@@ -14,11 +14,66 @@ from middleware.auth_middleware import get_current_user_id
 # Load environment variables
 load_dotenv()
 
-def async_route(f):
+# Simple request deduplication cache
+request_cache = {}
+CACHE_TTL = 5  # 5 seconds
+
+def deduplicate_requests(f):
+    """Decorator to deduplicate identical requests within a short time window"""
     @wraps(f)
-    def wrapped(*args, **kwargs):
-        return asyncio.run(f(*args, **kwargs))
-    return wrapped
+    def decorated_function(*args, **kwargs):
+        # Create a cache key based on the request parameters
+        cache_key = f"{request.endpoint}_{request.method}_{request.query_string.decode()}_{request.get_data().decode()}"
+        
+        current_time = time.time()
+        
+        # Check if we have a recent identical request
+        if cache_key in request_cache:
+            cached_result, timestamp = request_cache[cache_key]
+            if current_time - timestamp < CACHE_TTL:
+                # Return cached result if it's still valid
+                return cached_result
+        
+        # Process the request normally
+        result = f(*args, **kwargs)
+        
+        # Cache the result
+        request_cache[cache_key] = (result, current_time)
+        
+        # Clean up old cache entries
+        for key in list(request_cache.keys()):
+            if current_time - request_cache[key][1] > CACHE_TTL:
+                del request_cache[key]
+        
+        return result
+    return decorated_function
+
+def async_route(f):
+    """Decorator to handle async functions in Flask"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        try:
+            # Get the current event loop or create a new one
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_closed():
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+            except RuntimeError:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+            
+            # Run the async function
+            if asyncio.iscoroutinefunction(f):
+                result = loop.run_until_complete(f(*args, **kwargs))
+            else:
+                result = f(*args, **kwargs)
+            
+            return result
+        except Exception as e:
+            print(f"Error in async_route: {e}")
+            raise
+    return decorated_function
 
 def register_recipe_routes(app, recipe_cache):
     # Initialize services

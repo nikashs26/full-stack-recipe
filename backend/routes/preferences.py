@@ -34,14 +34,14 @@ def save_user_preferences():
         # Debug log the incoming data
         print(f"Processing preferences: {preferences_data}")
         
-        # Validate and set defaults for preferences
+        # Validate and set defaults for preferences - respect user choices, don't force defaults
         processed_preferences = {
             'dietaryRestrictions': preferences_data.get('dietaryRestrictions', []),
-            'favoriteCuisines': preferences_data.get('favoriteCuisines', []) or ["International"],
-            'foodsToAvoid': preferences_data.get('foodsToAvoid', []),  # Add foodsToAvoid
+            'favoriteCuisines': preferences_data.get('favoriteCuisines', []),  # Don't force defaults
+            'foodsToAvoid': preferences_data.get('foodsToAvoid', []),
             'allergens': preferences_data.get('allergens', []),
             'cookingSkillLevel': preferences_data.get('cookingSkillLevel', "beginner"),
-            'healthGoals': preferences_data.get('healthGoals', ["General wellness"]),
+            'healthGoals': preferences_data.get('healthGoals', []),  # Don't force defaults
             'maxCookingTime': preferences_data.get('maxCookingTime', "30 minutes"),
             'favoriteFoods': preferences_data.get('favoriteFoods', []),
             # New meal preference fields
@@ -94,16 +94,16 @@ def get_user_preferences():
         
         if not preferences:
             response = jsonify({
-                "message": "No preferences found. Using default preferences.",
+                "message": "No preferences found. Using minimal defaults.",
                 "preferences": {
                     "dietaryRestrictions": [],
-                    "favoriteCuisines": ["International"],
+                    "favoriteCuisines": [],  # Don't force any cuisines
                     "foodsToAvoid": [],
                     "allergens": [],
                     "cookingSkillLevel": "beginner",
-                    "healthGoals": ["General wellness"],
+                    "healthGoals": [],  # Don't force any health goals
                     "maxCookingTime": "30 minutes",
-                    "favoriteFoods": ["", "", ""]
+                    "favoriteFoods": []
                 }
             })
         else:

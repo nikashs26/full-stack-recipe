@@ -23,7 +23,7 @@ const FoldersPage: React.FC = () => {
         throw new Error('Please sign in to access folders');
       }
       
-      const response = await apiCall('/folders');
+              const response = await apiCall('/api/folders');
       if (!response.ok) {
         throw new Error('Failed to fetch folders');
       }
@@ -273,7 +273,7 @@ const FoldersPage: React.FC = () => {
     }
 
     try {
-      const response = await apiCall('/folders', {
+              const response = await apiCall('/api/folders', {
         method: 'POST',
         body: JSON.stringify({
           name: name.trim(),

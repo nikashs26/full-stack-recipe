@@ -2,6 +2,7 @@ from flask import Flask
 from flask_cors import CORS
 import os
 from dotenv import load_dotenv
+from config.logging_config import configure_logging
 from services.recipe_cache_service import RecipeCacheService
 from services.email_service import EmailService
 from routes.recipe_routes import register_recipe_routes
@@ -17,6 +18,10 @@ from test_meal_planner import test_meal_bp
 
 # Load environment variables
 load_dotenv()
+
+# Configure logging to reduce chaos
+debug_mode = os.environ.get("DEBUG", "false").lower() == "true"
+configure_logging(debug_mode)
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -58,4 +63,5 @@ app.register_blueprint(test_meal_bp, url_prefix='/api')  # Test meal planner rou
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5003))
-    app.run(host="0.0.0.0", port=port, debug=True)
+    print(f"🚀 Starting Flask app on port {port}...")
+    app.run(host="0.0.0.0", port=port, debug=debug_mode)

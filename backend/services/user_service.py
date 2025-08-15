@@ -14,6 +14,19 @@ class UserService:
     Handles registration, login, email verification, and user management
     """
     
+    # Class-level JWT secret to ensure consistency across instances
+    _jwt_secret = None
+    
+    @classmethod
+    def _get_jwt_secret(cls):
+        """Get the JWT secret, loading it from environment if not already loaded"""
+        if cls._jwt_secret is None:
+            import os
+            from dotenv import load_dotenv
+            load_dotenv()  # Ensure environment variables are loaded
+            cls._jwt_secret = os.getenv('JWT_SECRET_KEY', 'your-super-secret-jwt-key-change-in-production')
+        return cls._jwt_secret
+    
     def __init__(self):
         # Initialize ChromaDB
         import os
@@ -24,9 +37,6 @@ class UserService:
         # User collections
         self.users_collection = self.client.get_or_create_collection("users")
         self.verification_tokens_collection = self.client.get_or_create_collection("verification_tokens")
-        
-        # JWT secret
-        self.jwt_secret = os.getenv('JWT_SECRET_KEY', 'your-super-secret-jwt-key-change-in-production')
         
     def hash_password(self, password: str) -> str:
         """Hash a password using bcrypt"""
@@ -46,16 +56,24 @@ class UserService:
             'exp': datetime.utcnow() + timedelta(days=7),  # Token expires in 7 days
             'iat': datetime.utcnow()
         }
-        return jwt.encode(payload, self.jwt_secret, algorithm='HS256')
+        return jwt.encode(payload, self._get_jwt_secret(), algorithm='HS256')
     
     def decode_jwt_token(self, token: str) -> Optional[Dict[str, Any]]:
         """Decode and verify a JWT token"""
         try:
-            payload = jwt.decode(token, self.jwt_secret, algorithms=['HS256'])
+            jwt_secret = self._get_jwt_secret()
+            print(f"🔍 UserService - Attempting to decode token with secret: {jwt_secret[:20]}...")
+            payload = jwt.decode(token, jwt_secret, algorithms=['HS256'])
+            print(f"✅ UserService - Token decoded successfully, payload: {payload}")
             return payload
-        except jwt.ExpiredSignatureError:
+        except jwt.ExpiredSignatureError as e:
+            print(f"❌ UserService - Token expired: {e}")
             return None
-        except jwt.InvalidTokenError:
+        except jwt.InvalidTokenError as e:
+            print(f"❌ UserService - Invalid token: {e}")
+            return None
+        except Exception as e:
+            print(f"❌ UserService - Unexpected error decoding token: {e}")
             return None
     
     def generate_verification_token(self) -> str:

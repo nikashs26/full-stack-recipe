@@ -162,6 +162,119 @@ def get_personalized_recommendations():
         print(f"❌ Error in recommendations endpoint: {e}")
         return jsonify({"error": str(e)}), 500
 
+@smart_features_bp.route('/recommendations/simple', methods=['GET'])
+def get_simple_recommendations():
+    """
+    Get simple, fast recipe recommendations without complex AI processing
+    Note: This endpoint ignores user preferences for speed. Use /recommendations for personalized results.
+    """
+    try:
+        limit = request.args.get('limit', 8, type=int)
+        print(f"🚀 Simple recommendations - Requested limit: {limit}")
+        
+        # Get recipes directly from the recipe cache (much faster)
+        from services.recipe_cache_service import RecipeCacheService
+        recipe_cache = RecipeCacheService()
+        
+        # Get a simple list of popular recipes
+        all_recipes = recipe_cache.get_cached_recipes()  # Get all recipes
+        
+        if not all_recipes:
+            print("⚠️ No recipes found in simple recommendations")
+            return jsonify({
+                "success": True,
+                "recommendations": [],
+                "message": "No recipes available"
+            }), 200
+        
+        # Implement diverse sampling to avoid clustering by cuisine
+        import random
+        
+        # Group recipes by cuisine for better distribution
+        recipes_by_cuisine = {}
+        for recipe in all_recipes:
+            cuisine = recipe.get('cuisine', 'Unknown')
+            if cuisine not in recipes_by_cuisine:
+                recipes_by_cuisine[cuisine] = []
+            recipes_by_cuisine[cuisine].append(recipe)
+        
+        print(f"📊 Found recipes from {len(recipes_by_cuisine)} cuisines: {list(recipes_by_cuisine.keys())}")
+        print(f"⚠️  WARNING: Simple recommendations ignore user preferences. Showing variety from all cuisines.")
+        
+        # Shuffle cuisines to avoid always starting with the same ones
+        cuisines = list(recipes_by_cuisine.keys())
+        random.shuffle(cuisines)
+        
+        # Sample evenly from each cuisine to ensure variety
+        formatted_recipes = []
+        
+        # Calculate how many recipes to take from each cuisine
+        recipes_per_cuisine = max(1, limit // len(cuisines))
+        extra_recipes = limit % len(cuisines)
+        
+        for i, cuisine in enumerate(cuisines):
+            cuisine_recipes = recipes_by_cuisine[cuisine]
+            # Take recipes_per_cuisine + 1 extra for the first few cuisines
+            current_limit = recipes_per_cuisine + (1 if i < extra_recipes else 0)
+            
+            # Randomly sample from this cuisine's recipes
+            if len(cuisine_recipes) > current_limit:
+                sampled_recipes = random.sample(cuisine_recipes, current_limit)
+            else:
+                sampled_recipes = cuisine_recipes
+            
+            for recipe in sampled_recipes:
+                if len(formatted_recipes) >= limit:
+                    break
+                    
+                # Include ALL available recipe fields for complete data
+                formatted_recipe = {
+                    "id": recipe.get('id', recipe.get('recipe_id', 'unknown')),
+                    "title": recipe.get('title', recipe.get('name', 'Unknown Recipe')),
+                    "name": recipe.get('title', recipe.get('name', 'Unknown Recipe')),
+                    "cuisine": recipe.get('cuisine', ''),
+                    "cuisines": [recipe.get('cuisine', '')] if recipe.get('cuisine') else [],
+                    "image": recipe.get('image', ''),
+                    "calories": recipe.get('calories', 0),
+                    "protein": recipe.get('protein', 0),
+                    "carbs": recipe.get('carbs', 0),
+                    "fat": recipe.get('fat', 0),
+                    "source": recipe.get('source', ''),
+                    "type": "recommended",
+                    
+                    # Add missing fields that the frontend expects
+                    "tags": recipe.get('tags', []),
+                    "dietary_restrictions": recipe.get('dietary_restrictions', []),
+                    "diets": recipe.get('diets', []),
+                    "ingredients": recipe.get('ingredients', []),
+                    "instructions": recipe.get('instructions', []),
+                    "servings": recipe.get('servings', 1),
+                    "readyInMinutes": recipe.get('readyInMinutes', recipe.get('cooking_time', 0)),
+                    "cooking_time": recipe.get('cooking_time', ''),
+                    "difficulty": recipe.get('difficulty', ''),
+                    "meal_type": recipe.get('meal_type', ''),
+                    "avg_rating": recipe.get('avg_rating', 0),
+                    "ratings": recipe.get('ratings', 0),
+                    "prep_time": recipe.get('prep_time', ''),
+                    "total_time": recipe.get('total_time', ''),
+                    "dish_types": recipe.get('dish_types', []),
+                    "occasions": recipe.get('occasions', [])
+                }
+                formatted_recipes.append(formatted_recipe)
+        
+        print(f"✅ Simple recommendations: {len(formatted_recipes)} recipes")
+        
+        return jsonify({
+            "success": True,
+            "recommendations": formatted_recipes,
+            "total": len(formatted_recipes),
+            "message": "Simple recommendations generated successfully"
+        }), 200
+        
+    except Exception as e:
+        print(f"❌ Error in simple recommendations: {e}")
+        return jsonify({"error": str(e)}), 500
+
 @smart_features_bp.route('/meal-history/log', methods=['POST'])
 def log_meal_generation():
     """

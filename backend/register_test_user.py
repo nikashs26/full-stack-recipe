@@ -2,7 +2,7 @@ import requests
 import json
 
 # Base URL for the API
-BASE_URL = 'http://localhost:5005/api'
+BASE_URL = 'http://localhost:5003/api'
 
 def verify_test_user():
     """Verify the test user's email using the dev endpoint"""

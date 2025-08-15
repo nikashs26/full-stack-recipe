@@ -238,7 +238,7 @@ class RecipeCacheService:
         try:
             # Always get all recipes from cache since search collection only contains metadata
             # The filtering will be done in the recipe service
-            logger.info("Getting all recipes from cache for filtering in recipe service")
+            logger.debug("Getting all recipes from cache for filtering in recipe service")
             return self._get_all_recipes_from_cache()
             
             # Original search logic (commented out since search collection doesn't have full recipes):
@@ -884,7 +884,6 @@ class RecipeCacheService:
                 try:
                     # Skip empty or invalid documents
                     if not doc or not isinstance(doc, (str, dict)):
-                        logger.debug(f"Skipping invalid document at index {i}")
                         continue
                         
                     # Parse JSON if needed
@@ -902,14 +901,12 @@ class RecipeCacheService:
                         
                     # Validate recipe structure
                     if not isinstance(recipe, dict) or not recipe.get('id'):
-                        logger.debug(f"Skipping invalid recipe at index {i}")
                         continue
                         
                     metadata = recipe_results['metadatas'][i] if i < len(recipe_results['metadatas']) else {}
                     
                     recipe_id = recipe.get('id')
                     if not recipe_id or recipe_id in seen_ids:
-                        logger.debug(f"Skipping recipe {recipe_id}: already seen")
                         continue
                     # TTL is disabled - don't check expiration
                     # if not self._is_cache_valid(metadata.get('cached_at')):
@@ -923,7 +920,8 @@ class RecipeCacheService:
                     logger.error(f"Unexpected error processing recipe at index {i}: {e}", exc_info=True)
                     continue
             
-            logger.info(f"Found {len(all_recipes)} recipes in cache")
+            # Only log once per request, not for every recipe
+            logger.debug(f"Retrieved {len(all_recipes)} recipes from cache")
             return all_recipes
             
         except Exception as e:

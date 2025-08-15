@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { loadRecipes } from '../utils/storage';
@@ -17,6 +17,12 @@ const RecommendedRecipes: React.FC = () => {
   console.log('🔍 RecommendedRecipes component rendered');
   
   const { user, isAuthenticated } = useAuth();
+  
+  // State for refresh feedback
+  const [refreshFeedback, setRefreshFeedback] = useState<string>('');
+  
+  // State for refresh counter to force new queries
+  const [refreshCounter, setRefreshCounter] = useState<number>(0);
   
   console.log('🔍 Component - isAuthenticated:', isAuthenticated);
   console.log('🔍 Component - user:', user);
@@ -66,9 +72,25 @@ const RecommendedRecipes: React.FC = () => {
   
   console.log('RecommendedRecipes - User preferences:', { favoriteCuisines, dietaryRestrictions });
 
+  // Handle refresh recommendations with feedback
+  const handleRefreshRecommendations = async () => {
+    setRefreshFeedback('Refreshing recommendations...');
+    try {
+      // Increment refresh counter to force a completely new query
+      setRefreshCounter(prev => prev + 1);
+      setRefreshFeedback('Recommendations refreshed!');
+      // Clear feedback after 3 seconds
+      setTimeout(() => setRefreshFeedback(''), 3000);
+    } catch (error) {
+      setRefreshFeedback('Failed to refresh recommendations');
+      // Clear error feedback after 3 seconds
+      setTimeout(() => setRefreshFeedback(''), 3000);
+    }
+  };
+
   // Query backend recommendations API
-  const { data: recommendedRecipes = [], isLoading: isRecommendationsLoading } = useQuery({
-    queryKey: ['recommendations', user?.preferences, hasMeaningfulPreferences],
+  const { data: recommendedRecipes = [], isLoading: isRecommendationsLoading, refetch: refetchRecommendations } = useQuery({
+    queryKey: ['recommendations', user?.preferences, hasMeaningfulPreferences, refreshCounter], // Add refresh counter for unique queries
     queryFn: async () => {
       console.log('🔍 Query function called!');
       console.log('🔍 isAuthenticated:', isAuthenticated);
@@ -91,7 +113,7 @@ const RecommendedRecipes: React.FC = () => {
       try {
         console.log('🔍 Making API call to /recommendations...');
         
-        const response = await apiCall('/recommendations?limit=12', {
+        const response = await apiCall('/api/recommendations?limit=12', {
           method: 'GET',
           headers: {
             'Accept': 'application/json',
@@ -109,6 +131,13 @@ const RecommendedRecipes: React.FC = () => {
 
         const data = await response.json();
         console.log('✅ Backend recommendations response:', data);
+        console.log('✅ Backend recommendations array:', data.recommendations);
+        console.log('✅ First recipe details:', data.recommendations?.[0] ? {
+          id: data.recommendations[0].id,
+          title: data.recommendations[0].title,
+          name: data.recommendations[0].name,
+          cuisine: data.recommendations[0].cuisine
+        } : 'No recipes');
         
         return data.recommendations || [];
       } catch (error) {
@@ -124,12 +153,36 @@ const RecommendedRecipes: React.FC = () => {
   console.log('🔍 isAuthenticated:', isAuthenticated);
   console.log('🔍 user?.preferences:', user?.preferences);
 
-  // Combine all recipes for display
+  // Combine all recipes for display, prioritizing backend recommendations
+  // Backend recommendations should come first since they have the most complete data
   const allCombined = [
-    ...recommendedRecipes.map(recipe => ({ ...recipe, type: 'external' as const })),
-    ...manualRecipes.map(recipe => ({ ...recipe, type: 'manual' as const })),
-    ...allRecipes.map(recipe => ({ ...recipe, type: 'saved' as const }))
+    ...recommendedRecipes.map(recipe => ({ 
+      ...recipe, 
+      type: 'external' as const,
+      // Ensure backend recommendations have priority
+      priority: 1
+    })),
+    ...manualRecipes.map(recipe => ({ 
+      ...recipe, 
+      type: 'manual' as const,
+      priority: 2
+    })),
+    ...allRecipes.map(recipe => ({ 
+      ...recipe, 
+      type: 'saved' as const,
+      priority: 3
+    }))
   ];
+
+  // Sort by priority to ensure backend recommendations come first
+  allCombined.sort((a, b) => (a.priority || 3) - (b.priority || 3));
+
+  // Debug: Log what each source is providing
+  console.log('🔍 Recipe sources debug:');
+  console.log('Backend recommendations:', recommendedRecipes.slice(0, 2).map(r => ({ id: r.id, title: r.title, name: r.name, type: 'external' })));
+  console.log('Manual recipes:', manualRecipes.slice(0, 2).map(r => ({ id: r.id, title: r.title, name: (r as any).name, type: 'manual' })));
+  console.log('Local recipes:', allRecipes.slice(0, 2).map(r => ({ id: r.id, title: r.title, name: (r as any).name, type: 'saved' })));
+  console.log('Combined result:', allCombined.slice(0, 3).map(r => ({ id: r.id, title: r.title, name: (r as any).name, type: r.type })));
 
   console.log(`Found ${allCombined.length} total recipes for recommendations:`, {
     recommended: recommendedRecipes.length,
@@ -181,34 +234,61 @@ const RecommendedRecipes: React.FC = () => {
             Based on your preferences
           </p>
         </div>
-        <Link
-          to="/preferences"
-          className="text-sm text-blue-600 hover:text-blue-500"
-        >
-          Update preferences
-        </Link>
+        <div className="flex items-center space-x-4">
+          <button
+            onClick={handleRefreshRecommendations}
+            disabled={isRecommendationsLoading}
+            className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {isRecommendationsLoading ? (
+              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+            ) : (
+              <svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            )}
+            Refresh
+          </button>
+          <Link
+            to="/preferences"
+            className="text-sm text-blue-600 hover:text-blue-500"
+          >
+            Update preferences
+          </Link>
+        </div>
       </div>
+      
+      {/* Refresh feedback */}
+      {refreshFeedback && (
+        <div className={`text-sm font-medium mb-4 px-4 py-2 rounded-md ${
+          refreshFeedback.includes('Failed') 
+            ? 'bg-red-100 text-red-700 border border-red-200' 
+            : refreshFeedback.includes('Refreshing')
+            ? 'bg-blue-100 text-blue-700 border border-blue-200'
+            : 'bg-green-100 text-green-700 border border-green-200'
+        }`}>
+          {refreshFeedback}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         {allCombined.slice(0, 12).map((recipe) => {
-          if (recipe.type === 'manual') {
-            return (
-              <ManualRecipeCard
-                key={`manual-${recipe.id}`}
-                recipe={recipe as Recipe}
-                onDelete={() => {}}
-                showDeleteButton={false}
-              />
-            );
-          } else {
-            return (
-              <RecipeCard
-                key={`${recipe.type}-${recipe.id}`}
-                recipe={recipe as SpoonacularRecipe}
-                type={recipe.type}
-              />
-            );
-          }
+                      if (recipe.type === 'manual') {
+              return (
+                <ManualRecipeCard
+                  key={`manual-${recipe.id}`}
+                  recipe={recipe as Recipe}
+                />
+              );
+            } else {
+              return (
+                <RecipeCard
+                  key={`${recipe.type}-${recipe.id}`}
+                  recipe={recipe as Recipe}
+                  isExternal={recipe.type === 'external'}
+                />
+              );
+            }
         })}
       </div>
 

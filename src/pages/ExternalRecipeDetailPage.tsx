@@ -272,6 +272,20 @@ const ExternalRecipeDetailPage: React.FC = () => {
   // Better ingredient parsing with fallback
   const ingredients = (() => {
     console.log('Full recipe data for ingredients:', recipe);
+    console.log('Recipe keys:', Object.keys(recipe));
+    console.log('Recipe ingredients field:', recipe?.ingredients);
+    console.log('Recipe extendedIngredients field:', recipe?.extendedIngredients);
+    console.log('Recipe strIngredients field:', recipe?.strIngredients);
+    
+    // Check all possible ingredient fields
+    const possibleIngredientFields = [
+      'ingredients',
+      'extendedIngredients', 
+      'strIngredients',
+      'ingredients_list',
+      'ingredient_list',
+      'ingredientsList'
+    ];
     
     // First try the normalized ingredients array (backend format)
     if (recipe?.ingredients && Array.isArray(recipe.ingredients) && recipe.ingredients.length > 0) {
@@ -283,16 +297,25 @@ const ExternalRecipeDetailPage: React.FC = () => {
         if (ing.original && ing.original.trim()) return ing.original.trim();
         if (ing.originalString && ing.originalString.trim()) return ing.originalString.trim();
         
-        // Only construct if we have meaningful data
-        const parts = [];
-        if (ing.amount && ing.amount > 0) {
-          const amount = ing.amount % 1 === 0 ? ing.amount.toString() : ing.amount.toFixed(2).replace(/\.?0+$/, '');
-          parts.push(amount);
+        // Handle TheMealDB format (name + measure)
+        if (ing.name && ing.measure) {
+          return `${ing.measure} ${ing.name}`.trim();
         }
-        if (ing.unit && ing.unit.trim()) parts.push(ing.unit.trim());
-        if (ing.name && ing.name.trim()) parts.push(ing.name.trim());
         
-        return parts.length > 1 ? parts.join(' ') : ing.name || 'Ingredient';
+        // Handle standard format (name + amount + unit)
+        if (ing.name) {
+          const parts = [];
+          if (ing.amount && ing.amount > 0) {
+            const amount = ing.amount % 1 === 0 ? ing.amount.toString() : ing.amount.toFixed(2).replace(/\.?0+$/, '');
+            parts.push(amount);
+          }
+          if (ing.unit && ing.unit.trim()) parts.push(ing.unit.trim());
+          if (ing.name && ing.name.trim()) parts.push(ing.name.trim());
+          
+          return parts.length > 1 ? parts.join(' ') : ing.name || 'Ingredient';
+        }
+        
+        return 'Ingredient';
       }).filter(ingredient => ingredient && ingredient.trim().length > 0);
       
       if (parsedIngredients.length > 0) {
@@ -324,8 +347,54 @@ const ExternalRecipeDetailPage: React.FC = () => {
       }
     }
     
+    // Try TheMealDB format (strIngredients)
+    if (recipe?.strIngredients && Array.isArray(recipe.strIngredients) && recipe.strIngredients.length > 0) {
+      console.log('Found strIngredients:', recipe.strIngredients);
+      const parsedIngredients = recipe.strIngredients
+        .filter(ing => ing && ing.trim().length > 0)
+        .map(ing => ing.trim());
+      
+      if (parsedIngredients.length > 0) {
+        return parsedIngredients;
+      }
+    }
+    
+    // Try other possible ingredient fields
+    for (const field of possibleIngredientFields) {
+      if (recipe?.[field] && Array.isArray(recipe[field]) && recipe[field].length > 0) {
+        console.log(`Found ingredients in field ${field}:`, recipe[field]);
+        const parsedIngredients = recipe[field]
+          .filter(ing => ing && (typeof ing === 'string' ? ing.trim().length > 0 : true))
+          .map(ing => {
+            if (typeof ing === 'string') return ing.trim();
+            if (ing.original) return ing.original.trim();
+            if (ing.name) return ing.name.trim();
+            return 'Ingredient';
+          });
+        
+        if (parsedIngredients.length > 0) {
+          return parsedIngredients;
+        }
+      }
+    }
+    
+    // Check if ingredients might be stored as a string
+    if (recipe?.ingredients && typeof recipe.ingredients === 'string' && recipe.ingredients.trim().length > 0) {
+      console.log('Found ingredients as string:', recipe.ingredients);
+      // Try to parse comma-separated ingredients
+      const parsedIngredients = recipe.ingredients
+        .split(',')
+        .map(ing => ing.trim())
+        .filter(ing => ing.length > 0);
+      
+      if (parsedIngredients.length > 0) {
+        return parsedIngredients;
+      }
+    }
+    
     // If no ingredients found, return empty array instead of placeholder text
     console.log('No ingredients found for recipe:', recipe.title);
+    console.log('Available fields that might contain ingredients:', possibleIngredientFields.filter(field => recipe?.[field]));
     return [];
   })();
 

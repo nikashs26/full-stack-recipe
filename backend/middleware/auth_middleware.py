@@ -20,24 +20,34 @@ class AuthMiddleware:
         """
         @wraps(f)
         def decorated_function(*args, **kwargs):
+            # Debug logging
+            print(f"🔍 Auth middleware - Request headers: {dict(request.headers)}")
+            print(f"🔍 Auth middleware - Authorization header: {request.headers.get('Authorization')}")
+            
             auth_header = request.headers.get('Authorization')
             
             if not auth_header:
+                print("❌ Auth middleware - No authorization header provided")
                 return jsonify({'error': 'No authorization header provided'}), 401
             
             try:
                 # Extract token from "Bearer <token>"
                 if not auth_header.startswith('Bearer '):
+                    print("❌ Auth middleware - Invalid authorization header format")
                     return jsonify({'error': 'Invalid authorization header format'}), 401
                 
                 token = auth_header.split(' ')[1]
+                print(f"🔍 Auth middleware - Extracted token: {token[:20]}...")
                 
                 if not token or token in ['null', 'undefined']:
+                    print("❌ Auth middleware - Token is null, undefined, or empty")
                     return jsonify({'error': 'Invalid token'}), 401
                 
                 # Decode and verify JWT token
+                print("🔍 Auth middleware - Attempting to decode token...")
                 payload = self.user_service.decode_jwt_token(token)
                 if not payload:
+                    print("❌ Auth middleware - Token decode failed or token expired")
                     return jsonify({'error': 'Invalid or expired token'}), 401
                 
                 # Get user from database

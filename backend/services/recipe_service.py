@@ -829,18 +829,18 @@ class RecipeService:
         foods_to_avoid = [fa.lower().strip() for fa in foods_to_avoid] if foods_to_avoid else []
         favorite_foods = [ff.lower().strip() for ff in favorite_foods] if favorite_foods else []
         
-        logger.info(f"Searching recipes with query: {query}, ingredient: {ingredient}, "
-                   f"cuisines: {cuisines}, dietary_restrictions: {dietary_restrictions}, "
-                   f"foods_to_avoid: {foods_to_avoid}, favorite_foods: {favorite_foods}, "
-                   f"offset: {offset}, limit: {limit}")
+        # Only log once per request, not for every recipe
+        logger.info(f"Searching recipes: query='{query}', ingredient='{ingredient}', "
+                   f"cuisines={len(cuisines)}, diets={len(dietary_restrictions)}, "
+                   f"offset={offset}, limit={limit}")
         
         # Get all recipes from cache
         all_recipes = self.recipe_cache.get_cached_recipes(query, ingredient)
         if not all_recipes:
             logger.warning("No recipes found in cache")
-            return []
+            return {"results": [], "total": 0}
             
-        logger.info(f"Found {len(all_recipes)} recipes in cache")
+        logger.info(f"Processing {len(all_recipes)} recipes from cache")
         
         # If favorite_foods is provided, filter recipes that contain any of the favorite foods
         if favorite_foods and len(favorite_foods) > 0 and favorite_foods[0]:
@@ -912,7 +912,7 @@ class RecipeService:
             
             # Apply cuisine balancing for display order (NOT quantity limits)
             if normalized_cuisines and len(normalized_cuisines) > 1:
-                logger.info(f"Applying cuisine balancing for {len(normalized_cuisines)} cuisines (ordering only, no quantity limits)")
+                logger.info(f"Applying cuisine balancing for {len(normalized_cuisines)} cuisines")
                 
                 # Group recipes by cuisine for better ordering
                 cuisine_groups = {cuisine: [] for cuisine in normalized_cuisines}
@@ -962,7 +962,7 @@ class RecipeService:
                 balanced_recipes.extend(other_recipes)
                 
                 all_recipes = balanced_recipes
-                logger.info(f"Applied cuisine balancing: {len(all_recipes)} recipes with preference-based ordering")
+                logger.info(f"Applied cuisine balancing: {len(all_recipes)} recipes")
             else:
                 # No balancing needed, just use scored results
                 all_recipes = [recipe for recipe, score in scored_recipes]
@@ -971,29 +971,20 @@ class RecipeService:
         filtered_recipes = []
         total_recipes = len(all_recipes)
         
-        logger.info(f"\n=== Starting recipe filtering ===")
-        logger.info(f"Total recipes to process: {total_recipes}")
-        logger.info(f"Search query: '{query}'")
-        logger.info(f"Ingredient filter: '{ingredient}'")
-        logger.info(f"Cuisines: {cuisines}")
-        logger.info(f"Dietary restrictions: {dietary_restrictions}")
-        logger.info(f"Foods to avoid: {foods_to_avoid}")
+        # Only log filtering start once, not for every recipe
+        logger.info(f"Filtering {total_recipes} recipes...")
         
         # Track cuisine matching statistics
         cuisine_match_counts = {cuisine: 0 for cuisine in (cuisines or [])}
         total_cuisine_matches = 0
         
-        for idx, recipe in enumerate(all_recipes, 1):
+        for recipe in all_recipes:
             if not isinstance(recipe, dict) or 'id' not in recipe:
-                logger.warning(f"Skipping invalid recipe at index {idx}")
                 continue
                 
             recipe_name = recipe.get('title', 'Unknown Recipe')
-            recipe_id = recipe.get('id', 'unknown')
             
-            logger.debug(f"\n[{idx}/{total_recipes}] Processing: {recipe_name} (ID: {recipe_id})")
-            
-            # Get recipe's dietary restrictions for logging
+            # Get recipe's dietary restrictions for filtering
             recipe_restrictions = set()
             if 'diets' in recipe and isinstance(recipe['diets'], list):
                 recipe_restrictions.update(d.lower() for d in recipe['diets'] if isinstance(d, str) and d.strip())
@@ -1021,26 +1012,20 @@ class RecipeService:
                             break
                 
                 if not ingredient_found:
-                    logger.debug(f"  - Recipe does not contain ingredient: {ingredient}")
                     continue
-            
-            logger.debug(f"Recipe restrictions: {recipe_restrictions}")
             
             # Apply search query filter if provided
             if query and not self._matches_query(recipe, query):
-                logger.debug("Skipping - doesn't match search query")
                 continue
                 
             # Apply ingredient filter if provided
             if ingredient and not self._contains_ingredient(recipe, ingredient):
-                logger.debug("Skipping - doesn't contain required ingredient")
                 continue
                 
             # Skip if recipe contains any foods to avoid
             if foods_to_avoid:
                 contains_bad_food = self._contains_foods_to_avoid(recipe, foods_to_avoid)
                 if contains_bad_food:
-                    logger.info(f"❌ Excluding recipe due to containing foods to avoid: {recipe_name}")
                     continue
             
             # Check other criteria
@@ -1067,27 +1052,15 @@ class RecipeService:
             # Include recipe only if it matches all criteria
             if all([matches_query, has_ingredient, matches_cuisine, matches_diet]):
                 filtered_recipes.append(recipe)
-            else:
-                logger.debug(f"❌ Excluding recipe - Criteria not met: {recipe_name}")
-                if query:
-                    logger.debug(f"  - Matches query '{query}': {matches_query}")
-                if ingredient:
-                    logger.debug(f"  - Has ingredient '{ingredient}': {has_ingredient}")
-                if cuisines:
-                    logger.debug(f"  - Matches cuisine {cuisines}: {matches_cuisine}")
-                if dietary_restrictions:
-                    logger.debug(f"  - Matches diet {dietary_restrictions}: {matches_diet}")
         
-        logger.info(f"\n=== Filtering complete ===")
-        logger.info(f"Total recipes processed: {total_recipes}")
-        logger.info(f"Recipes after filtering: {len(filtered_recipes)}")
+        logger.info(f"Filtering complete: {len(filtered_recipes)} of {total_recipes} recipes match criteria")
         
-        # Log cuisine matching statistics
+        # Log cuisine matching statistics only if cuisines were specified
         if cuisines:
-            logger.info(f"Cuisine filtering statistics:")
-            logger.info(f"  Total recipes matching any cuisine: {total_cuisine_matches}")
+            logger.info(f"Cuisine matches: {total_cuisine_matches} total")
             for cuisine, count in cuisine_match_counts.items():
-                logger.info(f"  {cuisine}: {count} recipes")
+                if count > 0:  # Only log non-zero counts
+                    logger.info(f"  {cuisine}: {count} recipes")
         
         # Apply offset and limit
         start_idx = min(offset, len(filtered_recipes))
