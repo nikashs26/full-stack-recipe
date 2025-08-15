@@ -123,7 +123,7 @@ export interface Recipe extends BaseRecipe {
   // Additional tag fields from backend
   tags?: string[] | string;
   dish_types?: string[] | string;
-  type: 'manual' | 'spoonacular' | 'saved';
+  type: 'manual' | 'spoonacular' | 'saved' | 'external';
   ready_in_minutes?: number;
   cooking_instructions?: string;
   reviewCount?: number;

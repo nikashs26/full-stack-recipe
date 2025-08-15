@@ -20,7 +20,7 @@ type BaseRecipe = {
   title: string;
   description?: string;
   image?: string;
-  type: 'saved' | 'manual' | 'spoonacular';
+  type: 'saved' | 'manual' | 'spoonacular' | 'external';
   created_at?: string;
   updated_at?: string;
 };
@@ -59,7 +59,20 @@ type SpoonacularRecipe = BaseRecipe & {
   }>;
 };
 
-type Recipe = ManualRecipe | SpoonacularRecipe;
+type ExternalRecipe = BaseRecipe & {
+  type: 'external';
+  ready_in_minutes?: number;
+  servings?: number;
+  cuisines?: string[];
+  cuisine?: string[];
+  diets?: string[];
+  dietaryRestrictions?: string[];
+  vegetarian?: boolean;
+  vegan?: boolean;
+  ingredients?: Array<{ name: string; amount?: string | number; unit?: string }>;
+};
+
+type Recipe = ManualRecipe | SpoonacularRecipe | ExternalRecipe;
 
 type NormalizedRecipe = {
   id: string;
@@ -75,7 +88,7 @@ type NormalizedRecipe = {
   ingredients: Array<{ name: string; amount?: string; unit?: string }>;
   cuisines: string[];
   dietaryRestrictions: string[];
-  type: 'saved' | 'manual' | 'spoonacular';
+  type: 'saved' | 'manual' | 'spoonacular' | 'external';
 };
 
 const RecipesPage: React.FC = () => {
@@ -93,7 +106,7 @@ const RecipesPage: React.FC = () => {
   });
   const [gotoPage, setGotoPage] = useState<string>("");
   const [totalPages, setTotalPages] = useState(1);
-  const recipesPerPage = 20;
+  const [recipesPerPage, setRecipesPerPage] = useState(20); // Show 20 recipes per page
   
   // Remove debounced search - we'll only search on explicit action
   // const debouncedSearchQuery = useDebounce(searchQuery, 500);
@@ -109,13 +122,20 @@ const RecipesPage: React.FC = () => {
     isLoading: isLoadingRecipes, 
     isFetching 
   } = useQuery<{ recipes: Recipe[], total: number }>({
-    queryKey: ['recipes', searchQuery, ingredientSearch, selectedCuisines, selectedDiets, currentPage],
+    queryKey: ['recipes', searchQuery, ingredientSearch, selectedCuisines, selectedDiets],
+    enabled: true, // Always enable the query to fetch recipes on mount
     queryFn: async () => {
       try {
+        console.log('useQuery triggered with:');
+        console.log('- searchQuery:', searchQuery);
+        console.log('- ingredientSearch:', ingredientSearch);
+        console.log('- selectedCuisines:', selectedCuisines);
+        console.log('- selectedDiets:', selectedDiets);
+        
         // Always use pagination for consistent behavior
         const result = await fetchManualRecipes(searchQuery, ingredientSearch, {
           page: currentPage,
-          pageSize: recipesPerPage, // Always use 20 recipes per page
+          pageSize: recipesPerPage, // Use configurable page size
           cuisines: selectedCuisines,
           diets: selectedDiets
         });
@@ -162,9 +182,13 @@ const RecipesPage: React.FC = () => {
 
   // Handle search button click or Enter key press
   const handleSearchSubmit = () => {
+    console.log('Search submitted - before setting searchQuery');
+    console.log('searchTerm:', searchTerm);
+    console.log('ingredientSearch:', ingredientSearch);
     setSearchQuery(searchTerm);
     updateCurrentPage(1);
     console.log('Search submitted, triggering search');
+    console.log('searchQuery will be set to:', searchTerm);
   };
 
   // Handle Enter key press in search input
@@ -277,7 +301,13 @@ const RecipesPage: React.FC = () => {
                 amount: ing.amount?.toString(),
                 unit: ing.unit || ''
               }))
-            : [],
+            : recipe.type === 'external' && 'ingredients' in recipe && Array.isArray(recipe.ingredients)
+              ? recipe.ingredients.map(ing => ({
+                  name: ing.name,
+                  amount: ing.amount?.toString(),
+                  unit: ing.unit || ''
+                }))
+              : [],
         servings: recipe.type === 'spoonacular' ? (recipe as SpoonacularRecipe).servings : 4,
         sourceUrl: recipe.type === 'spoonacular' ? (recipe as SpoonacularRecipe).sourceUrl : '',
         summary: recipe.type === 'spoonacular' ? (recipe as SpoonacularRecipe).summary : '',
@@ -299,26 +329,35 @@ const RecipesPage: React.FC = () => {
     return normalizedRecipes;
   }, [normalizedRecipes]);
 
-  // Server handles pagination, so we just use the recipes as-is
+  // Apply frontend pagination to show only recipes for current page
   const displayRecipes = useMemo(() => {
     if (!Array.isArray(filteredRecipes)) {
       console.log('No recipes to display');
       return [];
     }
     
-    console.log('Displaying recipes:', {
-      count: filteredRecipes.length,
+    // Calculate start and end indices for current page
+    const startIndex = (currentPage - 1) * recipesPerPage;
+    const endIndex = startIndex + recipesPerPage;
+    const paginatedRecipes = filteredRecipes.slice(startIndex, endIndex);
+    
+    console.log('Displaying paginated recipes:', {
+      totalRecipes: filteredRecipes.length,
       currentPage,
       totalPages,
-      recipes: filteredRecipes.map(r => ({
+      pageSize: recipesPerPage,
+      startIndex,
+      endIndex,
+      paginatedCount: paginatedRecipes.length,
+      recipes: paginatedRecipes.map(r => ({
         title: r?.title || 'Untitled',
         image: r?.imageUrl,
         hasImage: !!r?.imageUrl
       }))
     });
     
-    return filteredRecipes;
-  }, [filteredRecipes, currentPage, totalPages]);
+    return paginatedRecipes;
+  }, [filteredRecipes, currentPage, totalPages, recipesPerPage]);
 
   // Update total pages based on server response
   useEffect(() => {
@@ -328,7 +367,7 @@ const RecipesPage: React.FC = () => {
         
         console.log('Updating total pages from server:', {
           totalItems: recipesData.total,
-          recipesPerPage,
+          pageSize: recipesPerPage,
           calculatedTotalPages,
           currentPage
         });
@@ -464,23 +503,28 @@ const RecipesPage: React.FC = () => {
       description: recipe.description || '',
       cookingTime: recipe.ready_in_minutes ? `${recipe.ready_in_minutes} minutes` : 'Not specified',
       servings: recipe.servings || 4,
-      source: recipe.type === 'spoonacular' ? 'spoonacular' : 'local',
+      source: recipe.type === 'spoonacular' ? 'spoonacular' : recipe.type === 'external' ? 'backend' : 'local',
       type: (recipe.type === 'saved' ? 'manual' : recipe.type) || 'manual',
       ratings: [],
       comments: [],
 
-      ...(recipe.type === 'spoonacular' && { source: 'spoonacular' })
+      ...(recipe.type === 'spoonacular' && { source: 'spoonacular' }),
+      ...(recipe.type === 'external' && { source: 'backend' })
     };
     
     return (
       <div key={`${recipe.type}-${recipe.id}-${index}`} className="h-full">
         <RecipeCard 
           recipe={recipeForCard}
-          isExternal={recipe.type === 'spoonacular'}
+          isExternal={recipe.type === 'spoonacular' || recipe.type === 'external'}
           onClick={() => {
             if (recipe.type === 'spoonacular') {
               navigate(`/external-recipe/${recipe.id}`, { 
                 state: { source: 'spoonacular' } 
+              });
+            } else if (recipe.type === 'external') {
+              navigate(`/external-recipe/${recipe.id}`, { 
+                state: { source: 'backend' } 
               });
             } else {
               navigate(`/recipe/${recipe.id}`);
@@ -677,54 +721,51 @@ const RecipesPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Pagination Controls */}
-          {totalPages > 1 && (
-            <div className="flex flex-col items-center border-t border-gray-200 bg-white px-4 py-3 sm:px-6">
-              {/* Results Info */}
-              <div className="mb-3 text-center">
-                <p className="text-sm text-gray-700">
-                  Showing{' '}
-                  <span className="font-medium">{((currentPage - 1) * recipesPerPage) + 1}</span>
-                  {' '}to{' '}
-                  <span className="font-medium">
-                    {Math.min(currentPage * recipesPerPage, recipesData.total)}
-                  </span>
-                  {' '}of{' '}
-                  <span className="font-medium">{recipesData.total}</span>
-                  {' '}results
-                </p>
-              </div>
-              
-              {/* Mobile Pagination */}
-              <div className="flex flex-1 justify-between sm:hidden">
-                <Button
-                  onClick={() => {
-                    console.log('Previous button clicked, current page:', currentPage);
-                    updateCurrentPage(Math.max(1, currentPage - 1));
-                  }}
-                  disabled={currentPage === 1 || isLoadingRecipes}
-                  variant="outline"
-                  size="sm"
-                >
-                  Previous
-                </Button>
-                <Button
-                  onClick={() => {
-                    console.log('Next button clicked, current page:', currentPage);
-                    updateCurrentPage(Math.min(totalPages, currentPage + 1));
-                  }}
-                  disabled={currentPage === totalPages || isLoadingRecipes}
-                  variant="outline"
-                  size="sm"
-                >
-                  Next
-                </Button>
-              </div>
-              
-              {/* Desktop Pagination - Centered */}
-              <div className="hidden sm:flex sm:items-center sm:justify-center">
-                <div className="flex items-center gap-2">
-                  {/* Previous Arrow */}
+                    {/* Page Size Selector and Pagination Controls */}
+          <div className="flex flex-col items-center border-t border-gray-200 bg-white px-4 py-3 sm:px-6">
+            {/* Page Size Selector */}
+            <div className="mb-3 flex items-center gap-2">
+              <label htmlFor="pageSize" className="text-sm text-gray-700">
+                Show:
+              </label>
+              <select
+                id="pageSize"
+                value={recipesPerPage}
+                onChange={(e) => {
+                  const newPageSize = parseInt(e.target.value);
+                  setRecipesPerPage(newPageSize);
+                  updateCurrentPage(1); // Reset to first page when changing page size
+                }}
+                className="text-sm border border-gray-300 rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+                <option value={200}>200</option>
+              </select>
+              <span className="text-sm text-gray-700">recipes per page</span>
+            </div>
+            
+            {/* Pagination Controls - Only show if there are multiple pages */}
+            {totalPages > 1 && (
+              <>
+                {/* Results Info */}
+                <div className="mb-3 text-center">
+                  <p className="text-sm text-gray-700">
+                    Showing{' '}
+                    <span className="font-medium">{((currentPage - 1) * recipesPerPage) + 1}</span>
+                    {' '}to{' '}
+                    <span className="font-medium">
+                      {Math.min(currentPage * recipesPerPage, recipesData.total)}
+                    </span>
+                    {' '}of{' '}
+                    <span className="font-medium">{recipesData.total}</span>
+                    {' '}results
+                  </p>
+                </div>
+                
+                {/* Mobile Pagination */}
+                <div className="flex flex-1 justify-between sm:hidden">
                   <Button
                     onClick={() => {
                       console.log('Previous button clicked, current page:', currentPage);
@@ -733,105 +774,9 @@ const RecipesPage: React.FC = () => {
                     disabled={currentPage === 1 || isLoadingRecipes}
                     variant="outline"
                     size="sm"
-                    className="px-3"
                   >
-                    <ChevronLeft className="h-4 w-4" />
+                    Previous
                   </Button>
-                  
-                  {/* Page Numbers */}
-                  <div className="flex items-center gap-1">
-                    {(() => {
-                      const items: (number | 'ellipsis')[] = [];
-                      const showAllThreshold = 9;
-                      if (totalPages <= showAllThreshold) {
-                        for (let p = 1; p <= totalPages; p++) items.push(p);
-                      } else {
-                        // Always show first two
-                        items.push(1);
-                        if (totalPages >= 2) items.push(2);
-                        // Ellipsis before middle window
-                        if (currentPage > 4) items.push('ellipsis');
-                        // Middle window around current page
-                        const start = Math.max(3, Math.min(currentPage - 1, totalPages - 4));
-                        const end = Math.min(totalPages - 2, Math.max(currentPage + 1, 5));
-                        for (let p = start; p <= end; p++) {
-                          if (!items.includes(p)) items.push(p);
-                        }
-                        // Ellipsis after middle window
-                        if (currentPage < totalPages - 3) items.push('ellipsis');
-                        // Always show last two
-                        if (!items.includes(totalPages - 1)) items.push(totalPages - 1);
-                        if (!items.includes(totalPages)) items.push(totalPages);
-                      }
-
-                      return (
-                        <>
-                          {items.map((it, idx) => {
-                            if (it === 'ellipsis') {
-                              return (
-                                <Button key={`e-${idx}`} variant="outline" size="sm" disabled className="min-w-[40px]">
-                                  ...
-                                </Button>
-                              );
-                            }
-                            const pageNum = it as number;
-                            return (
-                              <Button
-                                key={pageNum}
-                                variant={currentPage === pageNum ? "default" : "outline"}
-                                size="sm"
-                                onClick={() => {
-                                  if (currentPage !== pageNum) {
-                                    console.log(`Page ${pageNum} clicked, current page:`, currentPage);
-                                    updateCurrentPage(pageNum);
-                                  }
-                                }}
-                                disabled={isLoadingRecipes}
-                                className={`min-w-[40px] ${currentPage === pageNum ? 'font-bold' : ''}`}
-                                aria-label={`Go to page ${pageNum}`}
-                              >
-                                {pageNum}
-                              </Button>
-                            );
-                          })}
-                        </>
-                      );
-                    })()}
-                  </div>
-                  
-                  {/* Go To Page */}
-                  <div className="flex items-center gap-1 ml-2">
-                    <Input
-                      value={gotoPage}
-                      onChange={(e) => setGotoPage(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          const n = parseInt(gotoPage || '');
-                          if (!isNaN(n)) {
-                            const clamped = Math.max(1, Math.min(totalPages, n));
-                            updateCurrentPage(clamped);
-                          }
-                        }
-                      }}
-                      placeholder="Go to"
-                      className="h-8 w-16"
-                    />
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        const n = parseInt(gotoPage || '');
-                        if (!isNaN(n)) {
-                          const clamped = Math.max(1, Math.min(totalPages, n));
-                          updateCurrentPage(clamped);
-                        }
-                      }}
-                    >
-                      Go
-                    </Button>
-                  </div>
-                  
-                  {/* Next Arrow */}
                   <Button
                     onClick={() => {
                       console.log('Next button clicked, current page:', currentPage);
@@ -840,14 +785,139 @@ const RecipesPage: React.FC = () => {
                     disabled={currentPage === totalPages || isLoadingRecipes}
                     variant="outline"
                     size="sm"
-                    className="px-3"
                   >
-                    <ChevronRight className="h-4 w-4" />
+                    Next
                   </Button>
                 </div>
-              </div>
-            </div>
-          )}
+                
+                {/* Desktop Pagination - Centered */}
+                <div className="hidden sm:flex sm:items-center sm:justify-center">
+                  <div className="flex items-center gap-2">
+                    {/* Previous Arrow */}
+                    <Button
+                      onClick={() => {
+                        console.log('Previous button clicked, current page:', currentPage);
+                        updateCurrentPage(Math.max(1, currentPage - 1));
+                      }}
+                      disabled={currentPage === 1 || isLoadingRecipes}
+                      variant="outline"
+                      size="sm"
+                      className="px-3"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    
+                    {/* Page Numbers */}
+                    <div className="flex items-center gap-1">
+                      {(() => {
+                        const items: (number | 'ellipsis')[] = [];
+                        const showAllThreshold = 9;
+                        if (totalPages <= showAllThreshold) {
+                          for (let p = 1; p <= totalPages; p++) items.push(p);
+                        } else {
+                          // Always show first two
+                          items.push(1);
+                          if (totalPages >= 2) items.push(2);
+                          // Ellipsis before middle window
+                          if (currentPage > 4) items.push('ellipsis');
+                          // Middle window around current page
+                          const start = Math.max(3, Math.min(currentPage - 1, totalPages - 4));
+                          const end = Math.min(totalPages - 2, Math.max(currentPage + 1, 5));
+                          for (let p = start; p <= end; p++) {
+                            if (!items.includes(p)) items.push(p);
+                          }
+                          // Ellipsis after middle window
+                          if (currentPage < totalPages - 3) items.push('ellipsis');
+                          // Always show last two
+                          if (!items.includes(totalPages - 1)) items.push(totalPages - 1);
+                          if (!items.includes(totalPages)) items.push(totalPages);
+                        }
+
+                        return (
+                          <>
+                            {items.map((it, idx) => {
+                              if (it === 'ellipsis') {
+                                return (
+                                  <Button key={`e-${idx}`} variant="outline" size="sm" disabled className="min-w-[40px]">
+                                    ...
+                                  </Button>
+                                );
+                              }
+                              const pageNum = it as number;
+                              return (
+                                <Button
+                                  key={pageNum}
+                                  variant={currentPage === pageNum ? "default" : "outline"}
+                                  size="sm"
+                                  onClick={() => {
+                                    if (currentPage !== pageNum) {
+                                      console.log(`Page ${pageNum} clicked, current page:`, currentPage);
+                                      updateCurrentPage(pageNum);
+                                    }
+                                  }}
+                                  disabled={isLoadingRecipes}
+                                  className={`min-w-[40px] ${currentPage === pageNum ? 'font-bold' : ''}`}
+                                  aria-label={`Go to page ${pageNum}`}
+                                >
+                                  {pageNum}
+                                </Button>
+                              );
+                            })}
+                          </>
+                        );
+                      })()}
+                    </div>
+                    
+                    {/* Go To Page */}
+                    <div className="flex items-center gap-1 ml-2">
+                      <Input
+                        value={gotoPage}
+                        onChange={(e) => setGotoPage(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            const n = parseInt(gotoPage || '');
+                            if (!isNaN(n)) {
+                              const clamped = Math.max(1, Math.min(totalPages, n));
+                              updateCurrentPage(clamped);
+                            }
+                          }
+                        }}
+                        placeholder="Go to"
+                        className="px-2 py-1"
+                      />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const n = parseInt(gotoPage || '');
+                          if (!isNaN(n)) {
+                            const clamped = Math.max(1, Math.min(totalPages, n));
+                            updateCurrentPage(clamped);
+                          }
+                        }}
+                      >
+                        Go
+                      </Button>
+                    </div>
+                    
+                    {/* Next Arrow */}
+                    <Button
+                      onClick={() => {
+                        console.log('Next button clicked, current page:', currentPage);
+                        updateCurrentPage(Math.min(totalPages, currentPage + 1));
+                      }}
+                      disabled={currentPage === totalPages || isLoadingRecipes}
+                      variant="outline"
+                      size="sm"
+                      className="px-3"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </main>
     </div>

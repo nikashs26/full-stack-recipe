@@ -52,12 +52,22 @@ export const fetchManualRecipes = async (
     if (queryStr) params.append('query', queryStr);
     if (ingredientStr) params.append('ingredient', ingredientStr);
     
-    // Handle pagination - always use pagination for consistent behavior
+    // Handle pagination - if no search terms, get all recipes; otherwise use pagination
     const page = options.page || 1;
     const pageSize = options.pageSize || 20;
-    const offset = (page - 1) * pageSize;
-    params.append('offset', String(offset));
-    params.append('limit', String(pageSize));
+    
+    // Handle pagination based on whether we have search terms
+    if (queryStr || ingredientStr) {
+      // We have search terms - let backend handle search and return reasonable results
+      // Don't override backend's search logic with a huge limit
+      console.log('Search terms present - letting backend handle search');
+      // Don't append limit - let backend use default
+    } else {
+      // No search terms - get all recipes for frontend pagination
+      console.log('No search terms - fetching all recipes for frontend pagination');
+      params.append('offset', '0');
+      params.append('limit', '10000'); // Large enough to get all recipes
+    }
     
     // Handle cuisines filter
     if (options.cuisines?.length) {

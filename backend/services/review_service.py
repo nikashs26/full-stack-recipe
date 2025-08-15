@@ -127,7 +127,7 @@ class ReviewService:
             return reviews
             
         except Exception as e:
-            print(f"❌ Error getting reviews: {str(e)}")
+
             return []
     
     def get_reviews_by_user(self, user_id: str) -> List[Dict[str, Any]]:

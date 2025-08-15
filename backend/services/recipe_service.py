@@ -829,12 +829,12 @@ class RecipeService:
         foods_to_avoid = [fa.lower().strip() for fa in foods_to_avoid] if foods_to_avoid else []
         favorite_foods = [ff.lower().strip() for ff in favorite_foods] if favorite_foods else []
         
-        # Only log once per request, not for every recipe
+        # Log once per request (reduced logging)
         logger.info(f"Searching recipes: query='{query}', ingredient='{ingredient}', "
                    f"cuisines={len(cuisines)}, diets={len(dietary_restrictions)}, "
                    f"offset={offset}, limit={limit}")
         
-        # Get all recipes from cache
+        # Get recipes from cache with initial filtering to reduce dataset size
         all_recipes = self.recipe_cache.get_cached_recipes(query, ingredient)
         if not all_recipes:
             logger.warning("No recipes found in cache")
@@ -842,11 +842,17 @@ class RecipeService:
             
         logger.info(f"Processing {len(all_recipes)} recipes from cache")
         
-        # If favorite_foods is provided, filter recipes that contain any of the favorite foods
+        # OPTIMIZATION: Apply basic filters first to reduce dataset size
+        filtered_recipes = all_recipes
+        
+        # NEW STRATEGY: Prioritize favorite foods over cuisine restrictions
+        # If user has favorite foods, search for them first without cuisine restrictions
+        favorite_food_recipes = []
         if favorite_foods and len(favorite_foods) > 0 and favorite_foods[0]:
-            filtered_recipes = []
+            logger.info(f"Searching for favorite foods first: {favorite_foods}")
+            
+            # Search for favorite foods across ALL cuisines (not just preferred ones)
             for recipe in all_recipes:
-                # Check if any favorite food is in the recipe title or description
                 recipe_lower = {k: str(v).lower() for k, v in recipe.items() if isinstance(v, str)}
                 
                 # Check title and description
@@ -869,32 +875,157 @@ class RecipeService:
                                 break
                 
                 if title_match or desc_match or ingredient_match:
-                    filtered_recipes.append(recipe)
+                    favorite_food_recipes.append(recipe)
             
-            all_recipes = filtered_recipes
-            logger.info(f"Filtered to {len(all_recipes)} recipes matching favorite foods")
+            logger.info(f"Found {len(favorite_food_recipes)} recipes matching favorite foods")
+            
+            # Add favorite food recipes to the beginning of results
+            filtered_recipes = favorite_food_recipes + [r for r in all_recipes if r not in favorite_food_recipes]
         
-        # Apply preference-based scoring and balancing
-        if cuisines or favorite_foods:
-            # Normalize cuisine preferences to lowercase for consistent comparison
-            normalized_cuisines = [c.lower().strip() for c in cuisines] if cuisines else []
+        # Filter by cuisine (but don't remove favorite food recipes that don't match)
+        if cuisines:
+            cuisine_filtered = []
             
-            # Score recipes based on preferences
-            scored_recipes = []
+            for recipe in filtered_recipes:
+                # Always include favorite food recipes regardless of cuisine
+                is_favorite_food = recipe in favorite_food_recipes
+                
+                # Use the proper cuisine matching method that handles hierarchies
+                cuisine_match = self._matches_cuisine(recipe, cuisines)
+                
+                # Include if it's a favorite food OR matches preferred cuisine
+                if is_favorite_food or cuisine_match:
+                    cuisine_filtered.append(recipe)
+            
+            filtered_recipes = cuisine_filtered
+            logger.info(f"After cuisine filtering (preserving favorite foods): {len(filtered_recipes)} recipes")
+        
+        # CRITICAL FIX: Ensure ALL favorite foods are included, even if they don't match preferred cuisines
+        if favorite_foods and len(favorite_foods) > 0 and favorite_foods[0]:
+            # Get all recipes that match favorite foods (from any cuisine)
+            all_favorite_food_recipes = []
             for recipe in all_recipes:
+                recipe_lower = {k: str(v).lower() for k, v in recipe.items() if isinstance(v, str)}
+                
+                # Check title and description
+                title_match = any(food in recipe_lower.get('title', '') for food in favorite_foods)
+                desc_match = any(food in recipe_lower.get('description', '') for food in favorite_foods)
+                
+                # Check ingredients
+                ingredient_match = False
+                if 'ingredients' in recipe and isinstance(recipe['ingredients'], list):
+                    for ing in recipe['ingredients']:
+                        if isinstance(ing, dict) and 'name' in ing:
+                            ing_name = str(ing['name']).lower()
+                            if any(food in ing_name for food in favorite_foods):
+                                ingredient_match = True
+                                break
+                        elif isinstance(ing, str):
+                            ing_lower = ing.lower()
+                            if any(food in ing_lower for food in favorite_foods):
+                                ingredient_match = True
+                                break
+                
+                if title_match or desc_match or ingredient_match:
+                    all_favorite_food_recipes.append(recipe)
+            
+            # Combine: favorite foods first, then cuisine-filtered results (without duplicates)
+            final_recipes = []
+            seen_ids = set()
+            
+            # Add all favorite food recipes first
+            for recipe in all_favorite_food_recipes:
+                recipe_id = recipe.get('id') or recipe.get('_id') or str(hash(str(recipe)))
+                if recipe_id not in seen_ids:
+                    final_recipes.append(recipe)
+                    seen_ids.add(recipe_id)
+            
+            # Add cuisine-filtered recipes (avoiding duplicates)
+            for recipe in filtered_recipes:
+                recipe_id = recipe.get('id') or recipe.get('_id') or str(hash(str(recipe)))
+                if recipe_id not in seen_ids:
+                    final_recipes.append(recipe)
+                    seen_ids.add(recipe_id)
+            
+            filtered_recipes = final_recipes
+            logger.info(f"Final results: {len(filtered_recipes)} recipes (favorite foods + cuisine matches)")
+        
+        # Filter by dietary restrictions
+        if dietary_restrictions:
+            diet_filtered = []
+            for recipe in filtered_recipes:
+                recipe_restrictions = set()
+                if 'diets' in recipe and isinstance(recipe['diets'], list):
+                    recipe_restrictions.update(d.lower().strip() for d in recipe['diets'] if isinstance(d, str))
+                if 'dietary_restrictions' in recipe and isinstance(recipe['dietary_restrictions'], list):
+                    recipe_restrictions.update(d.lower().strip() for d in recipe['dietary_restrictions'] if isinstance(d, str))
+                if recipe.get('vegetarian', False):
+                    recipe_restrictions.add('vegetarian')
+                if recipe.get('vegan', False):
+                    recipe_restrictions.add('vegan')
+                
+                # Check if recipe matches any dietary restriction
+                if any(diet.lower().strip() in recipe_restrictions for diet in dietary_restrictions):
+                    diet_filtered.append(recipe)
+            
+            filtered_recipes = diet_filtered
+            logger.info(f"After dietary filtering: {len(filtered_recipes)} recipes")
+        
+        # Remove the old favorite food filtering since we're doing it first now
+        # Filter by favorite foods (only if we have a reasonable dataset size)
+        # if favorite_foods and len(favorite_foods) > 0 and favorite_foods[0] and len(filtered_recipes) > 100:
+        
+        # Apply preference-based scoring and balancing (only if we have multiple cuisines)
+        if cuisines and len(cuisines) > 1 and len(filtered_recipes) > 0:
+            # Only apply complex balancing if we have multiple cuisines and reasonable dataset
+            logger.info(f"Applying cuisine balancing for {len(cuisines)} cuisines")
+            
+            # Score recipes based on search relevance and preferences
+            scored_recipes = []
+            for recipe in filtered_recipes:
                 score = 0
                 
+                # HIGHEST PRIORITY: Score based on search query relevance
+                if query:
+                    query_lower = query.lower()
+                    recipe_title = (recipe.get('title', '') or '').lower()
+                    recipe_description = (recipe.get('description', '') or '').lower()
+                    recipe_summary = (recipe.get('summary', '') or '').lower()
+                    
+                    # Check title matches (highest score)
+                    if query_lower in recipe_title:
+                        score += 100  # Very high score for title match
+                        logger.debug(f"✓ Title match for '{query}' in '{recipe_title}'")
+                    
+                    # Check description/summary matches
+                    if query_lower in recipe_description or query_lower in recipe_summary:
+                        score += 50  # High score for description match
+                        logger.debug(f"✓ Description match for '{query}' in recipe")
+                    
+                    # Check ingredient matches
+                    if 'ingredients' in recipe and isinstance(recipe['ingredients'], list):
+                        for ingredient in recipe['ingredients']:
+                            if isinstance(ingredient, dict) and 'name' in ingredient:
+                                if query_lower in ingredient['name'].lower():
+                                    score += 30  # Good score for ingredient match
+                                    logger.debug(f"✓ Ingredient match for '{query}' in '{ingredient['name']}'")
+                                    break
+                            elif isinstance(ingredient, str) and query_lower in ingredient.lower():
+                                score += 30  # Good score for ingredient match
+                                logger.debug(f"✓ Ingredient match for '{query}' in '{ingredient}'")
+                                break
+                
                 # Score based on cuisine preferences
-                if normalized_cuisines:
+                if cuisines:
                     recipe_cuisines = []
                     if 'cuisines' in recipe and isinstance(recipe['cuisines'], list):
                         recipe_cuisines.extend([c.lower().strip() for c in recipe['cuisines'] if isinstance(c, str)])
                     if 'cuisine' in recipe and isinstance(recipe['cuisine'], list):
                         recipe_cuisines.extend([c.lower().strip() for c in recipe['cuisine'] if isinstance(c, str)])
                     
-                    for pref_cuisine in normalized_cuisines:
-                        if pref_cuisine in recipe_cuisines:
-                            score += 10  # High score for cuisine match
+                    for pref_cuisine in cuisines:
+                        if pref_cuisine.lower() in recipe_cuisines:
+                            score += 10  # Medium score for cuisine match
                             break
                 
                 # Score based on favorite foods
@@ -902,172 +1033,111 @@ class RecipeService:
                     recipe_text = f"{recipe.get('title', '')} {recipe.get('description', '')}".lower()
                     for food in favorite_foods:
                         if food.lower() in recipe_text:
-                            score += 5  # Medium score for food match
+                            score += 5  # Low score for favorite food match
                             break
                 
                 scored_recipes.append((recipe, score))
             
-            # Sort by score (highest first) - this ensures preference-based ordering
+            # Sort by score (highest first)
             scored_recipes.sort(key=lambda x: x[1], reverse=True)
             
-            # Apply cuisine balancing for display order (NOT quantity limits)
-            if normalized_cuisines and len(normalized_cuisines) > 1:
-                logger.info(f"Applying cuisine balancing for {len(normalized_cuisines)} cuisines")
+            # Apply STRICT cuisine quantity limits to prevent domination
+            # Calculate how many recipes each cuisine should get
+            recipes_per_cuisine = max(1, limit // len(cuisines))
+            extra_slots = limit % len(cuisines)
+            
+            logger.info(f"Applying STRICT cuisine limits: {recipes_per_cuisine} per cuisine + {extra_slots} extra")
+            
+            # Group recipes by cuisine for balanced distribution
+            cuisine_groups = {cuisine: [] for cuisine in cuisines}
+            other_recipes = []
+            
+            for recipe, score in scored_recipes:
+                recipe_cuisines = []
+                if 'cuisines' in recipe and isinstance(recipe['cuisines'], list):
+                    recipe_cuisines.extend([c.lower().strip() for c in recipe['cuisines'] if isinstance(c, str)])
+                if 'cuisine' in recipe and isinstance(recipe['cuisine'], list):
+                    recipe_cuisines.extend([c.lower().strip() for c in recipe['cuisine'] if isinstance(c, str)])
                 
-                # Group recipes by cuisine for better ordering
-                cuisine_groups = {cuisine: [] for cuisine in normalized_cuisines}
-                other_recipes = []
+                # Find which preference cuisine this recipe matches
+                matched_cuisine = None
+                for pref_cuisine in cuisines:
+                    if pref_cuisine.lower() in recipe_cuisines:
+                        matched_cuisine = pref_cuisine
+                        break
                 
-                for recipe, score in scored_recipes:
-                    recipe_cuisines = []
-                    if 'cuisines' in recipe and isinstance(recipe['cuisines'], list):
-                        recipe_cuisines.extend([c.lower().strip() for c in recipe['cuisines'] if isinstance(c, str)])
-                    if 'cuisine' in recipe and isinstance(recipe['cuisine'], list):
-                        recipe_cuisines.extend([c.lower().strip() for c in recipe['cuisine'] if isinstance(c, str)])
+                if matched_cuisine:
+                    cuisine_groups[matched_cuisine].append((recipe, score))
+                else:
+                    other_recipes.append((recipe, score))
+            
+            # Sort each cuisine group by score
+            for cuisine in cuisines:
+                cuisine_groups[cuisine].sort(key=lambda x: x[1], reverse=True)
+            
+            # Create balanced ordering with quantity limits
+            balanced_recipes = []
+            
+            # First pass: add exactly recipes_per_cuisine from each cuisine
+            for i, cuisine in enumerate(cuisines):
+                target_count = recipes_per_cuisine + (1 if i < extra_slots else 0)
+                cuisine_recipes = cuisine_groups[cuisine][:target_count]  # Limit quantity
+                
+                for recipe, score in cuisine_recipes:
+                    balanced_recipes.append(recipe)
+                
+                logger.info(f"Added {len(cuisine_recipes)} recipes from {cuisine} cuisine (target: {target_count})")
+            
+            # If we still have room, add remaining recipes from each cuisine in round-robin order
+            remaining_slots = limit - len(balanced_recipes)
+            if remaining_slots > 0:
+                logger.info(f"Adding {remaining_slots} additional recipes to fill remaining slots")
+                
+                # Round-robin selection for remaining slots
+                round_num = recipes_per_cuisine + (1 if extra_slots > 0 else 0)
+                added_in_round = 0
+                
+                while remaining_slots > 0 and added_in_round < len(cuisines):
+                    added_in_round = 0
                     
-                    # Find which preference cuisine this recipe matches
-                    matched_cuisine = None
-                    for pref_cuisine in normalized_cuisines:
-                        if pref_cuisine in recipe_cuisines:
-                            matched_cuisine = pref_cuisine
+                    for cuisine in cuisines:
+                        if remaining_slots <= 0:
                             break
-                    
-                    if matched_cuisine:
-                        cuisine_groups[matched_cuisine].append((recipe, score))
-                    else:
-                        other_recipes.append((recipe, score))
-                
-                # Sort each cuisine group by score
-                for cuisine in normalized_cuisines:
-                    cuisine_groups[cuisine].sort(key=lambda x: x[1], reverse=True)
-                
-                # Create balanced ordering (round-robin) but keep ALL recipes
-                balanced_recipes = []
-                max_recipes_per_cuisine = max(len(group) for group in cuisine_groups.values()) if cuisine_groups else 0
-                
-                # Round-robin selection to ensure even distribution in ordering
-                for round_num in range(max_recipes_per_cuisine):
-                    for cuisine in normalized_cuisines:
+                            
                         if round_num < len(cuisine_groups[cuisine]):
                             recipe, score = cuisine_groups[cuisine][round_num]
-                            balanced_recipes.append(recipe)
-                
-                # Add remaining recipes from each cuisine group
-                for cuisine in normalized_cuisines:
-                    for recipe, score in cuisine_groups[cuisine]:
-                        if recipe not in balanced_recipes:
-                            balanced_recipes.append(recipe)
-                
-                # Add other recipes at the end
-                balanced_recipes.extend(other_recipes)
-                
-                all_recipes = balanced_recipes
-                logger.info(f"Applied cuisine balancing: {len(all_recipes)} recipes")
-            else:
-                # No balancing needed, just use scored results
-                all_recipes = [recipe for recipe, score in scored_recipes]
-        
-        # Filter recipes based on query, ingredient, cuisine, and dietary restrictions
-        filtered_recipes = []
-        total_recipes = len(all_recipes)
-        
-        # Only log filtering start once, not for every recipe
-        logger.info(f"Filtering {total_recipes} recipes...")
-        
-        # Track cuisine matching statistics
-        cuisine_match_counts = {cuisine: 0 for cuisine in (cuisines or [])}
-        total_cuisine_matches = 0
-        
-        for recipe in all_recipes:
-            if not isinstance(recipe, dict) or 'id' not in recipe:
-                continue
-                
-            recipe_name = recipe.get('title', 'Unknown Recipe')
-            
-            # Get recipe's dietary restrictions for filtering
-            recipe_restrictions = set()
-            if 'diets' in recipe and isinstance(recipe['diets'], list):
-                recipe_restrictions.update(d.lower() for d in recipe['diets'] if isinstance(d, str) and d.strip())
-            if 'dietary_restrictions' in recipe and isinstance(recipe['dietary_restrictions'], list):
-                recipe_restrictions.update(d.lower() for d in recipe['dietary_restrictions'] 
-                                         if isinstance(d, str) and d.strip())
-            if recipe.get('vegetarian', False):
-                recipe_restrictions.add('vegetarian')
-            if recipe.get('vegan', False):
-                recipe_restrictions.add('vegan')
-                
-            # Check if recipe contains the required ingredient
-            if ingredient:
-                ingredient_found = False
-                recipe_ingredients = recipe.get('ingredients', [])
-                if isinstance(recipe_ingredients, list):
-                    for ing in recipe_ingredients:
-                        if isinstance(ing, dict) and 'name' in ing:
-                            ing_name = str(ing['name']).lower()
-                            if ingredient.lower() in ing_name:
-                                ingredient_found = True
-                                break
-                        elif isinstance(ing, str) and ingredient.lower() in ing.lower():
-                            ingredient_found = True
-                            break
-                
-                if not ingredient_found:
-                    continue
-            
-            # Apply search query filter if provided
-            if query and not self._matches_query(recipe, query):
-                continue
-                
-            # Apply ingredient filter if provided
-            if ingredient and not self._contains_ingredient(recipe, ingredient):
-                continue
-                
-            # Skip if recipe contains any foods to avoid
-            if foods_to_avoid:
-                contains_bad_food = self._contains_foods_to_avoid(recipe, foods_to_avoid)
-                if contains_bad_food:
-                    continue
-            
-            # Check other criteria
-            matches_query = self._matches_query(recipe, query) if query else True
-            has_ingredient = self._contains_ingredient(recipe, ingredient) if ingredient else True
-            matches_cuisine = self._matches_cuisine(recipe, cuisines) if cuisines else True
-            matches_diet = self._matches_dietary_restrictions(recipe, dietary_restrictions) if dietary_restrictions else True
-            
-            # Track cuisine matches for statistics
-            if cuisines and matches_cuisine:
-                total_cuisine_matches += 1
-                # Find which specific cuisine matched
-                recipe_cuisines = set()
-                if 'cuisines' in recipe and isinstance(recipe['cuisines'], list):
-                    recipe_cuisines.update(c.lower() for c in recipe['cuisines'] if c and isinstance(c, str))
-                if 'cuisine' in recipe and isinstance(recipe['cuisine'], list):
-                    recipe_cuisines.update(c.lower() for c in recipe['cuisine'] if c and isinstance(c, str))
-                
-                for cuisine in cuisines:
-                    if cuisine.lower() in recipe_cuisines:
-                        cuisine_match_counts[cuisine] += 1
+                            if recipe not in balanced_recipes:
+                                balanced_recipes.append(recipe)
+                                remaining_slots -= 1
+                                added_in_round += 1
+                                logger.debug(f"Added additional {cuisine} recipe: {recipe.get('title', 'Unknown')}")
+                    
+                    round_num += 1
+                    
+                    # Prevent infinite loop
+                    if added_in_round == 0:
                         break
             
-            # Include recipe only if it matches all criteria
-            if all([matches_query, has_ingredient, matches_cuisine, matches_diet]):
-                filtered_recipes.append(recipe)
+            # Add other recipes at the end if we still have room
+            remaining_slots = limit - len(balanced_recipes)
+            if remaining_slots > 0 and other_recipes:
+                other_recipes_to_add = other_recipes[:remaining_slots]
+                balanced_recipes.extend([recipe for recipe, score in other_recipes_to_add])
+                logger.info(f"Added {len(other_recipes_to_add)} other recipes to fill remaining slots")
+            
+            filtered_recipes = balanced_recipes[:limit]  # Ensure we don't exceed the limit
+            logger.info(f"Applied STRICT cuisine balancing: {len(filtered_recipes)} recipes with quantity limits")
+        else:
+            # No balancing needed - keep recipes in relevance order
+            # Apply limit without randomization to preserve search relevance
+            if limit:
+                filtered_recipes = filtered_recipes[:limit]
         
-        logger.info(f"Filtering complete: {len(filtered_recipes)} of {total_recipes} recipes match criteria")
+        # Apply pagination
+        paginated_recipes = filtered_recipes[offset:offset + limit]
         
-        # Log cuisine matching statistics only if cuisines were specified
-        if cuisines:
-            logger.info(f"Cuisine matches: {total_cuisine_matches} total")
-            for cuisine, count in cuisine_match_counts.items():
-                if count > 0:  # Only log non-zero counts
-                    logger.info(f"  {cuisine}: {count} recipes")
+        logger.info(f"Final result: {len(paginated_recipes)} recipes (offset: {offset}, limit: {limit})")
         
-        # Apply offset and limit
-        start_idx = min(offset, len(filtered_recipes))
-        end_idx = min(offset + limit, len(filtered_recipes))
-        paginated_recipes = filtered_recipes[start_idx:end_idx]
-        
-        logger.info(f"Returning {len(paginated_recipes)} of {len(filtered_recipes)} matching recipes")
         return {
             "results": paginated_recipes,
             "total": len(filtered_recipes)

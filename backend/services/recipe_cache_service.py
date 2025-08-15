@@ -236,10 +236,87 @@ class RecipeCacheService:
             return []
         
         try:
-            # Always get all recipes from cache since search collection only contains metadata
-            # The filtering will be done in the recipe service
-            logger.debug("Getting all recipes from cache for filtering in recipe service")
-            return self._get_all_recipes_from_cache()
+            # If no search terms, return all recipes
+            if not query.strip() and not ingredient.strip():
+                logger.debug("No search terms - returning all recipes from cache")
+                return self._get_all_recipes_from_cache()
+            
+            # We have search terms - implement proper text-based search
+            search_text = f"{query} {ingredient}".strip()
+            logger.info(f"Searching for: '{search_text}' in cached recipes")
+            
+            # Get all recipes and filter them by search terms
+            all_recipes = self._get_all_recipes_from_cache()
+            matching_recipes = []
+            
+            # Split search terms for better matching
+            search_terms = search_text.lower().split()
+            
+            for recipe in all_recipes:
+                # Build searchable text from recipe
+                recipe_text = ""
+                
+                # Add title
+                if 'title' in recipe and recipe['title']:
+                    recipe_text += f" {recipe['title']}"
+                
+                # Add description/summary
+                if 'description' in recipe and recipe['description']:
+                    recipe_text += f" {recipe['description']}"
+                if 'summary' in recipe and recipe['summary']:
+                    recipe_text += f" {recipe['summary']}"
+                
+                # Add ingredients
+                if 'ingredients' in recipe and isinstance(recipe['ingredients'], list):
+                    for ing in recipe['ingredients']:
+                        if isinstance(ing, dict) and 'name' in ing:
+                            recipe_text += f" {ing['name']}"
+                        elif isinstance(ing, str):
+                            recipe_text += f" {ing}"
+                
+                recipe_text = recipe_text.lower()
+                
+                # Check if ANY search term matches (partial matching)
+                if any(term in recipe_text for term in search_terms):
+                    # Calculate a simple relevance score
+                    score = 0
+                    
+                    # Title matches get highest score
+                    if 'title' in recipe and recipe['title']:
+                        title_lower = recipe['title'].lower()
+                        for term in search_terms:
+                            if term in title_lower:
+                                score += 100
+                    
+                    # Description matches get medium score
+                    if 'description' in recipe and recipe['description']:
+                        desc_lower = recipe['description'].lower()
+                        for term in search_terms:
+                            if term in desc_lower:
+                                score += 50
+                    
+                    # Ingredient matches get good score
+                    if 'ingredients' in recipe and isinstance(recipe['ingredients'], list):
+                        for ing in recipe['ingredients']:
+                            ing_name = ""
+                            if isinstance(ing, dict) and 'name' in ing:
+                                ing_name = ing['name'].lower()
+                            elif isinstance(ing, str):
+                                ing_name = ing.lower()
+                            
+                            for term in search_terms:
+                                if term in ing_name:
+                                    score += 30
+                                    break
+                    
+                    recipe['search_score'] = score
+                    matching_recipes.append(recipe)
+            
+            # Sort by relevance score (highest first)
+            matching_recipes.sort(key=lambda x: x.get('search_score', 0), reverse=True)
+            
+            logger.info(f"Text search found {len(matching_recipes)} recipes matching '{search_text}' out of {len(all_recipes)} total")
+            return matching_recipes
             
             # Original search logic (commented out since search collection doesn't have full recipes):
             # # Sanitize inputs

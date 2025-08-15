@@ -197,14 +197,33 @@ class RecipeSearchService:
                 cuisine = ""
                 if recipe_data.get("cuisines") and isinstance(recipe_data["cuisines"], list) and len(recipe_data["cuisines"]) > 0:
                     cuisine = recipe_data["cuisines"][0]  # Take first cuisine from array
+                    logger.debug(f"Found cuisine from cuisines array: {cuisine}")
                 elif recipe_data.get("cuisine"):
                     cuisine = recipe_data["cuisine"]
+                    logger.debug(f"Found cuisine from cuisine field: {cuisine}")
                 elif metadata.get("cuisine"):
                     cuisine = metadata["cuisine"]
+                    logger.debug(f"Found cuisine from metadata: {cuisine}")
+                
+                # Debug: Log what cuisine data we found
+                logger.debug(f"Recipe {i} cuisine extraction - cuisines: {recipe_data.get('cuisines')}, cuisine: {recipe_data.get('cuisine')}, metadata cuisine: {metadata.get('cuisine')}, final: {cuisine}")
+                
+                # Debug: Log the full recipe data structure to see what fields are available
+                logger.debug(f"Recipe {i} full data structure: {json.dumps(recipe_data, indent=2)}")
                 
                 # Normalize the cuisine if we have one
                 if cuisine:
                     cuisine = self._normalize_cuisine(cuisine, recipe_data)
+                    logger.debug(f"After normalization: {cuisine}")
+                else:
+                    logger.warning(f"No cuisine found for recipe: {name}")
+                    # Try to detect cuisine from ingredients as a fallback
+                    detected_cuisine = self._detect_cuisine_from_ingredients(recipe_data)
+                    if detected_cuisine:
+                        cuisine = detected_cuisine
+                        logger.info(f"Detected cuisine '{detected_cuisine}' from ingredients for recipe: {name}")
+                    else:
+                        logger.warning(f"Could not detect cuisine for recipe: {name}")
                 
                 # Get other fields from recipe data
                 difficulty = recipe_data.get("difficulty", metadata.get("difficulty", ""))
@@ -428,10 +447,11 @@ class RecipeSearchService:
 
     def get_recipe_recommendations(self, user_preferences: Dict[str, Any], limit: int = 8) -> List[Dict[str, Any]]:
         """
-        Get personalized recipe recommendations with improved prioritization:
-        1. Balanced distribution across chosen cuisines (highest priority)
-        2. Favorite foods distributed evenly across cuisines
-        3. Fill remaining slots with variety from chosen cuisines
+        Get personalized recipe recommendations with PROPER favorite food balancing:
+        1. Add just 2-3 favorite foods from preferred cuisines (if available)
+        2. Add just 1-2 favorite foods from other cuisines (if available) 
+        3. Fill the rest with balanced cuisine recommendations
+        4. Ensure no cuisine dominates and maintain diversity
         """
         # Normalize cuisines while preserving user-provided order and uniqueness
         raw_cuisines = user_preferences.get("favoriteCuisines", []) or []
@@ -494,181 +514,46 @@ class RecipeSearchService:
             logger.info("No cuisines selected and no favorite food matches found")
             return []
         
-        # NEW APPROACH: Start with balanced cuisine distribution, then enhance with favorite foods
+        # NEW BALANCED APPROACH: Proper favorite food + cuisine balancing
         import time
         current_timestamp = int(time.time())
-        random_base = random.randint(1000, 9999)  # Add random base for more variety
-        logger.info(f"Starting recommendations generation at timestamp: {current_timestamp}, random base: {random_base}")
+        random_base = random.randint(1000, 9999)
+        logger.info(f"Starting BALANCED recommendations generation at timestamp: {current_timestamp}, random base: {random_base}")
         
-        # PHASE 1: Ensure balanced representation across all chosen cuisines
-        # This is now the highest priority to ensure diversity
-        cuisine_balanced_recipes: List[Dict[str, Any]] = []
+        final_recommendations: List[Dict[str, Any]] = []
         used_ids = set()
         
         if favorite_cuisines:
-            logger.info(f"Phase 1: Ensuring balanced representation across {len(favorite_cuisines)} cuisines")
-            
-            # Calculate base recipes per cuisine for guaranteed fair distribution
-            base_recipes_per_cuisine = max(1, limit // len(favorite_cuisines))
-            extra_slots = limit % len(favorite_cuisines)
-            
-            logger.info(f"Base distribution: {base_recipes_per_cuisine} per cuisine + {extra_slots} extra")
-            
-            # For each cuisine, get base recipes to ensure representation
-            recipes_by_cuisine: Dict[str, List[Dict[str, Any]]] = {}
-            
-            for i, cuisine in enumerate(favorite_cuisines):
-                current_limit = base_recipes_per_cuisine + (1 if i < extra_slots else 0)
-                valid_cuisine_recipes: List[Dict[str, Any]] = []
-                seen_ids_for_cuisine: set = set()
+            # Step 1: Find and intelligently distribute favorite foods based on cuisine overlap
+            if favorite_foods:
+                logger.info(f"Phase 1: Intelligently distributing favorite foods based on cuisine overlap")
                 
-                # Search for general cuisine recipes
-                random_seed = (int(time.time() * 1000) + random_base + random.randint(0, 999)) % 10000
-                cuisine_query = f"delicious {cuisine} recipes {random_seed}"
-                cuisine_results = self.semantic_search(query=cuisine_query, filters=filters, limit=current_limit * 3)
+                # First, find all favorite foods and categorize them by cuisine
+                favorite_foods_in_preferred_cuisines = []
+                favorite_foods_in_other_cuisines = []
                 
-                # Filter by target cuisine and avoid duplicates
-                for recipe in cuisine_results:
-                    if len(valid_cuisine_recipes) >= current_limit:
-                        break
-                        
-                    recipe_cuisine = self._normalize_cuisine(recipe.get('cuisine', ''), recipe) or self._detect_cuisine_from_ingredients(recipe)
-                    if not recipe_cuisine:
-                        continue
-                    
-                    recipe['cuisine'] = recipe_cuisine
-                    
-                    target_cuisine_normalized = self._normalize_cuisine(cuisine)
-                    if recipe_cuisine.lower() != target_cuisine_normalized.lower():
-                        continue
-                    
-                    # Check if we already have this recipe
-                    k = self._get_recipe_key(recipe)
-                    if k in used_ids or k in seen_ids_for_cuisine:
-                        continue
-                    
-                    # Check if recipe should be excluded
-                    if self._should_exclude_recipe(recipe, user_preferences):
-                        logger.debug(f"Skipping excluded recipe: {recipe.get('name', 'Unknown')}")
-                        continue
-                    
-                    # Only include complete recipes (with proper images, tags, etc.)
-                    if not self._is_recipe_complete(recipe):
-                        logger.debug(f"Skipping incomplete recipe: {recipe.get('name', 'Unknown')} - missing essential data")
-                        continue
-                        
-                    valid_cuisine_recipes.append(recipe)
-                    seen_ids_for_cuisine.add(k)
-                
-                recipes_by_cuisine[cuisine] = valid_cuisine_recipes[:current_limit]
-                logger.info(f"Found {len(recipes_by_cuisine[cuisine])} base recipes for {cuisine} cuisine")
-            
-            # Guarantee fair distribution by taking recipes from each cuisine in rotation
-            # This ensures all cuisines are represented even if some have fewer recipes
-            for i in range(base_recipes_per_cuisine):
-                for cuisine in favorite_cuisines:
-                    if len(cuisine_balanced_recipes) >= limit:
-                        break
-                    if i < len(recipes_by_cuisine.get(cuisine, [])):
-                        recipe = recipes_by_cuisine[cuisine][i]
-                        k = self._get_recipe_key(recipe)
-                        if k not in used_ids:
-                            cuisine_balanced_recipes.append(recipe)
-                            used_ids.add(k)
-                            logger.debug(f"Added base {cuisine} recipe: {recipe.get('name', 'Unknown')}")
-                
-                if len(cuisine_balanced_recipes) >= limit:
-                    break
-            
-            # Add extra recipes from cuisines that can provide them
-            if extra_slots > 0:
-                for i, cuisine in enumerate(favorite_cuisines):
-                    if i >= extra_slots or len(cuisine_balanced_recipes) >= limit:
-                        break
-                    if base_recipes_per_cuisine < len(recipes_by_cuisine.get(cuisine, [])):
-                        recipe = recipes_by_cuisine[cuisine][base_recipes_per_cuisine]
-                        k = self._get_recipe_key(recipe)
-                        if k not in used_ids:
-                            cuisine_balanced_recipes.append(recipe)
-                            used_ids.add(k)
-                            logger.debug(f"Added extra {cuisine} recipe: {recipe.get('name', 'Unknown')}")
-            
-            # Ensure we have at least 1 recipe from each cuisine if possible
-            for cuisine in favorite_cuisines:
-                cuisine_recipes_in_balanced = [r for r in cuisine_balanced_recipes if r.get('cuisine', '').lower() == cuisine.lower()]
-                if len(cuisine_recipes_in_balanced) == 0:
-                    # Try to get at least 1 recipe from this cuisine
-                    for recipe in recipes_by_cuisine.get(cuisine, []):
-                        k = self._get_recipe_key(recipe)
-                        if k not in used_ids and len(cuisine_balanced_recipes) < limit:
-                            cuisine_balanced_recipes.append(recipe)
-                            used_ids.add(k)
-                            logger.debug(f"Added minimum {cuisine} recipe to ensure representation: {recipe.get('name', 'Unknown')}")
-                            break
-        
-        logger.info(f"Phase 1 complete: Added {len(cuisine_balanced_recipes)} cuisine-balanced recipes")
-        
-        # PHASE 2: Enhance with favorite foods while maintaining cuisine balance
-        # Now we can add favorite foods, but limit them per cuisine to maintain diversity
-        favorite_foods_recipes: List[Dict[str, Any]] = []
-        
-        if favorite_foods and favorite_cuisines:
-            logger.info(f"Phase 2: Enhancing with favorite foods while maintaining cuisine balance")
-            
-            # Calculate how many favorite food recipes we can add per cuisine
-            # We want to maintain the balance we achieved in Phase 1
-            max_favorite_foods_per_cuisine = max(1, (limit - len(cuisine_balanced_recipes)) // len(favorite_cuisines))
-            total_favorite_foods_allowed = min(len(favorite_foods) * 2, limit - len(cuisine_balanced_recipes))
-            
-            logger.info(f"Adding up to {max_favorite_foods_per_cuisine} favorite foods per cuisine, total: {total_favorite_foods_allowed}")
-            
-            # For each cuisine, try to find favorite food recipes
-            for cuisine in favorite_cuisines:
-                if len(favorite_foods_recipes) >= total_favorite_foods_allowed:
-                    break
-                    
-                cuisine_favorite_count = 0
-                cuisine_recipes = [r for r in cuisine_balanced_recipes if r.get('cuisine', '').lower() == cuisine.lower()]
-                
-                # Don't add too many favorite foods to any single cuisine
-                if len(cuisine_recipes) >= max_favorite_foods_per_cuisine + 1:
-                    continue
-                
+                # Search for ALL favorite foods and categorize them
                 for food in favorite_foods:
-                    if cuisine_favorite_count >= max_favorite_foods_per_cuisine:
-                        break
-                    if len(favorite_foods_recipes) >= total_favorite_foods_allowed:
-                        break
-                        
+                    # Search for this favorite food from any cuisine
                     random_seed = (int(time.time() * 1000) + random_base + random.randint(0, 999)) % 10000
-                    
-                    # Try to find favorite food in this specific cuisine
                     search_queries = [
-                        f"{cuisine} {food} recipe {random_seed}",
-                        f"{food} {cuisine} recipe {random_seed}",
-                        f"{cuisine} {food} dish {random_seed}"
+                        f"delicious {food} recipes {random_seed}",
+                        f"{food} recipe dishes {random_seed}",
+                        f"{food} food recipes {random_seed}"
                     ]
                     
                     for query in search_queries:
-                        if cuisine_favorite_count >= max_favorite_foods_per_cuisine:
-                            break
-                            
-                        results = self.semantic_search(query=query, filters=filters, limit=3)
+                        results = self.semantic_search(query=query, filters=filters, limit=5)
                         
                         for recipe in results:
-                            if cuisine_favorite_count >= max_favorite_foods_per_cuisine:
-                                break
-                            if len(favorite_foods_recipes) >= total_favorite_foods_allowed:
-                                break
-                                
                             # Check if we already have this recipe
                             k = self._get_recipe_key(recipe)
                             if k in used_ids:
                                 continue
                             
-                            # Verify this recipe is from the target cuisine
+                            # Verify this recipe has a cuisine
                             recipe_cuisine = self._normalize_cuisine(recipe.get('cuisine', ''), recipe) or self._detect_cuisine_from_ingredients(recipe)
-                            if not recipe_cuisine or recipe_cuisine.lower() != cuisine.lower():
+                            if not recipe_cuisine:
                                 continue
                             
                             recipe['cuisine'] = recipe_cuisine
@@ -680,113 +565,163 @@ class RecipeSearchService:
                             # Only include complete recipes
                             if not self._is_recipe_complete(recipe):
                                 continue
-                                
-                            favorite_foods_recipes.append(recipe)
-                            used_ids.add(k)
-                            cuisine_favorite_count += 1
-                            logger.info(f"Found favorite food '{food}' from {cuisine}: {recipe.get('name', 'Unknown')}")
-                            break  # Only add one recipe per food per cuisine
-        
-        logger.info(f"Phase 2 complete: Added {len(favorite_foods_recipes)} favorite food recipes")
-        
-        # PHASE 3: Fill any remaining slots with additional cuisine variety
-        remaining_slots = limit - len(cuisine_balanced_recipes) - len(favorite_foods_recipes)
-        additional_cuisine_recipes: List[Dict[str, Any]] = []
-        
-        if remaining_slots > 0 and favorite_cuisines:
-            logger.info(f"Phase 3: Filling {remaining_slots} remaining slots with additional cuisine variety")
-            
-            # Get additional recipes from each cuisine to fill remaining slots
-            recipes_per_cuisine = max(1, remaining_slots // len(favorite_cuisines))
-            
-            for cuisine in favorite_cuisines:
-                if len(additional_cuisine_recipes) >= remaining_slots:
-                    break
-                    
-                # Search for more recipes from this cuisine
-                random_seed = (int(time.time() * 1000) + random_base + random.randint(0, 999)) % 10000
-                cuisine_query = f"{cuisine} food dishes {random_seed}"
-                cuisine_results = self.semantic_search(query=cuisine_query, filters=filters, limit=recipes_per_cuisine * 2)
+                            
+                            # Categorize by whether it's in a preferred cuisine
+                            is_preferred_cuisine = any(c.lower() == recipe_cuisine.lower() for c in favorite_cuisines)
+                            
+                            if is_preferred_cuisine:
+                                favorite_foods_in_preferred_cuisines.append(recipe)
+                                logger.info(f"Found favorite food '{food}' in preferred cuisine '{recipe_cuisine}': {recipe.get('name', 'Unknown')}")
+                            else:
+                                favorite_foods_in_other_cuisines.append(recipe)
+                                logger.info(f"Found favorite food '{food}' in other cuisine '{recipe_cuisine}': {recipe.get('name', 'Unknown')}")
                 
-                for recipe in cuisine_results:
-                    if len(additional_cuisine_recipes) >= remaining_slots:
+                # Step 1a: Add favorite foods that are in preferred cuisines (with smart distribution)
+                if favorite_foods_in_preferred_cuisines:
+                    # Group favorite foods by cuisine for smart distribution
+                    fav_foods_by_cuisine = {}
+                    
+                    for recipe in favorite_foods_in_preferred_cuisines:
+                        cuisine = recipe.get('cuisine', '').lower()
+                        if cuisine not in fav_foods_by_cuisine:
+                            fav_foods_by_cuisine[cuisine] = []
+                        fav_foods_by_cuisine[cuisine].append(recipe)
+                    
+                    # Smart distribution: Add 2-3 favorite foods per cuisine, but don't let them dominate
+                    max_fav_foods_per_cuisine = min(3, max(1, limit // len(favorite_cuisines)))
+                    
+                    for cuisine, recipes in fav_foods_by_cuisine.items():
+                        recipes_to_add = min(max_fav_foods_per_cuisine, len(recipes))
+                        final_recommendations.extend(recipes[:recipes_to_add])
+                        used_ids.update(self._get_recipe_key(r) for r in recipes[:recipes_to_add])
+                        logger.info(f"Added {recipes_to_add} favorite foods from {cuisine} cuisine")
+                
+                # Step 1b: Add favorite foods from other cuisines (limited to prevent domination)
+                if favorite_foods_in_other_cuisines:
+                    remaining_slots = limit - len(final_recommendations)
+                    max_other_cuisine_favs = min(2, max(1, remaining_slots // 3))  # Limit to prevent domination
+                    
+                    if max_other_cuisine_favs > 0:
+                        other_favs_to_add = min(max_other_cuisine_favs, len(favorite_foods_in_other_cuisines))
+                        final_recommendations.extend(favorite_foods_in_other_cuisines[:other_favs_to_add])
+                        used_ids.update(self._get_recipe_key(r) for r in favorite_foods_in_other_cuisines[:other_favs_to_add])
+                        logger.info(f"Added {other_favs_to_add} favorite foods from other cuisines")
+                
+                logger.info(f"Phase 1 complete: Added {len(final_recommendations)} favorite food recipes")
+            
+            # Step 2: Fill remaining slots with balanced cuisine recommendations
+            remaining_slots = limit - len(final_recommendations)
+            if remaining_slots > 0:
+                logger.info(f"Phase 2: Filling {remaining_slots} remaining slots with balanced cuisine recommendations")
+                
+                # Calculate recipes per cuisine for the remaining slots
+                recipes_per_cuisine = remaining_slots // len(favorite_cuisines)
+                extra_slots = remaining_slots % len(favorite_cuisines)
+                
+                logger.info(f"Balanced allocation: {recipes_per_cuisine} per cuisine + {extra_slots} extra")
+                
+                # For each cuisine, get the required number of recipes
+                for i, cuisine in enumerate(favorite_cuisines):
+                    if len(final_recommendations) >= limit:
                         break
                         
-                    recipe_cuisine = self._normalize_cuisine(recipe.get('cuisine', ''), recipe) or self._detect_cuisine_from_ingredients(recipe)
-                    if not recipe_cuisine:
+                    # Calculate how many recipes this cuisine needs
+                    target_count = recipes_per_cuisine + (1 if i < extra_slots else 0)
+                    current_cuisine_count = len([r for r in final_recommendations if r.get('cuisine', '').lower() == cuisine.lower()])
+                    needed_count = target_count - current_cuisine_count
+                    
+                    if needed_count <= 0:
                         continue
                         
-                    recipe['cuisine'] = recipe_cuisine
+                    logger.info(f"Target for {cuisine}: {needed_count} additional recipes (already have {current_cuisine_count})")
                     
-                    target_cuisine_normalized = self._normalize_cuisine(cuisine)
-                    if recipe_cuisine.lower() != target_cuisine_normalized.lower():
-                        continue
+                    cuisine_recipes_found = 0
+                    search_attempts = 0
+                    max_search_attempts = 5  # Prevent excessive searching
                     
-                    # Check if we already have this recipe
-                    k = self._get_recipe_key(recipe)
-                    if k in used_ids:
-                        continue
-                    
-                    # Check if recipe should be excluded
-                    if self._should_exclude_recipe(recipe, user_preferences):
-                        logger.debug(f"Skipping excluded recipe: {recipe.get('name', 'Unknown')}")
-                        continue
-                    
-                    # Only include complete recipes (with proper images, tags, etc.)
-                    if not self._is_recipe_complete(recipe):
-                        logger.debug(f"Skipping incomplete recipe: {recipe.get('name', 'Unknown')} - missing essential data")
-                        continue
+                    # Search for additional recipes from this cuisine
+                    while cuisine_recipes_found < needed_count and search_attempts < max_search_attempts:
+                        search_attempts += 1
                         
-                    additional_cuisine_recipes.append(recipe)
-                    used_ids.add(k)
+                        # Use different search strategies to get variety
+                        search_strategies = [
+                            f"delicious {cuisine} recipes {random_base + search_attempts}",
+                            f"{cuisine} food dishes {random_base + search_attempts}",
+                            f"{cuisine} traditional recipes {random_base + search_attempts}",
+                            f"{cuisine} popular dishes {random_base + search_attempts}",
+                            f"{cuisine} classic recipes {random_base + search_attempts}"
+                        ]
+                        
+                        strategy_index = (search_attempts - 1) % len(search_strategies)
+                        query = search_strategies[strategy_index]
+                        
+                        logger.info(f"Search attempt {search_attempts} for {cuisine}: {query}")
+                        
+                        # Search with higher limit to get more options
+                        search_limit = (needed_count - cuisine_recipes_found) * 3
+                        cuisine_results = self.semantic_search(query=query, filters=filters, limit=search_limit)
+                        
+                        # Process results for this cuisine
+                        for recipe in cuisine_results:
+                            if cuisine_recipes_found >= needed_count:
+                                break
+                                
+                            # Check if we already have this recipe
+                            k = self._get_recipe_key(recipe)
+                            if k in used_ids:
+                                continue
+                            
+                            # Verify this recipe is from the target cuisine
+                            recipe_cuisine = self._normalize_cuisine(recipe.get('cuisine', ''), recipe) or self._detect_cuisine_from_ingredients(recipe)
+                            if not recipe_cuisine:
+                                continue
+                            
+                            recipe['cuisine'] = recipe_cuisine
+                            
+                            # STRICT cuisine matching - must match exactly
+                            target_cuisine_normalized = self._normalize_cuisine(cuisine)
+                            if recipe_cuisine.lower() != target_cuisine_normalized.lower():
+                                continue
+                            
+                            # Check if recipe should be excluded
+                            if self._should_exclude_recipe(recipe, user_preferences):
+                                logger.debug(f"Skipping excluded recipe: {recipe.get('name', 'Unknown')}")
+                                continue
+                            
+                            # Only include complete recipes
+                            if not self._is_recipe_complete(recipe):
+                                logger.debug(f"Skipping incomplete recipe: {recipe.get('name', 'Unknown')}")
+                                continue
+                            
+                            # Add to final recommendations
+                            final_recommendations.append(recipe)
+                            used_ids.add(k)
+                            cuisine_recipes_found += 1
+                            logger.info(f"Found {cuisine} recipe {cuisine_recipes_found}/{needed_count}: {recipe.get('name', 'Unknown')}")
+                    
+                    logger.info(f"Phase 2 complete for {cuisine}: {cuisine_recipes_found}/{needed_count} additional recipes found")
+                    
+                    # If we couldn't find enough recipes for this cuisine, log a warning
+                    if cuisine_recipes_found < needed_count:
+                        logger.warning(f"Could only find {cuisine_recipes_found}/{needed_count} additional recipes for {cuisine} cuisine")
         
-        logger.info(f"Phase 3 complete: Added {len(additional_cuisine_recipes)} additional cuisine recipes")
+        logger.info(f"Final recommendations complete: Total recipes: {len(final_recommendations)}")
         
-        # Combine all phases
-        final_recommendations = (
-            cuisine_balanced_recipes + 
-            favorite_foods_recipes + 
-            additional_cuisine_recipes
-        )
+        # Final validation: ensure we don't have too many from any single cuisine
+        if len(final_recommendations) > 0:
+            cuisine_counts = {}
+            for recipe in final_recommendations:
+                cuisine = recipe.get('cuisine', 'Unknown')
+                cuisine_counts[cuisine] = cuisine_counts.get(cuisine, 0) + 1
+            
+            logger.info(f"Final cuisine distribution: {cuisine_counts}")
+            
+            # Check if any cuisine dominates (more than 50% of recommendations)
+            max_cuisine_count = max(cuisine_counts.values()) if cuisine_counts else 0
+            if max_cuisine_count > len(final_recommendations) * 0.5:
+                logger.warning(f"Warning: {max(cuisine_counts, key=cuisine_counts.get)} cuisine dominates with {max_cuisine_count} recipes")
         
-        # Skip cache hydration since we already have full recipe data from search
-        # The cache service returns recipes with missing 'name' field which causes frontend issues
-        hydrated = final_recommendations
-
-        # Final validation: ensure all recipes are complete and have proper data
-        validated_recommendations: List[Dict[str, Any]] = []
-        for recipe in hydrated:
-            if self._should_exclude_recipe(recipe, user_preferences):
-                continue
-            if self._is_recipe_complete(recipe):
-                validated_recommendations.append(recipe)
-
-        # Ensure we don't exceed the limit
-        final_recommendations = validated_recommendations[:limit]
-        
-        # Final balancing: ensure fair distribution across cuisines
-        if len(final_recommendations) > 0 and favorite_cuisines:
-            balanced_recommendations = self._balance_cuisine_distribution(final_recommendations, favorite_cuisines, limit)
-            if len(balanced_recommendations) > 0:
-                final_recommendations = balanced_recommendations
-                logger.info("Applied final cuisine balancing for fair distribution")
-        
-        logger.info(f"After validation and balancing: {len(final_recommendations)} complete recipes out of {len(validated_recommendations)} total")
-        logger.info(f"Total recipes processed: {len(validated_recommendations) + len([r for r in final_recommendations if r not in validated_recommendations])}")
-        
-        # Final logging of distribution
-        final_cuisine_counts: Dict[str, int] = {}
-        for recipe in final_recommendations:
-            cuisine = recipe.get('cuisine', 'Unknown')
-            final_cuisine_counts[cuisine] = final_cuisine_counts.get(cuisine, 0) + 1
-        
-        logger.info(f"Final cuisine distribution: {final_cuisine_counts}")
-        
-        # Log the final recommendations for debugging
-        for i, recipe in enumerate(final_recommendations):
-            logger.info(f"Final recommendation {i+1}: {recipe.get('name', 'Unknown')} ({recipe.get('cuisine', 'Unknown')})")
-        
-        return final_recommendations
+        return final_recommendations[:limit]
 
     
     def _should_exclude_recipe(self, recipe: Dict[str, Any], user_preferences: Dict[str, Any] = None) -> bool:
@@ -855,28 +790,39 @@ class RecipeSearchService:
         text_parts = []
         if 'name' in recipe:
             text_parts.append(recipe['name'].lower())
+        if 'title' in recipe:
+            text_parts.append(recipe['title'].lower())
         if 'ingredients' in recipe and isinstance(recipe['ingredients'], list):
-            text_parts.extend(str(i).lower() for i in recipe['ingredients'])
+            for ingredient in recipe['ingredients']:
+                if isinstance(ingredient, dict):
+                    # Handle ingredient objects with 'name' field
+                    if 'name' in ingredient:
+                        text_parts.append(str(ingredient['name']).lower())
+                    elif 'original' in ingredient:
+                        text_parts.append(str(ingredient['original']).lower())
+                else:
+                    # Handle string ingredients
+                    text_parts.append(str(ingredient).lower())
         if 'instructions' in recipe:
             text_parts.append(str(recipe['instructions']).lower())
             
         text = ' '.join(text_parts)
         
-        # Look for cuisine indicators
+        # Enhanced cuisine indicators with more comprehensive coverage
         cuisine_indicators = {
-            'italian': ['pasta', 'pizza', 'risotto', 'prosciutto', 'parmesan', 'mozzarella', 'basil', 'oregano'],
-            'mexican': ['taco', 'tortilla', 'salsa', 'guacamole', 'queso', 'cilantro', 'jalapeno', 'enchilada'],
-            'chinese': ['soy sauce', 'hoisin', 'szechuan', 'wok', 'stir-fry', 'dumpling', 'bok choy'],
-            'indian': ['curry', 'masala', 'tikka', 'naan', 'samosas', 'tandoori', 'garam masala'],
-            'thai': ['curry', 'coconut milk', 'lemongrass', 'thai basil', 'fish sauce', 'pad thai'],
-            'japanese': ['sushi', 'ramen', 'miso', 'wasabi', 'teriyaki', 'tempura', 'dashi'],
-            'french': ['baguette', 'brie', 'provençal', 'ratatouille', 'béchamel', 'au vin', 'coq au vin'],
-            'mediterranean': ['olive oil', 'feta', 'hummus', 'tzatziki', 'falafel', 'pita', 'eggplant'],
-            'greek': ['feta', 'tzatziki', 'gyro', 'dolma', 'moussaka', 'kalamata'],
-            'spanish': ['paella', 'chorizo', 'saffron', 'tapas', 'manchego', 'gazpacho'],
-            'vietnamese': ['pho', 'banh mi', 'fish sauce', 'lemongrass', 'rice paper', 'hoisin'],
-            'korean': ['kimchi', 'gochujang', 'bulgogi', 'bibimbap', 'korean bbq', 'soju'],
-            'american': ['burger', 'hot dog', 'barbecue', 'mac and cheese', 'apple pie', 'buffalo wings']
+            'italian': ['pasta', 'pizza', 'risotto', 'prosciutto', 'parmesan', 'mozzarella', 'basil', 'oregano', 'bolognese', 'carbonara', 'pesto', 'bruschetta', 'tiramisu', 'gnocchi', 'ravioli', 'lasagna'],
+            'mexican': ['taco', 'tortilla', 'salsa', 'guacamole', 'queso', 'cilantro', 'jalapeno', 'enchilada', 'burrito', 'quesadilla', 'mole', 'tamale', 'pozole', 'churros'],
+            'chinese': ['soy sauce', 'hoisin', 'szechuan', 'wok', 'stir-fry', 'dumpling', 'bok choy', 'kung pao', 'sweet and sour', 'chow mein', 'lo mein', 'peking duck', 'char siu', 'bao'],
+            'indian': ['curry', 'masala', 'tikka', 'naan', 'samosas', 'tandoori', 'garam masala', 'biryani', 'dal', 'vindaloo', 'paneer', 'chutney', 'roti', 'bharta', 'handi', 'rogan josh', 'biryani', 'curry', 'masala', 'tikka', 'naan', 'samosas', 'tandoori', 'garam masala', 'paneer', 'chutney', 'roti', 'bharta', 'handi', 'rogan josh'],
+            'thai': ['curry', 'coconut milk', 'lemongrass', 'thai basil', 'fish sauce', 'pad thai', 'tom yum', 'green curry', 'massaman', 'satay', 'papaya salad', 'mango sticky rice'],
+            'japanese': ['sushi', 'ramen', 'miso', 'wasabi', 'teriyaki', 'tempura', 'dashi', 'udon', 'sashimi', 'bento', 'kaiseki', 'washoku'],
+            'french': ['baguette', 'brie', 'provençal', 'ratatouille', 'béchamel', 'au vin', 'coq au vin', 'quiche', 'crepe', 'croissant', 'bouillabaisse', 'escargot'],
+            'mediterranean': ['olive oil', 'feta', 'hummus', 'tzatziki', 'falafel', 'pita', 'eggplant', 'tabbouleh', 'baba ghanoush', 'dolma'],
+            'greek': ['feta', 'tzatziki', 'gyro', 'dolma', 'moussaka', 'kalamata', 'spanakopita', 'baklava', 'souvlaki'],
+            'spanish': ['paella', 'chorizo', 'saffron', 'tapas', 'manchego', 'gazpacho', 'tortilla', 'pulpo', 'jamón'],
+            'vietnamese': ['pho', 'banh mi', 'fish sauce', 'lemongrass', 'rice paper', 'hoisin', 'nuoc cham', 'bun cha'],
+            'korean': ['kimchi', 'gochujang', 'bulgogi', 'bibimbap', 'korean bbq', 'soju', 'tteokbokki', 'samgyeopsal'],
+            'american': ['burger', 'hot dog', 'barbecue', 'mac and cheese', 'apple pie', 'buffalo wings', 'fried chicken', 'cornbread', 'biscuits', 'grits', 'jambalaya', 'gumbo']
         }
         
         # Count matches for each cuisine
@@ -890,8 +836,11 @@ class RecipeSearchService:
         max_score = max(cuisine_scores.values())
         if max_score > 0:
             top_cuisines = [c for c, s in cuisine_scores.items() if s == max_score]
-            return top_cuisines[0]  # Return first if tie
+            detected_cuisine = top_cuisines[0]  # Return first if tie
+            logger.debug(f"Detected cuisine '{detected_cuisine}' from text: {text[:100]}...")
+            return detected_cuisine
             
+        logger.debug(f"No cuisine detected from text: {text[:100]}...")
         return ""
         
     def _normalize_cuisine(self, cuisine: str, recipe: Optional[Dict[str, Any]] = None) -> str:

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Search, ChefHat, ThumbsUp, Award, TrendingUp, Clock, Star, Users, Zap, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Header from '../components/Header';
@@ -32,16 +32,26 @@ const HomePage: React.FC = () => {
   // State for refresh counter to force new queries
   const [refreshCounter, setRefreshCounter] = useState<number>(0);
   
+  // Get query client for invalidation
+  const queryClient = useQueryClient();
+  
   // Handle refresh recommendations with feedback
   const handleRefreshRecommendations = async () => {
     setRefreshFeedback('Refreshing recommendations...');
     try {
-      // Increment refresh counter to force a completely new query
+      // Invalidate the query to force a complete refetch
+      await queryClient.invalidateQueries({ queryKey: ['backend-recipes'] });
+      
+      // Also increment refresh counter as backup
       setRefreshCounter(prev => prev + 1);
+      
+      console.log('🔄 Refresh triggered - query invalidated and counter incremented');
       setRefreshFeedback('Recommendations refreshed!');
+      
       // Clear feedback after 3 seconds
       setTimeout(() => setRefreshFeedback(''), 3000);
     } catch (error) {
+      console.error('Error refreshing recommendations:', error);
       setRefreshFeedback('Failed to refresh recommendations');
       // Clear error feedback after 3 seconds
       setTimeout(() => setRefreshFeedback(''), 3000);
@@ -73,6 +83,14 @@ const HomePage: React.FC = () => {
         if (response.ok) {
           const data = await response.json();
           console.log('✅ Loaded preferences:', data.preferences);
+          console.log('🔍 Preferences breakdown:', {
+            favoriteFoods: data.preferences?.favoriteFoods,
+            favoriteCuisines: data.preferences?.favoriteCuisines,
+            dietaryRestrictions: data.preferences?.dietaryRestrictions,
+            foodsToAvoid: data.preferences?.foodsToAvoid,
+            cookingSkillLevel: data.preferences?.cookingSkillLevel,
+            healthGoals: data.preferences?.healthGoals
+          });
           setUserPreferences(data.preferences);
         } else if (response.status === 404) {
           // No preferences set yet
@@ -93,93 +111,84 @@ const HomePage: React.FC = () => {
   }, [isAuthenticated]);
 
   // Load recipes using React Query for better caching
-  // For authenticated users with preferences, use recommendations endpoint
-  // For unauthenticated users, use general recipes endpoint
-  const { data: backendRecipes = [], isLoading: isLoadingBackend, error: backendError } = useQuery({
-    queryKey: ['backend-recipes', isAuthenticated, userPreferences],
+  // Use the same /get_recipes endpoint for consistent data across homepage and search page
+  const { data: backendRecipes = [], isLoading: isLoadingBackend, error: backendError, refetch: refetchBackendRecipes } = useQuery({
+    queryKey: ['backend-recipes', isAuthenticated, userPreferences, refreshCounter], // Include refreshCounter for refresh functionality
     queryFn: async () => {
       try {
-        // For authenticated users with preferences, get recommendations instead of all recipes
+        // Always use the same /get_recipes endpoint for consistency with search page
+        console.log('🔍 Using /get_recipes endpoint for consistent data across homepage and search');
+        
+        // Build query parameters based on user preferences
+        const params = new URLSearchParams();
+        
         if (isAuthenticated && userPreferences) {
-          console.log('🔍 Authenticated user with preferences - using recommendations endpoint');
-          const response = await fetch('http://localhost:5003/api/recommendations?limit=20');
-          if (!response.ok) {
-            const errorData = await response.text();
-            console.error('Recommendations error response:', errorData);
-            throw new Error('Failed to fetch recommendations');
+          // Add user preferences as filters
+          if (userPreferences.favoriteCuisines?.length) {
+            params.append('cuisine', userPreferences.favoriteCuisines.join(','));
           }
-          const data = await response.json();
-          console.log('🔍 HomePage backend recommendations raw data:', data);
-          console.log('🔍 HomePage backend recommendations array:', data.recommendations);
-          console.log('🔍 HomePage first recipe details:', data.recommendations?.[0] ? {
-            id: data.recommendations[0].id,
-            title: data.recommendations[0].title,
-            name: data.recommendations[0].name,
-            cuisine: data.recommendations[0].cuisine
-          } : 'No recipes');
-          return data.recommendations || [];
+          if (userPreferences.favoriteFoods?.length) {
+            params.append('favorite_foods', userPreferences.favoriteFoods.join(','));
+          }
+          if (userPreferences.dietaryRestrictions?.length) {
+            params.append('dietary_restrictions', userPreferences.dietaryRestrictions.join(','));
+          }
+          // Use a reasonable limit for homepage
+          params.append('limit', '20');
         } else {
-          // For unauthenticated users or users without preferences, get general recipes
-          console.log('🔍 Unauthenticated user or no preferences - using general recipes endpoint');
-          const response = await fetch('http://localhost:5003/get_recipes');
-          if (!response.ok) {
-            const errorData = await response.text();
-            console.error('Backend error response:', errorData);
-            throw new Error('Failed to fetch recipes');
-          }
-          const data = await response.json();
-          return data.results || [];
+          // For unauthenticated users, just get general recipes
+          params.append('limit', '20');
         }
+        
+        // Add timestamp to ensure backend randomization works effectively
+        params.append('_t', Date.now().toString());
+        
+        const queryString = params.toString();
+        const url = `http://localhost:5003/get_recipes${queryString ? `?${queryString}` : ''}`;
+        
+        console.log('🔍 HomePage calling /get_recipes with URL:', url);
+        
+        const response = await fetch(url);
+        if (!response.ok) {
+          const errorData = await response.text();
+          console.error('Backend error response:', errorData);
+          throw new Error('Failed to fetch recipes');
+        }
+        
+        const data = await response.json();
+        console.log('🔍 HomePage /get_recipes response:', data);
+        console.log('🔍 HomePage recipes array:', data.results);
+        console.log('🔍 HomePage first recipe details:', data.results?.[0] ? {
+          id: data.results[0].id,
+          title: data.results[0].title,
+          name: data.results[0].name,
+          cuisine: data.results[0].cuisine
+        } : 'No recipes');
+        
+        return data.results || [];
       } catch (error) {
         console.error('Error fetching backend recipes:', error);
         return [];
       }
     },
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 0, // No stale time - always allow refetching for refresh functionality
     retry: 1, // Only retry once on failure
     enabled: true, // Always enabled
   });
 
-  // Query for backend recommendations when user has preferences
-  const { data: backendRecommendations = [], isLoading: isLoadingRecommendations, refetch: refetchRecommendations } = useQuery({
-    queryKey: ['backend-recommendations', userPreferences, refreshCounter], // Add refresh counter for unique queries
-    queryFn: async () => {
-      if (!userPreferences) {
-        console.log('❌ No user preferences available for backend recommendations');
-        return [];
-      }
-      
-      console.log('🔍 Fetching backend recommendations with preferences:', userPreferences);
-      
-      try {
-        console.log('🔍 Fetching backend recommendations using apiCall utility');
-        
-        const response = await apiCall('/api/recommendations?limit=8', {
-          method: 'GET',
-          headers: {
-            'Accept': 'application/json'
-          }
-        });
-        console.log('📡 Backend response status:', response.status);
-        
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error('❌ Failed to fetch backend recommendations:', response.status, errorText);
-          return [];
-        }
-        
-        const data = await response.json();
-        console.log('✅ Backend recommendations response:', data);
-        return data.recommendations || [];
-      } catch (error) {
-        console.error('❌ Error fetching backend recommendations:', error);
-        return [];
-      }
-    },
-    enabled: !!userPreferences && isAuthenticated,
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    retry: 1,
-  });
+  // Remove the separate recommendations query since we're now using the same endpoint
+  // This ensures homepage and search page show the same data
+  const backendRecommendations = backendRecipes; // Use the same data
+  const isLoadingRecommendations = isLoadingBackend; // Use the same loading state
+  
+  // Debug logging for backend data changes
+  useEffect(() => {
+    console.log('🔄 Backend recipes data changed:', {
+      length: backendRecipes?.length,
+      firstRecipe: backendRecipes?.[0]?.title,
+      timestamp: new Date().toISOString()
+    });
+  }, [backendRecipes]);
 
   const { data: manualRecipes = [], isLoading: isLoadingManual, error: manualRecipesError } = useQuery({
     queryKey: ['manual-recipes'],
@@ -349,6 +358,12 @@ const HomePage: React.FC = () => {
 
   // Combine and organize recipes into different categories
   const organizedRecipes = useMemo(() => {
+    console.log('🔄 organizedRecipes useMemo recalculating...', {
+      backendRecipesLength: backendRecipes?.length,
+      backendRecommendationsLength: backendRecommendations?.length,
+      timestamp: new Date().toISOString()
+    });
+    
     // Mark recipes from the main backend endpoint as external type so they route to /external-recipe/ID
     const allCombined = [
       ...spoonacularRecipes.map(recipe => ({ ...recipe, type: 'external' as const })),
@@ -386,9 +401,21 @@ const HomePage: React.FC = () => {
       const hasHealthGoals = Array.isArray(userPreferences.healthGoals) && 
         userPreferences.healthGoals.length > 0;
       
+      const hasAnyPreference = hasFavoriteFoods || hasFavoriteCuisines || hasDietaryRestrictions || 
+                               hasFoodsToAvoid || hasCookingSkill || hasHealthGoals;
+      
+      console.log('🔍 Preference check:', {
+        hasFavoriteFoods,
+        hasFavoriteCuisines,
+        hasDietaryRestrictions,
+        hasFoodsToAvoid,
+        hasCookingSkill,
+        hasHealthGoals,
+        hasAnyPreference
+      });
+      
       // Return true if any meaningful preference is set
-      return hasFavoriteFoods || hasFavoriteCuisines || hasDietaryRestrictions || 
-             hasFoodsToAvoid || hasCookingSkill || hasHealthGoals;
+      return hasAnyPreference;
     }, [userPreferences]);
 
     // For authenticated users with preferences, use backend recommendations
@@ -406,53 +433,91 @@ const HomePage: React.FC = () => {
         console.log('🎯 Using backend recommendations:', backendRecommendations.length);
         console.log('📊 Backend recommendations cuisines:', backendRecommendations.map(r => r.cuisine));
         
-        // Ensure even distribution across cuisines from backend recommendations
-        // but prioritize favorite-food matches first
+        // MORE BALANCED approach: Favorite foods get limited priority (37.5%) for better variety
         const favoriteFoodsNorm: string[] = (userPreferences?.favoriteFoods || [])
           .map((f: any) => (f || '').toString().trim().toLowerCase())
           .filter(Boolean);
 
-        type AnyRec = any;
-        const cuisineGroupsFav: Record<string, AnyRec[]> = {};
-        const cuisineGroupsOther: Record<string, AnyRec[]> = {};
+        console.log('🍔 Backend recommendations - prioritizing favorite foods:', favoriteFoodsNorm);
+
+        // First, collect all favorite food recipes (regardless of cuisine)
+        const favoriteFoodRecipes: any[] = [];
+        const nonFavoriteFoodRecipes: any[] = [];
+        
         backendRecommendations.forEach((recipe: any) => {
-          const cuisine = recipe.cuisine || 'Unknown';
-          if (!cuisineGroupsFav[cuisine]) cuisineGroupsFav[cuisine] = [];
-          if (!cuisineGroupsOther[cuisine]) cuisineGroupsOther[cuisine] = [];
           const titleLower = ((recipe.title || recipe.name || '') as string).toLowerCase();
           const ingredientsLower = Array.isArray(recipe.ingredients) ? recipe.ingredients.map((i: any) => String(i).toLowerCase()) : [];
           const hasFavFood = favoriteFoodsNorm.length > 0 && favoriteFoodsNorm.some(f => titleLower.includes(f) || ingredientsLower.some(i => i.includes(f)));
+          
           if (hasFavFood) {
-            cuisineGroupsFav[cuisine].push(recipe);
+            favoriteFoodRecipes.push(recipe);
           } else {
-            cuisineGroupsOther[cuisine].push(recipe);
+            nonFavoriteFoodRecipes.push(recipe);
           }
         });
-        const cuisineGroups: Record<string, AnyRec[]> = {};
-        Object.keys({...cuisineGroupsFav, ...cuisineGroupsOther}).forEach(c => {
-          cuisineGroups[c] = [
-            ...(cuisineGroupsFav[c] || []),
-            ...(cuisineGroupsOther[c] || [])
-          ];
-        });
         
-        console.log('📊 Cuisine groups from backend:', Object.keys(cuisineGroups).map(c => `${c}: ${cuisineGroups[c].length}`));
+        console.log('🍔 Backend - Favorite food recipes found:', favoriteFoodRecipes.length);
+        console.log('🌍 Backend - Non-favorite food recipes:', nonFavoriteFoodRecipes.length);
         
-        // Distribute recipes evenly across cuisines
+        // Build recommendations: favorite foods first, then fill with cuisine-balanced recipes
         const distributedRecipes = [];
-        const maxRecipesPerCuisine = Math.ceil(8 / Object.keys(cuisineGroups).length);
         
-        // Take recipes from each cuisine in rotation
-        for (let i = 0; i < maxRecipesPerCuisine; i++) {
-          for (const cuisine in cuisineGroups) {
-            if (cuisineGroups[cuisine][i] && distributedRecipes.length < 8) {
-              distributedRecipes.push(cuisineGroups[cuisine][i]);
+        // Add favorite foods first (but limit to 3 slots for better balance)
+        const maxFavoriteFoods = Math.min(3, favoriteFoodRecipes.length);
+        distributedRecipes.push(...favoriteFoodRecipes.slice(0, maxFavoriteFoods));
+        
+        console.log('🍔 Backend - Added favorite foods:', maxFavoriteFoods, 'out of', favoriteFoodRecipes.length, 'available');
+        console.log('🍔 Backend - Remaining slots for cuisine recipes:', 8 - distributedRecipes.length);
+        
+        // Fill remaining slots with cuisine-balanced recipes
+        if (distributedRecipes.length < 8 && nonFavoriteFoodRecipes.length > 0) {
+          const remainingSlots = 8 - distributedRecipes.length;
+          
+          // Group remaining recipes by cuisine for balanced distribution
+          const cuisineGroups: Record<string, any[]> = {};
+          nonFavoriteFoodRecipes.forEach((recipe: any) => {
+            const cuisine = recipe.cuisine || 'Unknown';
+            if (!cuisineGroups[cuisine]) cuisineGroups[cuisine] = [];
+            cuisineGroups[cuisine].push(recipe);
+          });
+          
+          // Round-robin pick from each cuisine to fill remaining slots
+          const cuisines = Object.keys(cuisineGroups);
+          let added = true;
+          let index = 0;
+          
+          while (distributedRecipes.length < 8 && added && cuisines.length > 0) {
+            added = false;
+            for (let i = 0; i < cuisines.length && distributedRecipes.length < 8; i++) {
+              const cuisine = cuisines[i];
+              const recipes = cuisineGroups[cuisine];
+              if (recipes && recipes.length > 0) {
+                distributedRecipes.push(recipes.shift()!);
+                added = true;
+              }
             }
           }
         }
         
         console.log('🎯 Final distributed recommendations:', distributedRecipes.length);
         console.log('📊 Final cuisine distribution:', distributedRecipes.map(r => r.cuisine));
+        const backendFavFoods = distributedRecipes.filter(r => {
+          const titleLower = (r.title || r.name || '').toLowerCase();
+          const ingredientsLower = Array.isArray(r.ingredients) ? r.ingredients.map((i: any) => String(i).toLowerCase()) : [];
+          return favoriteFoodsNorm.some(f => titleLower.includes(f) || ingredientsLower.some(i => i.includes(f)));
+        });
+        console.log('🍔 Favorite foods in final recommendations:', backendFavFoods.length);
+        console.log('🍔 Backend - Favorite foods found:', backendFavFoods.map(r => r.title || r.name));
+        
+        // Backend distribution summary
+        const totalBackendFavFoods = backendFavFoods.length;
+        const totalBackendCuisineRecipes = distributedRecipes.length - totalBackendFavFoods;
+        console.log('📊 Backend distribution summary:', {
+          totalRecipes: distributedRecipes.length,
+          favoriteFoods: totalBackendFavFoods,
+          cuisineRecipes: totalBackendCuisineRecipes,
+          favoriteFoodPercentage: Math.round((totalBackendFavFoods / distributedRecipes.length) * 100)
+        });
         
         // Debug: Check recipe data before and after processing
         console.log('🔍 First recipe before processing:', distributedRecipes[0] ? {
@@ -477,6 +542,7 @@ const HomePage: React.FC = () => {
       } else {
         console.log('🔄 Backend recommendations not available, using fallback filtering');
         console.log('❌ Backend recommendations failed or empty, falling back to frontend filtering');
+        console.log('🔍 This is why you might not see favorite foods - using frontend fallback!');
         
         // Fallback to frontend filtering (simplified version)
         const { 
@@ -530,27 +596,70 @@ const HomePage: React.FC = () => {
         // Smart recommendation logic: prioritize favorite foods first, then cuisine preferences
         const favoriteFoodsNorm: string[] = (favoriteFoods || []).map((f: any) => (f || '').toString().trim().toLowerCase()).filter(Boolean);
         
-        // Step 1: Find ALL recipes that match favorite foods (from any cuisine)
-        let favoriteFoodRecipes: any[] = [];
+        // Step 1: Find ALL favorite food recipes and categorize them by cuisine overlap
+        let favoriteFoodsInPreferredCuisines: any[] = [];
+        let favoriteFoodsInOtherCuisines: any[] = [];
         
         if (favoriteFoodsNorm.length > 0) {
-          favoriteFoodRecipes = filteredRecipes.filter(recipe => {
+          console.log('🔍 Searching for favorite foods:', favoriteFoodsNorm);
+          console.log('🔍 Available recipes to search:', filteredRecipes.length);
+          
+          // Debug: Show some sample recipe titles to see what we're working with
+          console.log('🔍 Sample recipe titles:', filteredRecipes.slice(0, 5).map(r => ({
+            title: r.title || (r as any).name,
+            cuisines: (r as any).cuisines || [],
+            cuisine: (r as any).cuisine
+          })));
+          
+          const allFavoriteFoodRecipes = filteredRecipes.filter(recipe => {
             // Check if it's a favorite food
             const titleLower = ((recipe.title || (recipe as any).name || '') as string).toLowerCase();
             const ingredients = (recipe as any).ingredients || [];
             const ingredientsLower = Array.isArray(ingredients) ? 
               ingredients.map((i: any) => String(i).toLowerCase()) : [];
-            const isFavoriteFood = favoriteFoodsNorm.some(food => 
-              titleLower.includes(food) || 
-              ingredientsLower.some((ing: string) => ing.includes(food))
-            );
+            
+            // Debug: Log what we're checking
+            const isFavoriteFood = favoriteFoodsNorm.some(food => {
+              const titleMatch = titleLower.includes(food);
+              const ingredientMatch = ingredientsLower.some((ing: string) => ing.includes(food));
+              if (titleMatch || ingredientMatch) {
+                console.log(`🍔 Found favorite food '${food}' in recipe: ${recipe.title || (recipe as any).name}`);
+                console.log(`   Title match: ${titleMatch}, Ingredient match: ${ingredientMatch}`);
+              }
+              return titleMatch || ingredientMatch;
+            });
             
             return isFavoriteFood;
           });
-          console.log('🍔 Found favorite food recipes from any cuisine:', favoriteFoodRecipes.length);
+          
+          console.log('🍔 Total favorite food recipes found:', allFavoriteFoodRecipes.length);
+          
+          // Categorize favorite foods by whether they're in preferred cuisines
+          allFavoriteFoodRecipes.forEach(recipe => {
+            const recipeCuisines = Array.isArray((recipe as any).cuisines) ? (recipe as any).cuisines : [];
+            const recipeTitle = (recipe.title || (recipe as any).name || '').toLowerCase();
+            
+            const isInPreferredCuisine = favoriteCuisines && favoriteCuisines.length > 0 && favoriteCuisines.some(cuisine => {
+              if (!cuisine) return false;
+              const cuisineLower = cuisine.toLowerCase();
+              return recipeCuisines.some((c: any) => c?.toLowerCase().includes(cuisineLower)) ||
+                     recipeTitle.includes(cuisineLower);
+            });
+            
+            if (isInPreferredCuisine) {
+              favoriteFoodsInPreferredCuisines.push(recipe);
+              console.log(`🍔 Favorite food in preferred cuisine: ${recipe.title || (recipe as any).name} (${recipeCuisines.join(', ')})`);
+            } else {
+              favoriteFoodsInOtherCuisines.push(recipe);
+              console.log(`🍔 Favorite food in other cuisine: ${recipe.title || (recipe as any).name} (${recipeCuisines.join(', ')})`);
+            }
+          });
+          
+          console.log('🍔 Found favorite food recipes in preferred cuisines:', favoriteFoodsInPreferredCuisines.length);
+          console.log('🍔 Found favorite food recipes in other cuisines:', favoriteFoodsInOtherCuisines.length);
         }
         
-        // Step 2: Find recipes that match favorite cuisines (but aren't favorite foods) - RESPECTING DIETARY RESTRICTIONS
+        // Step 2: Find recipes that match favorite cuisines (but aren't favorite foods)
         let cuisineMatchedRecipes: any[] = [];
         if (favoriteCuisines && favoriteCuisines.length > 0) {
           cuisineMatchedRecipes = filteredRecipes.filter(recipe => {
@@ -582,85 +691,120 @@ const HomePage: React.FC = () => {
           console.log('🌍 Found cuisine-matched recipes (excluding favorite foods):', cuisineMatchedRecipes.length);
         }
         
-        // Step 3: Build recommendations intelligently with priority order
+        // Step 3: Build recommendations with intelligent favorite food distribution
         let finalRecommendations: any[] = [];
         
-        // Priority 1: Favorite foods from any cuisine (up to 4 - more flexible now)
-        if (favoriteFoodRecipes.length > 0) {
-          const favFoodCount = Math.min(4, favoriteFoodRecipes.length);
-          finalRecommendations.push(...favoriteFoodRecipes.slice(0, favFoodCount));
-          console.log(`🍔 Added ${favFoodCount} favorite food recipes from any cuisine`);
-        }
+        // Strategy: MORE BALANCED approach between favorite foods and cuisine preferences
+        // - Favorite foods get limited priority (25-37.5%) to maintain variety
+        // - Cuisine preferences get more representation (62.5-75%) for diversity
+        // - This ensures users see some favorite foods while getting culinary variety
         
-        // Priority 2: Then add cuisine-matched recipes with proper balancing across cuisines
-        if (cuisineMatchedRecipes.length > 0 && favoriteCuisines && favoriteCuisines.length > 1) {
-          const remainingSlots = 8 - finalRecommendations.length;
+        // Priority 1: Add favorite foods that are in preferred cuisines (with smart distribution)
+        if (favoriteFoodsInPreferredCuisines.length > 0) {
+          // Group favorite foods by cuisine for smart distribution
+          const favFoodsByCuisine: Record<string, any[]> = {};
           
-          // Filter out recipes we already added as favorite foods
-          const uniqueCuisineRecipes = cuisineMatchedRecipes.filter(recipe => 
-            !finalRecommendations.some(fav => fav.id === recipe.id)
-          );
-          
-          // Group recipes by cuisine for balanced distribution
-          const normalizedSelected = favoriteCuisines.map(c => (c || '').toString().trim().toLowerCase()).filter(Boolean);
-          const groupsByCuisine: Record<string, any[]> = {};
-          
-          for (const c of normalizedSelected) {
-            groupsByCuisine[c] = [];
-          }
-          
-          // Assign recipes to their matching cuisines
-          for (const recipe of uniqueCuisineRecipes) {
+          favoriteFoodsInPreferredCuisines.forEach(recipe => {
             const recipeCuisines = Array.isArray((recipe as any).cuisines) ? (recipe as any).cuisines : [];
             const single = (recipe as any).cuisine ? [(recipe as any).cuisine.toString().toLowerCase()] : [];
             const allRecipeCuisines = [...recipeCuisines, ...single];
             
-            const matchCuisine = normalizedSelected.find(sel => 
-              allRecipeCuisines.some(rc => rc?.toLowerCase().includes(sel))
-            );
+            // Find which preferred cuisine this recipe belongs to
+            const matchCuisine = favoriteCuisines.find(sel => {
+              if (!sel) return false;
+              const selLower = sel.toLowerCase();
+              return allRecipeCuisines.some(rc => rc?.toLowerCase().includes(selLower));
+            });
             
             if (matchCuisine) {
-              groupsByCuisine[matchCuisine].push(recipe);
-            }
-          }
-          
-          // Round-robin pick from each cuisine to fill remaining slots
-          let added = true;
-          while (finalRecommendations.length < 8 && added) {
-            added = false;
-            for (const cuisine of normalizedSelected) {
-              const cuisineRecipes = groupsByCuisine[cuisine] || [];
-              if (cuisineRecipes.length > 0 && finalRecommendations.length < 8) {
-                finalRecommendations.push(cuisineRecipes.shift()!);
-                added = true;
+              const cuisineKey = matchCuisine.toLowerCase();
+              if (!favFoodsByCuisine[cuisineKey]) {
+                favFoodsByCuisine[cuisineKey] = [];
               }
+              favFoodsByCuisine[cuisineKey].push(recipe);
             }
-          }
+          });
           
-          console.log(`🌍 Added ${8 - finalRecommendations.length} cuisine-balanced recipes to recommendations`);
-        } else if (cuisineMatchedRecipes.length > 0) {
-          // Single cuisine: just add what we can
-          const remainingSlots = 8 - finalRecommendations.length;
-          const uniqueCuisineRecipes = cuisineMatchedRecipes.filter(recipe => 
-            !finalRecommendations.some(fav => fav.id === recipe.id)
-          );
-          
-          const cuisineCount = Math.min(remainingSlots, uniqueCuisineRecipes.length);
-          finalRecommendations.push(...uniqueCuisineRecipes.slice(0, cuisineCount));
-          console.log(`🌍 Added ${cuisineCount} single-cuisine recipes to recommendations`);
+                            // Smart distribution: Limit favorite foods per cuisine for better balance
+          const maxFavFoodsPerCuisine = Math.min(1, Math.ceil(4 / Math.max(1, favoriteCuisines.length)));
+        
+        console.log('🍔 Frontend - Max favorite foods per cuisine:', maxFavFoodsPerCuisine);
+        console.log('🍔 Frontend - Total favorite foods in preferred cuisines:', favoriteFoodsInPreferredCuisines.length);
+        
+        Object.entries(favFoodsByCuisine).forEach(([cuisine, recipes]) => {
+          const recipesToAdd = Math.min(maxFavFoodsPerCuisine, recipes.length);
+          finalRecommendations.push(...recipes.slice(0, recipesToAdd));
+          console.log(`🍔 Added ${recipesToAdd} favorite foods from ${cuisine} cuisine (balanced approach)`);
+        });
+        
+        console.log('🍔 Frontend - After adding preferred cuisine favorites:', finalRecommendations.length, 'recipes');
         }
         
-        // If we still don't have enough, only fill with additional cuisine-matched recipes
-        // DO NOT fall back to random recipes to avoid showing nonsense recommendations
-        if (finalRecommendations.length < 8 && cuisineMatchedRecipes.length > 0) {
+        // Priority 2: Add favorite foods from other cuisines (limited for balance)
+        if (favoriteFoodsInOtherCuisines.length > 0) {
           const remainingSlots = 8 - finalRecommendations.length;
-          const additionalCuisineRecipes = cuisineMatchedRecipes.filter(recipe => 
-            !finalRecommendations.some(rec => rec.id === recipe.id)
-          );
+          // Limit favorite foods from other cuisines to 1 slot for better balance
+          const maxOtherCuisineFavs = Math.min(1, Math.min(remainingSlots, favoriteFoodsInOtherCuisines.length));
           
-          const additionalCount = Math.min(remainingSlots, additionalCuisineRecipes.length);
-          finalRecommendations.push(...additionalCuisineRecipes.slice(0, additionalCount));
-          console.log(`🌍 Added ${additionalCount} additional cuisine-matched recipes to fill recommendations`);
+          if (maxOtherCuisineFavs > 0) {
+            const otherFavsToAdd = Math.min(maxOtherCuisineFavs, favoriteFoodsInOtherCuisines.length);
+            finalRecommendations.push(...favoriteFoodsInOtherCuisines.slice(0, otherFavsToAdd));
+            console.log(`🍔 Added ${otherFavsToAdd} favorite foods from other cuisines (balanced approach)`);
+          }
+        }
+        
+        // Priority 3: Fill remaining slots with balanced cuisine recommendations
+        if (cuisineMatchedRecipes.length > 0) {
+          const remainingSlots = Math.max(0, 8 - finalRecommendations.length);
+          
+          if (remainingSlots > 0) {
+            console.log(`🌍 Filling ${remainingSlots} remaining slots with balanced cuisine recommendations`);
+            
+            // Filter out recipes we already added as favorite foods
+            const uniqueCuisineRecipes = cuisineMatchedRecipes.filter(recipe => 
+              !finalRecommendations.some(fav => fav.id === recipe.id)
+            );
+            
+            if (uniqueCuisineRecipes.length > 0) {
+              // Group recipes by cuisine for balanced distribution
+              const normalizedSelected = favoriteCuisines.map(c => (c || '').toString().trim().toLowerCase()).filter(Boolean);
+              const groupsByCuisine: Record<string, any[]> = {};
+              
+              for (const c of normalizedSelected) {
+                groupsByCuisine[c] = [];
+              }
+              
+              // Assign recipes to their matching cuisines
+              for (const recipe of uniqueCuisineRecipes) {
+                const recipeCuisines = Array.isArray((recipe as any).cuisines) ? (recipe as any).cuisines : [];
+                const single = (recipe as any).cuisine ? [(recipe as any).cuisine.toString().toLowerCase()] : [];
+                const allRecipeCuisines = [...recipeCuisines, ...single];
+                
+                const matchCuisine = normalizedSelected.find(sel => 
+                  allRecipeCuisines.some(rc => rc?.toLowerCase().includes(sel))
+                );
+                
+                if (matchCuisine) {
+                  groupsByCuisine[matchCuisine].push(recipe);
+                }
+              }
+              
+              // Round-robin pick from each cuisine to fill remaining slots
+              let added = true;
+              while (finalRecommendations.length < 8 && added) {
+                added = false;
+                for (const cuisine of normalizedSelected) {
+                  const cuisineRecipes = groupsByCuisine[cuisine] || [];
+                  if (cuisineRecipes.length > 0 && finalRecommendations.length < 8) {
+                    finalRecommendations.push(cuisineRecipes.shift()!);
+                    added = true;
+                  }
+                }
+              }
+              
+              console.log(`🌍 Added ${8 - finalRecommendations.length} cuisine-balanced recipes to fill recommendations`);
+            }
+          }
         }
         
         // If we still don't have enough, that's okay - better to show fewer quality recommendations
@@ -671,6 +815,26 @@ const HomePage: React.FC = () => {
         
         recommendedRecipes = finalRecommendations.slice(0, 8);
         console.log('🔄 Final frontend recommendations:', recommendedRecipes.length);
+        
+        // Debug: Show breakdown of final recommendations
+        const finalFavFoods = recommendedRecipes.filter(r => {
+          const titleLower = (r.title || (r as any).name || '').toLowerCase();
+          const ingredients = (r as any).ingredients || [];
+          const ingredientsLower = Array.isArray(ingredients) ? ingredients.map((i: any) => String(i).toLowerCase()) : [];
+          return favoriteFoodsNorm.some(food => titleLower.includes(food) || ingredientsLower.some(i => i.includes(food)));
+        });
+        console.log('🍔 Frontend fallback - Favorite foods in final recommendations:', finalFavFoods.length);
+        console.log('🍔 Frontend fallback - Favorite foods found:', finalFavFoods.map(r => r.title || (r as any).name));
+        
+        // Final distribution summary
+        const totalFavFoods = finalFavFoods.length;
+        const totalCuisineRecipes = recommendedRecipes.length - totalFavFoods;
+        console.log('📊 Final distribution summary:', {
+          totalRecipes: recommendedRecipes.length,
+          favoriteFoods: totalFavFoods,
+          cuisineRecipes: totalCuisineRecipes,
+          favoriteFoodPercentage: Math.round((totalFavFoods / recommendedRecipes.length) * 100)
+        });
       }
     } else {
       console.log('ℹ️ No user preferences, using default recipe organization');
@@ -793,7 +957,7 @@ const HomePage: React.FC = () => {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
               <div>
                 <div className="text-3xl md:text-4xl font-bold text-recipe-primary mb-2">
-                  {spoonacularRecipes.length}+
+                  1000+
                 </div>
                 <div className="text-gray-600">Recipes Available</div>
               </div>

@@ -97,7 +97,7 @@ def register_recipe_routes(app, recipe_cache):
             }), 500
     
     @app.route("/get_recipes", methods=["GET", "OPTIONS"])
-    @cross_origin(origins=["http://localhost:8081"], 
+    @cross_origin(origins=["http://localhost:8081", "http://localhost:5173"], 
                  supports_credentials=True)
     @async_route
     async def get_recipes():
@@ -110,6 +110,7 @@ def register_recipe_routes(app, recipe_cache):
         start_time = time.time()
         query = request.args.get("query", "").strip()
         ingredient = request.args.get("ingredient", "").strip()
+        
         offset = int(request.args.get("offset", "0"))
         limit = int(request.args.get("limit", "1000"))  # Default to 1000 results
         
@@ -181,7 +182,7 @@ def register_recipe_routes(app, recipe_cache):
             }), 500
 
     @app.route("/get_recipe_by_id", methods=["GET", "OPTIONS"])
-    @cross_origin(origins=["http://localhost:8081"], 
+    @cross_origin(origins=["http://localhost:8081", "http://localhost:5173"], 
                  supports_credentials=True)
     @async_route
     async def get_recipe_by_id():
