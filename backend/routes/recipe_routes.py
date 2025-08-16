@@ -114,6 +114,12 @@ def register_recipe_routes(app, recipe_cache):
         offset = int(request.args.get("offset", "0"))
         limit = int(request.args.get("limit", "1000"))  # Default to 1000 results
         
+        # Debug pagination parameters
+        print(f"🔍 BACKEND PAGINATION DEBUG:")
+        print(f"   - Received offset: {offset}")
+        print(f"   - Received limit: {limit}")
+        print(f"   - Request args: {dict(request.args)}")
+        
         # Get cuisine and dietary restrictions filters
         cuisine_param = request.args.get("cuisine", "")
         diet_param = request.args.get("dietary_restrictions", "")
@@ -145,18 +151,13 @@ def register_recipe_routes(app, recipe_cache):
         print(f"\n=== Recipe Search Request ===")
         print(f"Query: '{query}'")
         print(f"Ingredient: '{ingredient}'")
-        print(f"Cuisines: {cuisines}")
-        print(f"Dietary Restrictions: {dietary_restrictions}")
+        print(f"Cuisines: {cuisines} (type: {type(cuisines)}, length: {len(cuisines)})")
+        print(f"Dietary Restrictions: {dietary_restrictions} (type: {type(dietary_restrictions)}, length: {len(dietary_restrictions)})")
         print(f"Offset: {offset}, Limit: {limit}")
-        print(f"Foods to avoid: {foods_to_avoid}")
-        print(f"Favorite foods: {favorite_foods}")
-        print(f"Ingredient: '{ingredient}'")
-        print(f"Foods to avoid: {foods_to_avoid}")
-        print(f"Favorite foods: {favorite_foods}")
-        print(f"Offset: {offset}")
-        print(f"Limit: {limit}")
-        print(f"Cuisines filter: {cuisines}")
-        print(f"Dietary restrictions filter: {dietary_restrictions}")
+        print(f"Foods to avoid: {foods_to_avoid} (type: {type(foods_to_avoid)}, length: {len(foods_to_avoid)})")
+        print(f"Favorite foods: {favorite_foods} (type: {type(favorite_foods)}, length: {len(favorite_foods)})")
+        print(f"Raw cuisine_param: '{cuisine_param}' (type: {type(cuisine_param)})")
+        print(f"Raw diet_param: '{diet_param}' (type: {type(diet_param)})")
         
         try:
             # Search recipes from all sources with pagination and filters

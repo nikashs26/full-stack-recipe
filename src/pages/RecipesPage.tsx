@@ -122,15 +122,17 @@ const RecipesPage: React.FC = () => {
     isLoading: isLoadingRecipes, 
     isFetching 
   } = useQuery<{ recipes: Recipe[], total: number }>({
-    queryKey: ['recipes', searchQuery, ingredientSearch, selectedCuisines, selectedDiets],
+    queryKey: ['recipes', searchQuery, ingredientSearch, selectedCuisines, selectedDiets, currentPage, recipesPerPage],
     enabled: true, // Always enable the query to fetch recipes on mount
     queryFn: async () => {
       try {
-        console.log('useQuery triggered with:');
-        console.log('- searchQuery:', searchQuery);
-        console.log('- ingredientSearch:', ingredientSearch);
-        console.log('- selectedCuisines:', selectedCuisines);
-        console.log('- selectedDiets:', selectedDiets);
+        console.log('🔍 useQuery triggered with:');
+        console.log('  - searchQuery:', searchQuery);
+        console.log('  - ingredientSearch:', ingredientSearch);
+        console.log('  - selectedCuisines:', selectedCuisines);
+        console.log('  - selectedDiets:', selectedDiets);
+        console.log('  - currentPage:', currentPage);
+        console.log('  - recipesPerPage:', recipesPerPage);
         
         // Always use pagination for consistent behavior
         const result = await fetchManualRecipes(searchQuery, ingredientSearch, {
@@ -140,17 +142,18 @@ const RecipesPage: React.FC = () => {
           diets: selectedDiets
         });
         
-        console.log('Raw result from fetchManualRecipes:', result);
-        console.log('Result keys:', Object.keys(result));
-        console.log('Result.recipes:', result.recipes);
-        console.log('Result.total:', result.total);
-        console.log('Selected cuisines being sent to backend:', selectedCuisines);
-        console.log('Selected diets being sent to backend:', selectedDiets);
+        console.log('🔍 Backend response:');
+        console.log('  - Raw result:', result);
+        console.log('  - Result keys:', Object.keys(result));
+        console.log('  - Result.recipes:', result.recipes);
+        console.log('  - Result.total:', result.total);
+        console.log('  - Selected cuisines sent to backend:', selectedCuisines);
+        console.log('  - Selected diets sent to backend:', selectedDiets);
         
         // Update total pages based on the response
         const totalRecipes = result.total || 0;
         const calculatedTotalPages = Math.ceil(totalRecipes / recipesPerPage);
-        console.log(`Pagination Debug: total=${totalRecipes}, pageSize=${recipesPerPage}, calculatedTotalPages=${calculatedTotalPages}, currentPage=${currentPage}`);
+        console.log(`🔍 Pagination Debug: total=${totalRecipes}, pageSize=${recipesPerPage}, calculatedTotalPages=${calculatedTotalPages}, currentPage=${currentPage}`);
         setTotalPages(calculatedTotalPages);
         
         return {
@@ -182,13 +185,32 @@ const RecipesPage: React.FC = () => {
 
   // Handle search button click or Enter key press
   const handleSearchSubmit = () => {
-    console.log('Search submitted - before setting searchQuery');
-    console.log('searchTerm:', searchTerm);
-    console.log('ingredientSearch:', ingredientSearch);
+    console.log('=== SEARCH SUBMITTED ===');
+    console.log('searchTerm (from input):', searchTerm);
+    console.log('ingredientSearch (from input):', ingredientSearch);
+    console.log('Current searchQuery state:', searchQuery);
+    console.log('Current ingredientSearch state:', ingredientSearch);
+    
+    // Set both searchQuery and ingredientSearch to ensure the search is triggered
+    // This ensures that both recipe name and ingredient searches work properly
     setSearchQuery(searchTerm);
+    // Note: ingredientSearch state is already being used in the useQuery dependency array
+    // so we don't need to set it again, just ensure the search is triggered
+    
     updateCurrentPage(1);
-    console.log('Search submitted, triggering search');
-    console.log('searchQuery will be set to:', searchTerm);
+    console.log('After setting searchQuery to:', searchTerm);
+    console.log('Search should now be triggered with:');
+    console.log('- searchQuery:', searchTerm);
+    console.log('- ingredientSearch:', ingredientSearch);
+    console.log('=== END SEARCH SUBMITTED ===');
+    
+    // Add additional debugging to help identify the issue
+    console.log('🔍 SEARCH DEBUG INFO:');
+    console.log('  - searchTerm value:', searchTerm);
+    console.log('  - ingredientSearch value:', ingredientSearch);
+    console.log('  - Both values will be sent to backend');
+    console.log('  - Backend should differentiate between name and ingredient search');
+    console.log('  - If results are the same, the issue is likely in backend logic');
   };
 
   // Handle Enter key press in search input
@@ -329,35 +351,27 @@ const RecipesPage: React.FC = () => {
     return normalizedRecipes;
   }, [normalizedRecipes]);
 
-  // Apply frontend pagination to show only recipes for current page
+  // The backend now handles pagination, so we don't need frontend pagination
+  // Just use the recipes returned from the backend directly
   const displayRecipes = useMemo(() => {
     if (!Array.isArray(filteredRecipes)) {
       console.log('No recipes to display');
       return [];
     }
     
-    // Calculate start and end indices for current page
-    const startIndex = (currentPage - 1) * recipesPerPage;
-    const endIndex = startIndex + recipesPerPage;
-    const paginatedRecipes = filteredRecipes.slice(startIndex, endIndex);
-    
-    console.log('Displaying paginated recipes:', {
+    console.log('Displaying recipes from backend:', {
       totalRecipes: filteredRecipes.length,
       currentPage,
       totalPages,
-      pageSize: recipesPerPage,
-      startIndex,
-      endIndex,
-      paginatedCount: paginatedRecipes.length,
-      recipes: paginatedRecipes.map(r => ({
+      recipes: filteredRecipes.map(r => ({
         title: r?.title || 'Untitled',
         image: r?.imageUrl,
         hasImage: !!r?.imageUrl
       }))
     });
     
-    return paginatedRecipes;
-  }, [filteredRecipes, currentPage, totalPages, recipesPerPage]);
+    return filteredRecipes;
+  }, [filteredRecipes, currentPage, totalPages]);
 
   // Update total pages based on server response
   useEffect(() => {

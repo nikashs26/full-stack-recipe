@@ -52,21 +52,27 @@ export const fetchManualRecipes = async (
     if (queryStr) params.append('query', queryStr);
     if (ingredientStr) params.append('ingredient', ingredientStr);
     
-    // Handle pagination - if no search terms, get all recipes; otherwise use pagination
-    const page = options.page || 1;
-    const pageSize = options.pageSize || 20;
+    // Debug logging to help identify the issue
+    console.log('🔍 fetchManualRecipes called with:');
+    console.log('  - query:', query, '(type:', typeof query, ')');
+    console.log('  - ingredient:', ingredient, '(type:', typeof ingredient, ')');
+    console.log('  - queryStr:', queryStr);
+    console.log('  - ingredientStr:', ingredientStr);
+    console.log('  - URL params being built:', params.toString());
     
-    // Handle pagination based on whether we have search terms
-    if (queryStr || ingredientStr) {
-      // We have search terms - let backend handle search and return reasonable results
-      // Don't override backend's search logic with a huge limit
-      console.log('Search terms present - letting backend handle search');
-      // Don't append limit - let backend use default
+    // Handle pagination - always send pagination parameters to backend
+    if (options.page && options.pageSize) {
+      // Calculate offset based on current page and page size
+      const offset = (options.page - 1) * options.pageSize;
+      params.append('offset', offset.toString());
+      params.append('limit', options.pageSize.toString());
+      console.log(`🔍 PAGINATION DEBUG: page ${options.page}, pageSize ${options.pageSize}, offset ${offset}`);
+      console.log(`🔍 URL params being sent:`, params.toString());
     } else {
-      // No search terms - get all recipes for frontend pagination
-      console.log('No search terms - fetching all recipes for frontend pagination');
+      // Fallback: if no pagination options, use defaults
       params.append('offset', '0');
-      params.append('limit', '10000'); // Large enough to get all recipes
+      params.append('limit', '20');
+      console.log('⚠️ Using default pagination: offset 0, limit 20');
     }
     
     // Handle cuisines filter
@@ -101,7 +107,11 @@ export const fetchManualRecipes = async (
     
     const queryString = params.toString();
     const url = `${API_BASE_URL}/get_recipes${queryString ? `?${queryString}` : ''}`;
-    console.log('Fetching recipes from:', url);
+    console.log('🔍 Final API call details:');
+    console.log('  - Base URL:', API_BASE_URL);
+    console.log('  - Query string:', queryString);
+    console.log('  - Full URL:', url);
+    console.log('  - This URL will be called to search for recipes');
     
     // Get the authentication token from localStorage
     const token = localStorage.getItem('auth_token');

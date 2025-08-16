@@ -29,9 +29,6 @@ const HomePage: React.FC = () => {
     // State for refresh feedback
   const [refreshFeedback, setRefreshFeedback] = useState<string>('');
   
-  // State for refresh counter to force new queries
-  const [refreshCounter, setRefreshCounter] = useState<number>(0);
-  
   // Get query client for invalidation
   const queryClient = useQueryClient();
   
@@ -39,13 +36,10 @@ const HomePage: React.FC = () => {
   const handleRefreshRecommendations = async () => {
     setRefreshFeedback('Refreshing recommendations...');
     try {
-      // Invalidate the query to force a complete refetch
-      await queryClient.invalidateQueries({ queryKey: ['backend-recipes'] });
+      // Use React Query's refetch function to get fresh recommendations
+      await refetchBackendRecipes();
       
-      // Also increment refresh counter as backup
-      setRefreshCounter(prev => prev + 1);
-      
-      console.log('🔄 Refresh triggered - query invalidated and counter incremented');
+      console.log('🔄 Refresh triggered - backend recipes refetched');
       setRefreshFeedback('Recommendations refreshed!');
       
       // Clear feedback after 3 seconds
@@ -113,7 +107,7 @@ const HomePage: React.FC = () => {
   // Load recipes using React Query for better caching
   // Use the same /get_recipes endpoint for consistent data across homepage and search page
   const { data: backendRecipes = [], isLoading: isLoadingBackend, error: backendError, refetch: refetchBackendRecipes } = useQuery({
-    queryKey: ['backend-recipes', isAuthenticated, userPreferences, refreshCounter], // Include refreshCounter for refresh functionality
+    queryKey: ['backend-recipes', isAuthenticated, userPreferences], // Remove refreshCounter to prevent auto-refresh
     queryFn: async () => {
       try {
         // Always use the same /get_recipes endpoint for consistency with search page
@@ -171,7 +165,11 @@ const HomePage: React.FC = () => {
         return [];
       }
     },
-    staleTime: 0, // No stale time - always allow refetching for refresh functionality
+    staleTime: Infinity, // Never consider data stale - only refresh manually
+    gcTime: Infinity, // Keep in cache indefinitely
+    refetchOnWindowFocus: false, // Don't refetch when window regains focus
+    refetchOnMount: false, // Don't refetch when component mounts
+    refetchOnReconnect: false, // Don't refetch when reconnecting to network
     retry: 1, // Only retry once on failure
     enabled: true, // Always enabled
   });

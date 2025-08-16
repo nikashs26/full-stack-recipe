@@ -21,9 +21,6 @@ const RecommendedRecipes: React.FC = () => {
   // State for refresh feedback
   const [refreshFeedback, setRefreshFeedback] = useState<string>('');
   
-  // State for refresh counter to force new queries
-  const [refreshCounter, setRefreshCounter] = useState<number>(0);
-  
   console.log('🔍 Component - isAuthenticated:', isAuthenticated);
   console.log('🔍 Component - user:', user);
   console.log('🔍 Component - user?.preferences:', user?.preferences);
@@ -67,8 +64,8 @@ const RecommendedRecipes: React.FC = () => {
   const manualRecipes = manualRecipesData || [];
   
   // Safely access user preferences with fallback to empty arrays
-  const favoriteCuisines = user?.preferences?.favoriteCuisines || [];
-  const dietaryRestrictions = user?.preferences?.dietaryRestrictions || [];
+  const favoriteCuisines = React.useMemo(() => user?.preferences?.favoriteCuisines || [], [user?.preferences?.favoriteCuisines]);
+  const dietaryRestrictions = React.useMemo(() => user?.preferences?.dietaryRestrictions || [], [user?.preferences?.dietaryRestrictions]);
   
   console.log('RecommendedRecipes - User preferences:', { favoriteCuisines, dietaryRestrictions });
 
@@ -76,8 +73,8 @@ const RecommendedRecipes: React.FC = () => {
   const handleRefreshRecommendations = async () => {
     setRefreshFeedback('Refreshing recommendations...');
     try {
-      // Increment refresh counter to force a completely new query
-      setRefreshCounter(prev => prev + 1);
+      // Use React Query's refetch function to get fresh recommendations
+      await refetchRecommendations();
       setRefreshFeedback('Recommendations refreshed!');
       // Clear feedback after 3 seconds
       setTimeout(() => setRefreshFeedback(''), 3000);
@@ -88,35 +85,17 @@ const RecommendedRecipes: React.FC = () => {
     }
   };
 
-  // Query backend recommendations API
+  // Query for backend recommendations
   const { data: recommendedRecipes = [], isLoading: isRecommendationsLoading, refetch: refetchRecommendations } = useQuery({
-    queryKey: ['recommendations', user?.preferences, hasMeaningfulPreferences, refreshCounter], // Add refresh counter for unique queries
+    queryKey: ['recommendations', user?.preferences?.favoriteCuisines?.join(','), user?.preferences?.favoriteFoods?.join(',')], // Stable key based on preferences
     queryFn: async () => {
-      console.log('🔍 Query function called!');
-      console.log('🔍 isAuthenticated:', isAuthenticated);
-      console.log('🔍 user?.preferences:', user?.preferences);
-      
-      if (!isAuthenticated || !user?.preferences) {
-        console.log('❌ No user preferences, returning empty recommendations');
-        return [];
-      }
-
-      // Debug: Log the exact preferences being sent
-      console.log('🔍 Sending preferences to recommendation API:', {
-        favoriteFoods: user.preferences.favoriteFoods,
-        favoriteCuisines: user.preferences.favoriteCuisines,
-        dietaryRestrictions: user.preferences.dietaryRestrictions,
-        hasMeaningfulPreferences,
-        allPreferences: user.preferences
-      });
-
       try {
-        console.log('🔍 Making API call to /recommendations...');
+        console.log('🔍 Fetching recommendations from backend...');
         
-        const response = await apiCall('/api/recommendations?limit=12', {
+        const response = await fetch('/api/smart-features/recommendations', {
           method: 'GET',
+          credentials: 'include',
           headers: {
-            'Accept': 'application/json',
             'Content-Type': 'application/json'
           }
         });
@@ -132,6 +111,51 @@ const RecommendedRecipes: React.FC = () => {
         const data = await response.json();
         console.log('✅ Backend recommendations response:', data);
         console.log('✅ Backend recommendations array:', data.recommendations);
+        
+        // Analyze the recommendations for balance
+        if (data.recommendations && Array.isArray(data.recommendations)) {
+          const cuisineCounts: Record<string, number> = {};
+          const favoriteFoodMatches: string[] = [];
+          
+          data.recommendations.forEach((recipe: any) => {
+            const cuisine = recipe.cuisine || 'Unknown';
+            cuisineCounts[cuisine] = (cuisineCounts[cuisine] || 0) + 1;
+            
+            // Check for favorite food matches
+            if (user?.preferences?.favoriteFoods) {
+              const recipeText = `${recipe.title || recipe.name || ''} ${recipe.description || ''}`.toLowerCase();
+              const hasFavoriteFood = user.preferences.favoriteFoods.some((food: string) => 
+                recipeText.includes(food.toLowerCase())
+              );
+              if (hasFavoriteFood) {
+                favoriteFoodMatches.push(recipe.title || recipe.name || 'Unknown');
+              }
+            }
+          });
+          
+          console.log('📊 Recommendation Analysis:');
+          console.log('   • Total recipes:', data.recommendations.length);
+          console.log('   • Cuisine distribution:', cuisineCounts);
+          console.log('   • Favorite food matches:', favoriteFoodMatches.length);
+          
+          // Check balance
+          const counts = Object.values(cuisineCounts);
+          if (counts.length > 1) {
+            const maxCount = Math.max(...counts);
+            const minCount = Math.min(...counts);
+            const balanceRatio = maxCount / minCount;
+            
+            console.log('   • Balance ratio:', balanceRatio.toFixed(2));
+            if (balanceRatio > 3) {
+              console.warn('   ⚠️ Recommendations may be imbalanced');
+            } else if (balanceRatio > 2) {
+              console.log('   ⚠️ Moderate imbalance detected');
+            } else {
+              console.log('   ✅ Good balance');
+            }
+          }
+        }
+        
         console.log('✅ First recipe details:', data.recommendations?.[0] ? {
           id: data.recommendations[0].id,
           title: data.recommendations[0].title,
@@ -145,37 +169,43 @@ const RecommendedRecipes: React.FC = () => {
         return [];
       }
     },
-    enabled: isAuthenticated && !!user?.preferences, // Temporarily removed hasMeaningfulPreferences check
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    enabled: isAuthenticated && !!user?.preferences,
+    staleTime: Infinity, // Never consider data stale - only refresh manually
+    gcTime: Infinity, // Keep in cache indefinitely
+    refetchOnWindowFocus: false, // Don't refetch when window regains focus
+    refetchOnMount: false, // Don't refetch when component mounts
+    refetchOnReconnect: false, // Don't refetch when reconnecting to network
   });
 
   console.log('🔍 Query enabled:', isAuthenticated && !!user?.preferences);
   console.log('🔍 isAuthenticated:', isAuthenticated);
   console.log('🔍 user?.preferences:', user?.preferences);
 
-  // Combine all recipes for display, prioritizing backend recommendations
-  // Backend recommendations should come first since they have the most complete data
-  const allCombined = [
-    ...recommendedRecipes.map(recipe => ({ 
-      ...recipe, 
-      type: 'external' as const,
-      // Ensure backend recommendations have priority
-      priority: 1
-    })),
-    ...manualRecipes.map(recipe => ({ 
-      ...recipe, 
-      type: 'manual' as const,
-      priority: 2
-    })),
-    ...allRecipes.map(recipe => ({ 
-      ...recipe, 
-      type: 'saved' as const,
-      priority: 3
-    }))
-  ];
-
-  // Sort by priority to ensure backend recommendations come first
-  allCombined.sort((a, b) => (a.priority || 3) - (b.priority || 3));
+  // Memoize the combined recipes to prevent unnecessary re-computations
+  const allCombined = React.useMemo(() => {
+    const combined = [
+      ...recommendedRecipes.map(recipe => ({ 
+        ...recipe, 
+        type: 'external' as const,
+        priority: 1
+      })),
+      ...manualRecipes.map(recipe => ({ 
+        ...recipe, 
+        type: 'manual' as const,
+        priority: 2
+      })),
+      ...allRecipes.map(recipe => ({ 
+        ...recipe, 
+        type: 'saved' as const,
+        priority: 3
+      }))
+    ];
+    
+    // Sort by priority to ensure backend recommendations come first
+    combined.sort((a, b) => (a.priority || 3) - (b.priority || 3));
+    
+    return combined;
+  }, [recommendedRecipes, manualRecipes, allRecipes]);
 
   // Debug: Log what each source is providing
   console.log('🔍 Recipe sources debug:');

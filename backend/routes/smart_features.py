@@ -5,6 +5,7 @@ from services.smart_shopping_service import SmartShoppingService
 from services.user_preferences_service import UserPreferencesService
 import logging
 from middleware.auth_middleware import get_current_user_id, require_auth
+from flask_cors import cross_origin
 
 logger = logging.getLogger(__name__)
 
@@ -274,6 +275,187 @@ def get_simple_recommendations():
     except Exception as e:
         print(f"❌ Error in simple recommendations: {e}")
         return jsonify({"error": str(e)}), 500
+
+@smart_features_bp.route('/recommendations/test-balance', methods=['GET'])
+@cross_origin(origins=["http://localhost:5173"], supports_credentials=True)
+def test_recommendation_balance():
+    """Test endpoint to check recommendation balance and distribution"""
+    try:
+        user_id = get_current_user_id()
+        if not user_id:
+            return jsonify({
+                "status": "error",
+                "message": "User not authenticated"
+            }), 401
+        
+        # Get user preferences
+        preferences = user_preferences_service.get_preferences(user_id)
+        if not preferences:
+            return jsonify({
+                "status": "error",
+                "message": "No user preferences found"
+            }), 404
+        
+        # Get recommendations
+        limit = int(request.args.get('limit', 8))
+        results = recipe_search_service.get_recipe_recommendations(preferences, limit)
+        
+        # Analyze distribution
+        cuisine_counts = {}
+        favorite_food_matches = []
+        
+        for recipe in results:
+            # Count cuisines
+            cuisine = recipe.get('cuisine', 'Unknown')
+            cuisine_counts[cuisine] = cuisine_counts.get(cuisine, 0) + 1
+            
+            # Check for favorite food matches
+            if preferences.get('favoriteFoods'):
+                recipe_text = f"{recipe.get('title', '')} {recipe.get('description', '')}".lower()
+                for food in preferences['favoriteFoods']:
+                    if food.lower() in recipe_text:
+                        favorite_food_matches.append({
+                            'recipe': recipe.get('title', recipe.get('name', 'Unknown')),
+                            'favorite_food': food,
+                            'cuisine': cuisine
+                        })
+                        break
+        
+        # Calculate balance metrics
+        total_recipes = len(results)
+        max_cuisine_count = max(cuisine_counts.values()) if cuisine_counts else 0
+        min_cuisine_count = min(cuisine_counts.values()) if cuisine_counts else 0
+        balance_ratio = max_cuisine_count / min_cuisine_count if min_cuisine_count > 0 else float('inf')
+        
+        return jsonify({
+            "status": "success",
+            "data": {
+                "total_recipes": total_recipes,
+                "cuisine_distribution": cuisine_counts,
+                "favorite_food_matches": favorite_food_matches,
+                "balance_metrics": {
+                    "max_cuisine_count": max_cuisine_count,
+                    "min_cuisine_count": min_cuisine_count,
+                    "balance_ratio": round(balance_ratio, 2),
+                    "is_balanced": balance_ratio <= 2.0
+                },
+                "recommendations": results
+            }
+        }), 200
+        
+    except Exception as e:
+        print(f"❌ Error in test balance endpoint: {e}")
+        return jsonify({
+            "status": "error",
+            "message": f"Failed to test recommendations: {str(e)}"
+        }), 500
+
+@smart_features_bp.route('/recommendations/debug', methods=['GET'])
+@cross_origin(origins=["http://localhost:5173"], supports_credentials=True)
+def debug_recommendations():
+    """Debug endpoint to investigate cuisine distribution issues"""
+    try:
+        user_id = get_current_user_id()
+        if not user_id:
+            return jsonify({
+                "status": "error",
+                "message": "User not authenticated"
+            }), 401
+        
+        # Get user preferences
+        preferences = user_preferences_service.get_preferences(user_id)
+        if not preferences:
+            return jsonify({
+                "status": "error",
+                "message": "No user preferences found"
+            }), 404
+        
+        limit = int(request.args.get('limit', 8))
+        
+        # Get recommendations
+        results = recipe_search_service.get_recipe_recommendations(preferences, limit)
+        
+        # Detailed analysis
+        cuisine_counts = {}
+        cuisine_details = {}
+        favorite_food_matches = []
+        
+        for i, recipe in enumerate(results):
+            # Count cuisines
+            cuisine = recipe.get('cuisine', 'Unknown')
+            cuisine_counts[cuisine] = cuisine_counts.get(cuisine, 0) + 1
+            
+            # Track recipe details for each cuisine
+            if cuisine not in cuisine_details:
+                cuisine_details[cuisine] = []
+            
+            recipe_info = {
+                'index': i,
+                'title': recipe.get('title') or recipe.get('name', 'Unknown'),
+                'id': recipe.get('id') or recipe.get('_id', 'Unknown'),
+                'original_cuisine': recipe.get('cuisine', 'Unknown'),
+                'detected_cuisine': recipe_search_service._detect_cuisine_from_ingredients(recipe),
+                'normalized_cuisine': recipe_search_service._normalize_cuisine(recipe.get('cuisine', ''), recipe)
+            }
+            cuisine_details[cuisine].append(recipe_info)
+            
+            # Check for favorite food matches
+            if preferences.get('favoriteFoods'):
+                recipe_text = f"{recipe.get('title', '')} {recipe.get('description', '')}".lower()
+                for food in preferences['favoriteFoods']:
+                    if food.lower() in recipe_text:
+                        favorite_food_matches.append({
+                            'recipe': recipe.get('title', recipe.get('name', 'Unknown')),
+                            'favorite_food': food,
+                            'cuisine': cuisine,
+                            'index': i
+                        })
+                        break
+        
+        # Analyze distribution
+        total_recipes = len(results)
+        max_cuisine_count = max(cuisine_counts.values()) if cuisine_counts else 0
+        min_cuisine_count = min(cuisine_counts.values()) if cuisine_counts else 0
+        balance_ratio = max_cuisine_count / min_cuisine_count if min_cuisine_count > 0 else float('inf')
+        
+        # Check if user preferences match what we're seeing
+        user_cuisines = preferences.get('favoriteCuisines', [])
+        user_foods = preferences.get('favoriteFoods', [])
+        
+        return jsonify({
+            "status": "success",
+            "data": {
+                "user_preferences": {
+                    "favoriteCuisines": user_cuisines,
+                    "favoriteFoods": user_foods,
+                    "dietaryRestrictions": preferences.get('dietaryRestrictions', [])
+                },
+                "requested_limit": limit,
+                "total_recipes": total_recipes,
+                "cuisine_distribution": cuisine_counts,
+                "cuisine_details": cuisine_details,
+                "favorite_food_matches": favorite_food_matches,
+                "balance_metrics": {
+                    "max_cuisine_count": max_cuisine_count,
+                    "min_cuisine_count": min_cuisine_count,
+                    "balance_ratio": round(balance_ratio, 2),
+                    "is_balanced": balance_ratio <= 2.0
+                },
+                "analysis": {
+                    "expected_cuisines": len(user_cuisines),
+                    "expected_per_cuisine": limit // len(user_cuisines) if user_cuisines else 0,
+                    "actual_distribution": cuisine_counts,
+                    "distribution_issues": []
+                }
+            }
+        }), 200
+        
+    except Exception as e:
+        print(f"❌ Error in debug endpoint: {e}")
+        return jsonify({
+            "status": "error",
+            "message": f"Failed to debug recommendations: {str(e)}"
+        }), 500
 
 @smart_features_bp.route('/meal-history/log', methods=['POST'])
 def log_meal_generation():

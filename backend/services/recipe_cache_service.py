@@ -236,21 +236,27 @@ class RecipeCacheService:
             return []
         
         try:
+            # Get all recipes from cache first
+            all_recipes = self._get_all_recipes_from_cache()
+            logger.info(f"Retrieved {len(all_recipes)} recipes from cache")
+            
             # If no search terms, return all recipes
             if not query.strip() and not ingredient.strip():
                 logger.debug("No search terms - returning all recipes from cache")
-                return self._get_all_recipes_from_cache()
+                return all_recipes
             
             # We have search terms - implement proper text-based search
             search_text = f"{query} {ingredient}".strip()
             logger.info(f"Searching for: '{search_text}' in cached recipes")
             
-            # Get all recipes and filter them by search terms
-            all_recipes = self._get_all_recipes_from_cache()
-            matching_recipes = []
-            
             # Split search terms for better matching
-            search_terms = search_text.lower().split()
+            search_terms = [term.strip().lower() for term in search_text.split() if term.strip()]
+            logger.info(f"Search terms: {search_terms}")
+            
+            # Check if this is primarily an ingredient search
+            is_ingredient_search = bool(ingredient.strip())
+            
+            matching_recipes = []
             
             for recipe in all_recipes:
                 # Build searchable text from recipe
@@ -276,44 +282,61 @@ class RecipeCacheService:
                 
                 recipe_text = recipe_text.lower()
                 
-                # Check if ANY search term matches (partial matching)
-                if any(term in recipe_text for term in search_terms):
-                    # Calculate a simple relevance score
-                    score = 0
-                    
-                    # Title matches get highest score
-                    if 'title' in recipe and recipe['title']:
-                        title_lower = recipe['title'].lower()
+                # Calculate relevance score based on how many search terms match
+                score = 0
+                matched_terms = 0
+                ingredient_matches = 0
+                
+                # Title matches get highest score
+                if 'title' in recipe and recipe['title']:
+                    title_lower = recipe['title'].lower()
+                    for term in search_terms:
+                        if term in title_lower:
+                            score += 100
+                            matched_terms += 1
+                
+                # Description matches get medium score
+                if 'description' in recipe and recipe['description']:
+                    desc_lower = recipe['description'].lower()
+                    for term in search_terms:
+                        if term in desc_lower:
+                            score += 50
+                            matched_terms += 1
+                
+                # Ingredient matches get good score, with bonus for ingredient searches
+                if 'ingredients' in recipe and isinstance(recipe['ingredients'], list):
+                    for ing in recipe['ingredients']:
+                        ing_name = ""
+                        if isinstance(ing, dict) and 'name' in ing:
+                            ing_name = ing['name'].lower()
+                        elif isinstance(ing, str):
+                            ing_name = ing.lower()
+                        
                         for term in search_terms:
-                            if term in title_lower:
-                                score += 100
-                    
-                    # Description matches get medium score
-                    if 'description' in recipe and recipe['description']:
-                        desc_lower = recipe['description'].lower()
-                        for term in search_terms:
-                            if term in desc_lower:
-                                score += 50
-                    
-                    # Ingredient matches get good score
-                    if 'ingredients' in recipe and isinstance(recipe['ingredients'], list):
-                        for ing in recipe['ingredients']:
-                            ing_name = ""
-                            if isinstance(ing, dict) and 'name' in ing:
-                                ing_name = ing['name'].lower()
-                            elif isinstance(ing, str):
-                                ing_name = ing.lower()
-                            
-                            for term in search_terms:
-                                if term in ing_name:
+                            if term in ing_name:
+                                # Give higher score for ingredient matches during ingredient searches
+                                if is_ingredient_search:
+                                    score += 80  # Higher score for ingredient searches
+                                else:
                                     score += 30
-                                    break
-                    
+                                matched_terms += 1
+                                ingredient_matches += 1
+                                break
+                
+                # Only include recipes that have at least one meaningful match
+                # This prevents returning recipes with 0 relevance
+                if score > 0:
                     recipe['search_score'] = score
+                    recipe['matched_terms'] = matched_terms
+                    recipe['ingredient_matches'] = ingredient_matches
                     matching_recipes.append(recipe)
             
-            # Sort by relevance score (highest first)
-            matching_recipes.sort(key=lambda x: x.get('search_score', 0), reverse=True)
+            # Sort by relevance score (highest first), then by number of matched terms
+            # For ingredient searches, prioritize recipes with more ingredient matches
+            if is_ingredient_search:
+                matching_recipes.sort(key=lambda x: (x.get('search_score', 0), x.get('ingredient_matches', 0), x.get('matched_terms', 0)), reverse=True)
+            else:
+                matching_recipes.sort(key=lambda x: (x.get('search_score', 0), x.get('matched_terms', 0)), reverse=True)
             
             logger.info(f"Text search found {len(matching_recipes)} recipes matching '{search_text}' out of {len(all_recipes)} total")
             return matching_recipes
