@@ -92,7 +92,7 @@ const RecommendedRecipes: React.FC = () => {
       try {
         console.log('🔍 Fetching recommendations from backend...');
         
-        const response = await fetch('/api/smart-features/recommendations', {
+        const response = await fetch('/api/recommendations', {
           method: 'GET',
           credentials: 'include',
           headers: {

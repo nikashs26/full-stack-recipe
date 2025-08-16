@@ -263,11 +263,113 @@ class RecipeCacheService:
             
             # If no search terms, return all recipes (or base recipes if chained search)
             if not query.strip() and not ingredient.strip():
+                logger.info(f"🔍 DEBUG: No search terms detected - query.strip(): '{query.strip()}', ingredient.strip(): '{ingredient.strip()}'")
                 if base_recipes:
                     logger.debug("Chained search with no new terms - returning base recipes")
                 else:
-                    logger.debug("No search terms - returning all recipes from cache")
-                return all_recipes
+                    logger.debug("No search terms - applying filters if provided")
+                    # Apply filters to all recipes when no search terms
+                    if filters:
+                        logger.info(f"🔍 DEBUG: About to check filters: {filters}")
+                        logger.info(f"🔍 DEBUG: filters type: {type(filters)}")
+                        logger.info(f"🔍 DEBUG: filters truthy: {bool(filters)}")
+                        logger.info(f"🔍 Applying filters to all recipes: {filters}")
+                        filtered_recipes = []
+                        
+                        for recipe in all_recipes:
+                            should_include = True
+                            
+                            # Cuisine filter
+                            if filters.get("cuisine"):
+                                cuisine_filter = filters["cuisine"]
+                                recipe_cuisines = []
+                                
+                                # Check both cuisine and cuisines fields
+                                if recipe.get('cuisine'):
+                                    recipe_cuisines.append(recipe['cuisine'].lower())
+                                if recipe.get('cuisines') and isinstance(recipe['cuisines'], list):
+                                    recipe_cuisines.extend([c.lower() for c in recipe['cuisines'] if c])
+                                
+                                logger.info(f"🔍 DEBUG: Recipe '{recipe.get('title', 'Unknown')}' has cuisines: {recipe_cuisines}")
+                                logger.info(f"🔍 DEBUG: Filtering for cuisine: {cuisine_filter}")
+                                
+                                # Handle both single string and list of strings for cuisine filter
+                                if isinstance(cuisine_filter, str):
+                                    # Single cuisine filter - check for exact match or contains
+                                    if not any(cuisine_filter.lower() == cuisine.lower() or cuisine.lower() in cuisine_filter.lower() for cuisine in recipe_cuisines):
+                                        should_include = False
+                                        logger.debug(f"Recipe '{recipe.get('title', 'Unknown')}' excluded by cuisine filter: {cuisine_filter}")
+                                elif isinstance(cuisine_filter, list):
+                                    # Multiple cuisine filters - check if any match
+                                    if not any(any(filter_cuisine.lower() == cuisine.lower() or cuisine.lower() in filter_cuisine.lower() for cuisine in recipe_cuisines) for filter_cuisine in cuisine_filter):
+                                        should_include = False
+                                        logger.debug(f"Recipe '{recipe.get('title', 'Unknown')}' excluded by cuisine filter: {cuisine_filter}")
+                                else:
+                                    # Invalid filter type
+                                    should_include = False
+                                    logger.warning(f"Invalid cuisine filter type: {type(cuisine_filter)}")
+                            
+                            # Dietary restrictions filter
+                            if should_include and filters.get("dietary_restrictions"):
+                                dietary_filter = [d.lower() for d in filters["dietary_restrictions"]]
+                                recipe_dietary = []
+                                
+                                if recipe.get('dietaryRestrictions'):
+                                    recipe_dietary.extend([d.lower() for d in recipe['dietaryRestrictions'] if d])
+                                if recipe.get('diets'):
+                                    recipe_dietary.extend([d.lower() for d in recipe['diets'] if d])
+                                
+                                # Check if any recipe dietary info matches the filter
+                                if not any(diet in recipe_dietary for diet in dietary_filter):
+                                    should_include = False
+                                    logger.debug(f"Recipe '{recipe.get('title', 'Unknown')}' excluded by dietary filter: {dietary_filter}")
+                            
+                            # Max cooking time filter
+                            if should_include and filters.get("max_cooking_time"):
+                                try:
+                                    max_time = int(filters["max_cooking_time"])
+                                    recipe_time = recipe.get('cooking_time') or recipe.get('readyInMinutes')
+                                    if recipe_time and int(recipe_time) > max_time:
+                                        should_include = False
+                                        logger.debug(f"Recipe '{recipe.get('title', 'Unknown')}' excluded by cooking time filter: {recipe_time} > {max_time}")
+                                except (ValueError, TypeError):
+                                    logger.warning(f"Invalid max_cooking_time value: {filters['max_cooking_time']}")
+                            
+                            # Max calories filter
+                            if should_include and filters.get("max_calories"):
+                                try:
+                                    max_cal = int(filters["max_calories"])
+                                    recipe_calories = recipe.get('calories') or recipe.get('calorieCount')
+                                    if recipe_calories and int(recipe_calories) > max_cal:
+                                        should_include = False
+                                        logger.debug(f"Recipe '{recipe.get('title', 'Unknown')}' excluded by calories filter: {recipe_calories} > {max_cal}")
+                                except (ValueError, TypeError):
+                                    logger.warning(f"Invalid max_calories value: {filters['max_calories']}")
+                            
+                            # Min rating filter
+                            if should_include and filters.get("min_rating"):
+                                try:
+                                    min_rating = float(filters["min_rating"])
+                                    recipe_rating = recipe.get('avg_rating') or recipe.get('rating')
+                                    if recipe_rating and float(recipe_rating) < min_rating:
+                                        should_include = False
+                                        logger.debug(f"Recipe '{recipe.get('title', 'Unknown')}' excluded by rating filter: {recipe_rating} < {min_rating}")
+                                except (ValueError, TypeError):
+                                    logger.warning(f"Invalid min_rating value: {filters['min_rating']}")
+                            
+                            if should_include:
+                                filtered_recipes.append(recipe)
+                        
+                        logger.info(f"🔍 Filtering results: {len(all_recipes)} -> {len(filtered_recipes)} recipes")
+                        all_recipes = filtered_recipes
+                    
+                    # If no search terms and no filters, return all recipes
+                    if not filters:
+                        logger.info(f"🔍 No search terms and no filters - returning all {len(all_recipes)} recipes")
+                        return all_recipes
+                    else:
+                        logger.info(f"🔍 No search terms but filters applied - returning {len(all_recipes)} filtered recipes")
+                        return all_recipes
             
             # STRICT VALIDATION: Require meaningful search terms
             query_trimmed = query.strip()
@@ -308,7 +410,8 @@ class RecipeCacheService:
                 logger.info(f"  - WILL NOT look at ingredients field at all")
                 logger.info(f"  - ONLY checking recipe.title and recipe.description for word matches")
             else:
-                logger.warning("⚠️ No search parameters provided - returning all recipes")
+                logger.warning("⚠️ No search parameters provided - applying filters only")
+                # This path is now handled above in the no search terms section
             
             matching_recipes = []
             
@@ -573,12 +676,10 @@ class RecipeCacheService:
                     
                     # CRITICAL: Verify we're NOT looking at ingredients for name search
                     if 'ingredients' in recipe:
-
                         # Double-check that ingredients don't contain the search term
                         ingredients_text = str(recipe.get('ingredients', '')).lower()
                         if query_lower in ingredients_text:
-
-
+                            logger.debug(f"  - ⚠️ Query '{query_lower}' found in ingredients, but this is name search - ignoring")
                     
                     # CRITICAL: Verify we're NOT looking at any other fields that might contain the search term
                     other_fields_to_check = ['summary', 'instructions', 'tags', 'cuisine', 'cuisines', 'category']
@@ -586,6 +687,7 @@ class RecipeCacheService:
                         if field in recipe:
                             field_text = str(recipe.get(field, '')).lower()
                             if query_lower in field_text:
+                                logger.debug(f"  - ⚠️ Query '{query_lower}' found in {field}, but this is name search - ignoring")
 
 
                     
@@ -692,6 +794,84 @@ class RecipeCacheService:
             else:
                 logger.warning(f"🔍 DEBUG: No recipes matched search criteria!")
                 logger.warning(f"🔍 This explains why you're getting 0 results")
+            
+            # Apply filters if provided
+            if filters:
+                logger.info(f"🔍 Applying filters: {filters}")
+                filtered_recipes = []
+                
+                for recipe in meaningful_recipes:
+                    should_include = True
+                    
+                    # Cuisine filter
+                    if filters.get("cuisine"):
+                        cuisine_filter = filters["cuisine"].lower()
+                        recipe_cuisines = []
+                        
+                        # Check both cuisine and cuisines fields
+                        if recipe.get('cuisine'):
+                            recipe_cuisines.append(recipe['cuisine'].lower())
+                        if recipe.get('cuisines') and isinstance(recipe['cuisines'], list):
+                            recipe_cuisines.extend([c.lower() for c in recipe['cuisines'] if c])
+                        
+                        # Check if any recipe cuisine matches the filter
+                        if not any(cuisine_filter in cuisine or cuisine in cuisine_filter for cuisine in recipe_cuisines):
+                            should_include = False
+                            logger.debug(f"Recipe '{recipe.get('title', 'Unknown')}' excluded by cuisine filter: {cuisine_filter}")
+                    
+                    # Dietary restrictions filter
+                    if should_include and filters.get("dietary_restrictions"):
+                        dietary_filter = [d.lower() for d in filters["dietary_restrictions"]]
+                        recipe_dietary = []
+                        
+                        if recipe.get('dietaryRestrictions'):
+                            recipe_dietary.extend([d.lower() for d in recipe['dietaryRestrictions'] if d])
+                        if recipe.get('diets'):
+                            recipe_dietary.extend([d.lower() for d in recipe['diets'] if d])
+                        
+                        # Check if any recipe dietary info matches the filter
+                        if not any(diet in recipe_dietary for diet in dietary_filter):
+                            should_include = False
+                            logger.debug(f"Recipe '{recipe.get('title', 'Unknown')}' excluded by dietary filter: {dietary_filter}")
+                    
+                    # Max cooking time filter
+                    if should_include and filters.get("max_cooking_time"):
+                        try:
+                            max_time = int(filters["max_cooking_time"])
+                            recipe_time = recipe.get('cooking_time') or recipe.get('readyInMinutes')
+                            if recipe_time and int(recipe_time) > max_time:
+                                should_include = False
+                                logger.debug(f"Recipe '{recipe.get('title', 'Unknown')}' excluded by cooking time filter: {recipe_time} > {max_time}")
+                        except (ValueError, TypeError):
+                            logger.warning(f"Invalid max_cooking_time value: {filters['max_cooking_time']}")
+                    
+                    # Max calories filter
+                    if should_include and filters.get("max_calories"):
+                        try:
+                            max_cal = int(filters["max_calories"])
+                            recipe_calories = recipe.get('calories') or recipe.get('calorieCount')
+                            if recipe_calories and int(recipe_calories) > max_cal:
+                                should_include = False
+                                logger.debug(f"Recipe '{recipe.get('title', 'Unknown')}' excluded by calories filter: {recipe_calories} > {max_cal}")
+                        except (ValueError, TypeError):
+                            logger.warning(f"Invalid max_calories value: {filters['max_calories']}")
+                    
+                    # Min rating filter
+                    if should_include and filters.get("min_rating"):
+                        try:
+                            min_rating = float(filters["min_rating"])
+                            recipe_rating = recipe.get('avg_rating') or recipe.get('rating')
+                            if recipe_rating and float(recipe_rating) < min_rating:
+                                should_include = False
+                                logger.debug(f"Recipe '{recipe.get('title', 'Unknown')}' excluded by rating filter: {recipe_rating} < {min_rating}")
+                        except (ValueError, TypeError):
+                            logger.warning(f"Invalid min_rating value: {filters['min_rating']}")
+                    
+                    if should_include:
+                        filtered_recipes.append(recipe)
+                
+                logger.info(f"🔍 Filtering results: {len(meaningful_recipes)} -> {len(filtered_recipes)} recipes")
+                meaningful_recipes = filtered_recipes
             
             return meaningful_recipes
             

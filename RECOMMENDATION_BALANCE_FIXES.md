@@ -1,133 +1,156 @@
-# Recommendation Balance Fixes - FAIR DISTRIBUTION
+# Recipe Recommendations Cuisine Distribution Fix
 
-## Problem Identified
-The recipe recommendations were showing imbalanced results due to overly complex balancing logic that:
-1. Applied very strict cuisine limits per cuisine
-2. Heavily prioritized favorite foods, allowing them to dominate results
-3. Used complex time-based randomization that created inconsistent results
-4. Had overly complicated multi-phase balancing that wasn't working as intended
+## Problem Description
 
-## Solution: FAIR CUISINE SPLIT + FAVORITE FOODS
+The recipe recommendations system was only returning recipes from one cuisine instead of providing a balanced distribution across all user-selected cuisine preferences. This was causing users to see recommendations that didn't reflect their diverse culinary interests.
 
-The new system ensures:
-- **Equal distribution among cuisines** - Each preferred cuisine gets exactly the same number of recipes
-- **Guaranteed favorite food inclusion** - At least 2-3 favorite foods are always included
-- **Predictable results** - Same preferences produce consistent, balanced recommendations
+## Root Cause Analysis
 
-## Changes Made
+The issue was in the `RecipeSearchService.get_recipe_recommendations()` method in `backend/services/recipe_search_service.py`. The problem had two main components:
 
-### 1. Fair Distribution Algorithm (`backend/services/recipe_search_service.py`)
-- **Reserves 2-3 slots for favorite foods** (25% of limit, minimum 2)
-- **Distributes remaining slots equally** among preferred cuisines
-- **Ensures perfect balance** - max difference between cuisines is ≤1
-- **Prioritizes favorite foods in preferred cuisines** when possible
+### 1. Incomplete `if` Statements (Syntax Error)
+There were incomplete `if` statements in the recipe cache service that were causing Python syntax errors:
+- Line 584: Missing body for `if query_lower in ingredients_text:`
+- Line 590: Missing body for `if query_lower in field_text:`
 
-### 2. Simplified Recipe Service (`backend/services/recipe_service.py`)
-- **Removed overly complex cuisine balancing** from search results
-- **Simplified filtering logic** to apply filters in sequence without complex reordering
-- **Improved scoring system** that's more predictable and balanced
-- **Eliminated strict quantity limits** that were forcing artificial distribution
+### 2. Cuisine Field Handling Mismatch
+The recommendation logic was only checking the `cuisine` field, but many recipes in the database have:
+- Empty `cuisine` fields (`''`)
+- Populated `cuisines` arrays (e.g., `['italian']`, `['indian']`)
 
-### 3. Enhanced Balance Testing (`backend/routes/smart_features.py`)
-- **New test endpoint** `/api/smart-features/recommendations/test-balance` to analyze recommendation distribution
-- **Balance metrics** including max/min ratio and balance validation
-- **Detailed logging** of cuisine distribution and favorite food matches
-- **Fair distribution validation** with warnings for unfair results
+This mismatch meant that recipes with cuisine information in the `cuisines` array were being ignored, severely limiting the available recipes for each cuisine preference.
 
-### 4. Enhanced Frontend Logging (`src/components/RecommendedRecipes.tsx`)
-- **Added recommendation analysis** in the frontend to help debug balance issues
-- **Real-time balance checking** with warnings for imbalanced results
-- **Better visibility** into what's happening with recommendations
+## Fixes Applied
 
-### 5. Comprehensive Test Script (`test_recommendations_balance.py`)
-- **Fair distribution testing** across different limits
-- **Balance validation** with clear metrics and feedback
-- **Specific scenario testing** to ensure consistency
-- **Favorite food inclusion validation**
+### 1. Fixed Syntax Errors in Recipe Cache Service
+```python
+# Before (incomplete if statements)
+if query_lower in ingredients_text:
 
-## How It Works Now
 
-### Phase 1: Favorite Food Reservation
-- **Reserves 2-3 slots** for favorite foods (25% of total limit)
-- **Prioritizes favorite foods in preferred cuisines** when possible
-- **Falls back to other cuisines** if needed to meet the minimum
-
-### Phase 2: Equal Cuisine Distribution
-- **Calculates equal allocation** for remaining slots among preferred cuisines
-- **Ensures each cuisine gets exactly the same number** of recipes
-- **Handles extra slots fairly** by distributing them round-robin
-
-### Example Distribution (Limit: 8, 2 cuisines)
-```
-Total: 8 recipes
-├── Favorite Foods: 2 slots (25%)
-│   ├── Italian favorite food: 1
-│   └── Mexican favorite food: 1
-└── Cuisine Distribution: 6 slots (75%)
-    ├── Italian: 3 recipes
-    └── Mexican: 3 recipes
+# After (complete if statements with proper bodies)
+if query_lower in ingredients_text:
+    logger.debug(f"  - ⚠️ Query '{query_lower}' found in ingredients, but this is name search - ignoring")
 ```
 
-## Key Improvements
+### 2. Enhanced Cuisine Extraction Logic
+Updated the cuisine extraction to check both fields in order of priority:
 
-### Before (Problematic):
-- Complex multi-phase balancing that wasn't working
-- Strict cuisine limits causing artificial distribution
-- Favorite foods dominating results
-- Time-based randomization creating inconsistency
-- Overly complicated logic that was hard to debug
+```python
+# Check both cuisine and cuisines fields for cuisine information
+recipe_cuisine = None
 
-### After (Fixed):
-- **Guaranteed fair distribution** among cuisines
-- **Guaranteed favorite food inclusion** (2-3 recipes minimum)
-- **Perfect balance** with max difference ≤1 between cuisines
-- **Predictable results** without excessive randomization
-- **Clear, debuggable logic** with better logging
+# First try the cuisine field
+if recipe.get('cuisine'):
+    recipe_cuisine = self._normalize_cuisine(recipe.get('cuisine', ''), recipe)
+
+# If no cuisine field, check the cuisines array
+if not recipe_cuisine and recipe.get('cuisines'):
+    cuisines_array = recipe.get('cuisines', [])
+    if isinstance(cuisines_array, list) and cuisines_array:
+        # Use the first cuisine from the array
+        recipe_cuisine = self._normalize_cuisine(cuisines_array[0], recipe)
+
+# If still no cuisine, try to detect from ingredients
+if not recipe_cuisine:
+    recipe_cuisine = self._detect_cuisine_from_ingredients(recipe)
+```
+
+### 3. Fixed Cuisine Counting Logic
+Updated all cuisine counting operations to check both fields:
+
+```python
+# Before (only checking cuisine field)
+c_count = len([r for r in final_recommendations if r.get('cuisine', '').lower() == c.lower()])
+
+# After (checking both fields)
+c_count = 0
+for r in final_recommendations:
+    recipe_cuisine = r.get('cuisine', '').lower()
+    recipe_cuisines = r.get('cuisines', [])
+    
+    # Check both cuisine and cuisines fields
+    if recipe_cuisine == c.lower():
+        c_count += 1
+    elif isinstance(recipe_cuisines, list):
+        for cuisine_item in recipe_cuisines:
+            if cuisine_item and cuisine_item.lower() == c.lower():
+                c_count += 1
+                break
+```
+
+## Files Modified
+
+1. **`backend/services/recipe_cache_service.py`**
+   - Fixed incomplete `if` statements around lines 584-590
+   - Added proper error handling and logging
+
+2. **`backend/services/recipe_search_service.py`**
+   - Enhanced cuisine extraction in `get_recipe_recommendations()`
+   - Fixed cuisine counting logic throughout the method
+   - Updated both Phase 2 and Phase 3 of the recommendation algorithm
 
 ## Testing
 
-Use the new test endpoint to verify fair distribution:
-```bash
-# Test with default limit (8)
-curl "http://localhost:5000/api/smart-features/recommendations/test-balance"
+### 1. Syntax Fix Verification
+The syntax errors have been resolved and the backend should now start without errors.
 
-# Test with custom limit
-curl "http://localhost:5000/api/smart-features/recommendations/test-balance?limit=12"
-```
+### 2. Cuisine Extraction Test
+Created `test_recommendations_fix.py` to verify the cuisine extraction logic works with different recipe formats:
+- ✅ Recipes with `cuisine` field only
+- ✅ Recipes with `cuisines` array only  
+- ✅ Recipes with both fields
+- ✅ Recipes with neither field (fallback to ingredient detection)
 
-Or run the comprehensive test script:
-```bash
-python test_recommendations_balance.py
-```
+### 3. Recommendations Logic Test
+Verified that the cuisine counting logic now properly handles both field types and maintains balanced distribution.
 
 ## Expected Results
 
-### Distribution Quality:
-- **Perfect Balance**: Max/min cuisine difference = 0
-- **Very Fair**: Max/min cuisine difference = 1 ✅
-- **Moderately Fair**: Max/min cuisine difference = 2 ⚠️
-- **Unfair**: Max/min cuisine difference > 2 ❌
+After applying these fixes, the recommendations system should:
 
-### Favorite Food Inclusion:
-- **Excellent**: ≥3 favorite food matches ✅
-- **Good**: 2 favorite food matches ✅
-- **Poor**: <2 favorite food matches ❌
+1. **Return balanced cuisine distribution**: If a user selects Italian, Indian, and Mexican cuisines, they should get roughly equal numbers of recipes from each cuisine.
+
+2. **Utilize all available recipes**: Recipes with cuisine information in the `cuisines` array will now be properly recognized and included in recommendations.
+
+3. **Maintain fair allocation**: The system will still respect the fair distribution algorithm that ensures each preferred cuisine gets its allocated number of recipe slots.
+
+## How to Test
+
+### 1. Start the Backend
+```bash
+cd backend
+python app.py
+```
+
+### 2. Set User Preferences
+Ensure a user has multiple cuisine preferences set (e.g., Italian, Indian, Mexican).
+
+### 3. Call Recommendations Endpoint
+```bash
+curl -H "Authorization: Bearer <token>" \
+     "http://localhost:5003/api/recommendations?limit=8"
+```
+
+### 4. Verify Cuisine Distribution
+Check that the response contains recipes from multiple cuisines with roughly equal distribution.
 
 ## Monitoring
 
-The system now provides:
-- **Real-time fair distribution validation** in logs
-- **Frontend warnings** for unfair results
-- **Detailed distribution analysis** with cuisine counts
-- **Favorite food inclusion tracking**
-- **Consistent, predictable recommendations**
+The system now includes enhanced logging that will show:
+- Cuisine distribution in search results
+- Current status after processing each cuisine
+- Final cuisine distribution in recommendations
+- Any warnings about cuisines that couldn't reach their target count
 
-## Benefits
+## Future Improvements
 
-1. **Fair Representation**: Each cuisine gets equal airtime
-2. **Personal Touch**: Favorite foods are always included
-3. **Variety**: Users see diverse options across their preferences
-4. **Consistency**: Same preferences produce same distribution
-5. **Transparency**: Clear logging shows exactly what's happening
+1. **Cuisine Normalization**: Consider standardizing cuisine names across the database to ensure consistent matching.
 
-This approach ensures users get a **balanced variety** of recipes while maintaining the **personal connection** of their favorite foods. Each cuisine gets fair representation, and favorite foods are guaranteed to be included without dominating the results.
+2. **Fallback Strategies**: Implement additional fallback strategies for recipes that still can't be categorized.
+
+3. **Performance Optimization**: The enhanced cuisine checking adds some overhead; consider caching cuisine information to improve performance.
+
+## Conclusion
+
+These fixes resolve the core issue where recommendations were only showing one cuisine. The system now properly handles the mixed cuisine field formats in the database and should provide balanced, diverse recipe recommendations that better reflect user preferences.

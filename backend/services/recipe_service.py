@@ -868,7 +868,18 @@ class RecipeService:
                    f"offset={offset}, limit={limit}")
         
         # Get recipes from cache with initial filtering
-        all_recipes = self.recipe_cache.get_cached_recipes(query, ingredient)
+        # Build filters dictionary for the cache service
+        filters = {}
+        if cuisines:
+            filters["cuisine"] = cuisines[0] if len(cuisines) == 1 else cuisines  # Pass single cuisine or list
+        if dietary_restrictions:
+            filters["dietary_restrictions"] = dietary_restrictions
+        
+        logger.info(f"🔍 RECIPE SERVICE DEBUG: About to call cache service with filters: {filters}")
+        logger.info(f"🔍 RECIPE SERVICE DEBUG: cuisines parameter: {cuisines}")
+        logger.info(f"🔍 RECIPE SERVICE DEBUG: dietary_restrictions parameter: {dietary_restrictions}")
+        
+        all_recipes = self.recipe_cache.get_cached_recipes(query, ingredient, filters)
         if not all_recipes:
             logger.warning("No recipes found in cache")
             return {"results": [], "total": 0}
@@ -915,105 +926,11 @@ class RecipeService:
             filtered_recipes = avoid_filtered
             logger.info(f"After foods-to-avoid filtering: {len(filtered_recipes)} recipes")
         
-        # Filter by cuisine (improved approach)
-        if cuisines:
-            cuisine_filtered = []
-            logger.info(f"🔍 CUISINE FILTERING DEBUG:")
-            logger.info(f"   - Looking for cuisines: {cuisines}")
-            logger.info(f"   - Recipes before cuisine filtering: {len(filtered_recipes)}")
-            
-            for recipe in filtered_recipes:
-                recipe_cuisines = []
-                
-                # Check multiple possible cuisine fields with different formats
-                cuisine_fields = ['cuisines', 'cuisine', 'tags', 'categories']
-                
-                for field in cuisine_fields:
-                    if field in recipe:
-                        field_value = recipe[field]
-                        if isinstance(field_value, list):
-                            # Handle list format
-                            for item in field_value:
-                                if isinstance(item, str) and item.strip():
-                                    recipe_cuisines.append(item.lower().strip())
-                        elif isinstance(field_value, str):
-                            # Handle string format - split by common separators
-                            for item in field_value.split(','):
-                                if item.strip():
-                                    recipe_cuisines.append(item.lower().strip())
-                
-                # Also check for cuisine in recipe title/description for common patterns
-                title = recipe.get('title', '').lower()
-                description = recipe.get('description', '').lower()
-                
-                # Common Italian cuisine indicators in titles/descriptions
-                italian_indicators = ['pasta', 'pizza', 'risotto', 'bruschetta', 'tiramisu', 'gnocchi', 'lasagna', 'ravioli', 'carbonara', 'bolognese', 'pesto', 'parmesan', 'mozzarella', 'prosciutto', 'balsamic', 'olive oil', 'basil', 'oregano', 'rosemary', 'thyme']
-                
-                for indicator in italian_indicators:
-                    if indicator in title or indicator in description:
-                        recipe_cuisines.append('italian')
-                        break
-                
-                # Remove duplicates
-                recipe_cuisines = list(set(recipe_cuisines))
-                
-                # Debug: Log some recipe cuisine data
-                if len(cuisine_filtered) < 5:  # Only log first 5 for debugging
-                    logger.info(f"   - Recipe '{recipe.get('title', 'No title')}':")
-                    logger.info(f"     * cuisines field: {recipe.get('cuisines', 'None')}")
-                    logger.info(f"     * cuisine field: {recipe.get('cuisine', 'None')}")
-                    logger.info(f"     * tags field: {recipe.get('tags', 'None')}")
-                    logger.info(f"     * extracted cuisines: {recipe_cuisines}")
-                
-                # Check if recipe matches any preferred cuisine (more flexible matching)
-                cuisine_matched = False
-                for pref_cuisine in cuisines:
-                    pref_cuisine_lower = pref_cuisine.lower().strip()
-                    
-                    # Exact match
-                    if pref_cuisine_lower in recipe_cuisines:
-                        cuisine_matched = True
-                        break
-                    
-                    # Partial match (e.g., "italian" matches "italian cuisine")
-                    if any(pref_cuisine_lower in cuisine for cuisine in recipe_cuisines):
-                        cuisine_matched = True
-                        break
-                    
-                    # Check for common variations
-                    if pref_cuisine_lower == 'italian':
-                        italian_variations = ['italian', 'italy', 'italian cuisine', 'mediterranean', 'southern european']
-                        if any(cuisine in italian_variations for cuisine in recipe_cuisines):
-                            cuisine_matched = True
-                            break
-                
-                if cuisine_matched:
-                    cuisine_filtered.append(recipe)
-            
-            filtered_recipes = cuisine_filtered
-            logger.info(f"   - Recipes after cuisine filtering: {len(filtered_recipes)}")
-            logger.info(f"   - Cuisine filtering removed: {len(filtered_recipes) - len(cuisine_filtered)} recipes")
+        # Cuisine filtering is now handled by the cache service
+        logger.info(f"🔍 Cuisine filtering handled by cache service - cuisines requested: {cuisines}")
         
-        # Filter by dietary restrictions
-        if dietary_restrictions:
-            diet_filtered = []
-            for recipe in filtered_recipes:
-                recipe_restrictions = set()
-                if 'diets' in recipe and isinstance(recipe['diets'], list):
-                    recipe_restrictions.update(d.lower().strip() for d in recipe['diets'] if isinstance(d, str))
-                if 'dietary_restrictions' in recipe and isinstance(recipe['dietary_restrictions'], list):
-                    recipe_restrictions.update(d.lower().strip() for d in recipe['dietary_restrictions'] if isinstance(d, str))
-                if recipe.get('vegetarian', False):
-                    recipe_restrictions.add('vegetarian')
-                if recipe.get('vegan', False):
-                    recipe_restrictions.add('vegan')
-                
-                # Check if recipe matches any dietary restriction
-                if any(diet.lower().strip() in recipe_restrictions for diet in dietary_restrictions):
-                    diet_filtered.append(recipe)
-            
-            filtered_recipes = diet_filtered
-            logger.info(f"After dietary filtering: {len(filtered_recipes)} recipes")
+        # Dietary restrictions filtering is now handled by the cache service
+        logger.info(f"🔍 Dietary restrictions filtering handled by cache service - restrictions requested: {dietary_restrictions}")
         
         # The cache service has already scored and sorted the recipes by search relevance
         # We don't need to re-score them here. Just preserve the existing search scores.

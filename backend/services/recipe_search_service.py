@@ -576,8 +576,26 @@ class RecipeSearchService:
                         continue
                     
                     # Ensure recipe has a cuisine
-                    if 'cuisine' not in recipe:
-                        recipe['cuisine'] = self._normalize_cuisine(recipe.get('cuisine', ''), recipe) or self._detect_cuisine_from_ingredients(recipe) or 'Unknown'
+                    if not recipe.get('cuisine'):
+                        # Check both cuisine and cuisines fields
+                        detected_cuisine = None
+                        
+                        # First try the cuisine field
+                        if recipe.get('cuisine'):
+                            detected_cuisine = self._normalize_cuisine(recipe.get('cuisine', ''), recipe)
+                        
+                        # If no cuisine field, check the cuisines array
+                        if not detected_cuisine and recipe.get('cuisines'):
+                            cuisines_array = recipe.get('cuisines', [])
+                            if isinstance(cuisines_array, list) and cuisines_array:
+                                detected_cuisine = self._normalize_cuisine(cuisines_array[0], recipe)
+                        
+                        # If still no cuisine, try to detect from ingredients
+                        if not detected_cuisine:
+                            detected_cuisine = self._detect_cuisine_from_ingredients(recipe)
+                        
+                        # Set the cuisine field
+                        recipe['cuisine'] = detected_cuisine or 'Unknown'
                     
                     # Check if it's in a preferred cuisine
                     recipe_cuisine = recipe.get('cuisine', '').lower()
@@ -616,7 +634,20 @@ class RecipeSearchService:
             # Track what we've already added for each cuisine
             cuisine_added_counts = {}
             for cuisine in favorite_cuisines:
-                current_count = len([r for r in final_recommendations if r.get('cuisine', '').lower() == cuisine.lower()])
+                current_count = 0
+                for r in final_recommendations:
+                    recipe_cuisine = r.get('cuisine', '').lower()
+                    recipe_cuisines = r.get('cuisines', [])
+                    
+                    # Check both cuisine and cuisines fields
+                    if recipe_cuisine == cuisine.lower():
+                        current_count += 1
+                    elif isinstance(recipe_cuisines, list):
+                        for c in recipe_cuisines:
+                            if c and c.lower() == cuisine.lower():
+                                current_count += 1
+                                break
+                
                 cuisine_added_counts[cuisine] = current_count
                 logger.info(f"   - {cuisine}: {current_count} recipes already added")
             
@@ -688,10 +719,22 @@ class RecipeSearchService:
                         if k in used_ids:
                             continue
                         
-                        # STRICT cuisine verification - must match exactly
-                        recipe_cuisine = self._normalize_cuisine(recipe.get('cuisine', ''), recipe)
+                        # Check both cuisine and cuisines fields for cuisine information
+                        recipe_cuisine = None
+                        
+                        # First try the cuisine field
+                        if recipe.get('cuisine'):
+                            recipe_cuisine = self._normalize_cuisine(recipe.get('cuisine', ''), recipe)
+                        
+                        # If no cuisine field, check the cuisines array
+                        if not recipe_cuisine and recipe.get('cuisines'):
+                            cuisines_array = recipe.get('cuisines', [])
+                            if isinstance(cuisines_array, list) and cuisines_array:
+                                # Use the first cuisine from the array
+                                recipe_cuisine = self._normalize_cuisine(cuisines_array[0], recipe)
+                        
+                        # If still no cuisine, try to detect from ingredients
                         if not recipe_cuisine:
-                            # Try to detect cuisine from ingredients
                             recipe_cuisine = self._detect_cuisine_from_ingredients(recipe)
                         
                         # FLEXIBLE cuisine verification - allow partial matches and variations
@@ -748,7 +791,20 @@ class RecipeSearchService:
                 current_total = len(final_recommendations)
                 logger.info(f"📊 STATUS AFTER {cuisine}: Total recipes: {current_total}/{limit}")
                 for c in favorite_cuisines:
-                    c_count = len([r for r in final_recommendations if r.get('cuisine', '').lower() == c.lower()])
+                    c_count = 0
+                    for r in final_recommendations:
+                        recipe_cuisine = r.get('cuisine', '').lower()
+                        recipe_cuisines = r.get('cuisines', [])
+                        
+                        # Check both cuisine and cuisines fields
+                        if recipe_cuisine == c.lower():
+                            c_count += 1
+                        elif isinstance(recipe_cuisines, list):
+                            for cuisine_item in recipe_cuisines:
+                                if cuisine_item and cuisine_item.lower() == c.lower():
+                                    c_count += 1
+                                    break
+                    
                     logger.info(f"   - {c}: {c_count} recipes")
                 
                 # If we couldn't find enough recipes for this cuisine, log a warning
@@ -790,8 +846,23 @@ class RecipeSearchService:
                     if k in used_ids:
                         continue
                     
-                    # Verify cuisine and add if it matches
-                    recipe_cuisine = self._normalize_cuisine(recipe.get('cuisine', ''), recipe) or self._detect_cuisine_from_ingredients(recipe)
+                    # Check both cuisine and cuisines fields for cuisine information
+                    recipe_cuisine = None
+                    
+                    # First try the cuisine field
+                    if recipe.get('cuisine'):
+                        recipe_cuisine = self._normalize_cuisine(recipe.get('cuisine', ''), recipe)
+                    
+                    # If no cuisine field, check the cuisines array
+                    if not recipe_cuisine and recipe.get('cuisines'):
+                        cuisines_array = recipe.get('cuisines', [])
+                        if isinstance(cuisines_array, list) and cuisines_array:
+                            # Use the first cuisine from the array
+                            recipe_cuisine = self._normalize_cuisine(cuisines_array[0], recipe)
+                    
+                    # If still no cuisine, try to detect from ingredients
+                    if not recipe_cuisine:
+                        recipe_cuisine = self._detect_cuisine_from_ingredients(recipe)
                     
                     # Use the same flexible cuisine matching logic
                     cuisine_matched = False
