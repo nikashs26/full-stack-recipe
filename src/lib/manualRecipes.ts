@@ -150,7 +150,12 @@ export const fetchManualRecipes = async (
       throw new Error('Invalid response from server');
     });
     
-    console.log('Received data from backend:', data);
+    console.log('🔍 Backend response received:');
+    console.log('  - Response status:', response.status);
+    console.log('  - Response URL:', response.url);
+    console.log('  - Raw data:', data);
+    console.log('  - Data type:', typeof data);
+    console.log('  - Data keys:', data ? Object.keys(data) : 'No data');
     
     // Handle both array response and object with results key
     let recipes: any[] = [];
@@ -296,13 +301,23 @@ export const fetchManualRecipes = async (
         };
       });
       
+      console.log('🔍 Search results summary:');
+      console.log('  - Original query:', queryStr);
+      console.log('  - Original ingredient:', ingredientStr);
+      console.log('  - Backend returned:', recipes.length, 'recipes');
+      console.log('  - Transformed to:', transformedRecipes.length, 'recipes');
+      console.log('  - First recipe title:', transformedRecipes[0]?.title || 'No title');
+      
       return {
         recipes: transformedRecipes,
         total: total || transformedRecipes.length
       };
     } else {
       // If no recipes found, return empty array with 0 total
-      console.log('No recipes found');
+      console.log('🔍 No recipes found for search:');
+      console.log('  - Query:', queryStr);
+      console.log('  - Ingredient:', ingredientStr);
+      console.log('  - This might indicate a backend search issue');
       return {
         recipes: [],
         total: 0
