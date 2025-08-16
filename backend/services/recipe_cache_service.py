@@ -231,6 +231,11 @@ class RecipeCacheService:
 
     def get_cached_recipes(self, query: str = "", ingredient: str = "", filters: Optional[Dict[str, Any]] = None) -> List[Dict[Any, Any]]:
         """Retrieve cached recipes for the given search parameters with TTL support"""
+        print(f"🔍 DEBUG: get_cached_recipes called with:")
+        print(f"  - query: '{query}' (type: {type(query)}, length: {len(query) if query else 0})")
+        print(f"  - ingredient: '{ingredient}' (type: {type(ingredient)}, length: {len(ingredient) if ingredient else 0})")
+        print(f"  - filters: {filters}")
+        
         if not self.recipe_collection:
             logger.warning("ChromaDB recipe collection not initialized")
             return []
@@ -240,106 +245,455 @@ class RecipeCacheService:
             all_recipes = self._get_all_recipes_from_cache()
             logger.info(f"Retrieved {len(all_recipes)} recipes from cache")
             
-            # If no search terms, return all recipes
+            # Debug: Show exactly what parameters we received
+            logger.info("🔍 SEARCH PARAMETERS RECEIVED:")
+            logger.info(f"  - query parameter: '{query}' (type: {type(query)}, length: {len(query) if query else 0})")
+            logger.info(f"  - ingredient parameter: '{ingredient}' (type: {type(ingredient)}, length: {len(ingredient) if ingredient else 0})")
+            logger.info(f"  - query.strip(): '{query.strip() if query else ''}'")
+            logger.info(f"  - ingredient.strip(): '{ingredient.strip() if ingredient else ''}'")
+            
+            # Check for chained search: base recipes from previous search
+            base_recipes = None
+            if filters and 'baseRecipes' in filters and filters['baseRecipes']:
+                base_recipes = filters['baseRecipes']
+                logger.info(f"🔗 CHAINED SEARCH DETECTED: {len(base_recipes)} base recipes from previous search")
+                # Use base recipes instead of all recipes for filtering
+                all_recipes = base_recipes
+                logger.info(f"  - Will filter ingredient search within {len(all_recipes)} base recipes")
+            
+            # If no search terms, return all recipes (or base recipes if chained search)
             if not query.strip() and not ingredient.strip():
-                logger.debug("No search terms - returning all recipes from cache")
+                if base_recipes:
+                    logger.debug("Chained search with no new terms - returning base recipes")
+                else:
+                    logger.debug("No search terms - returning all recipes from cache")
                 return all_recipes
             
-            # We have search terms - implement proper text-based search
-            search_text = f"{query} {ingredient}".strip()
-            logger.info(f"Searching for: '{search_text}' in cached recipes")
+            # STRICT VALIDATION: Require meaningful search terms
+            query_trimmed = query.strip()
+            ingredient_trimmed = ingredient.strip()
             
-            # Split search terms for better matching
-            search_terms = [term.strip().lower() for term in search_text.split() if term.strip()]
-            logger.info(f"Search terms: {search_terms}")
+            # REMOVED: Minimum length requirement to allow flexible substring searching
+            # Now any search term length will work, including single characters
+            # MIN_QUERY_LENGTH = 3
+            # if (query_trimmed and len(query_trimmed) < MIN_QUERY_LENGTH) or (ingredient_trimmed and len(ingredient_trimmed) < MIN_QUERY_LENGTH):
+            #     logger.warning(f"Search terms too short - query: '{query_trimmed}' ({len(query_trimmed)} chars), ingredient: '{ingredient_trimmed}' ({len(ingredient_trimmed)} chars)")
+            #     logger.warning(f"Minimum required length: {MIN_QUERY_LENGTH} characters")
+            #     return []  # Return empty results for nonsense searches
             
-            # Check if this is primarily an ingredient search
-            is_ingredient_search = bool(ingredient.strip())
+            # Check if this is primarily an ingredient search vs name search
+            is_ingredient_search = bool(ingredient_trimmed)
+            is_name_search = bool(query_trimmed)
+            is_combined_search = is_ingredient_search and is_name_search
+            
+            logger.info(f"🔍 SEARCH TYPE DETERMINATION:")
+            logger.info(f"  - ingredient.strip() result: '{ingredient_trimmed}'")
+            logger.info(f"  - query.strip() result: '{query_trimmed}'")
+            logger.info(f"  - bool(ingredient.strip()): {is_ingredient_search}")
+            logger.info(f"  - bool(query.strip()): {is_name_search}")
+            logger.info(f"  - is_combined_search: {is_combined_search}")
+            logger.info(f"  - Final: ingredient_search={is_ingredient_search}, name_search={is_name_search}")
+            
+            if is_combined_search:
+                logger.info(f"🔍 COMBINED SEARCH MODE: Both name and ingredient search provided")
+                logger.info(f"  - Name search: '{query_trimmed}' in title/description")
+                logger.info(f"  - Ingredient search: '{ingredient_trimmed}' in ingredients field")
+                logger.info(f"  - Will return recipes that match EITHER criteria")
+            elif is_ingredient_search:
+                logger.info(f"🔍 INGREDIENT SEARCH MODE: Looking ONLY in ingredients field for '{ingredient_trimmed}'")
+                logger.info(f"  - WILL NOT look at title, description, or any other fields")
+                logger.info(f"  - ONLY checking recipe.ingredients array for word matches")
+            elif is_name_search:
+                logger.info(f"🔍 NAME SEARCH MODE: Looking ONLY in title/description fields for '{query_trimmed}'")
+                logger.info(f"  - WILL NOT look at ingredients field at all")
+                logger.info(f"  - ONLY checking recipe.title and recipe.description for word matches")
+            else:
+                logger.warning("⚠️ No search parameters provided - returning all recipes")
             
             matching_recipes = []
             
+            # DEBUG: Log the first few recipes to see their structure
+            logger.info(f"🔍 DEBUG: First 3 recipes structure:")
+            for i, recipe in enumerate(all_recipes[:3]):
+                logger.info(f"  Recipe {i+1}: '{recipe.get('title', 'No title')}'")
+                logger.info(f"    - Keys: {list(recipe.keys())}")
+                logger.info(f"    - Title: '{recipe.get('title', 'No title')}'")
+                logger.info(f"    - Description: '{recipe.get('description', 'No description')}'")
+                logger.info(f"    - Ingredients: {recipe.get('ingredients', 'No ingredients')}")
+                logger.info(f"    - Type: {type(recipe)}")
+                # Add specific debugging for the search term
+                if query_trimmed:
+                    title_lower = str(recipe.get('title', '')).lower()
+                    desc_lower = str(recipe.get('description', '')).lower()
+                    logger.info(f"    - 🔍 SEARCH DEBUG for '{query_trimmed}':")
+                    logger.info(f"      * Title contains '{query_trimmed}': {query_trimmed in title_lower}")
+                    logger.info(f"      * Description contains '{query_trimmed}': {query_trimmed in desc_lower}")
+                    logger.info(f"      * Title text: '{title_lower}'")
+                    logger.info(f"      * Description text: '{desc_lower}'")
+                
+                # CRITICAL: Check if this recipe contains the search terms in unexpected places
+                if query_trimmed:
+                    logger.info(f"    - 🔍 SEARCH TERM '{query_trimmed}' ANALYSIS:")
+                    title_contains = query_trimmed.lower() in str(recipe.get('title', '')).lower()
+                    desc_contains = query_trimmed.lower() in str(recipe.get('description', '')).lower()
+                    ingredients_contains = query_trimmed.lower() in str(recipe.get('ingredients', '')).lower()
+                    logger.info(f"      * Title contains '{query_trimmed}': {title_contains}")
+                    logger.info(f"      * Description contains '{query_trimmed}': {desc_contains}")
+                    logger.info(f"      * Ingredients contains '{query_trimmed}': {ingredients_contains}")
+                    
+                    # If ingredients contain the search term but we're doing name search, this is the problem!
+                    if ingredients_contains and is_name_search:
+                        logger.warning(f"      🚨 PROBLEM: Recipe has '{query_trimmed}' in ingredients but we're doing NAME search!")
+                        logger.warning(f"      This should NOT happen - name search should ignore ingredients!")
+                
+                if ingredient_trimmed:
+                    logger.info(f"    - 🔍 INGREDIENT TERM '{ingredient_trimmed}' ANALYSIS:")
+                    title_contains = ingredient_trimmed.lower() in str(recipe.get('title', '')).lower()
+                    desc_contains = ingredient_trimmed.lower() in str(recipe.get('description', '')).lower()
+                    ingredients_contains = ingredient_trimmed.lower() in str(recipe.get('ingredients', '')).lower()
+                    logger.info(f"      * Title contains '{ingredient_trimmed}': {title_contains}")
+                    logger.info(f"      * Description contains '{ingredient_trimmed}': {desc_contains}")
+                    logger.info(f"      * Ingredients contains '{ingredient_trimmed}': {ingredients_contains}")
+                    
+                    # If title/description contain the ingredient term but we're doing ingredient search, this is also a problem!
+                    if (title_contains or desc_contains) and is_ingredient_search:
+                        logger.warning(f"      🚨 PROBLEM: Recipe has '{ingredient_trimmed}' in title/description but we're doing INGREDIENT search!")
+                        logger.warning(f"      This should NOT happen - ingredient search should ignore title/description!")
+            
+            # CRITICAL: Verify search isolation
+            logger.info(f"🔍 SEARCH ISOLATION VERIFICATION:")
+            if is_name_search:
+                logger.info(f"  - NAME SEARCH: Will ONLY look at title and description fields")
+                logger.info(f"  - Will IGNORE: ingredients, summary, instructions, tags, cuisine, etc.")
+            elif is_ingredient_search:
+                logger.info(f"  - INGREDIENT SEARCH: Will ONLY look at ingredients field")
+                logger.info(f"  - Will IGNORE: title, description, summary, instructions, tags, cuisine, etc.")
+            elif is_combined_search:
+                logger.info(f"  - COMBINED SEARCH: Will look at title/description AND ingredients separately")
+                logger.info(f"  - Will IGNORE: summary, instructions, tags, cuisine, etc.")
+            
+            logger.info(f"🔍 DEBUG: Processing {len(all_recipes)} recipes for search")
+            logger.info(f"🔍 DEBUG: Search type: name_search={is_name_search}, ingredient_search={is_ingredient_search}")
+            
             for recipe in all_recipes:
-                # Build searchable text from recipe
-                recipe_text = ""
-                
-                # Add title
-                if 'title' in recipe and recipe['title']:
-                    recipe_text += f" {recipe['title']}"
-                
-                # Add description/summary
-                if 'description' in recipe and recipe['description']:
-                    recipe_text += f" {recipe['description']}"
-                if 'summary' in recipe and recipe['summary']:
-                    recipe_text += f" {recipe['summary']}"
-                
-                # Add ingredients
-                if 'ingredients' in recipe and isinstance(recipe['ingredients'], list):
-                    for ing in recipe['ingredients']:
-                        if isinstance(ing, dict) and 'name' in ing:
-                            recipe_text += f" {ing['name']}"
-                        elif isinstance(ing, str):
-                            recipe_text += f" {ing}"
-                
-                recipe_text = recipe_text.lower()
-                
-                # Calculate relevance score based on how many search terms match
+                # Calculate relevance score based on search type
                 score = 0
                 matched_terms = 0
                 ingredient_matches = 0
+                title_matches = 0
                 
-                # Title matches get highest score
-                if 'title' in recipe and recipe['title']:
-                    title_lower = recipe['title'].lower()
-                    for term in search_terms:
-                        if term in title_lower:
-                            score += 100
-                            matched_terms += 1
+                # Debug: Show what recipe we're processing
+                if is_name_search:
+                    logger.info(f"🔍 Processing recipe: '{recipe.get('title', 'No title')}' for name search '{query_trimmed}'")
                 
-                # Description matches get medium score
-                if 'description' in recipe and recipe['description']:
-                    desc_lower = recipe['description'].lower()
-                    for term in search_terms:
-                        if term in desc_lower:
-                            score += 50
-                            matched_terms += 1
-                
-                # Ingredient matches get good score, with bonus for ingredient searches
-                if 'ingredients' in recipe and isinstance(recipe['ingredients'], list):
-                    for ing in recipe['ingredients']:
-                        ing_name = ""
-                        if isinstance(ing, dict) and 'name' in ing:
-                            ing_name = ing['name'].lower()
-                        elif isinstance(ing, str):
-                            ing_name = ing.lower()
+                # For COMBINED SEARCH: Check both name and ingredient criteria
+                if is_combined_search:
+                    # ENHANCED: Support substring matching for flexible searches
+                    # Instead of splitting into words, use the entire search term as a substring
+                    query_lower = query_trimmed.lower()
+                    ingredient_lower = ingredient_trimmed.lower()
+                    logger.debug(f"🔍 COMBINED SEARCH: Processing recipe '{recipe.get('title', 'No title')}'")
+                    logger.debug(f"  - Looking for name substring: '{query_lower}' in title/description")
+                    logger.debug(f"  - Looking for ingredient substring: '{ingredient_lower}' in ingredients")
+                    
+                    # SUBSTRING MATCHING: Check if the search terms appear anywhere in the content
+                    # This allows for partial matches like "chi" matching "chicken"
+                    
+                    # Check title field for name search (substring match)
+                    if 'title' in recipe and recipe['title']:
+                        title_lower = recipe['title'].lower()
                         
-                        for term in search_terms:
-                            if term in ing_name:
-                                # Give higher score for ingredient matches during ingredient searches
-                                if is_ingredient_search:
-                                    score += 80  # Higher score for ingredient searches
-                                else:
-                                    score += 30
-                                matched_terms += 1
-                                ingredient_matches += 1
+                        # Check if the entire query appears as a substring in the title
+                        if query_lower in title_lower:
+                            score += 100
+                            title_matches = 1
+                            logger.debug(f"  - ✅ Name substring '{query_lower}' found in title!")
+                    
+                    # Check description field for name search (substring match)
+                    if 'description' in recipe and recipe['description']:
+                        desc_lower = recipe['description'].lower()
+                        
+                        # Check if the entire query appears as a substring in the description
+                        if query_lower in desc_lower:
+                            score += 50
+                            logger.debug(f"  - ✅ Name substring '{query_lower}' found in description!")
+                    
+                    # Check ingredients field for ingredient search (substring match)
+                    if 'ingredients' in recipe and isinstance(recipe['ingredients'], list):
+                        # Track if any ingredient contains the search substring
+                        ingredient_found = False
+                        
+                        for ing in recipe['ingredients']:
+                            ing_name = ""
+                            if isinstance(ing, dict) and 'name' in ing:
+                                ing_name = ing['name'].lower()
+                            elif isinstance(ing, str):
+                                ing_name = ing.lower()
+                            else:
+                                continue
+                            
+                            # Check if the ingredient name contains the search substring
+                            if ingredient_lower in ing_name:
+                                ingredient_found = True
+                                ingredient_matches = 1
+                                logger.debug(f"  - ✅ Ingredient substring '{ingredient_lower}' found in ingredient '{ing_name}'!")
                                 break
+                        
+                        # Score based on whether we found the ingredient substring
+                        if ingredient_found:
+                            score += 100
+                            logger.debug(f"  - ✅ Ingredient substring '{ingredient_lower}' found in ingredients!")
+                    
+                    # Include recipe if it matches EITHER name OR ingredient criteria (substring matches)
+                    if title_matches > 0 or ingredient_matches > 0:
+                        recipe['search_score'] = score
+                        recipe['matched_terms'] = title_matches + ingredient_matches
+                        recipe['ingredient_matches'] = ingredient_matches
+                        recipe['title_matches'] = title_matches
+                        matching_recipes.append(recipe)
+                        logger.debug(f"✅ Recipe '{recipe.get('title', 'No title')}' matches combined search criteria")
+                    else:
+                        logger.debug(f"❌ Recipe '{recipe.get('title', 'No title')}' does NOT match combined search criteria")
                 
-                # Only include recipes that have at least one meaningful match
-                # This prevents returning recipes with 0 relevance
-                if score > 0:
-                    recipe['search_score'] = score
-                    recipe['matched_terms'] = matched_terms
-                    recipe['ingredient_matches'] = ingredient_matches
-                    matching_recipes.append(recipe)
+                # For INGREDIENT SEARCH: ONLY look at ingredients field, ignore everything else
+                elif is_ingredient_search:
+                    ingredient_lower = ingredient_trimmed.lower()
+                    search_context = "CHAINED SEARCH" if base_recipes else "FULL DATABASE"
+                    logger.debug(f"🔍 INGREDIENT SEARCH ({search_context}): Processing recipe '{recipe.get('title', 'No title')}'")
+                    logger.debug(f"  - Looking for ingredient: '{ingredient_lower}'")
+                    logger.debug(f"  - Recipe ingredients field: {recipe.get('ingredients', 'No ingredients')}")
+                    
+                    # DEBUG: Log the actual recipe data structure to see what we're working with
+                    logger.debug(f"  - Recipe keys: {list(recipe.keys())}")
+                    logger.debug(f"  - Recipe type: {type(recipe)}")
+                    
+                    # CRITICAL: Verify we're ONLY looking at ingredients for ingredient search
+                    logger.debug(f"  - ⚠️ For ingredient search, we ONLY check the ingredients field")
+                    logger.debug(f"  - We IGNORE title, description, and all other fields")
+                    
+                    # SUBSTRING MATCHING: Check if the ingredient search term appears anywhere in ingredients
+                    # This allows for partial matches like "chick" matching "chicken"
+                    logger.debug(f"  - Looking for ingredient substring: '{ingredient_lower}'")
+                    
+                    # ONLY check recipe ingredients field - require SUBSTRING match
+                    if 'ingredients' in recipe and isinstance(recipe['ingredients'], list):
+                        logger.debug(f"  - Found ingredients list with {len(recipe['ingredients'])} items")
+                        
+                        # Track if any ingredient contains the search substring
+                        ingredient_found = False
+                        
+                        for ing in recipe['ingredients']:
+                            ing_name = ""
+                            if isinstance(ing, dict) and 'name' in ing:
+                                ing_name = ing['name'].lower()
+                                logger.debug(f"  - Checking ingredient dict: '{ing_name}'")
+                            elif isinstance(ing, str):
+                                ing_name = ing.lower()
+                                logger.debug(f"  - Checking ingredient string: '{ing_name}'")
+                            else:
+                                logger.debug(f"  - Skipping ingredient with unexpected type: {type(ing)}")
+                                continue
+                            
+                            logger.debug(f"  - Checking ingredient: '{ing_name}' for substring '{ingredient_lower}'")
+                            
+                            # Check if the ingredient name contains the search substring
+                            if ingredient_lower in ing_name:
+                                ingredient_found = True
+                                ingredient_matches = 1
+                                logger.debug(f"  - ✅ Ingredient substring '{ingredient_lower}' found in ingredient '{ing_name}'!")
+                                break
+                        
+                        # Score based on whether we found the ingredient substring
+                        if ingredient_found:
+                            score += 100  # 100 points for ingredient match
+                            logger.debug(f"  - ✅ Ingredient substring '{ingredient_lower}' found in ingredients!")
+                        else:
+                            logger.debug(f"  - ❌ Ingredient substring '{ingredient_lower}' NOT found in any ingredients")
+                    else:
+                        logger.debug(f"  - No ingredients list found or ingredients is not a list")
+                        logger.debug(f"  - Ingredients field type: {type(recipe.get('ingredients'))}")
+                    
+                    # ONLY include recipes that have ANY ingredient words in the ingredients field
+                    if ingredient_matches > 0:
+                        recipe['search_score'] = score
+                        recipe['matched_terms'] = ingredient_matches
+                        recipe['ingredient_matches'] = ingredient_matches
+                        recipe['title_matches'] = 0
+                        matching_recipes.append(recipe)
+                        logger.debug(f"✅ Recipe '{recipe.get('title', 'No title')}' has {ingredient_matches} ingredient words in ingredients field")
+                    else:
+                        logger.debug(f"❌ Recipe '{recipe.get('title', 'No title')}' does NOT have any ingredient words in ingredients field")
+                
+                # For NAME SEARCH: ONLY look at title/description fields, ignore ingredients completely
+                elif is_name_search:
+                    query_lower = query_trimmed.lower()
+                    logger.debug(f"🔍 NAME SEARCH: Processing recipe '{recipe.get('title', 'No title')}'")
+                    logger.debug(f"  - Looking for query substring: '{query_lower}'")
+                    logger.debug(f"  - Recipe title: '{recipe.get('title', 'No title')}'")
+                    logger.debug(f"  - Recipe description: '{recipe.get('description', 'No description')}'")
+                    logger.debug(f"  - IGNORING ingredients field completely for name search")
+                    
+                    # DEBUG: Log the actual recipe data structure to see what we're working with
+                    logger.debug(f"  - Recipe keys: {list(recipe.keys())}")
+                    logger.debug(f"  - Recipe type: {type(recipe)}")
+                    
+                    # CRITICAL: Double-check that we're NOT looking at ingredients for name search
+                    # This is the key fix - ensure name search only looks at title/description
+                    title_text = ""
+                    description_text = ""
+                    
+                    # SUBSTRING MATCHING: Check if the search term appears anywhere in title/description
+                    # This allows for partial matches like "chi" matching "chicken"
+                    
+                    # Check title field for substring match
+                    if 'title' in recipe and recipe['title']:
+                        title_text = str(recipe['title']).lower()
+                        logger.debug(f"  - Title to search: '{title_text}'")
+                        
+                        # Check if the search query appears as a substring in the title
+                        if query_lower in title_text:
+                            score += 100  # 100 points for title match
+                            title_matches = 1
+                            logger.info(f"  - ✅ Query substring '{query_lower}' found in title '{title_text}'!")
+                        else:
+                            logger.info(f"  - ❌ Query substring '{query_lower}' NOT found in title '{title_text}'")
+                            logger.info(f"  - DEBUG: '{query_lower}' is NOT a substring of '{title_text}'")
+                    
+                    # Check description field for substring match (secondary scoring)
+                    if 'description' in recipe and recipe['description']:
+                        description_text = str(recipe['description']).lower()
+                        logger.debug(f"  - Description to search: '{description_text}'")
+                        
+                        # Check if the search query appears as a substring in the description
+                        if query_lower in description_text:
+                            score += 50  # 50 points for description match
+                            logger.debug(f"  - ✅ Query substring '{query_lower}' found in description!")
+                        else:
+                            logger.debug(f"  - ❌ Query substring '{query_lower}' NOT found in description")
+                    
+                    # CRITICAL: Verify we're NOT looking at ingredients for name search
+                    if 'ingredients' in recipe:
+
+                        # Double-check that ingredients don't contain the search term
+                        ingredients_text = str(recipe.get('ingredients', '')).lower()
+                        if query_lower in ingredients_text:
+
+
+                    
+                    # CRITICAL: Verify we're NOT looking at any other fields that might contain the search term
+                    other_fields_to_check = ['summary', 'instructions', 'tags', 'cuisine', 'cuisines', 'category']
+                    for field in other_fields_to_check:
+                        if field in recipe:
+                            field_text = str(recipe.get(field, '')).lower()
+                            if query_lower in field_text:
+
+
+                    
+                    # Include recipe if it has ANY matching words in title or description
+                    if title_matches > 0 or score > 0:
+                        recipe['search_score'] = score
+                        recipe['matched_terms'] = title_matches
+                        recipe['ingredient_matches'] = 0
+                        recipe['title_matches'] = title_matches
+                        matching_recipes.append(recipe)
+                        logger.info(f"✅ Recipe '{recipe.get('title', 'No title')}' MATCHED name search for '{query_trimmed}' (score: {score})")
+                    else:
+                        logger.info(f"❌ Recipe '{recipe.get('title', 'No title')}' did NOT match name search for '{query_trimmed}' (score: {score}, title_matches: {title_matches})")
+                
+                # For COMBINED SEARCH: both query and ingredient are provided
+                else:
+                    # Since we want completely separate searches, treat this as an error case
+                    logger.warning(f"Unexpected combined search case: query='{query}', ingredient='{ingredient}'")
+                    logger.warning("This should not happen with the current search logic")
+                    # Don't add any recipes for unexpected combined searches
+                    continue
             
-            # Sort by relevance score (highest first), then by number of matched terms
-            # For ingredient searches, prioritize recipes with more ingredient matches
+            logger.info(f"🔍 DEBUG: Initial search found {len(matching_recipes)} recipes")
+            logger.info(f"🔍 DEBUG: Now applying relevance filtering...")
+            
+            # STRICT FILTERING: Only return recipes with meaningful matches
+            # Filter out recipes with very low relevance scores
+            meaningful_recipes = []
+            for recipe in matching_recipes:
+                score = recipe.get('search_score', 0)
+                title_matches = recipe.get('title_matches', 0)
+                ingredient_matches = recipe.get('ingredient_matches', 0)
+                
+                # For ingredient search: require at least 1 ingredient match
+                if is_ingredient_search:
+                    if ingredient_matches > 0:
+                        meaningful_recipes.append(recipe)
+                        logger.debug(f"✅ Recipe '{recipe.get('title', 'No title')}' passed ingredient relevance filter")
+                    else:
+                        logger.debug(f"❌ Recipe '{recipe.get('title', 'No title')}' failed ingredient relevance filter (score: {score})")
+                
+                # For name search: require at least 1 title match OR high description score
+                elif is_name_search:
+                    if title_matches > 0 or score >= 50:
+                        meaningful_recipes.append(recipe)
+                        logger.info(f"✅ Recipe '{recipe.get('title', 'No title')}' passed name relevance filter (score: {score}, title_matches: {title_matches})")
+                    else:
+                        logger.info(f"❌ Recipe '{recipe.get('title', 'No title')}' failed name relevance filter (score: {score}, title_matches: {title_matches})")
+                
+                # For combined search: require at least 1 title match OR 1 ingredient match
+                elif is_combined_search:
+                    if title_matches > 0 or ingredient_matches > 0:
+                        meaningful_recipes.append(recipe)
+                        logger.debug(f"✅ Recipe '{recipe.get('title', 'No title')}' passed combined relevance filter")
+                    else:
+                        logger.debug(f"❌ Recipe '{recipe.get('title', 'No title')}' failed combined relevance filter (score: {score}, title_matches: {title_matches}, ingredient_matches: {ingredient_matches})")
+                
+                # For unexpected cases: don't include
+                else:
+                    logger.warning(f"⚠️ Recipe '{recipe.get('title', 'No title')}' excluded due to unexpected search type")
+            
+            # Sort by relevance score (highest first)
             if is_ingredient_search:
-                matching_recipes.sort(key=lambda x: (x.get('search_score', 0), x.get('ingredient_matches', 0), x.get('matched_terms', 0)), reverse=True)
+                # For ingredient searches, prioritize recipes with more ingredient matches
+                meaningful_recipes.sort(key=lambda x: (x.get('search_score', 0), x.get('ingredient_matches', 0), x.get('title_matches', 0)), reverse=True)
+            elif is_name_search:
+                # For name searches, prioritize recipes with more title matches
+                meaningful_recipes.sort(key=lambda x: (x.get('search_score', 0), x.get('title_matches', 0), x.get('ingredient_matches', 0)), reverse=True)
+            elif is_combined_search:
+                # For combined searches, prioritize recipes with more total matches (title + ingredient)
+                meaningful_recipes.sort(key=lambda x: (x.get('search_score', 0), x.get('matched_terms', 0), x.get('title_matches', 0), x.get('ingredient_matches', 0)), reverse=True)
             else:
-                matching_recipes.sort(key=lambda x: (x.get('search_score', 0), x.get('matched_terms', 0)), reverse=True)
+                # For unexpected cases, sort by overall score
+                meaningful_recipes.sort(key=lambda x: (x.get('search_score', 0), x.get('matched_terms', 0)), reverse=True)
             
-            logger.info(f"Text search found {len(matching_recipes)} recipes matching '{search_text}' out of {len(all_recipes)} total")
-            return matching_recipes
+            logger.info(f"Text search found {len(meaningful_recipes)} recipes with meaningful matches out of {len(matching_recipes)} total matches")
+            if is_ingredient_search:
+                logger.info(f"🔍 INGREDIENT SEARCH RESULTS: Found {len(meaningful_recipes)} recipes with '{ingredient_trimmed}' in ingredients field")
+                logger.info(f"  - ✅ SEARCH WAS COMPLETELY SEPARATE: Only looked at ingredients, ignored title/description")
+                if meaningful_recipes:
+                    sample_titles = [r.get('title', 'No title')[:50] for r in meaningful_recipes[:3]]
+                    logger.info(f"Sample ingredient search results: {sample_titles}")
+            elif is_name_search:
+                logger.info(f"🔍 NAME SEARCH RESULTS: Found {len(meaningful_recipes)} recipes with '{query_trimmed}' in title/description")
+                logger.info(f"  - ✅ SEARCH WAS COMPLETELY SEPARATE: Only looked at title/description, ignored ingredients")
+                if meaningful_recipes:
+                    sample_titles = [r.get('title', 'No title')[:50] for r in meaningful_recipes[:3]]
+                    logger.info(f"Sample name search results: {sample_titles}")
+            elif is_combined_search:
+                logger.info(f"🔍 COMBINED SEARCH RESULTS: Found {len(meaningful_recipes)} recipes matching combined criteria")
+                logger.info(f"  - ✅ COMBINED SEARCH: Returned recipes that match EITHER name OR ingredient criteria")
+                logger.info(f"  - Name search: '{query_trimmed}' in title/description")
+                logger.info(f"  - Ingredient search: '{ingredient_trimmed}' in ingredients field")
+                if meaningful_recipes:
+                    sample_titles = [r.get('title', 'No title')[:50] for r in meaningful_recipes[:3]]
+                    logger.info(f"Sample combined search results: {sample_titles}")
+            
+            # Debug: Show what recipes we're returning
+            logger.info(f"🔍 SEARCH COMPLETE: Returning {len(meaningful_recipes)} recipes from {len(all_recipes)} total recipes")
+            if meaningful_recipes:
+                logger.info(f"🔍 DEBUG: Recipes being returned:")
+                for i, recipe in enumerate(meaningful_recipes[:5]):  # Show first 5
+                    logger.info(f"  {i+1}. '{recipe.get('title', 'No title')}' (score: {recipe.get('search_score', 0)})")
+            else:
+                logger.warning(f"🔍 DEBUG: No recipes matched search criteria!")
+                logger.warning(f"🔍 This explains why you're getting 0 results")
+            
+            return meaningful_recipes
             
             # Original search logic (commented out since search collection doesn't have full recipes):
             # # Sanitize inputs

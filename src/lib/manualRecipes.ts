@@ -31,6 +31,7 @@ export interface FetchRecipesOptions {
   cuisines?: string[];
   diets?: string[];
   favoriteFoods?: string[];
+  baseRecipes?: any[]; // For chained search: filter ingredient search within previous results
 }
 
 export interface PaginatedRecipes {
@@ -49,8 +50,10 @@ export const fetchManualRecipes = async (
     // Handle search query and ingredient
     const queryStr = typeof query === 'string' ? query.trim() : '';
     const ingredientStr = typeof ingredient === 'string' ? ingredient.trim() : '';
-    if (queryStr) params.append('query', queryStr);
-    if (ingredientStr) params.append('ingredient', ingredientStr);
+    // Always send both parameters to ensure backend can properly determine search type
+    // Even if empty, the backend needs to know whether to do name search, ingredient search, or combined search
+    params.append('query', queryStr);
+    params.append('ingredient', ingredientStr);
     
     // Debug logging to help identify the issue
     console.log('🔍 fetchManualRecipes called with:');
@@ -59,6 +62,8 @@ export const fetchManualRecipes = async (
     console.log('  - queryStr:', queryStr);
     console.log('  - ingredientStr:', ingredientStr);
     console.log('  - URL params being built:', params.toString());
+    console.log('  - Backend will receive: query="' + queryStr + '", ingredient="' + ingredientStr + '"');
+    console.log('  - This ensures backend can properly determine search type (name, ingredient, or combined)');
     
     // Handle pagination - always send pagination parameters to backend
     if (options.page && options.pageSize) {

@@ -99,6 +99,9 @@ const RecipesPage: React.FC = () => {
   const [selectedCuisines, setSelectedCuisines] = useState<string[]>([]);
   const [selectedDiets, setSelectedDiets] = useState<string[]>([]);
   const [showLoading, setShowLoading] = useState(false);
+  // Add state to track previous search results for chained search
+  const [previousSearchResults, setPreviousSearchResults] = useState<Recipe[]>([]);
+  const [isChainedSearch, setIsChainedSearch] = useState(false);
   const [currentPage, setCurrentPage] = useState(() => {
     // Try to restore the current page from localStorage
     const savedPage = localStorage.getItem('recipes-current-page');
@@ -122,7 +125,7 @@ const RecipesPage: React.FC = () => {
     isLoading: isLoadingRecipes, 
     isFetching 
   } = useQuery<{ recipes: Recipe[], total: number }>({
-    queryKey: ['recipes', searchQuery, ingredientSearch, selectedCuisines, selectedDiets, currentPage, recipesPerPage],
+    queryKey: ['recipes', searchQuery, ingredientSearch, selectedCuisines, selectedDiets, currentPage, recipesPerPage, isChainedSearch],
     enabled: true, // Always enable the query to fetch recipes on mount
     queryFn: async () => {
       try {
@@ -133,14 +136,32 @@ const RecipesPage: React.FC = () => {
         console.log('  - selectedDiets:', selectedDiets);
         console.log('  - currentPage:', currentPage);
         console.log('  - recipesPerPage:', recipesPerPage);
+        console.log('  - isChainedSearch:', isChainedSearch);
+        console.log('  - previousSearchResults count:', previousSearchResults.length);
+        console.log('🔍 DEBUG: About to call fetchManualRecipes with:', { searchQuery, ingredientSearch });
         
-        // Always use pagination for consistent behavior
-        const result = await fetchManualRecipes(searchQuery, ingredientSearch, {
-          page: currentPage,
-          pageSize: recipesPerPage, // Use configurable page size
-          cuisines: selectedCuisines,
-          diets: selectedDiets
-        });
+        // For chained search: ingredient search filters down from previous name search results
+        let result;
+        if (isChainedSearch && ingredientSearch && previousSearchResults.length > 0) {
+          console.log('🔗 CHAINED SEARCH: Filtering ingredient search within previous name search results');
+          // Use a special endpoint or parameter to indicate chained search
+          result = await fetchManualRecipes('', ingredientSearch, {
+            page: currentPage,
+            pageSize: recipesPerPage,
+            cuisines: selectedCuisines,
+            diets: selectedDiets,
+            baseRecipes: previousSearchResults // Pass previous results for filtering
+          });
+        } else {
+          // Regular search: search from entire database
+          console.log('🔍 REGULAR SEARCH: Searching entire database');
+          result = await fetchManualRecipes(searchQuery, ingredientSearch, {
+            page: currentPage,
+            pageSize: recipesPerPage,
+            cuisines: selectedCuisines,
+            diets: selectedDiets
+          });
+        }
         
         console.log('🔍 Backend response:');
         console.log('  - Raw result:', result);
@@ -149,6 +170,8 @@ const RecipesPage: React.FC = () => {
         console.log('  - Result.total:', result.total);
         console.log('  - Selected cuisines sent to backend:', selectedCuisines);
         console.log('  - Selected diets sent to backend:', selectedDiets);
+        console.log('🔍 DEBUG: Backend returned', result.total || 0, 'recipes');
+        console.log('🔍 DEBUG: First few recipe titles:', result.recipes?.slice(0, 3).map(r => r?.title || 'No title'));
         
         // Update total pages based on the response
         const totalRecipes = result.total || 0;
@@ -170,47 +193,137 @@ const RecipesPage: React.FC = () => {
     refetchOnWindowFocus: false,
   });
 
-  // Handle recipe name search input change - only update local state, don't trigger search
+  // Handle recipe name search input change - update local state and auto-clear search when input is cleared
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchTerm(e.target.value);
-    // Don't update searchQuery here - only update it when search is explicitly triggered
-    console.log('Search term changed, but not triggering search yet');
+    const newValue = e.target.value;
+    setSearchTerm(newValue);
+    
+    // Auto-clear search when input is completely cleared
+    if (newValue.trim() === '' && searchQuery !== '') {
+      console.log('🔍 Auto-clearing name search: input was cleared');
+      setSearchQuery('');
+      setPreviousSearchResults([]);
+      setIsChainedSearch(false);
+      updateCurrentPage(1);
+    } else {
+      console.log('Search term changed, but not triggering search yet');
+    }
   };
 
-  // Handle ingredient search input change - only update local state, don't trigger search
+  // Handle ingredient search input change - update local state and auto-clear search when input is cleared
   const handleIngredientSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setIngredientSearch(e.target.value);
-    console.log('Ingredient search changed, but not triggering search yet');
+    const newValue = e.target.value;
+    setIngredientSearch(newValue);
+    
+    // Auto-clear search when input is completely cleared
+    if (newValue.trim() === '' && ingredientSearch !== '') {
+      console.log('🔍 Auto-clearing ingredient search: input was cleared');
+      // For ingredient search, we need to check if we should also clear name search
+      if (searchQuery === '') {
+        // If no name search is active, clear everything
+        setSearchQuery('');
+        setPreviousSearchResults([]);
+        setIsChainedSearch(false);
+        updateCurrentPage(1);
+      }
+    } else {
+      console.log('Ingredient search changed, but not triggering search yet');
+    }
   };
 
   // Handle search button click or Enter key press
   const handleSearchSubmit = () => {
-    console.log('=== SEARCH SUBMITTED ===');
-    console.log('searchTerm (from input):', searchTerm);
-    console.log('ingredientSearch (from input):', ingredientSearch);
-    console.log('Current searchQuery state:', searchQuery);
-    console.log('Current ingredientSearch state:', ingredientSearch);
+    try {
+      console.log('=== SEARCH SUBMITTED ===');
+      console.log('searchTerm (from recipe name input):', searchTerm);
+      console.log('ingredientSearch (from ingredient input):', ingredientSearch);
+      console.log('Current searchQuery state:', searchQuery);
+      console.log('Current ingredientSearch state:', ingredientSearch);
+      console.log('🔍 DEBUG: Search button clicked or Enter pressed');
+      console.log('🔍 DEBUG: Will now update state and trigger backend search');
     
-    // Set both searchQuery and ingredientSearch to ensure the search is triggered
-    // This ensures that both recipe name and ingredient searches work properly
-    setSearchQuery(searchTerm);
-    // Note: ingredientSearch state is already being used in the useQuery dependency array
-    // so we don't need to set it again, just ensure the search is triggered
+    // REMOVED: Minimum search length requirement to allow flexible substring searching
+    // Now any search term length will work, including single characters
+    const hasValidNameSearch = searchTerm.trim().length > 0;
+    const hasValidIngredientSearch = ingredientSearch.trim().length > 0;
+    
+    if (!hasValidNameSearch && !hasValidIngredientSearch) {
+      console.log('⚠️ Search validation failed: Both search terms are empty');
+      console.log(`  - Name search: '${searchTerm.trim()}' (${searchTerm.trim().length} chars)`);
+      console.log(`  - Ingredient search: '${ingredientSearch.trim()}' (${ingredientSearch.trim().length} chars)`);
+      // Don't submit the search - return early
+      return;
+    }
+    
+    // FIXED SEARCH LOGIC: Allow both search types to work independently
+    // The backend is designed to handle name and ingredient searches separately:
+    // - Name search: ONLY looks at recipe titles and descriptions (ignores ingredients)
+    // - Ingredient search: ONLY looks at recipe ingredients (ignores titles/descriptions)
+    
+    if (hasValidNameSearch && hasValidIngredientSearch) {
+      // Both fields have content - this is a valid case for the backend
+      // The backend will handle both parameters separately and return recipes that match either criteria
+      console.log('🔍 COMBINED SEARCH: Both name and ingredient search provided');
+      setIsChainedSearch(false);
+      setSearchQuery(searchTerm);
+      // Keep ingredientSearch as is - don't clear it
+      setPreviousSearchResults([]); // Clear previous results
+      console.log('  - Will do COMBINED SEARCH:');
+      console.log('    * Name search for:', searchTerm);
+      console.log('    * Ingredient search for:', ingredientSearch);
+      console.log('  - Backend will handle both parameters separately');
+    } else if (hasValidNameSearch) {
+      // Only recipe name search has content - do name search only
+      console.log('🔍 RECIPE NAME SEARCH: Searching by recipe name only');
+      setIsChainedSearch(false);
+      setSearchQuery(searchTerm);
+      setIngredientSearch(''); // Clear ingredient search for name-only search
+      setPreviousSearchResults([]); // Clear previous results
+      console.log('  - Will do NAME SEARCH for:', searchTerm);
+      console.log('  - Backend will ONLY look at recipe titles and descriptions');
+    } else if (hasValidIngredientSearch) {
+      // Only ingredient search has content - do ingredient search only
+      console.log('🔍 INGREDIENT SEARCH: Searching by ingredients only');
+      setIsChainedSearch(false);
+      setSearchQuery(''); // Clear name search for ingredient-only search
+      // Keep ingredientSearch as is - this will be sent to backend as ingredient parameter
+      setPreviousSearchResults([]); // Clear previous results
+      console.log('  - Will do INGREDIENT SEARCH for:', ingredientSearch);
+      console.log('  - Backend will ONLY look at recipe ingredients field');
+      console.log('  - searchQuery will be empty, ingredientSearch will be sent as ingredient parameter');
+      console.log('  - Backend should handle empty query parameter correctly for ingredient-only searches');
+      console.log('  - Frontend now sends both parameters (even if empty) to ensure proper backend search type detection');
+    } else {
+      // No valid search terms - clear everything
+      console.log('🔍 No valid search terms - clearing all searches');
+      setSearchQuery('');
+      setIngredientSearch('');
+      setIsChainedSearch(false);
+      setPreviousSearchResults([]);
+    }
     
     updateCurrentPage(1);
-    console.log('After setting searchQuery to:', searchTerm);
-    console.log('Search should now be triggered with:');
-    console.log('- searchQuery:', searchTerm);
-    console.log('- ingredientSearch:', ingredientSearch);
+    console.log('After search submission:');
+    console.log('- searchQuery will be:', hasValidNameSearch ? searchTerm : '');
+    console.log('- ingredientSearch will be:', hasValidIngredientSearch ? ingredientSearch : '');
+    console.log('- isChainedSearch will be:', false);
+    console.log('- previousSearchResults count:', 0);
+    console.log('🔍 DEBUG: State updated, backend search should be triggered now');
+    console.log('🔍 DEBUG: Check browser console for backend API calls');
     console.log('=== END SEARCH SUBMITTED ===');
     
     // Add additional debugging to help identify the issue
     console.log('🔍 SEARCH DEBUG INFO:');
     console.log('  - searchTerm value:', searchTerm);
     console.log('  - ingredientSearch value:', ingredientSearch);
-    console.log('  - Both values will be sent to backend');
-    console.log('  - Backend should differentiate between name and ingredient search');
-    console.log('  - If results are the same, the issue is likely in backend logic');
+    console.log('  - Search type: Combined search when both fields have content');
+    console.log('  - Backend will receive appropriate search parameters');
+    console.log('  - Backend correctly separates name and ingredient searches');
+    console.log('  - No minimum search length - any character count allowed');
+    } catch (error) {
+      console.error('🔍 ERROR in search submission:', error);
+      console.error('🔍 This might explain why search is not working');
+    }
   };
 
   // Handle Enter key press in search input
@@ -255,6 +368,8 @@ const RecipesPage: React.FC = () => {
     setSearchQuery("");
     setSearchTerm("");
     setIngredientSearch("");
+    setIsChainedSearch(false);
+    setPreviousSearchResults([]);
     // Reset to page 1 when clearing all filters
     updateCurrentPage(1);
   }, [updateCurrentPage]);
@@ -394,6 +509,34 @@ const RecipesPage: React.FC = () => {
     }
   }, [recipesData.total, recipesPerPage]);
 
+  // Store search results for potential chained search
+  useEffect(() => {
+    if (recipesData.recipes && recipesData.recipes.length > 0 && searchQuery && !isChainedSearch) {
+      console.log('💾 Storing search results for potential chained search');
+      console.log('  - Found', recipesData.recipes.length, 'recipes for query:', searchQuery);
+      setPreviousSearchResults(recipesData.recipes);
+    }
+  }, [recipesData.recipes, searchQuery, isChainedSearch]);
+
+  // Auto-clear search when both inputs are empty
+  useEffect(() => {
+    if (searchTerm.trim() === '' && ingredientSearch.trim() === '' && (searchQuery !== '' || isChainedSearch)) {
+      console.log('🔍 Auto-clearing search: both inputs are empty');
+      setSearchQuery('');
+      setPreviousSearchResults([]);
+      setIsChainedSearch(false);
+      updateCurrentPage(1);
+    }
+  }, [searchTerm, ingredientSearch, searchQuery, isChainedSearch, updateCurrentPage]);
+
+  // Update current page (localStorage is handled by useEffect)
+  useEffect(() => {
+    if (currentPage > 0) {
+      console.log('Saving current page to localStorage:', currentPage);
+      localStorage.setItem('recipes-current-page', currentPage.toString());
+    }
+  }, [currentPage]);
+
   const handleSearch = useCallback((term: string) => {
     setSearchTerm(term);
     setSearchQuery(term);
@@ -427,14 +570,6 @@ const RecipesPage: React.FC = () => {
     }
   }, []);
   
-  // Save current page to localStorage whenever it changes
-  useEffect(() => {
-    if (currentPage > 0) {
-      console.log('Saving current page to localStorage:', currentPage);
-      localStorage.setItem('recipes-current-page', currentPage.toString());
-    }
-  }, [currentPage]);
-
   const renderRecipeCard = useCallback((recipe: NormalizedRecipe, index: number) => {
     // Helper function to convert string to DietaryRestriction enum
     const convertToDietaryRestriction = (diet: string): DietaryRestriction | null => {
@@ -593,9 +728,11 @@ const RecipesPage: React.FC = () => {
                       onChange={handleSearchChange}
                       onKeyPress={handleSearchKeyPress}
                     />
+                    {/* Removed warning for short searches - now any length is allowed */}
                     <Button
                       onClick={handleSearchSubmit}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 px-5 h-10 rounded-full bg-gradient-to-r from-primary to-amber-600 hover:from-primary/90 hover:to-amber-600/90 text-white shadow"
+                      disabled={searchTerm.trim().length === 0 && ingredientSearch.trim().length === 0}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 px-5 h-10 rounded-full bg-gradient-to-r from-primary to-amber-600 hover:from-primary/90 hover:to-amber-600/90 text-white shadow disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <Search className="mr-2 h-4 w-4" />
                       Find
@@ -626,6 +763,7 @@ const RecipesPage: React.FC = () => {
                       onChange={handleIngredientSearchChange}
                       onKeyPress={handleIngredientKeyPress}
                     />
+                    {/* Removed warning for short searches - now any length is allowed */}
                   </div>
                 </div>
               </div>
@@ -679,6 +817,19 @@ const RecipesPage: React.FC = () => {
                   <h2 className="text-2xl font-bold text-gray-900 mb-1">
                     {searchTerm ? `Search Results for "${searchTerm}"` : 'All Recipes'}
                   </h2>
+                  {/* Add search type indicator */}
+                  {searchQuery && (
+                    <div className="text-sm text-gray-600 mb-2">
+                      🔍 <strong>Name Search:</strong> Looking for "{searchQuery}" in recipe titles and descriptions
+                    </div>
+                  )}
+                  {ingredientSearch && (
+                    <div className="text-sm text-gray-600 mb-2">
+                      🥕 <strong>Ingredient Search:</strong> Looking for "{ingredientSearch}" in recipe ingredients only
+                    </div>
+                  )}
+                  {/* Chained search indicator */}
+                 
                   <p className="text-gray-600">
                     {recipesData.total > 0 ? (
                       (() => {

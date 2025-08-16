@@ -13,11 +13,15 @@ export const fetchRecipes = async (query: string = "", ingredient: string = "", 
     try {
         // Build the URL with appropriate parameters
         const params = new URLSearchParams();
-        if (query) params.append('query', query);
-        if (ingredient) params.append('ingredient', ingredient);
+        // Always send both parameters to ensure backend can properly determine search type
+        // Even if empty, the backend needs to know whether to do name search, ingredient search, or combined search
+        params.append('query', query);
+        params.append('ingredient', ingredient);
         
         const url = `${API_URL}?${params.toString()}`;
         console.log('[DEBUG] API Request URL:', url);
+        console.log('[DEBUG] Backend will receive: query="' + query + '", ingredient="' + ingredient + '"');
+        console.log('[DEBUG] This ensures backend can properly determine search type (name, ingredient, or combined)');
         
         // Add a timeout to the fetch request
         const controller = new AbortController();

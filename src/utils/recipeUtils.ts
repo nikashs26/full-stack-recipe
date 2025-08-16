@@ -186,7 +186,18 @@ export const filterRecipes = (
         const cuisineLower = typeof cuisine === 'string' ? cuisine.toLowerCase() : '';
         // If American is selected, also match Southern and Creole cuisines
         if (cuisineFilterLower === 'american') {
-          return ['american', 'southern', 'creole', 'cajun', 'soul food', 'southwestern', 'louisiana', 'tex-mex', 'new orleans'].includes(cuisineLower);
+          const americanRegionalCuisines = [
+            'american', 'southern', 'creole', 'cajun', 'soul food', 'southwestern', 
+            'louisiana', 'tex-mex', 'new orleans', 'deep south', 'gulf coast',
+            'southern american', 'southern us', 'southern united states', 'southern cuisine',
+            'creole cuisine', 'cajun cuisine', 'soul food cuisine', 'southwestern cuisine',
+            'louisiana cuisine', 'tex-mex cuisine', 'new orleans cuisine', 'deep south cuisine',
+            'gulf coast cuisine', 'southern cooking', 'southern style', 'southern food',
+            'creole cooking', 'cajun cooking', 'soul food cooking', 'southwestern cooking',
+            'louisiana cooking', 'tex-mex cooking', 'new orleans cooking', 'deep south cooking',
+            'gulf coast cooking', 'southern dishes', 'southern recipes', 'southern meals'
+          ];
+          return americanRegionalCuisines.includes(cuisineLower);
         }
         // Normal cuisine matching for other cases
         return cuisineLower === cuisineFilterLower;

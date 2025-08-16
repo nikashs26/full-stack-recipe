@@ -606,11 +606,44 @@ class RecipeService:
                 # For American cuisine, also match Southern, Creole, and other American regional cuisines
                 american_regional_cuisines = {
                     'american', 'southern', 'creole', 'cajun', 'soul food', 'southwestern', 
-                    'louisiana', 'tex-mex', 'new orleans', 'deep south', 'gulf coast'
+                    'louisiana', 'tex-mex', 'new orleans', 'deep south', 'gulf coast',
+                    'southern american', 'southern us', 'southern united states', 'southern cuisine',
+                    'creole cuisine', 'cajun cuisine', 'soul food cuisine', 'southwestern cuisine',
+                    'louisiana cuisine', 'tex-mex cuisine', 'new orleans cuisine', 'deep south cuisine',
+                    'gulf coast cuisine', 'southern cooking', 'southern style', 'southern food',
+                    'creole cooking', 'cajun cooking', 'soul food cooking', 'southwestern cooking',
+                    'louisiana cooking', 'tex-mex cooking', 'new orleans cooking', 'deep south cooking',
+                    'gulf coast cooking', 'southern dishes', 'southern recipes', 'southern meals'
                 }
+                
+                # Check if any recipe cuisine matches American regional cuisines
                 if recipe_cuisines.intersection(american_regional_cuisines):
                     logger.debug(f"✓ American regional cuisine match found: {recipe_cuisines.intersection(american_regional_cuisines)}")
                     return True
+                
+                # Also check for partial matches in cuisine names (e.g., "Southern" in "Southern Comfort Food")
+                for recipe_cuisine in recipe_cuisines:
+                    for regional_cuisine in american_regional_cuisines:
+                        if regional_cuisine in recipe_cuisine.lower() or recipe_cuisine.lower() in regional_cuisine:
+                            logger.debug(f"✓ American regional cuisine partial match: '{recipe_cuisine}' matches '{regional_cuisine}'")
+                            return True
+                
+                # Check if recipe title/description contains Southern American indicators
+                title = recipe.get('title', '').lower()
+                description = recipe.get('description', '').lower()
+                
+                # Common Southern American indicators in titles/descriptions
+                southern_indicators = [
+                    'southern', 'creole', 'cajun', 'soul food', 'southwestern', 'louisiana', 
+                    'tex-mex', 'new orleans', 'deep south', 'gulf coast', 'comfort food',
+                    'fried chicken', 'grits', 'cornbread', 'biscuits', 'gravy', 'collard greens',
+                    'black eyed peas', 'okra', 'sweet tea', 'pecan pie', 'peach cobbler'
+                ]
+                
+                for indicator in southern_indicators:
+                    if indicator in title or indicator in description:
+                        logger.debug(f"✓ Southern American indicator found in title/description: '{indicator}'")
+                        return True
             else:
                 # Normal exact match for other cuisines
                 if cuisine_lower in recipe_cuisines:
@@ -872,7 +905,7 @@ class RecipeService:
                                 break
                         elif isinstance(ing, str):
                             ing_lower = ing.lower()
-                            if any(food in ing_name for food in foods_to_avoid):
+                            if any(food in ing_lower for food in foods_to_avoid):
                                 should_include = False
                                 break
                 
