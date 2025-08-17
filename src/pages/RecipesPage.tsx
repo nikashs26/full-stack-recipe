@@ -344,11 +344,36 @@ const RecipesPage: React.FC = () => {
 
   // Toggle cuisine filter and reset to first page
   const toggleCuisine = (cuisine: string) => {
-    setSelectedCuisines(prev => 
-      prev.includes(cuisine) 
-        ? prev.filter(c => c !== cuisine) 
-        : [...prev, cuisine]
-    );
+    setSelectedCuisines(prev => {
+      if (prev.includes(cuisine)) {
+        // Remove this cuisine and any related cuisines that were auto-added
+        const relatedCuisines = getRelatedCuisines(cuisine);
+        const cuisinesToRemove = [cuisine, ...relatedCuisines];
+        const newSelection = prev.filter(c => !cuisinesToRemove.includes(c));
+        
+        if (relatedCuisines.length > 0) {
+          console.log(`🗑️ Removed ${cuisine} and related cuisines: ${relatedCuisines.join(', ')}`);
+        } else {
+          console.log(`🗑️ Removed ${cuisine}`);
+        }
+        
+        return newSelection;
+      } else {
+        // Add this cuisine and any related cuisines
+        const relatedCuisines = getRelatedCuisines(cuisine);
+        const newCuisines = [cuisine, ...relatedCuisines];
+        // Only add cuisines that aren't already selected
+        const cuisinesToAdd = newCuisines.filter(c => !prev.includes(c));
+        
+        if (relatedCuisines.length > 0) {
+          console.log(`✅ Added ${cuisine} and automatically included related cuisines: ${relatedCuisines.join(', ')}`);
+        } else {
+          console.log(`✅ Added ${cuisine}`);
+        }
+        
+        return [...prev, ...cuisinesToAdd];
+      }
+    });
     updateCurrentPage(1);
   };
 
@@ -683,6 +708,34 @@ const RecipesPage: React.FC = () => {
       </div>
     );
   }, [navigate]);
+
+  // Helper function to get related cuisines for automatic expansion
+  const getRelatedCuisines = (cuisine: string): string[] => {
+    const cuisineLower = cuisine.toLowerCase();
+    
+    // Define cuisine relationships: parent -> [subset cuisines]
+    const cuisineExpansions: Record<string, string[]> = {
+      'american': ['southern', 'cajun', 'creole', 'tex-mex', 'hawaiian', 'pacific northwest', 'new england', 'midwest', 'southwest'],
+      'italian': ['sicilian', 'tuscan', 'roman', 'northern italian', 'southern italian'],
+      'chinese': ['cantonese', 'sichuan', 'hunan', 'peking', 'shanghai', 'dim sum'],
+      'indian': ['north indian', 'south indian', 'bengali', 'punjabi', 'gujarati', 'marathi', 'karnataka', 'tamil', 'kerala'],
+      'mexican': ['yucatan', 'oaxaca', 'puebla', 'veracruz', 'northern mexican', 'baja california'],
+      'french': ['provencal', 'normandy', 'alsace', 'burgundy', 'lyonnaise', 'parisian'],
+      'japanese': ['kyoto', 'osaka', 'tokyo', 'hokkaido', 'okinawa'],
+      'thai': ['northern thai', 'southern thai', 'central thai', 'isan'],
+      'greek': ['crete', 'peloponnese', 'aegean', 'ionian'],
+      'spanish': ['andalusia', 'catalonia', 'basque', 'galicia', 'valencia'],
+      'mediterranean': ['greek', 'italian', 'spanish', 'turkish', 'lebanese', 'moroccan'],
+      'asian': ['chinese', 'japanese', 'korean', 'thai', 'vietnamese', 'indian', 'indonesian', 'malaysian'],
+      'european': ['french', 'italian', 'spanish', 'german', 'british', 'greek', 'portuguese', 'dutch'],
+      'latin american': ['mexican', 'brazilian', 'argentine', 'peruvian', 'colombian', 'chilean'],
+      'african': ['north african', 'west african', 'east african', 'south african', 'ethiopian', 'moroccan'],
+      'middle eastern': ['lebanese', 'turkish', 'iranian', 'iraqi', 'syrian', 'jordanian', 'israeli']
+    };
+    
+    // Return related cuisines if this is a parent cuisine
+    return cuisineExpansions[cuisineLower] || [];
+  };
 
   return (
     <div className="min-h-screen relative">

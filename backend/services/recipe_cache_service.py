@@ -290,24 +290,59 @@ class RecipeCacheService:
                                 if recipe.get('cuisines') and isinstance(recipe['cuisines'], list):
                                     recipe_cuisines.extend([c.lower() for c in recipe['cuisines'] if c])
                                 
+                                # CUISINE EXPANSION: Automatically include related/subset cuisines
+                                expanded_cuisine_filter = self._expand_cuisine_filter(cuisine_filter)
+                                if expanded_cuisine_filter != cuisine_filter:
+                                    logger.info(f"🔍 CUISINE EXPANSION: {cuisine_filter} -> {expanded_cuisine_filter}")
+                                
                                 logger.info(f"🔍 DEBUG: Recipe '{recipe.get('title', 'Unknown')}' has cuisines: {recipe_cuisines}")
                                 logger.info(f"🔍 DEBUG: Filtering for cuisine: {cuisine_filter}")
+                                logger.info(f"🔍 DEBUG: Expanded cuisine filter: {expanded_cuisine_filter}")
+                                logger.info(f"🔍 DEBUG: cuisine_filter type: {type(cuisine_filter)}")
                                 
                                 # Handle both single string and list of strings for cuisine filter
-                                if isinstance(cuisine_filter, str):
+                                if isinstance(expanded_cuisine_filter, str):
                                     # Single cuisine filter - check for exact match or contains
-                                    if not any(cuisine_filter.lower() == cuisine.lower() or cuisine.lower() in cuisine_filter.lower() for cuisine in recipe_cuisines):
+                                    if not any(expanded_cuisine_filter.lower() == cuisine.lower() or cuisine.lower() in expanded_cuisine_filter.lower() for cuisine in recipe_cuisines):
                                         should_include = False
-                                        logger.debug(f"Recipe '{recipe.get('title', 'Unknown')}' excluded by cuisine filter: {cuisine_filter}")
-                                elif isinstance(cuisine_filter, list):
-                                    # Multiple cuisine filters - check if any match
-                                    if not any(any(filter_cuisine.lower() == cuisine.lower() or cuisine.lower() in filter_cuisine.lower() for cuisine in recipe_cuisines) for filter_cuisine in cuisine_filter):
+                                        logger.debug(f"Recipe '{recipe.get('title', 'Unknown')}' excluded by cuisine filter: {expanded_cuisine_filter}")
+                                elif isinstance(expanded_cuisine_filter, list):
+                                    # Multiple cuisine filters - check if ANY of the requested cuisines match ANY of the recipe's cuisines
+                                    # This is the key fix: we want to include recipes that match ANY of the requested cuisines
+                                    logger.info(f"🔍 DEBUG: Processing expanded list cuisine filter: {expanded_cuisine_filter}")
+                                    cuisine_matched = False
+                                    for filter_cuisine in expanded_cuisine_filter:
+                                        if not filter_cuisine:
+                                            continue
+                                        filter_cuisine_lower = filter_cuisine.lower().strip()
+                                        logger.info(f"🔍 DEBUG: Checking filter cuisine: '{filter_cuisine}' -> '{filter_cuisine_lower}'")
+                                        
+                                        for recipe_cuisine in recipe_cuisines:
+                                            if not recipe_cuisine:
+                                                continue
+                                            recipe_cuisine_lower = recipe_cuisine.lower().strip()
+                                            logger.info(f"🔍 DEBUG: Against recipe cuisine: '{recipe_cuisine}' -> '{recipe_cuisine_lower}'")
+                                            
+                                            # Check for exact match or partial match
+                                            if (filter_cuisine_lower == recipe_cuisine_lower or 
+                                                filter_cuisine_lower in recipe_cuisine_lower or 
+                                                recipe_cuisine_lower in filter_cuisine_lower):
+                                                cuisine_matched = True
+                                                logger.info(f"🔍 DEBUG: ✅ Cuisine match found: '{filter_cuisine_lower}' matches '{recipe_cuisine_lower}'")
+                                                break
+                                        
+                                        if cuisine_matched:
+                                            break
+                                    
+                                    if not cuisine_matched:
                                         should_include = False
-                                        logger.debug(f"Recipe '{recipe.get('title', 'Unknown')}' excluded by cuisine filter: {cuisine_filter}")
+                                        logger.info(f"🔍 DEBUG: ❌ Recipe '{recipe.get('title', 'Unknown')}' excluded by cuisine filter: {expanded_cuisine_filter} - no matches found")
+                                        logger.info(f"🔍 DEBUG: Recipe cuisines: {recipe_cuisines}")
+                                        logger.info(f"🔍 DEBUG: Expanded filter cuisines: {expanded_cuisine_filter}")
                                 else:
                                     # Invalid filter type
                                     should_include = False
-                                    logger.warning(f"Invalid cuisine filter type: {type(cuisine_filter)}")
+                                    logger.warning(f"Invalid cuisine filter type: {type(expanded_cuisine_filter)}")
                             
                             # Dietary restrictions filter
                             if should_include and filters.get("dietary_restrictions"):
@@ -1561,3 +1596,65 @@ class RecipeCacheService:
         except Exception as e:
             logger.error(f"Error in _get_all_recipes_from_cache: {e}")
             return [] 
+
+    def _expand_cuisine_filter(self, cuisine_filter):
+        """
+        Expand cuisine filters to include related/subset cuisines.
+        For example, 'american' should include 'southern', 'cajun', etc.
+        """
+        if not cuisine_filter:
+            return cuisine_filter
+        
+        # Define cuisine relationships: parent -> [subset cuisines]
+        cuisine_expansions = {
+            'american': ['southern', 'cajun', 'creole', 'tex-mex', 'hawaiian', 'pacific northwest', 'new england', 'midwest', 'southwest'],
+            'italian': ['sicilian', 'tuscan', 'roman', 'northern italian', 'southern italian'],
+            'chinese': ['cantonese', 'sichuan', 'hunan', 'peking', 'shanghai', 'dim sum'],
+            'indian': ['north indian', 'south indian', 'bengali', 'punjabi', 'gujarati', 'marathi', 'karnataka', 'tamil', 'kerala'],
+            'mexican': ['yucatan', 'oaxaca', 'puebla', 'veracruz', 'northern mexican', 'baja california'],
+            'french': ['provencal', 'normandy', 'alsace', 'burgundy', 'lyonnaise', 'parisian'],
+            'japanese': ['kyoto', 'osaka', 'tokyo', 'hokkaido', 'okinawa'],
+            'thai': ['northern thai', 'southern thai', 'central thai', 'isan'],
+            'greek': ['crete', 'peloponnese', 'aegean', 'ionian'],
+            'spanish': ['andalusia', 'catalonia', 'basque', 'galicia', 'valencia'],
+            'mediterranean': ['greek', 'italian', 'spanish', 'turkish', 'lebanese', 'moroccan'],
+            'asian': ['chinese', 'japanese', 'korean', 'thai', 'vietnamese', 'indian', 'indonesian', 'malaysian'],
+            'european': ['french', 'italian', 'spanish', 'german', 'british', 'greek', 'portuguese', 'dutch'],
+            'latin american': ['mexican', 'brazilian', 'argentine', 'peruvian', 'colombian', 'chilean'],
+            'african': ['north african', 'west african', 'east african', 'south african', 'ethiopian', 'moroccan'],
+            'middle eastern': ['lebanese', 'turkish', 'iranian', 'iraqi', 'syrian', 'jordanian', 'israeli']
+        }
+        
+        # Handle single string
+        if isinstance(cuisine_filter, str):
+            cuisine_lower = cuisine_filter.lower().strip()
+            expanded = [cuisine_filter]  # Keep original
+            
+            # Add subset cuisines
+            for parent, subsets in cuisine_expansions.items():
+                if cuisine_lower == parent.lower():
+                    expanded.extend(subsets)
+                    break
+            
+            return expanded
+        
+        # Handle list
+        elif isinstance(cuisine_filter, list):
+            expanded = []
+            for cuisine in cuisine_filter:
+                if not cuisine:
+                    continue
+                    
+                cuisine_lower = cuisine.lower().strip()
+                expanded.append(cuisine)  # Keep original
+                
+                # Add subset cuisines
+                for parent, subsets in cuisine_expansions.items():
+                    if cuisine_lower == parent.lower():
+                        expanded.extend(subsets)
+                        break
+            
+            return expanded
+        
+        # Return as-is for other types
+        return cuisine_filter

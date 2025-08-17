@@ -431,6 +431,41 @@ const HomePage: React.FC = () => {
         console.log('🎯 Using backend recommendations:', backendRecommendations.length);
         console.log('📊 Backend recommendations cuisines:', backendRecommendations.map(r => r.cuisine));
         
+        // DEBUG: Show initial cuisine distribution from backend
+        const initialCuisineCounts: Record<string, number> = {};
+        backendRecommendations.forEach(recipe => {
+          const cuisine = recipe.cuisine || 'Unknown';
+          initialCuisineCounts[cuisine] = (initialCuisineCounts[cuisine] || 0) + 1;
+        });
+        console.log('🔍 Initial cuisine distribution from backend:', initialCuisineCounts);
+        console.log('🔍 Total recipes from backend:', backendRecommendations.length);
+        
+        // ADDITIONAL DEBUG: Show cuisines field distribution (this is where the actual cuisine data is)
+        const cuisinesFieldCounts: Record<string, number> = {};
+        backendRecommendations.forEach(recipe => {
+          const cuisines = Array.isArray((recipe as any).cuisines) ? (recipe as any).cuisines : [];
+          cuisines.forEach((cuisine: string) => {
+            if (cuisine && typeof cuisine === 'string') {
+              cuisinesFieldCounts[cuisine] = (cuisinesFieldCounts[cuisine] || 0) + 1;
+            }
+          });
+        });
+        console.log('🔍 Cuisines field distribution from backend:', cuisinesFieldCounts);
+        
+        // Check if we're missing any user-selected cuisines in the backend data
+        const userCuisines = userPreferences?.favoriteCuisines || [];
+        const missingCuisinesInBackend = userCuisines.filter(userCuisine => 
+          !Object.keys(cuisinesFieldCounts).some(backendCuisine => 
+            backendCuisine.toLowerCase().includes(userCuisine.toLowerCase()) ||
+            userCuisine.toLowerCase().includes(backendCuisine.toLowerCase())
+          )
+        );
+        
+        if (missingCuisinesInBackend.length > 0) {
+          console.log('⚠️ WARNING: Missing cuisines in backend data:', missingCuisinesInBackend);
+          console.log('🔍 This suggests the backend cuisine filtering is not working correctly');
+        }
+
         // IMPROVED BALANCED DISTRIBUTION: Ensure fair cuisine distribution and guaranteed favorite foods
         const favoriteFoodsNorm: string[] = (userPreferences?.favoriteFoods || [])
           .map((f: any) => (f || '').toString().trim().toLowerCase())
@@ -482,11 +517,8 @@ const HomePage: React.FC = () => {
           console.log(`🌍 Filling ${remainingSlots} slots with balanced cuisine distribution from ${cuisines.length} cuisines`);
           
           if (cuisines.length > 0) {
-            // Calculate fair distribution per cuisine
-            const maxPerCuisine = Math.ceil(remainingSlots / cuisines.length);
-            console.log(`📊 Max recipes per cuisine: ${maxPerCuisine}`);
-            
-            // Round-robin distribution to ensure fair balance
+            // IMPROVED: Use round-robin distribution to ensure fair balance across cuisines
+            // This prevents one cuisine from dominating the recommendations
             let added = true;
             let cuisineIndex = 0;
             
@@ -507,6 +539,15 @@ const HomePage: React.FC = () => {
                 cuisineIndex++;
               }
             }
+            
+            // Debug: Show final distribution
+            const finalCuisineCounts: Record<string, number> = {};
+            finalRecommendations.forEach(r => {
+              const cuisine = r.cuisine || 'Unknown';
+              finalCuisineCounts[cuisine] = (finalCuisineCounts[cuisine] || 0) + 1;
+            });
+            
+            console.log('📊 Final cuisine distribution:', finalCuisineCounts);
           }
         }
         
@@ -678,15 +719,28 @@ const HomePage: React.FC = () => {
         let cuisineMatchedRecipes: any[] = [];
         if (favoriteCuisines && favoriteCuisines.length > 0) {
           cuisineMatchedRecipes = filteredRecipes.filter(recipe => {
-            // Check if it's within preferred cuisines
+            // IMPROVED: More flexible cuisine matching logic
+            // Check both cuisine and cuisines fields for better coverage
             const recipeCuisines = Array.isArray((recipe as any).cuisines) ? (recipe as any).cuisines : [];
-            const recipeTitle = (recipe.title || (recipe as any).name || '').toLowerCase();
+            const singleCuisine = (recipe as any).cuisine ? [(recipe as any).cuisine] : [];
+            const allRecipeCuisines = [...recipeCuisines, ...singleCuisine];
             
+            // Normalize recipe cuisines for comparison
+            const normalizedRecipeCuisines = allRecipeCuisines
+              .filter(c => c && typeof c === 'string')
+              .map(c => c.toLowerCase().trim());
+            
+            // Check if recipe matches ANY of the preferred cuisines
             const isInPreferredCuisine = favoriteCuisines.some(cuisine => {
               if (!cuisine) return false;
-              const cuisineLower = cuisine.toLowerCase();
-              return recipeCuisines.some((c: any) => c?.toLowerCase().includes(cuisineLower)) ||
-                     recipeTitle.includes(cuisineLower);
+              const cuisineLower = cuisine.toLowerCase().trim();
+              
+              // Check for exact match or partial match
+              return normalizedRecipeCuisines.some(recipeCuisine => 
+                recipeCuisine === cuisineLower || 
+                recipeCuisine.includes(cuisineLower) || 
+                cuisineLower.includes(recipeCuisine)
+              );
             });
             
             if (!isInPreferredCuisine) return false;
@@ -703,7 +757,39 @@ const HomePage: React.FC = () => {
             
             return !isFavoriteFood;
           });
+          
           console.log('🌍 Found cuisine-matched recipes (excluding favorite foods):', cuisineMatchedRecipes.length);
+          
+          // IMPROVED: Better cuisine breakdown logging that shows actual cuisines from cuisines field
+          const cuisineBreakdown: Record<string, number> = {};
+          cuisineMatchedRecipes.forEach(recipe => {
+            // Check both cuisine and cuisines fields for accurate breakdown
+            const recipeCuisines = Array.isArray((recipe as any).cuisines) ? (recipe as any).cuisines : [];
+            const singleCuisine = (recipe as any).cuisine ? [(recipe as any).cuisine] : [];
+            const allCuisines = [...recipeCuisines, ...singleCuisine];
+            
+            // Use the first available cuisine for breakdown
+            const primaryCuisine = allCuisines.find(c => c && typeof c === 'string') || 'Unknown';
+            cuisineBreakdown[primaryCuisine] = (cuisineBreakdown[primaryCuisine] || 0) + 1;
+          });
+          console.log('🌍 Cuisine breakdown of matched recipes:', cuisineBreakdown);
+          
+          // ADDITIONAL DEBUG: Show what cuisines the user selected vs what we found
+          console.log('🔍 User selected cuisines:', favoriteCuisines);
+          console.log('🔍 Available cuisines in matched recipes:', Object.keys(cuisineBreakdown));
+          
+          // Check if we're missing any user-selected cuisines
+          const missingCuisines = favoriteCuisines.filter(userCuisine => 
+            !Object.keys(cuisineBreakdown).some(foundCuisine => 
+              foundCuisine.toLowerCase().includes(userCuisine.toLowerCase()) ||
+              userCuisine.toLowerCase().includes(foundCuisine.toLowerCase())
+            )
+          );
+          
+          if (missingCuisines.length > 0) {
+            console.log('⚠️ WARNING: Missing cuisines from user selection:', missingCuisines);
+            console.log('🔍 This suggests the cuisine matching logic is too restrictive');
+          }
         }
         
         // Step 3: Build recommendations with intelligent favorite food distribution

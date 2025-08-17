@@ -40,10 +40,37 @@ export const normalizeRecipe = (recipeData: any): Recipe => {
         };
       }
       // Already in object format
+      let amount: string | number | undefined;
+      let unit: string | undefined;
+      
+      // Handle new Spoonacular format with nested amount structure
+      if (ing.amount && typeof ing.amount === 'object') {
+        // Prefer US measurements, fallback to metric
+        if (ing.amount.us && ing.amount.us.value !== undefined) {
+          amount = ing.amount.us.value;
+          unit = ing.amount.us.unit || ing.unit;
+        } else if (ing.amount.metric && ing.amount.metric.value !== undefined) {
+          amount = ing.amount.metric.value;
+          unit = ing.amount.metric.unit || ing.unit;
+        }
+      } else {
+        // Handle simple amount/unit format
+        amount = ing.amount;
+        unit = ing.unit;
+      }
+      
+      // Format amount and unit together if both exist
+      let formattedAmount: string | number | undefined = amount;
+      if (amount !== undefined && unit && unit !== '') {
+        formattedAmount = `${amount} ${unit}`.trim();
+      } else if (amount !== undefined) {
+        formattedAmount = amount;
+      }
+      
       return {
         name: ing.name || ing.ingredient || 'Unknown',
-        amount: ing.amount,
-        unit: ing.unit
+        amount: formattedAmount,
+        unit: unit
       };
     });
   }
