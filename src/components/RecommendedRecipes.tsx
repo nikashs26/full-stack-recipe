@@ -92,7 +92,7 @@ const RecommendedRecipes: React.FC = () => {
       try {
         console.log('🔍 Fetching recommendations from backend...');
         
-        const response = await fetch('/api/recommendations', {
+        const response = await fetch('/api/recommendations?limit=16', {
           method: 'GET',
           credentials: 'include',
           headers: {
@@ -302,7 +302,7 @@ const RecommendedRecipes: React.FC = () => {
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        {allCombined.slice(0, 12).map((recipe) => {
+        {allCombined.map((recipe) => {
                       if (recipe.type === 'manual') {
               return (
                 <ManualRecipeCard
@@ -322,7 +322,7 @@ const RecommendedRecipes: React.FC = () => {
         })}
       </div>
 
-      {allCombined.length > 12 && (
+      {allCombined.length > 16 && (
         <div className="text-center">
           <Link
             to="/recipes"

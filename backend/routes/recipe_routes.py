@@ -158,6 +158,9 @@ def register_recipe_routes(app, recipe_cache):
         print(f"Favorite foods: {favorite_foods} (type: {type(favorite_foods)}, length: {len(favorite_foods)})")
         print(f"Raw cuisine_param: '{cuisine_param}' (type: {type(cuisine_param)})")
         print(f"Raw diet_param: '{diet_param}' (type: {type(diet_param)})")
+        print(f"Parsed dietary_restrictions: {dietary_restrictions}")
+        print(f"Request args keys: {list(request.args.keys())}")
+        print(f"Request args values: {dict(request.args)}")
         
         try:
             # Search recipes from all sources with pagination and filters

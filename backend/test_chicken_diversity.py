@@ -22,7 +22,7 @@ def test_chicken_diversity():
     }
     
     try:
-        recommendations = service.get_recipe_recommendations(user_prefs, limit=8)
+        recommendations = service.get_recipe_recommendations(user_prefs, limit=16)
         print(f"Found {len(recommendations)} recommendations")
         
         # Check cuisine distribution

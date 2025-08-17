@@ -954,6 +954,17 @@ class RecipeService:
         # Store the total count BEFORE applying pagination
         total_matching_recipes = len(filtered_recipes)
         
+        # ENHANCED: Add randomization to ensure different recipes on each request
+        # This prevents the same recipes from being returned every time
+        import random
+        random.seed()  # Use system time as seed for true randomness
+        
+        # Shuffle the filtered recipes to get different order each time
+        shuffled_recipes = filtered_recipes.copy()
+        random.shuffle(shuffled_recipes)
+        
+        logger.info(f"🔍 RANDOMIZATION: Shuffled {len(shuffled_recipes)} recipes for variety")
+        
         # Debug pagination parameters
         logger.info(f"🔍 PAGINATION DEBUG:")
         logger.info(f"   - Requested offset: {offset}")
@@ -969,8 +980,8 @@ class RecipeService:
                 "total": total_matching_recipes
             }
         
-        # Apply pagination
-        paginated_recipes = filtered_recipes[offset:offset + limit]
+        # Apply pagination to shuffled recipes
+        paginated_recipes = shuffled_recipes[offset:offset + limit]
         
         logger.info(f"Final result: {len(paginated_recipes)} recipes (offset: {offset}, limit: {limit})")
         logger.info(f"Total matching recipes: {total_matching_recipes}")

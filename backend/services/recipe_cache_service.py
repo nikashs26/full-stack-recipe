@@ -274,6 +274,8 @@ class RecipeCacheService:
                         logger.info(f"🔍 DEBUG: filters type: {type(filters)}")
                         logger.info(f"🔍 DEBUG: filters truthy: {bool(filters)}")
                         logger.info(f"🔍 Applying filters to all recipes: {filters}")
+                        logger.info(f"🔍 Total recipes to filter: {len(all_recipes)}")
+                        logger.info(f"🔍 Dietary restrictions filter: {filters.get('dietary_restrictions', 'None')}")
                         filtered_recipes = []
                         
                         for recipe in all_recipes:
@@ -349,15 +351,50 @@ class RecipeCacheService:
                                 dietary_filter = [d.lower() for d in filters["dietary_restrictions"]]
                                 recipe_dietary = []
                                 
+                                # Check dietaryRestrictions and diets arrays
                                 if recipe.get('dietaryRestrictions'):
                                     recipe_dietary.extend([d.lower() for d in recipe['dietaryRestrictions'] if d])
                                 if recipe.get('diets'):
                                     recipe_dietary.extend([d.lower() for d in recipe['diets'] if d])
                                 
-                                # Check if any recipe dietary info matches the filter
-                                if not any(diet in recipe_dietary for diet in dietary_filter):
+                                # Check vegetarian and vegan boolean fields
+                                if recipe.get('vegetarian') is True:
+                                    recipe_dietary.append('vegetarian')
+                                if recipe.get('vegan') is True:
+                                    recipe_dietary.append('vegan')
+                                
+                                # ENHANCED: If no explicit tags found, do ingredient-based detection for vegetarian/vegan
+                                if not any('vegetarian' in diet.lower() for diet in recipe_dietary) and 'vegetarian' in dietary_filter:
+                                    # Check if recipe is vegetarian by analyzing ingredients
+                                    if self._is_recipe_vegetarian_by_ingredients(recipe):
+                                        recipe_dietary.append('vegetarian')
+                                        logger.debug(f"🔍 Detected vegetarian recipe by ingredients: {recipe.get('title', 'Unknown')}")
+                                
+                                if not any('vegan' in diet.lower() for diet in recipe_dietary) and 'vegan' in dietary_filter:
+                                    # Check if recipe is vegan by analyzing ingredients
+                                    if self._is_recipe_vegan_by_ingredients(recipe):
+                                        recipe_dietary.append('vegan')
+                                        logger.debug(f"🔍 Detected vegan recipe by ingredients: {recipe.get('title', 'Unknown')}")
+                                
+                                # IMPROVED: Check if any recipe dietary info matches the filter
+                                # Use more flexible matching to catch variations
+                                dietary_matched = False
+                                for diet_filter in dietary_filter:
+                                    for recipe_diet in recipe_dietary:
+                                        # Check for exact match or partial match
+                                        if (diet_filter == recipe_diet or 
+                                            diet_filter in recipe_diet or 
+                                            recipe_diet in diet_filter):
+                                            dietary_matched = True
+                                            logger.debug(f"✅ Dietary match found: '{diet_filter}' matches '{recipe_diet}'")
+                                            break
+                                    if dietary_matched:
+                                        break
+                                
+                                if not dietary_matched:
                                     should_include = False
                                     logger.debug(f"Recipe '{recipe.get('title', 'Unknown')}' excluded by dietary filter: {dietary_filter}")
+                                    logger.debug(f"Recipe dietary info: {recipe_dietary}")
                             
                             # Max cooking time filter
                             if should_include and filters.get("max_cooking_time"):
@@ -396,6 +433,7 @@ class RecipeCacheService:
                                 filtered_recipes.append(recipe)
                         
                         logger.info(f"🔍 Filtering results: {len(all_recipes)} -> {len(filtered_recipes)} recipes")
+                        logger.info(f"🔍 Final filtered count: {len(filtered_recipes)}")
                         all_recipes = filtered_recipes
                     
                     # If no search terms and no filters, return all recipes
@@ -859,15 +897,37 @@ class RecipeCacheService:
                         dietary_filter = [d.lower() for d in filters["dietary_restrictions"]]
                         recipe_dietary = []
                         
+                        # Check dietaryRestrictions and diets arrays
                         if recipe.get('dietaryRestrictions'):
                             recipe_dietary.extend([d.lower() for d in recipe['dietaryRestrictions'] if d])
                         if recipe.get('diets'):
                             recipe_dietary.extend([d.lower() for d in recipe['diets'] if d])
                         
-                        # Check if any recipe dietary info matches the filter
-                        if not any(diet in recipe_dietary for diet in dietary_filter):
+                        # Check vegetarian and vegan boolean fields
+                        if recipe.get('vegetarian') is True:
+                            recipe_dietary.append('vegetarian')
+                        if recipe.get('vegan') is True:
+                            recipe_dietary.append('vegan')
+                        
+                        # IMPROVED: Check if any recipe dietary info matches the filter
+                        # Use more flexible matching to catch variations
+                        dietary_matched = False
+                        for diet_filter in dietary_filter:
+                            for recipe_diet in recipe_dietary:
+                                # Check for exact match or partial match
+                                if (diet_filter == recipe_diet or 
+                                    diet_filter in recipe_diet or 
+                                    recipe_diet in diet_filter):
+                                    dietary_matched = True
+                                    logger.debug(f"✅ Dietary match found: '{diet_filter}' matches '{recipe_diet}'")
+                                    break
+                            if dietary_matched:
+                                break
+                        
+                        if not dietary_matched:
                             should_include = False
                             logger.debug(f"Recipe '{recipe.get('title', 'Unknown')}' excluded by dietary filter: {dietary_filter}")
+                            logger.debug(f"Recipe dietary info: {recipe_dietary}")
                     
                     # Max cooking time filter
                     if should_include and filters.get("max_cooking_time"):
@@ -1599,62 +1659,116 @@ class RecipeCacheService:
 
     def _expand_cuisine_filter(self, cuisine_filter):
         """
-        Expand cuisine filters to include related/subset cuisines.
-        For example, 'american' should include 'southern', 'cajun', etc.
+        FIXED: Return exact cuisine matches only, no auto-expansion.
+        This prevents 'Italian' from including 'Southern' recipes.
         """
         if not cuisine_filter:
             return cuisine_filter
         
-        # Define cuisine relationships: parent -> [subset cuisines]
-        cuisine_expansions = {
-            'american': ['southern', 'cajun', 'creole', 'tex-mex', 'hawaiian', 'pacific northwest', 'new england', 'midwest', 'southwest'],
-            'italian': ['sicilian', 'tuscan', 'roman', 'northern italian', 'southern italian'],
-            'chinese': ['cantonese', 'sichuan', 'hunan', 'peking', 'shanghai', 'dim sum'],
-            'indian': ['north indian', 'south indian', 'bengali', 'punjabi', 'gujarati', 'marathi', 'karnataka', 'tamil', 'kerala'],
-            'mexican': ['yucatan', 'oaxaca', 'puebla', 'veracruz', 'northern mexican', 'baja california'],
-            'french': ['provencal', 'normandy', 'alsace', 'burgundy', 'lyonnaise', 'parisian'],
-            'japanese': ['kyoto', 'osaka', 'tokyo', 'hokkaido', 'okinawa'],
-            'thai': ['northern thai', 'southern thai', 'central thai', 'isan'],
-            'greek': ['crete', 'peloponnese', 'aegean', 'ionian'],
-            'spanish': ['andalusia', 'catalonia', 'basque', 'galicia', 'valencia'],
-            'mediterranean': ['greek', 'italian', 'spanish', 'turkish', 'lebanese', 'moroccan'],
-            'asian': ['chinese', 'japanese', 'korean', 'thai', 'vietnamese', 'indian', 'indonesian', 'malaysian'],
-            'european': ['french', 'italian', 'spanish', 'german', 'british', 'greek', 'portuguese', 'dutch'],
-            'latin american': ['mexican', 'brazilian', 'argentine', 'peruvian', 'colombian', 'chilean'],
-            'african': ['north african', 'west african', 'east african', 'south african', 'ethiopian', 'moroccan'],
-            'middle eastern': ['lebanese', 'turkish', 'iranian', 'iraqi', 'syrian', 'jordanian', 'israeli']
-        }
-        
-        # Handle single string
+        # Handle single string - return as-is
         if isinstance(cuisine_filter, str):
-            cuisine_lower = cuisine_filter.lower().strip()
-            expanded = [cuisine_filter]  # Keep original
-            
-            # Add subset cuisines
-            for parent, subsets in cuisine_expansions.items():
-                if cuisine_lower == parent.lower():
-                    expanded.extend(subsets)
-                    break
-            
-            return expanded
+            return [cuisine_filter]
         
-        # Handle list
+        # Handle list - return as-is
         elif isinstance(cuisine_filter, list):
-            expanded = []
-            for cuisine in cuisine_filter:
-                if not cuisine:
-                    continue
-                    
-                cuisine_lower = cuisine.lower().strip()
-                expanded.append(cuisine)  # Keep original
-                
-                # Add subset cuisines
-                for parent, subsets in cuisine_expansions.items():
-                    if cuisine_lower == parent.lower():
-                        expanded.extend(subsets)
-                        break
-            
-            return expanded
+            return [c for c in cuisine_filter if c]
         
         # Return as-is for other types
         return cuisine_filter
+
+    def _is_recipe_vegetarian_by_ingredients(self, recipe):
+        """
+        Check if a recipe is vegetarian by analyzing its ingredients
+        """
+        # Meat indicators that would make a recipe non-vegetarian
+        meat_indicators = [
+            'chicken', 'beef', 'pork', 'lamb', 'fish', 'salmon', 'tuna', 'shrimp', 'prawn', 
+            'meat', 'bacon', 'ham', 'sausage', 'turkey', 'duck', 'goose', 'venison', 
+            'rabbit', 'quail', 'pheasant', 'veal', 'mackerel', 'haddock', 'clam', 'oyster',
+            'mussel', 'scallop', 'crab', 'lobster', 'anchovy', 'sardine', 'trout', 'cod',
+            'halibut', 'sea bass', 'tilapia', 'catfish', 'swordfish', 'mahi mahi'
+        ]
+        
+        # Get ingredients from various possible fields
+        ingredients = []
+        
+        # Check ingredients array
+        if recipe.get('ingredients') and isinstance(recipe['ingredients'], list):
+            for ing in recipe['ingredients']:
+                if isinstance(ing, dict) and 'name' in ing:
+                    ingredients.append(str(ing['name']).lower())
+                elif isinstance(ing, str):
+                    ingredients.append(ing.lower())
+        
+        # Check extendedIngredients array (Spoonacular format)
+        if recipe.get('extendedIngredients') and isinstance(recipe['extendedIngredients'], list):
+            for ing in recipe['extendedIngredients']:
+                if isinstance(ing, dict) and 'name' in ing:
+                    ingredients.append(str(ing['name']).lower())
+        
+        # Check instructions for any meat mentions
+        instructions = recipe.get('instructions', '')
+        if isinstance(instructions, list):
+            instructions = ' '.join(str(step) for step in instructions)
+        instructions = str(instructions).lower()
+        
+        # Combine all text for checking
+        all_text = ' '.join(ingredients) + ' ' + instructions
+        
+        # Check for meat indicators
+        for meat in meat_indicators:
+            if meat in all_text:
+                return False
+        
+        return True
+
+    def _is_recipe_vegan_by_ingredients(self, recipe):
+        """
+        Check if a recipe is vegan by analyzing its ingredients
+        """
+        # Animal product indicators that would make a recipe non-vegan
+        animal_indicators = [
+            'milk', 'cheese', 'butter', 'cream', 'egg', 'yogurt', 'honey', 'gelatin', 
+            'lard', 'tallow', 'whey', 'casein', 'parmesan', 'pecorino', 'mascarpone', 
+            'creme fraiche', 'sour cream', 'condensed milk', 'evaporated milk', 'half and half',
+            'heavy cream', 'light cream', 'whipping cream', 'buttermilk', 'kefir', 'cottage cheese',
+            'ricotta', 'mozzarella', 'cheddar', 'gouda', 'brie', 'camembert', 'feta', 'blue cheese',
+            'goat cheese', 'cream cheese', 'american cheese', 'provolone', 'swiss cheese'
+        ]
+        
+        # First check if it's vegetarian
+        if not self._is_recipe_vegetarian_by_ingredients(recipe):
+            return False
+        
+        # Get ingredients from various possible fields
+        ingredients = []
+        
+        # Check ingredients array
+        if recipe.get('ingredients') and isinstance(recipe['ingredients'], list):
+            for ing in recipe['ingredients']:
+                if isinstance(ing, dict) and 'name' in ing:
+                    ingredients.append(str(ing['name']).lower())
+                elif isinstance(ing, str):
+                    ingredients.append(ing.lower())
+        
+        # Check extendedIngredients array (Spoonacular format)
+        if recipe.get('extendedIngredients') and isinstance(recipe['extendedIngredients'], list):
+            for ing in recipe['extendedIngredients']:
+                if isinstance(ing, dict) and 'name' in ing:
+                    ingredients.append(str(ing['name']).lower())
+        
+        # Check instructions for any animal product mentions
+        instructions = recipe.get('instructions', '')
+        if isinstance(instructions, list):
+            instructions = ' '.join(str(step) for step in instructions)
+        instructions = str(instructions).lower()
+        
+        # Combine all text for checking
+        all_text = ' '.join(ingredients) + ' ' + instructions
+        
+        # Check for animal product indicators
+        for animal in animal_indicators:
+            if animal in all_text:
+                return False
+        
+        return True

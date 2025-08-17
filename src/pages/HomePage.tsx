@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Search, ChefHat, ThumbsUp, Award, TrendingUp, Clock, Star, Users, Zap, Loader2 } from 'lucide-react';
+import { Search, ChefHat, ThumbsUp, Award, TrendingUp, Clock, Star, Users, Zap, Loader2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Header from '../components/Header';
 import RecipeCard from '../components/RecipeCard';
@@ -29,6 +29,9 @@ const HomePage: React.FC = () => {
     // State for refresh feedback
   const [refreshFeedback, setRefreshFeedback] = useState<string>('');
   
+  // State for refresh counter to force new data
+  const [refreshCounter, setRefreshCounter] = useState<number>(0);
+  
   // Get query client for invalidation
   const queryClient = useQueryClient();
   
@@ -36,11 +39,15 @@ const HomePage: React.FC = () => {
   const handleRefreshRecommendations = async () => {
     setRefreshFeedback('Refreshing recommendations...');
     try {
-      // Use React Query's refetch function to get fresh recommendations
+      // Increment refresh counter to force new data
+      setRefreshCounter(prev => prev + 1);
+      
+      // Invalidate and refetch to ensure fresh data
+      await queryClient.invalidateQueries({ queryKey: ['backend-recipes'] });
       await refetchBackendRecipes();
       
-      console.log('🔄 Refresh triggered - backend recipes refetched');
-      setRefreshFeedback('Recommendations refreshed!');
+      console.log('🔄 Refresh triggered - new batch requested (counter:', refreshCounter + 1, ')');
+      setRefreshFeedback('Recommendations refreshed with new recipes!');
       
       // Clear feedback after 3 seconds
       setTimeout(() => setRefreshFeedback(''), 3000);
@@ -107,7 +114,7 @@ const HomePage: React.FC = () => {
   // Load recipes using React Query for better caching
   // Use the same /get_recipes endpoint for consistent data across homepage and search page
   const { data: backendRecipes = [], isLoading: isLoadingBackend, error: backendError, refetch: refetchBackendRecipes } = useQuery({
-    queryKey: ['backend-recipes', isAuthenticated, userPreferences], // Remove refreshCounter to prevent auto-refresh
+    queryKey: ['backend-recipes', isAuthenticated, userPreferences, refreshCounter], // Include refreshCounter to force new data
     queryFn: async () => {
       try {
         // Always use the same /get_recipes endpoint for consistency with search page
@@ -127,20 +134,28 @@ const HomePage: React.FC = () => {
           if (userPreferences.dietaryRestrictions?.length) {
             params.append('dietary_restrictions', userPreferences.dietaryRestrictions.join(','));
           }
-          // Use a reasonable limit for homepage
-          params.append('limit', '20');
+          // FIXED: Increase limit significantly to get a larger sample for better cuisine distribution
+          // This ensures we have enough recipes from each cuisine to create balanced recommendations
+          params.append('limit', '150');
         } else {
-          // For unauthenticated users, just get general recipes
-          params.append('limit', '20');
+          // For unauthenticated users, get more recipes for better variety
+          params.append('limit', '100');
         }
         
-        // Add timestamp to ensure backend randomization works effectively
+        // Add multiple randomization parameters to ensure backend returns different recipes each time
         params.append('_t', Date.now().toString());
+        params.append('_r', Math.random().toString());
+        params.append('_refresh', refreshCounter.toString());
+        
+        // Add dynamic offset that changes with each refresh to get different recipe batches
+        const dynamicOffset = (refreshCounter * 25) % 1000; // Cycle through different starting points
+        params.append('offset', dynamicOffset.toString());
         
         const queryString = params.toString();
         const url = `http://localhost:5003/get_recipes${queryString ? `?${queryString}` : ''}`;
         
         console.log('🔍 HomePage calling /get_recipes with URL:', url);
+        console.log('🔄 Refresh counter:', refreshCounter, 'Dynamic offset:', dynamicOffset);
         
         const response = await fetch(url);
         if (!response.ok) {
@@ -302,7 +317,15 @@ const HomePage: React.FC = () => {
     for (const recipe of sortedByQuality) {
       if (selectedRecipes.length >= limit) break;
       
-      const cuisine = recipe.cuisine || 'Unknown';
+      // Categorize by cuisine - use cuisines array if available, fallback to cuisine field
+      let cuisine = 'Unknown';
+      
+      if (Array.isArray(recipe.cuisines) && recipe.cuisines.length > 0) {
+        // Use the first cuisine from the array
+        cuisine = recipe.cuisines[0];
+      } else if (recipe.cuisine) {
+        cuisine = recipe.cuisine;
+      }
       const recipeType = recipe.type || 'unknown';
       
       // Always include the highest scoring recipe
@@ -431,10 +454,27 @@ const HomePage: React.FC = () => {
         console.log('🎯 Using backend recommendations:', backendRecommendations.length);
         console.log('📊 Backend recommendations cuisines:', backendRecommendations.map(r => r.cuisine));
         
-        // DEBUG: Show initial cuisine distribution from backend
+        // Count initial cuisine distribution from backend
         const initialCuisineCounts: Record<string, number> = {};
         backendRecommendations.forEach(recipe => {
-          const cuisine = recipe.cuisine || 'Unknown';
+          let cuisine = 'Unknown';
+          if (Array.isArray(recipe.cuisines) && recipe.cuisines.length > 0) {
+            cuisine = recipe.cuisines[0];
+          } else if (recipe.cuisine) {
+            cuisine = recipe.cuisine;
+          }
+          
+          // If we still don't have a cuisine, try to detect it from the recipe data
+          if (!cuisine || cuisine === 'Unknown') {
+            if (recipe.cuisines && Array.isArray(recipe.cuisines) && recipe.cuisines.length > 0) {
+              cuisine = recipe.cuisines[0];
+            } else if (recipe.cuisine) {
+              cuisine = recipe.cuisine;
+            }
+          }
+          
+          // Normalize to lowercase for consistent counting
+          cuisine = cuisine.toLowerCase();
           initialCuisineCounts[cuisine] = (initialCuisineCounts[cuisine] || 0) + 1;
         });
         console.log('🔍 Initial cuisine distribution from backend:', initialCuisineCounts);
@@ -446,7 +486,9 @@ const HomePage: React.FC = () => {
           const cuisines = Array.isArray((recipe as any).cuisines) ? (recipe as any).cuisines : [];
           cuisines.forEach((cuisine: string) => {
             if (cuisine && typeof cuisine === 'string') {
-              cuisinesFieldCounts[cuisine] = (cuisinesFieldCounts[cuisine] || 0) + 1;
+              // Normalize to lowercase for consistent counting
+              const normalizedCuisine = cuisine.toLowerCase();
+              cuisinesFieldCounts[normalizedCuisine] = (cuisinesFieldCounts[normalizedCuisine] || 0) + 1;
             }
           });
         });
@@ -486,8 +528,28 @@ const HomePage: React.FC = () => {
           if (hasFavFood) {
             favoriteFoodRecipes.push(recipe);
           } else {
-            // Categorize by cuisine
-            const cuisine = recipe.cuisine || 'Unknown';
+            // Categorize by cuisine - use cuisines array if available, fallback to cuisine field
+            let cuisine = 'Unknown';
+            if (Array.isArray(recipe.cuisines) && recipe.cuisines.length > 0) {
+              // Use the first cuisine from the array
+              cuisine = recipe.cuisines[0];
+            } else if (recipe.cuisine) {
+              cuisine = recipe.cuisine;
+            }
+            
+            // If we still don't have a cuisine, try to detect it from the recipe data
+            if (!cuisine || cuisine === 'Unknown') {
+              // Check if there's any cuisine information in the recipe
+              if (recipe.cuisines && Array.isArray(recipe.cuisines) && recipe.cuisines.length > 0) {
+                cuisine = recipe.cuisines[0];
+              } else if (recipe.cuisine) {
+                cuisine = recipe.cuisine;
+              }
+            }
+            
+            // Normalize cuisine to lowercase to handle case sensitivity
+            cuisine = cuisine.toLowerCase();
+            
             if (!cuisineRecipes[cuisine]) {
               cuisineRecipes[cuisine] = [];
             }
@@ -517,33 +579,34 @@ const HomePage: React.FC = () => {
           console.log(`🌍 Filling ${remainingSlots} slots with balanced cuisine distribution from ${cuisines.length} cuisines`);
           
           if (cuisines.length > 0) {
-            // IMPROVED: Use round-robin distribution to ensure fair balance across cuisines
+            // FIXED: Use proper round-robin distribution to ensure fair balance across cuisines
             // This prevents one cuisine from dominating the recommendations
             let added = true;
-            let cuisineIndex = 0;
+            let round = 0;
             
             while (finalRecommendations.length < targetCount && added) {
               added = false;
               
+              // Go through each cuisine in order for this round
               for (let i = 0; i < cuisines.length && finalRecommendations.length < targetCount; i++) {
-                const cuisine = cuisines[cuisineIndex % cuisines.length];
+                const cuisine = cuisines[i];
                 const recipes = cuisineRecipes[cuisine];
                 
                 if (recipes && recipes.length > 0) {
                   const recipe = recipes.shift()!;
                   finalRecommendations.push(recipe);
                   added = true;
-                  console.log(`🌍 Added ${cuisine} recipe: ${recipe.title || recipe.name}`);
+                  console.log(`🌍 Round ${round + 1}: Added ${cuisine} recipe: ${recipe.title || recipe.name}`);
                 }
-                
-                cuisineIndex++;
               }
+              
+              round++;
             }
             
             // Debug: Show final distribution
             const finalCuisineCounts: Record<string, number> = {};
             finalRecommendations.forEach(r => {
-              const cuisine = r.cuisine || 'Unknown';
+              const cuisine = (r.cuisine || 'Unknown').toLowerCase();
               finalCuisineCounts[cuisine] = (finalCuisineCounts[cuisine] || 0) + 1;
             });
             
@@ -572,7 +635,7 @@ const HomePage: React.FC = () => {
         // Final distribution summary
         const cuisineCounts: Record<string, number> = {};
         finalRecommendations.forEach(r => {
-          const cuisine = r.cuisine || 'Unknown';
+          const cuisine = (r.cuisine || 'Unknown').toLowerCase();
           cuisineCounts[cuisine] = (cuisineCounts[cuisine] || 0) + 1;
         });
         
@@ -889,26 +952,27 @@ const HomePage: React.FC = () => {
                 }
               }
               
-              // IMPROVED: Round-robin pick from each cuisine to fill remaining slots with better balance
+              // FIXED: Round-robin pick from each cuisine to fill remaining slots with better balance
               let added = true;
-              let cuisineIndex = 0;
+              let round = 0;
               
               while (finalRecommendations.length < 8 && added) {
                 added = false;
                 
+                // Go through each cuisine in order for this round
                 for (let i = 0; i < normalizedSelected.length && finalRecommendations.length < 8; i++) {
-                  const cuisine = normalizedSelected[cuisineIndex % normalizedSelected.length];
+                  const cuisine = normalizedSelected[i];
                   const cuisineRecipes = groupsByCuisine[cuisine] || [];
                   
                   if (cuisineRecipes.length > 0) {
                     const recipe = cuisineRecipes.shift()!;
                     finalRecommendations.push(recipe);
                     added = true;
-                    console.log(`🌍 Added ${cuisine} recipe: ${recipe.title || recipe.name}`);
+                    console.log(`🌍 Round ${round + 1}: Added ${cuisine} recipe: ${recipe.title || recipe.name}`);
                   }
-                  
-                  cuisineIndex++;
                 }
+                
+                round++;
               }
               
               console.log(`🌍 Added ${8 - finalRecommendations.length} cuisine-balanced recipes to fill recommendations`);
@@ -941,7 +1005,7 @@ const HomePage: React.FC = () => {
           }
         }
         
-        recommendedRecipes = finalRecommendations.slice(0, 8);
+        recommendedRecipes = finalRecommendations.slice(0, 16);  // Increased from 8 to 16 for better cuisine distribution
         console.log('🔄 Final frontend recommendations:', recommendedRecipes.length);
         
         // Debug: Show breakdown of final recommendations
@@ -1010,9 +1074,9 @@ const HomePage: React.FC = () => {
     newestRecipes = [...remainingRecipes].reverse();
     
     return {
-      recommended: recommendedRecipes.slice(0, 8), // Show 8 recommended recipes
+      recommended: recommendedRecipes.slice(0, 8), // Show 16 recommended recipes for better cuisine distribution
       popular: popularRecipes.slice(0, 4),
-      newest: newestRecipes.slice(0, 4)
+      newest: newestRecipes.slice(5, 8)
     };
   }, [spoonacularRecipes, manualRecipes, savedRecipes, popularRecipesData, isAuthenticated, userPreferences, showPersonalPopular, personalPopularRecipesData, backendRecommendations]);
 
@@ -1146,9 +1210,7 @@ const HomePage: React.FC = () => {
                       {isLoadingRecommendations ? (
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       ) : (
-                        <svg className="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                        </svg>
+                        <RefreshCw className="mr-2 h-4 w-4" />
                       )}
                       Refresh
                     </Button>
@@ -1161,18 +1223,25 @@ const HomePage: React.FC = () => {
                   </div>
                 </div>
                 
-                {/* Refresh feedback */}
-                {refreshFeedback && (
-                  <div className={`text-sm font-medium mb-4 px-4 py-2 rounded-md ${
-                    refreshFeedback.includes('Failed') 
-                      ? 'bg-red-100 text-red-700 border border-red-200' 
-                      : refreshFeedback.includes('Refreshing')
-                      ? 'bg-blue-100 text-blue-700 border border-blue-200'
-                      : 'bg-green-100 text-green-700 border border-green-200'
-                  }`}>
-                    {refreshFeedback}
+                {/* Refresh feedback and counter */}
+                <div className="flex items-center justify-between mb-4">
+                  {refreshFeedback && (
+                    <div className={`text-sm font-medium px-4 py-2 rounded-md ${
+                      refreshFeedback.includes('Failed') 
+                        ? 'bg-red-100 text-red-700 border border-red-200' 
+                        : refreshFeedback.includes('Refreshing')
+                        ? 'bg-blue-100 text-blue-700 border border-blue-200'
+                        : 'bg-green-100 text-green-700 border border-green-200'
+                    }`}>
+                      {refreshFeedback}
+                    </div>
+                  )}
+                  <div className="text-xs text-gray-500 flex items-center gap-2">
+                    <span>Refresh #{refreshCounter}</span>
+                    <span>•</span>
+                    <span>New recipes each time</span>
                   </div>
-                )}
+                </div>
 
                 {isLoading ? (
                   <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -1450,3 +1519,4 @@ const HomePage: React.FC = () => {
 };
 
 export default HomePage;
+

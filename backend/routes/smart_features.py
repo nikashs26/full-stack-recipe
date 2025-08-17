@@ -131,7 +131,7 @@ def get_personalized_recommendations():
         user_id = get_current_user_id()
         print(f"🔍 Recommendations endpoint - User ID: {user_id}")
         
-        limit = request.args.get('limit', 8, type=int)
+        limit = request.args.get('limit', 16, type=int)  # Increased from 8 to 16 for better cuisine distribution
         print(f"📊 Requested limit: {limit}")
         
         # Get user preferences from the database

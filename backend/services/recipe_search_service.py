@@ -99,9 +99,24 @@ class RecipeSearchService:
             "ingredient_count": len(recipe.get("ingredients", [])),
             "avg_rating": self._calculate_avg_rating(recipe.get("ratings", [])),
             "has_reviews": len(recipe.get("comments", [])) > 0,
-            "is_vegetarian": "vegetarian" in recipe.get("dietaryRestrictions", []),
-            "is_vegan": "vegan" in recipe.get("dietaryRestrictions", []),
-            "is_gluten_free": "gluten-free" in recipe.get("dietaryRestrictions", []),
+            "is_vegetarian": (
+                "vegetarian" in recipe.get("dietaryRestrictions", []) or
+                recipe.get("vegetarian", False) or
+                recipe.get("diets") == "vegetarian" or
+                (isinstance(recipe.get("diets"), list) and "vegetarian" in recipe.get("diets", []))
+            ),
+            "is_vegan": (
+                "vegan" in recipe.get("dietaryRestrictions", []) or
+                recipe.get("vegan", False) or
+                recipe.get("diets") == "vegan" or
+                (isinstance(recipe.get("diets"), list) and "vegan" in recipe.get("diets", []))
+            ),
+            "is_gluten_free": (
+                "gluten-free" in recipe.get("dietaryRestrictions", []) or
+                recipe.get("gluten_free", False) or
+                recipe.get("diets") == "gluten-free" or
+                (isinstance(recipe.get("diets"), list) and "gluten-free" in recipe.get("diets", []))
+            ),
             "calories": recipe.get("nutrition", {}).get("calories", 0),
             "protein": recipe.get("nutrition", {}).get("protein", 0),
             "total_time": recipe.get("totalTime", 0),
@@ -247,7 +262,7 @@ class RecipeSearchService:
                     "title": name,  # Frontend expects 'title'
                     "name": name,    # Also include 'name' for compatibility
                     "cuisine": cuisine,
-                    "cuisines": [cuisine] if cuisine else [],  # Frontend expects 'cuisines' array
+                    "cuisines": recipe_data.get("cuisines", []) if recipe_data.get("cuisines") else ([cuisine] if cuisine else []),  # Preserve original cuisines array
                     "difficulty": difficulty,
                     "meal_type": meal_type,
                     "cooking_time": cooking_time,
@@ -455,7 +470,7 @@ class RecipeSearchService:
             or hash(json.dumps(recipe, sort_keys=True)[:128])
         )
 
-    def get_recipe_recommendations(self, user_preferences: Dict[str, Any], limit: int = 8) -> List[Dict[str, Any]]:
+    def get_recipe_recommendations(self, user_preferences: Dict[str, Any], limit: int = 16) -> List[Dict[str, Any]]:
         """
         Get personalized recipe recommendations with FAIR cuisine split and favorite foods:
         1. Reserve 2-3 slots for favorite foods (any cuisine)
@@ -478,9 +493,21 @@ class RecipeSearchService:
                 n = self._normalize_cuisine(c)
             except Exception:
                 n = str(c or '').strip().lower()
-            if n and n not in seen:
+            # Only add non-empty, valid cuisines
+            if n and n not in seen and n.strip():
                 seen.add(n)
                 favorite_cuisines.append(n)
+        
+        # Log the normalized cuisines for debugging
+        logger.info(f"🔍 Raw cuisines from preferences: {raw_cuisines}")
+        logger.info(f"🔍 Normalized cuisines: {favorite_cuisines}")
+        logger.info(f"🔍 DEBUG: Normalized cuisine details:")
+        for i, raw_cuisine in enumerate(raw_cuisines):
+            try:
+                normalized = self._normalize_cuisine(raw_cuisine)
+                logger.info(f"🔍 DEBUG:   '{raw_cuisine}' -> '{normalized}'")
+            except Exception as e:
+                logger.info(f"🔍 DEBUG:   '{raw_cuisine}' -> ERROR: {e}")
         
         # Shuffle cuisines to avoid always starting with the same ones
         random.shuffle(favorite_cuisines)
@@ -641,6 +668,9 @@ class RecipeSearchService:
             # Create a filter for all selected cuisines
             combined_cuisine_filter = {"cuisine": favorite_cuisines}
             
+            logger.info(f"🔍 DEBUG: Sending cuisine filter to semantic search: {combined_cuisine_filter}")
+            logger.info(f"🔍 DEBUG: This will search ChromaDB for recipes with cuisine in: {favorite_cuisines}")
+            
             # Get a larger pool of recipes from all selected cuisines
             pool_size = remaining_slots * 3  # Get 3x more than needed for better distribution
             combined_results = self.semantic_search(
@@ -649,9 +679,16 @@ class RecipeSearchService:
                 limit=pool_size
             )
             
+            # Debug: Show what cuisines we're actually getting back from the search
             if combined_results:
-                logger.info(f"🔍 Got {len(combined_results)} recipes from combined cuisine pool")
-                
+                logger.info(f"🔍 DEBUG: Search returned {len(combined_results)} recipes")
+                logger.info(f"🔍 DEBUG: First 10 recipes and their cuisines:")
+                for i, recipe in enumerate(combined_results[:10]):
+                    cuisine = recipe.get('cuisine', 'None')
+                    cuisines = recipe.get('cuisines', 'None')
+                    logger.info(f"🔍 DEBUG: Recipe {i+1}: '{recipe.get('title', recipe.get('name', 'Unknown'))}' - Cuisine: '{cuisine}' - Cuisines: {cuisines}")
+            
+            if combined_results:
                 # Group recipes by cuisine
                 recipes_by_cuisine = {}
                 for recipe in combined_results:
@@ -674,11 +711,24 @@ class RecipeSearchService:
                     
                     # Categorize by cuisine
                     recipe_cuisine = recipe.get('cuisine', 'Unknown')
+                    
+                    # DEBUG: Show what cuisine we're processing
+                    logger.info(f"🔍 DEBUG: Processing recipe '{recipe.get('title', recipe.get('name', 'Unknown'))}' with cuisine: '{recipe_cuisine}'")
+                    
                     if recipe_cuisine not in recipes_by_cuisine:
                         recipes_by_cuisine[recipe_cuisine] = []
                     recipes_by_cuisine[recipe_cuisine].append(recipe)
                 
                 logger.info(f"🔍 Recipes grouped by cuisine: {[(c, len(r)) for c, r in recipes_by_cuisine.items()]}")
+                
+                # Debug: Show what cuisines we're looking for vs what we found
+                logger.info(f"🔍 DEBUG: Looking for cuisines: {favorite_cuisines}")
+                logger.info(f"🔍 DEBUG: Found cuisines in recipes: {list(recipes_by_cuisine.keys())}")
+                
+                # Check if we have recipes for each requested cuisine
+                for cuisine in favorite_cuisines:
+                    count = len(recipes_by_cuisine.get(cuisine, []))
+                    logger.info(f"🔍 DEBUG: Cuisine '{cuisine}' has {count} recipes available")
                 
                 # Now distribute recipes evenly across cuisines
                 target_per_cuisine = remaining_slots // len(favorite_cuisines)
@@ -691,17 +741,26 @@ class RecipeSearchService:
                 cuisine_index = 0
                 added_count = 0
                 
+                logger.info(f"🔍 DEBUG: Starting round-robin distribution for {remaining_slots} slots")
+                
                 while added_count < remaining_slots and any(len(recipes_by_cuisine.get(c, [])) > 0 for c in favorite_cuisines):
                     cuisine = favorite_cuisines[cuisine_index % len(favorite_cuisines)]
                     cuisine_recipes = recipes_by_cuisine.get(cuisine, [])
                     
+                    logger.info(f"🔍 DEBUG: Round {added_count + 1}: Trying cuisine '{cuisine}' (index {cuisine_index % len(favorite_cuisines)})")
+                    logger.info(f"🔍 DEBUG: Cuisine '{cuisine}' has {len(cuisine_recipes)} recipes available")
+                    
                     if cuisine_recipes:
                         recipe = cuisine_recipes.pop(0)  # Take the first recipe from this cuisine
                         
+                        logger.info(f"🔍 DEBUG: Selected recipe: {recipe.get('title', recipe.get('name', 'Unknown'))} from cuisine '{cuisine}'")
+                        
                         if self._should_exclude_recipe(recipe, user_preferences):
+                            logger.info(f"🔍 DEBUG: Recipe excluded by _should_exclude_recipe")
                             continue
                         
                         if not self._is_recipe_complete(recipe):
+                            logger.info(f"🔍 DEBUG: Recipe excluded by _is_recipe_complete")
                             continue
                         
                         final_recommendations.append(recipe)
@@ -712,6 +771,8 @@ class RecipeSearchService:
                         
                         if added_count >= remaining_slots:
                             break
+                    else:
+                        logger.info(f"🔍 DEBUG: No recipes available for cuisine '{cuisine}'")
                     
                     cuisine_index += 1
                 
@@ -720,6 +781,34 @@ class RecipeSearchService:
                 logger.warning("⚠️ No recipes found from combined cuisine pool, falling back to individual searches")
                 # Fall back to the old individual search approach
                 self._fill_with_individual_cuisine_searches(final_recommendations, used_ids, favorite_cuisines, remaining_slots, filters, user_preferences)
+            
+            # DEBUG: If we still don't have enough recipes, try a search without cuisine filters to see what's available
+            if len(final_recommendations) < remaining_slots:
+                logger.warning(f"⚠️ Only got {len(final_recommendations)} recipes, trying search without cuisine filters")
+                try:
+                    no_filter_results = self.semantic_search(
+                        query="delicious recipes", 
+                        filters={},  # No cuisine filter
+                        limit=50
+                    )
+                    if no_filter_results:
+                        logger.info(f"🔍 DEBUG: Search without filters returned {len(no_filter_results)} recipes")
+                        logger.info(f"🔍 DEBUG: Available cuisines without filters:")
+                        available_cuisines = {}
+                        for recipe in no_filter_results:
+                            cuisine = recipe.get('cuisine', 'Unknown')
+                            available_cuisines[cuisine] = available_cuisines.get(cuisine, 0) + 1
+                        
+                        for cuisine, count in sorted(available_cuisines.items()):
+                            logger.info(f"🔍 DEBUG:   {cuisine}: {count} recipes")
+                        
+                        # Check if our requested cuisines are in the available ones
+                        for requested_cuisine in favorite_cuisines:
+                            found = any(requested_cuisine.lower() in available_cuisine.lower() or available_cuisine.lower() in requested_cuisine.lower() 
+                                      for available_cuisine in available_cuisines.keys())
+                            logger.info(f"🔍 DEBUG: Requested cuisine '{requested_cuisine}' found in database: {found}")
+                except Exception as e:
+                    logger.error(f"🔍 DEBUG: Error in fallback search: {e}")
         
         # FINAL DEBUG: Show the cuisine distribution in the final recommendations
         logger.info(f"🎯 FINAL RECOMMENDATIONS CUISINE DISTRIBUTION:")
@@ -731,7 +820,15 @@ class RecipeSearchService:
         for cuisine, count in final_cuisine_counts.items():
             logger.info(f"   - {cuisine}: {count} recipes")
         
-        return final_recommendations 
+        # DEBUG: Show the actual cuisine data being sent to frontend
+        logger.info(f"🔍 DEBUG: Final recommendations cuisine data check:")
+        for i, recipe in enumerate(final_recommendations[:5]):  # Check first 5 recipes
+            logger.info(f"🔍 DEBUG: Recipe {i+1}: '{recipe.get('title', recipe.get('name', 'Unknown'))}'")
+            logger.info(f"🔍 DEBUG:   - cuisine field: '{recipe.get('cuisine', 'None')}'")
+            logger.info(f"🔍 DEBUG:   - cuisines array: {recipe.get('cuisines', 'None')}")
+            logger.info(f"🔍 DEBUG:   - metadata cuisine: {recipe.get('metadata', {}).get('cuisine', 'None') if recipe.get('metadata') else 'No metadata'}")
+        
+        return final_recommendations
 
     def _fill_with_individual_cuisine_searches(self, final_recommendations, used_ids, favorite_cuisines, remaining_slots, filters, user_preferences):
         """Fallback method to fill remaining slots with individual cuisine searches"""

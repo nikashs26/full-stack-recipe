@@ -715,22 +715,8 @@ const RecipesPage: React.FC = () => {
     
     // Define cuisine relationships: parent -> [subset cuisines]
     const cuisineExpansions: Record<string, string[]> = {
-      'american': ['southern', 'cajun', 'creole', 'tex-mex', 'hawaiian', 'pacific northwest', 'new england', 'midwest', 'southwest'],
-      'italian': ['sicilian', 'tuscan', 'roman', 'northern italian', 'southern italian'],
-      'chinese': ['cantonese', 'sichuan', 'hunan', 'peking', 'shanghai', 'dim sum'],
-      'indian': ['north indian', 'south indian', 'bengali', 'punjabi', 'gujarati', 'marathi', 'karnataka', 'tamil', 'kerala'],
-      'mexican': ['yucatan', 'oaxaca', 'puebla', 'veracruz', 'northern mexican', 'baja california'],
-      'french': ['provencal', 'normandy', 'alsace', 'burgundy', 'lyonnaise', 'parisian'],
-      'japanese': ['kyoto', 'osaka', 'tokyo', 'hokkaido', 'okinawa'],
-      'thai': ['northern thai', 'southern thai', 'central thai', 'isan'],
-      'greek': ['crete', 'peloponnese', 'aegean', 'ionian'],
-      'spanish': ['andalusia', 'catalonia', 'basque', 'galicia', 'valencia'],
-      'mediterranean': ['greek', 'italian', 'spanish', 'turkish', 'lebanese', 'moroccan'],
-      'asian': ['chinese', 'japanese', 'korean', 'thai', 'vietnamese', 'indian', 'indonesian', 'malaysian'],
-      'european': ['french', 'italian', 'spanish', 'german', 'british', 'greek', 'portuguese', 'dutch'],
-      'latin american': ['mexican', 'brazilian', 'argentine', 'peruvian', 'colombian', 'chilean'],
-      'african': ['north african', 'west african', 'east african', 'south african', 'ethiopian', 'moroccan'],
-      'middle eastern': ['lebanese', 'turkish', 'iranian', 'iraqi', 'syrian', 'jordanian', 'israeli']
+      'american': ['southern', 'creole', 'tex-mex', 'hawaiian', 'pacific northwest', 'new england', 'midwest', 'southwest'],
+      
     };
     
     // Return related cuisines if this is a parent cuisine
