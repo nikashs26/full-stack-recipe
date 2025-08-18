@@ -26,21 +26,45 @@ configure_logging(debug_mode)
 # Initialize Flask app
 app = Flask(__name__)
 
-# Configure CORS for development
-cors = CORS(app, 
-    resources={
-        r"/*": {
-            "origins": ["http://localhost:8081", "http://127.0.0.1:8081", 
-                        "http://localhost:8083", "http://127.0.0.1:8083"],
-            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-            "allow_headers": ["Content-Type", "Authorization", "X-Requested-With", "x-requested-with"],
-            "expose_headers": ["Content-Type", "Authorization", "X-Requested-With", "x-requested-with"],
-            "supports_credentials": True,
-            "max_age": 3600
-        }
-    },
-    supports_credentials=True
-)
+# Configure CORS for development and production
+allowed_origins = [
+    "http://localhost:8081", "http://127.0.0.1:8081", 
+    "http://localhost:8083", "http://127.0.0.1:8083",
+    # Add your production frontend URLs here
+    "https://your-app.netlify.app",  # Replace with your actual frontend URL
+    "https://your-app.vercel.app"    # Replace with your actual frontend URL
+]
+
+# Allow all origins in development, restrict in production
+if os.environ.get("FLASK_ENV") == "production":
+    cors = CORS(app, 
+        resources={
+            r"/*": {
+                "origins": allowed_origins,
+                "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+                "allow_headers": ["Content-Type", "Authorization", "X-Requested-With", "x-requested-with"],
+                "expose_headers": ["Content-Type", "Authorization", "X-Requested-With", "x-requested-with"],
+                "supports_credentials": True,
+                "max_age": 3600
+            }
+        },
+        supports_credentials=True
+    )
+else:
+    # Development: allow all origins
+    cors = CORS(app, 
+        resources={
+            r"/*": {
+                "origins": ["*"],
+                "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+                "allow_headers": ["Content-Type", "Authorization", "X-Requested-With", "x-requested-with"],
+                "expose_headers": ["Content-Type", "Authorization", "X-Requested-With", "x-requested-with"],
+                "supports_credentials": True,
+                "max_age": 3600
+            }
+        },
+        supports_credentials=True
+    )
 
 # Initialize services
 recipe_cache = RecipeCacheService()

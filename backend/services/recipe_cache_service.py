@@ -363,18 +363,31 @@ class RecipeCacheService:
                                 if recipe.get('vegan') is True:
                                     recipe_dietary.append('vegan')
                                 
-                                # ENHANCED: If no explicit tags found, do ingredient-based detection for vegetarian/vegan
-                                if not any('vegetarian' in diet.lower() for diet in recipe_dietary) and 'vegetarian' in dietary_filter:
-                                    # Check if recipe is vegetarian by analyzing ingredients
+                                # FIXED: Always validate vegetarian/vegan recipes with ingredient-based detection
+                                # This catches both missing tags AND incorrectly tagged recipes
+                                if 'vegetarian' in dietary_filter:
+                                    # Check if recipe is actually vegetarian by analyzing ingredients
                                     if self._is_recipe_vegetarian_by_ingredients(recipe):
-                                        recipe_dietary.append('vegetarian')
-                                        logger.debug(f"🔍 Detected vegetarian recipe by ingredients: {recipe.get('title', 'Unknown')}")
+                                        # Add vegetarian tag if not already present
+                                        if not any('vegetarian' in diet.lower() for diet in recipe_dietary):
+                                            recipe_dietary.append('vegetarian')
+                                            logger.debug(f"🔍 Detected vegetarian recipe by ingredients: {recipe.get('title', 'Unknown')}")
+                                    else:
+                                        # Recipe has meat - remove any incorrect vegetarian tags
+                                        recipe_dietary = [d for d in recipe_dietary if 'vegetarian' not in d.lower()]
+                                        logger.debug(f"❌ Removed incorrect vegetarian tag from meat recipe: {recipe.get('title', 'Unknown')}")
                                 
-                                if not any('vegan' in diet.lower() for diet in recipe_dietary) and 'vegan' in dietary_filter:
-                                    # Check if recipe is vegan by analyzing ingredients
+                                if 'vegan' in dietary_filter:
+                                    # Check if recipe is actually vegan by analyzing ingredients
                                     if self._is_recipe_vegan_by_ingredients(recipe):
-                                        recipe_dietary.append('vegan')
-                                        logger.debug(f"🔍 Detected vegan recipe by ingredients: {recipe.get('title', 'Unknown')}")
+                                        # Add vegan tag if not already present
+                                        if not any('vegan' in diet.lower() for diet in recipe_dietary):
+                                            recipe_dietary.append('vegan')
+                                            logger.debug(f"🔍 Detected vegan recipe by ingredients: {recipe.get('title', 'Unknown')}")
+                                    else:
+                                        # Recipe has animal products - remove any incorrect vegan tags
+                                        recipe_dietary = [d for d in recipe_dietary if 'vegan' not in d.lower()]
+                                        logger.debug(f"❌ Removed incorrect vegan tag from non-vegan recipe: {recipe.get('title', 'Unknown')}")
                                 
                                 # IMPROVED: Check if any recipe dietary info matches the filter
                                 # Use more flexible matching to catch variations
@@ -1678,16 +1691,32 @@ class RecipeCacheService:
 
     def _is_recipe_vegetarian_by_ingredients(self, recipe):
         """
-        Check if a recipe is vegetarian by analyzing its ingredients
+        FIXED: Robust vegetarian detection that properly catches meat in ingredients and names
         """
-        # Meat indicators that would make a recipe non-vegetarian
+        # Comprehensive meat indicators that would make a recipe non-vegetarian
         meat_indicators = [
             'chicken', 'beef', 'pork', 'lamb', 'fish', 'salmon', 'tuna', 'shrimp', 'prawn', 
             'meat', 'bacon', 'ham', 'sausage', 'turkey', 'duck', 'goose', 'venison', 
             'rabbit', 'quail', 'pheasant', 'veal', 'mackerel', 'haddock', 'clam', 'oyster',
             'mussel', 'scallop', 'crab', 'lobster', 'anchovy', 'sardine', 'trout', 'cod',
-            'halibut', 'sea bass', 'tilapia', 'catfish', 'swordfish', 'mahi mahi'
+            'halibut', 'sea bass', 'tilapia', 'catfish', 'swordfish', 'mahi mahi',
+            'steak', 'burger', 'hot dog', 'hotdog', 'pepperoni', 'salami', 'prosciutto',
+            'chorizo', 'pastrami', 'corned beef', 'roast beef', 'ground beef', 'mince',
+            'liver', 'kidney', 'heart', 'tongue', 'tripe', 'oxtail', 'short ribs',
+            'ribeye', 'sirloin', 'tenderloin', 'brisket', 'flank', 'skirt steak',
+            'lamb chops', 'lamb shank', 'pork chops', 'pork belly', 'pork shoulder',
+            'chicken breast', 'chicken thigh', 'chicken wing', 'chicken leg', 'chicken drumstick',
+            'fish fillet', 'fish steak', 'fish cake', 'fish ball', 'fish sauce',
+            'anchovy paste', 'fish stock', 'chicken stock', 'beef stock', 'meat stock',
+            'bone broth', 'chicken broth', 'beef broth', 'meat broth'
         ]
+        
+        # Get recipe name/title for checking
+        recipe_name = ''
+        if recipe.get('title'):
+            recipe_name = str(recipe['title']).lower()
+        elif recipe.get('name'):
+            recipe_name = str(recipe['name']).lower()
         
         # Get ingredients from various possible fields
         ingredients = []
@@ -1712,14 +1741,37 @@ class RecipeCacheService:
             instructions = ' '.join(str(step) for step in instructions)
         instructions = str(instructions).lower()
         
-        # Combine all text for checking
-        all_text = ' '.join(ingredients) + ' ' + instructions
+        # Combine all text for checking - prioritize recipe name and ingredients
+        all_text = recipe_name + ' ' + ' '.join(ingredients) + ' ' + instructions
         
-        # Check for meat indicators
+        # IMPROVED: Use word boundary checking to avoid false positives
+        # This prevents "chicken" from matching "chickpea" or "chickenpox"
+        import re
+        
+        # Check for meat indicators with word boundaries
         for meat in meat_indicators:
-            if meat in all_text:
+            # Use word boundary regex to match whole words only
+            pattern = r'\b' + re.escape(meat) + r'\b'
+            if re.search(pattern, all_text):
+                logger.debug(f"❌ Meat detected in recipe '{recipe_name}': {meat}")
                 return False
         
+        # ADDITIONAL SAFETY CHECK: Look for common meat-containing recipe patterns
+        meat_patterns = [
+            r'\bchicken\s+\w+',  # chicken parmesan, chicken marsala, etc.
+            r'\bbeef\s+\w+',      # beef stew, beef stroganoff, etc.
+            r'\bpork\s+\w+',      # pork chops, pork belly, etc.
+            r'\bfish\s+\w+',      # fish tacos, fish curry, etc.
+            r'\bsteak\s+\w+',     # steak fajitas, steak salad, etc.
+            r'\bmeat\s+\w+',      # meat sauce, meat pie, etc.
+        ]
+        
+        for pattern in meat_patterns:
+            if re.search(pattern, all_text):
+                logger.debug(f"❌ Meat pattern detected in recipe '{recipe_name}': {pattern}")
+                return False
+        
+        logger.debug(f"✅ Recipe '{recipe_name}' passed vegetarian check")
         return True
 
     def _is_recipe_vegan_by_ingredients(self, recipe):
