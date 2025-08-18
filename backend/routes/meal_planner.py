@@ -743,7 +743,7 @@ def generate_meal_plan():
         logger.info(f"Using preferences for user {user_id}: {list(preferences.keys())}")
         
         # Generate meal plan using LLM agent
-        result = free_llm_meal_planner.generate_weekly_meal_plan(preferences)
+        result = free_llm_meal_planner.generate_weekly_meal_plan(user_id)
         
         if "error" in result:
             logger.error(f"Meal plan generation failed: {result['error']}")
@@ -756,10 +756,14 @@ def generate_meal_plan():
         logger.error(f"Exception in generate_meal_plan: {str(e)}")
         return jsonify({"error": f"Failed to generate meal plan: {str(e)}"}), 500
 
-@meal_planner_bp.route('/meal-plan/regenerate-meal', methods=['POST'])
+@meal_planner_bp.route('/meal-plan/regenerate-meal', methods=['POST', 'OPTIONS'])
 @require_auth  
 def regenerate_specific_meal():
     """Regenerate a specific meal in the plan (requires authentication)"""
+    
+    # Handle OPTIONS request for CORS preflight
+    if request.method == 'OPTIONS':
+        return jsonify({'status': 'ok'}), 200
     
     try:
         data = request.get_json()

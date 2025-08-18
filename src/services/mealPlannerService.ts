@@ -166,7 +166,7 @@ export const generateMealPlan = async (options?: MealPlanOptions): Promise<MealP
     console.log('🎯 Sending preferences to meal planner:', mealPlanPreferences);
     
     // Use the simple meal planner endpoint with user preferences
-    const response = await apiCall('/ai/simple_meal_plan', {
+    const response = await apiCall('/api/ai/simple_meal_plan', {
       method: 'POST',
       body: JSON.stringify({ preferences: mealPlanPreferences })
     });
@@ -317,7 +317,7 @@ function convertSimplePlanToMealPlanData(simplePlan: any, preferences?: any): Me
 }
 
 export const regenerateMeal = async (day: string, mealType: string): Promise<void> => {
-  const response = await apiCall('/meal-plan/regenerate', {
+      const response = await apiCall('/api/meal-plan/regenerate', {
     method: 'POST',
     body: JSON.stringify({ day, mealType })
   });

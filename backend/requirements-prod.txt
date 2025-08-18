@@ -1,0 +1,14 @@
+# Core Flask dependencies - essential for the app to run
+flask==2.3.3
+flask-cors==4.0.0
+python-dotenv==1.0.0
+requests==2.31.0
+gunicorn==21.2.0
+
+# Database and vector storage
+chromadb==0.4.18
+
+# Production notes:
+# - sentence-transformers and torch are excluded to reduce build time and image size
+# - These can be added later if AI features are needed in production
+# - Consider using a separate AI service or lighter alternatives for production

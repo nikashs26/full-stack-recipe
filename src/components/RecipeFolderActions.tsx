@@ -78,7 +78,7 @@ export function RecipeFolderActions({ recipeId, recipeType, recipeData }: Recipe
         console.log('Fetching folders from API...');
         const [foldersResponse, recipeFoldersResponse] = await Promise.all([
           apiCall('/api/folders'),
-          apiCall(`/recipes/${recipeType}/${recipeId}/folders`)
+          apiCall(`/api/recipes/${recipeType}/${recipeId}/folders`)
         ]);
         
         console.log('Folders response status:', foldersResponse.status);
@@ -215,7 +215,7 @@ export function RecipeFolderActions({ recipeId, recipeType, recipeData }: Recipe
   // Check if a recipe already exists in a folder
   const isRecipeInFolder = async (folderId: string): Promise<boolean> => {
     try {
-      const response = await apiCall(`/folders/${folderId}/recipes/${recipeId}?type=${recipeType}`);
+              const response = await apiCall(`/api/folders/${folderId}/recipes/${recipeId}?type=${recipeType}`);
       
       if (response.ok) {
         const data = await response.json();
@@ -384,7 +384,7 @@ export function RecipeFolderActions({ recipeId, recipeType, recipeData }: Recipe
         totalTime: recipeData.totalTime
       });
       
-      const url = `/folders/${encodeURIComponent(resolvedFolderId)}/items`;
+      const url = `/api/folders/${encodeURIComponent(resolvedFolderId)}/items`;
       console.log('Making request to:', url);
       
       const response = await apiCall(url, {

@@ -19,7 +19,7 @@ export interface UserPreferences {
 }
 
 export const loadUserPreferences = async (): Promise<UserPreferences> => {
-  const response = await apiCall('/preferences', {
+  const response = await apiCall('/api/preferences', {
     method: 'GET'
   });
 
@@ -40,7 +40,7 @@ export const loadUserPreferences = async (): Promise<UserPreferences> => {
 };
 
 export const saveUserPreferences = async (preferences: UserPreferences): Promise<void> => {
-  const response = await apiCall('/preferences', {
+  const response = await apiCall('/api/preferences', {
     method: 'POST',
     body: JSON.stringify({ preferences })
   });

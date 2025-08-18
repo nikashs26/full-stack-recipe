@@ -15,10 +15,15 @@ def handle_preflight():
     response.headers.add('Access-Control-Allow-Credentials', 'true')
     return response, 200
 
-@preferences_bp.route('/preferences', methods=['POST'])
+@preferences_bp.route('/preferences', methods=['POST', 'OPTIONS'])
 @require_auth
 def save_user_preferences():
     """Save user preferences (requires authentication)"""
+    
+    # Handle OPTIONS request for CORS preflight
+    if request.method == 'OPTIONS':
+        return jsonify({'status': 'ok'}), 200
+    
     try:
         user_id = get_current_user_id()
         
@@ -82,10 +87,15 @@ def save_user_preferences():
     except Exception as e:
         return jsonify({"error": f"Failed to save preferences: {str(e)}"}), 500
 
-@preferences_bp.route('/preferences', methods=['GET'])
+@preferences_bp.route('/preferences', methods=['GET', 'OPTIONS'])
 @require_auth
 def get_user_preferences():
     """Get user preferences (requires authentication)"""
+    
+    # Handle OPTIONS request for CORS preflight
+    if request.method == 'OPTIONS':
+        return jsonify({'status': 'ok'}), 200
+    
     try:
         user_id = get_current_user_id()
         

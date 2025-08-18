@@ -20,6 +20,10 @@ class AuthMiddleware:
         """
         @wraps(f)
         def decorated_function(*args, **kwargs):
+            # Allow OPTIONS requests to pass through for CORS preflight
+            if request.method == 'OPTIONS':
+                return f(*args, **kwargs)
+            
             # Debug logging
             print(f"🔍 Auth middleware - Request headers: {dict(request.headers)}")
             print(f"🔍 Auth middleware - Authorization header: {request.headers.get('Authorization')}")

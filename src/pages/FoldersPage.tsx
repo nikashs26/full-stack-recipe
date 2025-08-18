@@ -53,7 +53,7 @@ const FoldersPage: React.FC = () => {
       }
       
       try {
-        const response = await apiCall(`/folders/${selectedFolder.id}`);
+        const response = await apiCall(`/api/folders/${selectedFolder.id}`);
         if (!response.ok) {
           throw new Error('Failed to fetch folder contents');
         }
@@ -330,7 +330,7 @@ const FoldersPage: React.FC = () => {
     }
 
     try {
-      const response = await apiCall(`/folders/${folderId}`, {
+      const response = await apiCall(`/api/folders/${folderId}`, {
         method: 'PUT',
         body: JSON.stringify({
           name: name.trim(),
@@ -392,7 +392,7 @@ const FoldersPage: React.FC = () => {
     const folderToDelete = folders.find(folder => folder.id === folderId);
     
     try {
-      const response = await apiCall(`/folders/${folderId}`, {
+      const response = await apiCall(`/api/folders/${folderId}`, {
         method: 'DELETE',
       });
 
