@@ -46,3 +46,5 @@ backend/cookies.txt
 *.temp
 
 users.json
+# Local Netlify folder
+.netlify

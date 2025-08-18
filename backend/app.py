@@ -31,8 +31,7 @@ allowed_origins = [
     "http://localhost:8081", "http://127.0.0.1:8081", 
     "http://localhost:8083", "http://127.0.0.1:8083",
     # Add your production frontend URLs here
-    "https://your-app.netlify.app",  # Replace with your actual frontend URL
-    "https://your-app.vercel.app"    # Replace with your actual frontend URL
+    "https://betterbulk.netlify.app",  # Your actual Netlify frontend URL
 ]
 
 # Allow all origins in development, restrict in production
