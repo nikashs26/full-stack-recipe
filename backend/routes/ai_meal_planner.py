@@ -98,6 +98,8 @@ def ai_meal_plan():
     if not preferences:
         preferences = user_preferences_service.get_preferences(user_id)
     
+    print(f"🎯 Using preferences for meal planning: {preferences}")  # Debug log
+    
     # Get additional parameters from request
     budget = data.get('budget')
     dietary_goals = data.get('dietary_goals', [])
@@ -105,8 +107,8 @@ def ai_meal_plan():
 
     # Call the LLM service
     try:
-        # Generate the meal plan using the free LLM meal planner agent
-        result = free_llm_meal_planner.generate_weekly_meal_plan(user_id)
+        # Generate the meal plan using the free LLM meal planner agent WITH preferences
+        result = free_llm_meal_planner.generate_weekly_meal_plan_with_preferences(user_id, preferences)
         
         # Check if the LLM agent returned an error
         if 'error' in result:

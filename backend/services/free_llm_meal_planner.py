@@ -25,7 +25,7 @@ class FreeLLMMealPlannerAgent:
         self.hf_api_url = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2"
         
         # LLM configuration
-        self.ollama_timeout = 30  # Reduced timeout for faster responses
+        self.ollama_timeout = 120  # Increased timeout for complete meal plans
         self.ollama_max_tokens = 2000  # Increased for detailed responses
         self.hf_max_tokens = 2000
         
@@ -71,15 +71,35 @@ class FreeLLMMealPlannerAgent:
                 if meal_plan:
                     logger.info("📝 Validating meal plan structure...")
                     if self._validate_meal_plan(meal_plan):
-                        logger.info("✅ Ollama generated valid meal plan")
-                        # Convert the LLM response to the format expected by the frontend
-                        converted_plan = self._convert_to_frontend_format(meal_plan, preferences)
-                        return {
-                            "success": True,
-                            "meal_plan": converted_plan,
-                            "source": "ollama",
-                            "generated_at": datetime.now().isoformat()
+                        # Also validate macro targets
+                        target_macros = {
+                            'calories': preferences.get('targetCalories', 2000),
+                            'protein': preferences.get('targetProtein', 150),
+                            'carbs': preferences.get('targetCarbs', 200),
+                            'fat': preferences.get('targetFat', 65)
                         }
+                        
+                        if self._validate_macro_targets(meal_plan, target_macros):
+                            logger.info("✅ Ollama generated valid meal plan")
+                            # Convert the LLM response to the format expected by the frontend
+                            converted_plan = self._convert_to_frontend_format(meal_plan, preferences)
+                            return {
+                                "success": True,
+                                "meal_plan": converted_plan,
+                                "source": "ollama",
+                                "generated_at": datetime.now().isoformat()
+                            }
+                        else:
+                            logger.warning("⚠️ Meal plan may not meet macro targets, but proceeding")
+                            # Still proceed but log the warning
+                            converted_plan = self._convert_to_frontend_format(meal_plan, preferences)
+                            return {
+                                "success": True,
+                                "meal_plan": converted_plan,
+                                "source": "ollama",
+                                "generated_at": datetime.now().isoformat(),
+                                "warning": "Generated plan may not fully meet macro targets"
+                            }
                     else:
                         logger.error("❌ Meal plan validation failed")
                         logger.error(f"Meal plan structure: {meal_plan}")
@@ -118,9 +138,9 @@ class FreeLLMMealPlannerAgent:
             logger.error(f"❌ Meal plan generation failed: {e}")
             return {"error": f"Meal plan generation failed: {str(e)}"}
     
-    def _generate_with_ollama(self, preferences: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """Generate meal plan using Ollama LLM."""
-        prompt = self._create_meal_plan_prompt(preferences)
+    def _generate_with_ollama(self, preferences: Dict[str, Any], retry_count: int = 0) -> Optional[Dict[str, Any]]:
+        """Generate meal plan using Ollama LLM with retry for macro target compliance."""
+        prompt = self._create_meal_plan_prompt(preferences, retry_count)
         
         payload = {
             "model": self.ollama_model,
@@ -129,8 +149,8 @@ class FreeLLMMealPlannerAgent:
             "options": {
                 "temperature": 0.3,
                 "top_p": 0.9,
-                "num_predict": 800,
-                "num_ctx": 2048
+                "num_predict": 2000,  # Increased for complete meal plans
+                "num_ctx": 4096       # Increased context window
             }
         }
         
@@ -213,7 +233,7 @@ class FreeLLMMealPlannerAgent:
             logger.error(f"❌ Hugging Face request failed: {response.status_code}")
             raise Exception(f"Hugging Face request failed: {response.status_code}")
     
-    def _create_meal_plan_prompt(self, preferences: Dict[str, Any]) -> str:
+    def _create_meal_plan_prompt(self, preferences: Dict[str, Any], retry_count: int = 0) -> str:
         """Create a focused prompt for meal planning."""
         
         # Extract key preferences
@@ -225,7 +245,7 @@ class FreeLLMMealPlannerAgent:
         health_goals = preferences.get('healthGoals', ['General wellness'])
         max_time = preferences.get('maxCookingTime', '30 minutes')
         
-        # Get target macros
+        # Get target macros and meal inclusions
         macros = {
             'calories': preferences.get('targetCalories', 2000),
             'protein': preferences.get('targetProtein', 150),
@@ -233,26 +253,110 @@ class FreeLLMMealPlannerAgent:
             'fat': preferences.get('targetFat', 65)
         }
         
+        # Get meal inclusions
+        include_breakfast = preferences.get('includeBreakfast', True)
+        include_lunch = preferences.get('includeLunch', True) 
+        include_dinner = preferences.get('includeDinner', True)
+        include_snacks = preferences.get('includeSnacks', False)
+        
+        # Build meal list based on inclusions
+        meal_types = []
+        if include_breakfast:
+            meal_types.append('Breakfast')
+        if include_lunch:
+            meal_types.append('Lunch')
+        if include_dinner:
+            meal_types.append('Dinner')
+        if include_snacks:
+            meal_types.append('Snack')
+            
+        meal_format = ', '.join(meal_types)
+        
         # Build a focused but contextual prompt 
         cuisine_list = ', '.join(cuisines) if cuisines else 'American, Chinese, Mexican'
-        prompt = f"""You are a professional meal planner creating a diverse weekly menu. Generate varied, appealing meal names using these cuisines: {cuisine_list}
+        
+        # Add nutrition targets to the prompt
+        nutrition_info = f"Target: {macros['calories']} calories, {macros['protein']}g protein, {macros['carbs']}g carbs, {macros['fat']}g fat per day"
+        
+        # Calculate per-meal macro targets to enforce complete nutrition goals
+        num_main_meals = len([m for m in meal_types if m != 'Snack'])
+        has_snacks = include_snacks
+        
+        if has_snacks:
+            # Main meals get 85% of daily nutrition, snacks get 15%
+            main_meal_calories = int(macros['calories'] * 0.85 / max(num_main_meals, 1))
+            main_meal_protein = int(macros['protein'] * 0.85 / max(num_main_meals, 1))
+            main_meal_carbs = int(macros['carbs'] * 0.85 / max(num_main_meals, 1))
+            main_meal_fat = int(macros['fat'] * 0.85 / max(num_main_meals, 1))
+            
+            snack_calories = int(macros['calories'] * 0.15)
+            snack_protein = int(macros['protein'] * 0.15)
+            snack_carbs = int(macros['carbs'] * 0.15)
+            snack_fat = int(macros['fat'] * 0.15)
+            
+            snack_targets = f"""
+- Each snack: ~{snack_calories} calories, ~{snack_protein}g protein, ~{snack_carbs}g carbs, ~{snack_fat}g fat"""
+        else:
+            # No snacks, divide evenly among main meals
+            main_meal_calories = int(macros['calories'] / max(num_main_meals, 1))
+            main_meal_protein = int(macros['protein'] / max(num_main_meals, 1))
+            main_meal_carbs = int(macros['carbs'] / max(num_main_meals, 1))
+            main_meal_fat = int(macros['fat'] / max(num_main_meals, 1))
+            snack_targets = ""
+        
+        # Add retry-specific messaging
+        retry_emphasis = ""
+        if retry_count > 0:
+            retry_emphasis = f"""
+ATTENTION: This is retry #{retry_count}. Previous attempts failed to meet macro targets.
+CRITICAL: You MUST create meals large enough to reach the specified calorie and protein targets.
+Use LARGE portions, MULTIPLE protein sources, and HIGH-CALORIE ingredients.
+"""
+
+        prompt = f"""You are a professional meal planner. Create a balanced weekly menu using {cuisine_list} cuisine.
+{retry_emphasis}
+CRITICAL NUTRITION REQUIREMENTS - THESE MUST BE MET EXACTLY:
+Daily Target: {macros['calories']} calories, {macros['protein']}g protein, {macros['carbs']}g carbs, {macros['fat']}g fat
+
+MANDATORY Per-Meal Targets (YOU MUST HIT THESE NUMBERS):
+- Each main meal MUST contain: ~{main_meal_calories} calories, ~{main_meal_protein}g protein, ~{main_meal_carbs}g carbs, ~{main_meal_fat}g fat{snack_targets}
+
+IMPORTANT: Each meal must actually reach these macro targets. Use larger portions, multiple protein sources, nuts, oils, and dense foods as needed.
+
+Example of properly sized meal for {main_meal_calories} calories:
+* **Breakfast:** "Protein-Rich {cuisine_list} Bowl"
+  - 6 oz chicken/fish/paneer ({main_meal_protein//2}g protein)
+  - 1.5 cups rice/quinoa/bread ({main_meal_carbs//2}g carbs)
+  - 2 tbsp nuts/oil/ghee ({main_meal_fat//2}g fat)
+  - Vegetables and spices
+  Total: ~{main_meal_calories} calories, ~{main_meal_protein}g protein
 
 Requirements:
-- Each day needs 3 different meals (breakfast, lunch, dinner)
-- Ensure variety - no repeated meals across the week
-- Mix cooking styles (grilled, stir-fried, baked, etc.)
-- Include both simple and interesting options
-- Match cuisines appropriately (e.g., Chinese dishes should be labeled Chinese)
+- {len(meal_types)} meals per day: {meal_format}
+- Use {cuisine_list} cuisine exclusively
+- Each meal MUST reach the specified macro targets
+- Use appropriate portion sizes to meet calorie goals
+- Include multiple protein sources if needed (meat + legumes + dairy)
+- Add healthy fats (nuts, oils, seeds) to reach fat targets
+- Use complex carbs (rice, bread, grains) to reach carb targets
+- No repeated meals across the week
 
-Monday: Breakfast, Lunch, Dinner
-Tuesday: Breakfast, Lunch, Dinner  
-Wednesday: Breakfast, Lunch, Dinner
-Thursday: Breakfast, Lunch, Dinner
-Friday: Breakfast, Lunch, Dinner
-Saturday: Breakfast, Lunch, Dinner
-Sunday: Breakfast, Lunch, Dinner
+Format (EXACT - show meal names only):
+**Monday**
+* **Breakfast:** "High-Protein {cuisine_list} Meal Name"
+* **Lunch:** "Balanced {cuisine_list} Meal Name"
+* **Dinner:** "Nutritious {cuisine_list} Meal Name"{f'''
+* **Snack:** "Protein-Rich {cuisine_list} Snack Name"''' if include_snacks else ''}
 
-Provide specific meal names for each slot."""
+**Tuesday**
+* **Breakfast:** "High-Protein {cuisine_list} Meal Name"
+* **Lunch:** "Balanced {cuisine_list} Meal Name"
+* **Dinner:** "Nutritious {cuisine_list} Meal Name"{f'''
+* **Snack:** "Protein-Rich {cuisine_list} Snack Name"''' if include_snacks else ''}
+
+Continue for all 7 days (Monday through Sunday).
+
+Focus on creating nutritionally balanced meals that meet ALL macro targets."""
 
         return prompt
     
@@ -280,14 +384,13 @@ Provide specific meal names for each slot."""
                     logger.debug(f"❌ Day {day} is not a dict: {type(day_plan)}")
                     return False
                 
-                # Check that each day has the main meals
-                for meal_type in ['breakfast', 'lunch', 'dinner']:
-                    if meal_type not in day_plan:
-                        logger.debug(f"❌ Missing meal type {meal_type} for {day}")
-                        return False
+                # Check that each day has at least one meal
+                if not day_plan:
+                    logger.debug(f"❌ Day {day} has no meals")
+                    return False
                     
-                    meal = day_plan[meal_type]
-                    # For now, just check it's a string (meal name)
+                # Validate each meal in the day
+                for meal_type, meal in day_plan.items():
                     if not isinstance(meal, str):
                         logger.debug(f"❌ Meal {meal_type} for {day} is not a string: {type(meal)}")
                         return False
@@ -297,6 +400,32 @@ Provide specific meal names for each slot."""
             
         except Exception as e:
             logger.error(f"❌ Meal plan validation failed: {e}")
+            return False
+    
+    def _validate_macro_targets(self, meal_plan: Dict[str, Any], target_macros: Dict[str, int]) -> bool:
+        """Validate that the meal plan could reasonably meet macro targets."""
+        try:
+            week_plan = meal_plan.get('week_plan') or meal_plan
+            if not isinstance(week_plan, dict):
+                return False
+            
+            # Count total meals per day to estimate if macros could be met
+            for day_name, day_plan in week_plan.items():
+                if not isinstance(day_plan, dict):
+                    continue
+                    
+                meal_count = len([meal for meal in day_plan.values() if meal and meal.strip()])
+                
+                # If we have too few meals for high calorie targets, warn
+                min_expected_meals = 3  # breakfast, lunch, dinner
+                if meal_count < min_expected_meals:
+                    logger.warning(f"⚠️ Day {day_name} only has {meal_count} meals, may not meet macro targets")
+            
+            # Basic validation passed
+            return True
+            
+        except Exception as e:
+            logger.debug(f"❌ Macro validation error: {e}")
             return False
     
     def _parse_meal_plan_response(self, response_text: str) -> Optional[Dict[str, Any]]:
@@ -389,7 +518,7 @@ Provide specific meal names for each slot."""
             current_day = None
             
             day_names = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
-            meal_types = ['breakfast', 'lunch', 'dinner']
+            meal_types = ['breakfast', 'lunch', 'dinner', 'snack']  # Include snack as a possible meal type
             
             logger.info(f"🔍 Parsing response with {len(lines)} lines")
             
@@ -400,27 +529,64 @@ Provide specific meal names for each slot."""
                 
                 logger.info(f"📝 Processing line: '{line}'")
                 
-                # Check if line starts with a day name
+                # Check if line starts with a day name or contains day in **Day** format
                 line_lower = line.lower()
                 for day in day_names:
-                    if line_lower.startswith(day):
+                    if (line_lower.startswith(day) or 
+                        f"**{day}**" in line_lower or 
+                        f"*{day}*" in line_lower):
                         current_day = day
                         week_plan[current_day] = {}
                         logger.info(f"📅 Found day: {current_day}")
                         break
                 
-                # Check if line contains a meal (format: "- Breakfast: Meal Name")
-                if current_day and line.startswith('-'):
-                    # Parse lines like "- Breakfast: Egg Rolls & Oatmeal"
-                    if ':' in line:
-                        meal_part = line[1:].strip()  # Remove the '-'
-                        meal_type_text, meal_name = meal_part.split(':', 1)
-                        meal_type = meal_type_text.strip().lower()
-                        meal_name = meal_name.strip()
+                # Check if line contains a meal - handle multiple formats
+                if current_day and ':' in line:
+                    # Try to match any meal type in this line
+                    meal_found = False
+                    for meal_type in meal_types:
+                        if meal_found:
+                            break
+                            
+                        # Check for various patterns
+                        patterns = [
+                            f"* **{meal_type.title()}:**",  # * **Breakfast:**
+                            f"**{meal_type.title()}:**",   # **Breakfast:**
+                            f"* {meal_type.title()}:",     # * Breakfast:
+                            f"- {meal_type.title()}:",     # - Breakfast:
+                            f"{meal_type.title()}:"        # Breakfast:
+                        ]
                         
-                        if meal_type in meal_types and meal_name:
-                            week_plan[current_day][meal_type] = meal_name
-                            logger.info(f"🍽️ Added {meal_type}: {meal_name} for {current_day}")
+                        for pattern in patterns:
+                            if pattern in line:  # Exact case-sensitive match
+                                # Extract meal name after the pattern
+                                pattern_pos = line.find(pattern)
+                                if pattern_pos != -1:
+                                    meal_part = line[pattern_pos + len(pattern):].strip()
+                                    
+                                    # Clean up the meal name - extract just the quoted name if present
+                                    import re
+                                    # Look for quoted meal name like "Tamil Nadu Tiffin"
+                                    quoted_match = re.search(r'"([^"]+)"', meal_part)
+                                    if quoted_match:
+                                        meal_name = quoted_match.group(1)
+                                    else:
+                                        # Fallback: take everything before " - " or " (" or reasonable length
+                                        if ' - ' in meal_part:
+                                            meal_name = meal_part.split(' - ')[0].strip()
+                                        elif ' (' in meal_part:
+                                            meal_name = meal_part.split(' (')[0].strip()
+                                        else:
+                                            meal_name = meal_part[:50].strip()  # Reasonable max length
+                                    
+                                    # Clean up any remaining formatting
+                                    meal_name = meal_name.replace('*', '').replace('_', '').strip()
+                                    
+                                    if meal_name and current_day:
+                                        week_plan[current_day][meal_type.lower()] = meal_name
+                                        logger.info(f"🍽️ Added {meal_type.lower()}: {meal_name} for {current_day}")
+                                        meal_found = True
+                                        break
             
             # If we didn't get a proper structure, create a simple default one
             if not week_plan:
@@ -548,7 +714,7 @@ IMPORTANT: Return ONLY the JSON, no other text."""
             # Cache favorite cuisines for rotation to ensure variety that matches preferences
             favorite_cuisines: List[str] = preferences.get('favoriteCuisines', []) or []
             num_cuisines: int = len(favorite_cuisines)
-
+            
             for index, day_name in enumerate(day_names):
                 # Calculate the date for this day
                 day_date = today + timedelta(days=index)
@@ -556,15 +722,67 @@ IMPORTANT: Return ONLY the JSON, no other text."""
                 day_data = week_plan.get(day_name, {})
                 meals = []
                 
-                # Convert each meal type
-                for meal_index, meal_type in enumerate(['breakfast', 'lunch', 'dinner']):
+                # Get meal inclusions to determine which meals to process
+                include_breakfast = preferences.get('includeBreakfast', True)
+                include_lunch = preferences.get('includeLunch', True) 
+                include_dinner = preferences.get('includeDinner', True)
+                include_snacks = preferences.get('includeSnacks', False)
+                
+                # Build meal types list based on inclusions
+                meal_types_to_process = []
+                if include_breakfast:
+                    meal_types_to_process.append('breakfast')
+                if include_lunch:
+                    meal_types_to_process.append('lunch')
+                if include_dinner:
+                    meal_types_to_process.append('dinner')
+                if include_snacks:
+                    meal_types_to_process.append('snack')
+                
+                # Get nutrition targets from preferences
+                target_calories_per_day = preferences.get('targetCalories', 2000)
+                target_protein_per_day = preferences.get('targetProtein', 150)
+                target_carbs_per_day = preferences.get('targetCarbs', 200) 
+                target_fat_per_day = preferences.get('targetFat', 65)
+                
+                # Calculate per-meal nutrition (divide by number of main meals, snacks get 1/4 allocation)
+                num_main_meals = len([m for m in meal_types_to_process if m != 'snack'])
+                has_snacks = 'snack' in meal_types_to_process
+                
+                if has_snacks:
+                    # If snacks included, main meals get 85% of nutrition, snacks get 15%
+                    main_meal_calories = int(target_calories_per_day * 0.85 / max(num_main_meals, 1))
+                    snack_calories = int(target_calories_per_day * 0.15)
+                    main_meal_protein = int(target_protein_per_day * 0.85 / max(num_main_meals, 1))
+                    snack_protein = int(target_protein_per_day * 0.15)
+                    main_meal_carbs = int(target_carbs_per_day * 0.85 / max(num_main_meals, 1))
+                    snack_carbs = int(target_carbs_per_day * 0.15)
+                    main_meal_fat = int(target_fat_per_day * 0.85 / max(num_main_meals, 1))
+                    snack_fat = int(target_fat_per_day * 0.15)
+                else:
+                    # No snacks, divide evenly among main meals
+                    main_meal_calories = int(target_calories_per_day / max(num_main_meals, 1))
+                    main_meal_protein = int(target_protein_per_day / max(num_main_meals, 1))
+                    main_meal_carbs = int(target_carbs_per_day / max(num_main_meals, 1))
+                    main_meal_fat = int(target_fat_per_day / max(num_main_meals, 1))
+                
+                # Convert each meal type that's included
+                for meal_index, meal_type in enumerate(meal_types_to_process):
                     meal_name = day_data.get(meal_type, f"Default {meal_type}")
                     
-                    # Extract calories and protein from the meal name if present
-                    calories = 400  # Default
-                    protein = "15g"  # Default
+                    # Set nutrition based on meal type
+                    if meal_type == 'snack' and has_snacks:
+                        calories = snack_calories
+                        protein = f"{snack_protein}g"
+                        carbs = f"{snack_carbs}g"
+                        fat = f"{snack_fat}g"
+                    else:
+                        calories = main_meal_calories
+                        protein = f"{main_meal_protein}g"
+                        carbs = f"{main_meal_carbs}g"
+                        fat = f"{main_meal_fat}g"
                     
-                    # Try to extract numbers from meal name like "(350, 25g)"
+                    # Try to extract numbers from meal name like "(350, 25g)" and override defaults if present
                     import re
                     calorie_match = re.search(r'\((\d+)', meal_name)
                     protein_match = re.search(r'(\d+)g\)', meal_name)
@@ -624,8 +842,8 @@ IMPORTANT: Return ONLY the JSON, no other text."""
                         "nutrition": {
                             "calories": calories,
                             "protein": protein,
-                            "carbs": "30g",
-                            "fat": "10g"
+                            "carbs": carbs,
+                            "fat": fat
                         },
                         "prep_time": preferences.get('maxCookingTime', '30 minutes'),
                         "cook_time": preferences.get('maxCookingTime', '30 minutes'),

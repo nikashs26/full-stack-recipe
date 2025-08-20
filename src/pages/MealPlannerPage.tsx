@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ChefHat, Loader2, RefreshCw, Settings, Lock } from 'lucide-react';
 import { generateMealPlan, regenerateMeal, type MealPlanData, type MealDay, type Meal } from '../services/mealPlannerService';
+import MealPlannerAdvancedSettings, { type MealPlannerSettings } from '../components/MealPlannerAdvancedSettings';
 
 const MealPlannerPage: React.FC = () => {
   const { isAuthenticated, isLoading: authLoading, user } = useAuth();
@@ -15,6 +16,14 @@ const MealPlannerPage: React.FC = () => {
   const [mealPlan, setMealPlan] = useState<MealPlanData | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [advancedSettingsOpen, setAdvancedSettingsOpen] = useState(false);
+  const [mealPlannerSettings, setMealPlannerSettings] = useState<MealPlannerSettings>({
+    targetCalories: 2000,
+    targetProtein: 150,
+    targetCarbs: 200,
+    targetFat: 65,
+    includeSnacks: false
+  });
   
   // Redirect if not authenticated
   useEffect(() => {
@@ -89,14 +98,20 @@ const MealPlannerPage: React.FC = () => {
     
     try {
       const plan = await generateMealPlan({
-        // Removed budget, dietaryGoals, currency, mealPreferences, nutritionTargets
+        nutritionTargets: {
+          targetCalories: mealPlannerSettings.targetCalories,
+          targetProtein: mealPlannerSettings.targetProtein,
+          targetCarbs: mealPlannerSettings.targetCarbs,
+          targetFat: mealPlannerSettings.targetFat,
+          includeSnacks: mealPlannerSettings.includeSnacks
+        }
       });
       
       setMealPlan(plan);
       
       toast({
         title: "Success!",
-        description: `Your personalized weekly meal plan is ready.`,
+        description: `Your personalized weekly meal plan is ready with ${mealPlannerSettings.targetCalories} calories/day.`,
       });
       
       return plan;
@@ -282,6 +297,16 @@ const MealPlannerPage: React.FC = () => {
             <p className="text-lg text-gray-600 max-w-2xl mx-auto">
               Welcome back, {user?.full_name || user?.email}! Generate personalized weekly meal plans based on your preferences.
             </p>
+          </div>
+
+          {/* Advanced Settings */}
+          <div className="max-w-2xl mx-auto mb-8">
+            <MealPlannerAdvancedSettings
+              settings={mealPlannerSettings}
+              onSettingsChange={setMealPlannerSettings}
+              isOpen={advancedSettingsOpen}
+              onToggle={setAdvancedSettingsOpen}
+            />
           </div>
 
           {/* Action Buttons */}

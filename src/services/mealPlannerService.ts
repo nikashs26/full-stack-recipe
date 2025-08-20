@@ -13,10 +13,15 @@ export interface MealPlanOptions {
     includeSnacks: boolean;
   };
   nutritionTargets?: {
-    calories: number;
-    protein: number;
-    carbs: number;
-    fat: number;
+    calories?: number;
+    protein?: number;
+    carbs?: number;
+    fat?: number;
+    targetCalories?: number;
+    targetProtein?: number;
+    targetCarbs?: number;
+    targetFat?: number;
+    includeSnacks?: boolean;
   };
 }
 
@@ -151,16 +156,16 @@ export const generateMealPlan = async (options?: MealPlanOptions): Promise<MealP
       cookingSkillLevel: userPreferences.cookingSkillLevel,
       // Max cooking time
       maxCookingTime: userPreferences.maxCookingTime,
-      // Meal inclusions
-      includeBreakfast: userPreferences.includeBreakfast,
-      includeLunch: userPreferences.includeLunch,
-      includeDinner: userPreferences.includeDinner,
-      includeSnacks: userPreferences.includeSnacks,
-      // Nutrition targets
-      targetCalories: userPreferences.targetCalories,
-      targetProtein: userPreferences.targetProtein,
-      targetCarbs: userPreferences.targetCarbs,
-      targetFat: userPreferences.targetFat
+      // Meal inclusions - use options override or user preferences
+      includeBreakfast: options?.mealPreferences?.includeBreakfast ?? userPreferences.includeBreakfast,
+      includeLunch: options?.mealPreferences?.includeLunch ?? userPreferences.includeLunch,
+      includeDinner: options?.mealPreferences?.includeDinner ?? userPreferences.includeDinner,
+      includeSnacks: options?.nutritionTargets?.includeSnacks ?? options?.mealPreferences?.includeSnacks ?? userPreferences.includeSnacks,
+      // Nutrition targets - use options override or user preferences
+      targetCalories: options?.nutritionTargets?.targetCalories ?? options?.nutritionTargets?.calories ?? userPreferences.targetCalories,
+      targetProtein: options?.nutritionTargets?.targetProtein ?? options?.nutritionTargets?.protein ?? userPreferences.targetProtein,
+      targetCarbs: options?.nutritionTargets?.targetCarbs ?? options?.nutritionTargets?.carbs ?? userPreferences.targetCarbs,
+      targetFat: options?.nutritionTargets?.targetFat ?? options?.nutritionTargets?.fat ?? userPreferences.targetFat
     };
     
     console.log('🎯 Sending preferences to meal planner:', mealPlanPreferences);

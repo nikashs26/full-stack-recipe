@@ -231,10 +231,7 @@ class RecipeCacheService:
 
     def get_cached_recipes(self, query: str = "", ingredient: str = "", filters: Optional[Dict[str, Any]] = None) -> List[Dict[Any, Any]]:
         """Retrieve cached recipes for the given search parameters with TTL support"""
-        print(f"🔍 DEBUG: get_cached_recipes called with:")
-        print(f"  - query: '{query}' (type: {type(query)}, length: {len(query) if query else 0})")
-        print(f"  - ingredient: '{ingredient}' (type: {type(ingredient)}, length: {len(ingredient) if ingredient else 0})")
-        print(f"  - filters: {filters}")
+       
         
         if not self.recipe_collection:
             logger.warning("ChromaDB recipe collection not initialized")
