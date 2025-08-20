@@ -5,12 +5,10 @@ import { Search, ChefHat, ThumbsUp, Award, TrendingUp, Clock, Star, Users, Zap, 
 import { Button } from '@/components/ui/button';
 import Header from '../components/Header';
 import RecipeCard from '../components/RecipeCard';
-import ManualRecipeCard from '../components/ManualRecipeCard';
 import { Recipe } from '../types/recipe';
 import { SpoonacularRecipe } from '../types/spoonacular';
-import { loadRecipes } from '../utils/storage';
+
 import { fetchManualRecipes } from '../lib/manualRecipes';
-import { fetchRecipes } from '../lib/spoonacular';
 import { useAuth } from '../context/AuthContext';
 import { getHomepagePopularRecipes } from '../services/popularRecipesService';
 import { getQualityBasedRecipes } from '../services/popularRecipesService';
@@ -112,78 +110,53 @@ const HomePage: React.FC = () => {
   }, [isAuthenticated]);
 
   // Load recipes using React Query for better caching
-  // Use the same /get_recipes endpoint for consistent data across homepage and search page
+  // Use the same fetchManualRecipes function as search page for consistent data structure
   const { data: backendRecipes = [], isLoading: isLoadingBackend, error: backendError, refetch: refetchBackendRecipes } = useQuery({
     queryKey: ['backend-recipes', isAuthenticated, userPreferences, refreshCounter], // Include refreshCounter to force new data
     queryFn: async () => {
       try {
-        // Always use the same /get_recipes endpoint for consistency with search page
-        console.log('🔍 Using /get_recipes endpoint for consistent data across homepage and search');
+        // Use the same function as the search page for consistent data structure
+        console.log('🔍 Using fetchManualRecipes for consistent data across homepage and search');
         
         // Build query parameters based on user preferences
-        const params = new URLSearchParams();
+        let cuisines: string[] = [];
+        let diets: string[] = [];
         
         if (isAuthenticated && userPreferences) {
           // Add user preferences as filters
           if (userPreferences.favoriteCuisines?.length) {
-            params.append('cuisine', userPreferences.favoriteCuisines.join(','));
-          }
-          if (userPreferences.favoriteFoods?.length) {
-            params.append('favorite_foods', userPreferences.favoriteFoods.join(','));
+            cuisines = userPreferences.favoriteCuisines;
           }
           if (userPreferences.dietaryRestrictions?.length) {
-            params.append('dietary_restrictions', userPreferences.dietaryRestrictions.join(','));
+            diets = userPreferences.dietaryRestrictions;
           }
-          // FIXED: Increase limit significantly to get a larger sample for better cuisine distribution
-          // This ensures we have enough recipes from each cuisine to create balanced recommendations
-          params.append('limit', '150');
-        } else {
-          // For unauthenticated users, get more recipes for better variety
-          params.append('limit', '100');
         }
         
-        // Add multiple randomization parameters to ensure backend returns different recipes each time
-        params.append('_t', Date.now().toString());
-        params.append('_r', Math.random().toString());
-        params.append('_refresh', refreshCounter.toString());
+        // Use fetchManualRecipes with larger page size for homepage variety
+        const pageSize = isAuthenticated && userPreferences ? 150 : 100;
+        const result = await fetchManualRecipes('', '', {
+          page: 1,
+          pageSize: pageSize,
+          cuisines: cuisines,
+          diets: diets
+        });
         
-        // Add dynamic offset that changes with each refresh to get different recipe batches
-        const dynamicOffset = (refreshCounter * 25) % 1000; // Cycle through different starting points
-        params.append('offset', dynamicOffset.toString());
+        console.log('🔍 HomePage fetchManualRecipes response:', {
+          total: result.total,
+          recipes: result.recipes?.length || 0,
+          firstRecipe: result.recipes?.[0]?.title
+        });
         
-        const queryString = params.toString();
-        const url = `http://localhost:5003/get_recipes${queryString ? `?${queryString}` : ''}`;
-        
-        console.log('🔍 HomePage calling /get_recipes with URL:', url);
-        console.log('🔄 Refresh counter:', refreshCounter, 'Dynamic offset:', dynamicOffset);
-        
-        const response = await fetch(url);
-        if (!response.ok) {
-          const errorData = await response.text();
-          console.error('Backend error response:', errorData);
-          throw new Error('Failed to fetch recipes');
-        }
-        
-        const data = await response.json();
-        console.log('🔍 HomePage /get_recipes response:', data);
-        console.log('🔍 HomePage recipes array:', data.results);
-        console.log('🔍 HomePage first recipe details:', data.results?.[0] ? {
-          id: data.results[0].id,
-          title: data.results[0].title,
-          name: data.results[0].name,
-          cuisine: data.results[0].cuisine
-        } : 'No recipes');
-        
-        return data.results || [];
+        return result.recipes || [];
       } catch (error) {
         console.error('Error fetching backend recipes:', error);
         return [];
       }
     },
-    staleTime: Infinity, // Never consider data stale - only refresh manually
-    gcTime: Infinity, // Keep in cache indefinitely
+    staleTime: 10 * 60 * 1000, // 10 minutes - same as search page
+    gcTime: 10 * 60 * 1000, // 10 minutes
     refetchOnWindowFocus: false, // Don't refetch when window regains focus
-    refetchOnMount: false, // Don't refetch when component mounts
+    refetchOnMount: true, // Refetch when component mounts for fresh data
     refetchOnReconnect: false, // Don't refetch when reconnecting to network
     retry: 1, // Only retry once on failure
     enabled: true, // Always enabled
@@ -203,16 +176,7 @@ const HomePage: React.FC = () => {
     });
   }, [backendRecipes]);
 
-  const { data: manualRecipes = [], isLoading: isLoadingManual, error: manualRecipesError } = useQuery({
-    queryKey: ['manual-recipes'],
-    queryFn: async () => {
-      const result = await fetchManualRecipes();
-      return result.recipes || [];
-    },
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    retry: 1, // Only retry once on failure
-    enabled: false, // Disable this for now to avoid duplication since it calls same endpoint
-  });
+  // No longer needed - we use backendRecipes directly now
 
   // Query for popular recipes based on clicks and reviews
   const { data: popularRecipesData = [], isLoading: isLoadingPopular } = useQuery({
@@ -236,31 +200,12 @@ const HomePage: React.FC = () => {
     if (backendError) {
       console.warn('Failed to fetch backend recipes:', backendError);
     }
-    if (manualRecipesError) {
-      console.warn('Failed to fetch manual recipes:', manualRecipesError);
-    }
-  }, [backendError, manualRecipesError]);
+  }, [backendError]);
 
-  // Extract the results array from the API response
-  const spoonacularRecipes = useMemo(() => {
-    if (!backendRecipes) return [];
-    if (Array.isArray(backendRecipes)) return backendRecipes as Recipe[];
-    if (backendRecipes.results && Array.isArray(backendRecipes.results)) {
-      return backendRecipes.results as Recipe[];
-    }
-    console.warn('Unexpected backend data format:', backendRecipes);
-    return [];
-  }, [backendRecipes]);
+  // No longer needed - we use backendRecipes directly now
+  // This ensures we have the same data structure as the search page
 
-  // Load saved recipes
-  const [savedRecipes, setSavedRecipes] = useState<Recipe[]>([]);
-  useEffect(() => {
-    const loadSavedRecipes = async () => {
-      const recipes = await loadRecipes();
-      setSavedRecipes(recipes);
-    };
-    loadSavedRecipes();
-  }, []);
+  // No longer needed - we use backendRecipes directly now
 
   // Helper function to select quality-based recipes from available recipes
   const selectQualityBasedRecipes = (recipes: Recipe[], limit: number): Recipe[] => {
@@ -282,7 +227,10 @@ const HomePage: React.FC = () => {
       if (recipe.image && recipe.image !== 'placeholder') score += 20;
       
       // Recipe type diversity bonus (0-15 points)
-      if (recipe.cuisine && recipe.cuisine !== 'Unknown') score += 10;
+              if (recipe.cuisine && recipe.cuisine !== 'Unknown') {
+          const cuisineValue = Array.isArray(recipe.cuisine) ? recipe.cuisine[0] : recipe.cuisine;
+          if (cuisineValue !== 'Unknown') score += 10;
+        }
       if (recipe.dietaryRestrictions && recipe.dietaryRestrictions.length > 0) score += 5;
       
       // User engagement indicators (0-10 points)
@@ -324,7 +272,8 @@ const HomePage: React.FC = () => {
         // Use the first cuisine from the array
         cuisine = recipe.cuisines[0];
       } else if (recipe.cuisine) {
-        cuisine = recipe.cuisine;
+        // Handle both string and string[] types for cuisine field
+        cuisine = Array.isArray(recipe.cuisine) ? recipe.cuisine[0] || 'Unknown' : recipe.cuisine;
       }
       const recipeType = recipe.type || 'unknown';
       
@@ -385,19 +334,16 @@ const HomePage: React.FC = () => {
       timestamp: new Date().toISOString()
     });
     
-    // Mark recipes from the main backend endpoint as external type so they route to /external-recipe/ID
-    const allCombined = [
-      ...spoonacularRecipes.map(recipe => ({ ...recipe, type: 'external' as const })),
-      ...manualRecipes.map(recipe => ({ ...recipe, type: 'manual' as const })),
-      ...savedRecipes.map(recipe => ({ ...recipe, type: 'saved' as const }))
-    ];
+    // Use the same data source as search page - only backendRecipes from fetchManualRecipes
+    // This ensures we have the same complete data structure (macros, reviews, etc.)
+    const allCombined = backendRecipes ? 
+      backendRecipes.map(recipe => ({ ...recipe, type: 'external' as const })) : [];
 
     let recommendedRecipes = [];
     let popularRecipes = [];
-    let newestRecipes = [];
     
     console.log('🍽️ Recipe organization - isAuthenticated:', isAuthenticated, 'userPreferences:', userPreferences);
-    console.log('📊 Recipe counts - Backend:', spoonacularRecipes.length, 'Manual:', manualRecipes.length, 'Saved:', savedRecipes.length);
+    console.log('📊 Recipe counts - Backend:', backendRecipes?.length || 0, 'Using same source as search page');
     console.log('🔍 Total recipes to filter:', allCombined.length);
     
     // Check if user has meaningful preferences (not just empty arrays/strings)
@@ -461,7 +407,8 @@ const HomePage: React.FC = () => {
           if (Array.isArray(recipe.cuisines) && recipe.cuisines.length > 0) {
             cuisine = recipe.cuisines[0];
           } else if (recipe.cuisine) {
-            cuisine = recipe.cuisine;
+            // Handle both string and string[] types for cuisine field
+            cuisine = Array.isArray(recipe.cuisine) ? recipe.cuisine[0] || 'Unknown' : recipe.cuisine;
           }
           
           // If we still don't have a cuisine, try to detect it from the recipe data
@@ -469,7 +416,8 @@ const HomePage: React.FC = () => {
             if (recipe.cuisines && Array.isArray(recipe.cuisines) && recipe.cuisines.length > 0) {
               cuisine = recipe.cuisines[0];
             } else if (recipe.cuisine) {
-              cuisine = recipe.cuisine;
+              // Handle both string and string[] types for cuisine field
+              cuisine = Array.isArray(recipe.cuisine) ? recipe.cuisine[0] || 'Unknown' : recipe.cuisine;
             }
           }
           
@@ -534,7 +482,8 @@ const HomePage: React.FC = () => {
               // Use the first cuisine from the array
               cuisine = recipe.cuisines[0];
             } else if (recipe.cuisine) {
-              cuisine = recipe.cuisine;
+              // Handle both string and string[] types for cuisine field
+              cuisine = Array.isArray(recipe.cuisine) ? recipe.cuisine[0] || 'Unknown' : recipe.cuisine;
             }
             
             // If we still don't have a cuisine, try to detect it from the recipe data
@@ -543,7 +492,8 @@ const HomePage: React.FC = () => {
               if (recipe.cuisines && Array.isArray(recipe.cuisines) && recipe.cuisines.length > 0) {
                 cuisine = recipe.cuisines[0];
               } else if (recipe.cuisine) {
-                cuisine = recipe.cuisine;
+                // Handle both string and string[] types for cuisine field
+                cuisine = Array.isArray(recipe.cuisine) ? recipe.cuisine[0] || 'Unknown' : recipe.cuisine;
               }
             }
             
@@ -606,8 +556,9 @@ const HomePage: React.FC = () => {
             // Debug: Show final distribution
             const finalCuisineCounts: Record<string, number> = {};
             finalRecommendations.forEach(r => {
-              const cuisine = (r.cuisine || 'Unknown').toLowerCase();
-              finalCuisineCounts[cuisine] = (finalCuisineCounts[cuisine] || 0) + 1;
+              const cuisine = Array.isArray(r.cuisine) ? r.cuisine[0] : r.cuisine;
+              const cuisineValue = (cuisine || 'Unknown').toLowerCase();
+              finalCuisineCounts[cuisineValue] = (finalCuisineCounts[cuisineValue] || 0) + 1;
             });
             
             console.log('📊 Final cuisine distribution:', finalCuisineCounts);
@@ -615,7 +566,10 @@ const HomePage: React.FC = () => {
         }
         
         console.log('🎯 Final balanced recommendations:', finalRecommendations.length);
-        console.log('📊 Final cuisine distribution:', finalRecommendations.map(r => r.cuisine));
+        console.log('📊 Final cuisine distribution:', finalRecommendations.map(r => {
+          const cuisine = Array.isArray(r.cuisine) ? r.cuisine[0] : r.cuisine;
+          return cuisine || 'Unknown';
+        }));
         
         // Verify we have at least 1 favorite food
         const finalFavFoods = finalRecommendations.filter(r => {
@@ -635,8 +589,9 @@ const HomePage: React.FC = () => {
         // Final distribution summary
         const cuisineCounts: Record<string, number> = {};
         finalRecommendations.forEach(r => {
-          const cuisine = (r.cuisine || 'Unknown').toLowerCase();
-          cuisineCounts[cuisine] = (cuisineCounts[cuisine] || 0) + 1;
+          const cuisine = Array.isArray(r.cuisine) ? r.cuisine[0] : r.cuisine;
+          const cuisineValue = (cuisine || 'Unknown').toLowerCase();
+          cuisineCounts[cuisineValue] = (cuisineCounts[cuisineValue] || 0) + 1;
         });
         
         console.log('📊 Final balanced distribution:', {
@@ -653,7 +608,7 @@ const HomePage: React.FC = () => {
           id: recommendedRecipes[0].id,
           title: recommendedRecipes[0].title,
           name: recommendedRecipes[0].name,
-          cuisine: recommendedRecipes[0].cuisine
+          cuisine: Array.isArray(recommendedRecipes[0].cuisine) ? recommendedRecipes[0].cuisine[0] : recommendedRecipes[0].cuisine
         } : 'No recipes');
       } else if (isLoadingRecommendations) {
         console.log('⏳ Backend recommendations still loading...');
@@ -1059,7 +1014,7 @@ const HomePage: React.FC = () => {
       } else {
         console.log('🔄 No personal popular recipes data, using quality-based selection instead of random');
         // Use quality-based selection from remaining recipes
-        popularRecipes = selectQualityBasedRecipes(remainingRecipes as any[], 4);
+        popularRecipes = selectQualityBasedRecipes(remainingRecipes as any[], 8);
       }
     } else if (popularRecipesData && Array.isArray(popularRecipesData) && popularRecipesData.length > 0) {
       console.log('🎯 Using global popular recipes data:', popularRecipesData.length);
@@ -1067,27 +1022,22 @@ const HomePage: React.FC = () => {
     } else {
       console.log('🔄 No popular recipes data, using quality-based selection instead of random');
               // Use quality-based selection from remaining recipes
-        popularRecipes = selectQualityBasedRecipes(remainingRecipes as any[], 4);
+        popularRecipes = selectQualityBasedRecipes(remainingRecipes as any[], 8);
     }
-    
-    // Newest recipes = reverse order of remaining
-    newestRecipes = [...remainingRecipes].reverse();
     
     return {
       recommended: recommendedRecipes.slice(0, 8), // Show 16 recommended recipes for better cuisine distribution
-      popular: popularRecipes.slice(0, 4),
-      newest: newestRecipes.slice(5, 8)
+      popular: popularRecipes.slice(0, 8)
     };
-  }, [spoonacularRecipes, manualRecipes, savedRecipes, popularRecipesData, isAuthenticated, userPreferences, showPersonalPopular, personalPopularRecipesData, backendRecommendations]);
+  }, [backendRecipes, popularRecipesData, isAuthenticated, userPreferences, showPersonalPopular, personalPopularRecipesData, backendRecommendations]);
 
   // Debug logging for organizedRecipes
   console.log('🔍 Organized recipes debug:', {
     popular: organizedRecipes.popular.map(r => ({ id: r.id, type: r.type, title: r.title || r.name })),
-    recommended: organizedRecipes.recommended.map(r => ({ id: r.id, type: r.type, title: r.title || r.name })),
-    newest: organizedRecipes.newest.map(r => ({ id: r.id, type: r.type, title: r.title || r.name }))
+    recommended: organizedRecipes.recommended.map(r => ({ id: r.id, type: r.type, title: r.title || r.name }))
   });
 
-  const isLoading = isLoadingBackend || isLoadingManual || isLoadingPopular || (showPersonalPopular && isLoadingPersonalPopular) || isLoadingRecommendations;
+  const isLoading = isLoadingBackend || isLoadingPopular || (showPersonalPopular && isLoadingPersonalPopular) || isLoadingRecommendations;
 
   // Welcome message based on authentication status
   const getWelcomeMessage = () => {
@@ -1257,15 +1207,15 @@ const HomePage: React.FC = () => {
                   <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
                     {organizedRecipes.recommended.map((recipe, index) => {
                       console.log('Recommended recipe:', { id: recipe.id, type: recipe.type, isExternal: recipe.type === 'external' });
-                      if (recipe.type === 'manual') {
-                        return <ManualRecipeCard key={`recommended-${recipe.id}-${index}`} recipe={recipe} />;
-                      }
                       return (
                         <RecipeCard 
                           key={`recommended-${recipe.id}-${index}`} 
                           recipe={recipe} 
                           isExternal={recipe.type === 'external'}
                           onDelete={handleDeleteRecipe}
+                          onToggleFavorite={(updatedRecipe) => {
+                            // The recipe is already updated in storage and queries will be invalidated
+                          }}
                         />
                       );
                     })}
@@ -1317,15 +1267,8 @@ const HomePage: React.FC = () => {
                   </p>
                 </div>
                 <div className="flex items-center gap-4">
-                  {isAuthenticated && (
-                    <Button
-                      variant={showPersonalPopular ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setShowPersonalPopular(!showPersonalPopular)}
-                    >
-                      {showPersonalPopular ? 'Show Global' : 'Show Personal'}
-                    </Button>
-                  )}
+                 
+                  
                   <Link to="/recipes">
                     <Button variant="outline">
                       <ThumbsUp className="mr-2 h-4 w-4" />
@@ -1337,7 +1280,7 @@ const HomePage: React.FC = () => {
 
               {isLoading ? (
                 <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-                  {[...Array(4)].map((_, i) => (
+                  {[...Array(8)].map((_, i) => (
                     <div key={i} className="bg-white rounded-lg shadow-md p-4 animate-pulse">
                       <div className="bg-gray-300 h-48 rounded-lg mb-4"></div>
                       <div className="bg-gray-300 h-4 rounded mb-2"></div>
@@ -1349,15 +1292,15 @@ const HomePage: React.FC = () => {
                 <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
                   {organizedRecipes.popular.map((recipe, index) => {
                     console.log('Popular recipe:', { id: recipe.id, type: recipe.type, isExternal: recipe.type === 'external' });
-                    if (recipe.type === 'manual') {
-                      return <ManualRecipeCard key={`popular-${recipe.id}-${index}`} recipe={recipe} />;
-                    }
                     return (
                       <RecipeCard 
                         key={`popular-${recipe.id}-${index}`} 
                         recipe={recipe} 
                         isExternal={recipe.type === 'external'}
                         onDelete={handleDeleteRecipe}
+                        onToggleFavorite={(updatedRecipe) => {
+                          // The recipe is already updated in storage and queries will be invalidated
+                        }}
                       />
                     );
                   })}
@@ -1375,60 +1318,7 @@ const HomePage: React.FC = () => {
               )}
             </div>
 
-            {/* Newly Added Recipes */}
-            <div>
-              <div className="flex justify-between items-center mb-8">
-                <div>
-                  <h2 className="text-3xl font-bold text-gray-900 mb-2">Newly Added</h2>
-                  <p className="text-gray-600">Fresh recipes just added to our collection</p>
-                </div>
-                <Link to="/recipes">
-                  <Button variant="outline">
-                    <Clock className="mr-2 h-4 w-4" />
-                    View All Recent
-                  </Button>
-                </Link>
-              </div>
 
-              {isLoading ? (
-                <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-                  {[...Array(4)].map((_, i) => (
-                    <div key={i} className="bg-white rounded-lg shadow-md p-4 animate-pulse">
-                      <div className="bg-gray-300 h-48 rounded-lg mb-4"></div>
-                      <div className="bg-gray-300 h-4 rounded mb-2"></div>
-                      <div className="bg-gray-300 h-3 rounded w-2/3"></div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-                  {organizedRecipes.newest.map((recipe, index) => {
-                    console.log('Newest recipe:', { id: recipe.id, type: recipe.type, isExternal: recipe.type === 'external' });
-                    if (recipe.type === 'manual') {
-                      return <ManualRecipeCard key={`newest-${recipe.id}-${index}`} recipe={recipe} />;
-                    }
-                    return (
-                      <RecipeCard 
-                        key={`newest-${recipe.id}-${index}`} 
-                        recipe={recipe} 
-                        isExternal={recipe.type === 'external'}
-                        onDelete={handleDeleteRecipe}
-                      />
-                    );
-                  })}
-                </div>
-              )}
-
-              {!isLoading && organizedRecipes.newest.length === 0 && (
-                <div className="text-center py-16 bg-white rounded-2xl shadow-lg">
-                  <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                    <Clock className="h-10 w-10 text-gray-400" />
-                  </div>
-                  <h3 className="text-2xl font-semibold text-gray-900 mb-3">No New Recipes Yet</h3>
-                  <p className="text-gray-600">Check back soon for fresh additions!</p>
-                </div>
-              )}
-            </div>
 
           </div>
         </section>

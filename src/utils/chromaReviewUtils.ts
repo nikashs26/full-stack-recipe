@@ -7,7 +7,6 @@ export async function addReview(
   review: {
     recipeId: string;
     recipeType: 'local' | 'external' | 'manual';
-    author: string;
     text: string;
     rating: number;
   }
@@ -30,7 +29,6 @@ export async function addReview(
       body: JSON.stringify({
         recipe_id: review.recipeId,
         recipe_type: review.recipeType,
-        author: review.author,
         text: review.text,
         rating: review.rating
       })
@@ -88,49 +86,10 @@ export async function getReviewsByRecipeId(
   }
 }
 
-// Function to get all reviews by the current user
-export async function getMyReviews(): Promise<Review[]> {
-  try {
-    console.log('Fetching user reviews from ChromaDB backend');
-    
-    // Get the auth token from localStorage
-    const token = localStorage.getItem('auth_token');
-    if (!token) {
-      console.log('No authentication token found');
-      return [];
-    }
-    
-    const response = await fetch(`${API_BASE_URL}/reviews/my-reviews`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      }
-    });
-    
-    if (!response.ok) {
-      if (response.status === 401) {
-        console.log('Authentication required for fetching user reviews');
-        return [];
-      }
-      console.error(`Failed to fetch user reviews: ${response.status}`);
-      return [];
-    }
-    
-    const data = await response.json();
-    console.log('Fetched user reviews:', data.reviews);
-    
-    return data.reviews || [];
-  } catch (error) {
-    console.error('Error fetching user reviews:', error);
-    return [];
-  }
-}
-
-// Function to delete a review
+// Function to delete a review using ChromaDB backend
 export async function deleteReview(reviewId: string): Promise<boolean> {
   try {
-    console.log('Deleting review:', reviewId);
+    console.log('Deleting review from ChromaDB backend:', reviewId);
     
     // Get the auth token from localStorage
     const token = localStorage.getItem('auth_token');
@@ -141,7 +100,6 @@ export async function deleteReview(reviewId: string): Promise<boolean> {
     const response = await fetch(`${API_BASE_URL}/reviews/${reviewId}`, {
       method: 'DELETE',
       headers: {
-        'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`
       }
     });
@@ -161,7 +119,51 @@ export async function deleteReview(reviewId: string): Promise<boolean> {
     console.log('Review deleted successfully');
     return true;
   } catch (error) {
-    console.error('Error deleting review:', error);
+    console.error('Error in deleteReview:', error);
+    throw error;
+  }
+}
+
+// Function to get all reviews by the current user
+export async function getMyReviews(): Promise<Review[]> {
+  try {
+    console.log('Fetching my reviews from ChromaDB backend');
+    
+    // Get the auth token from localStorage
+    const token = localStorage.getItem('auth_token');
+    if (!token) {
+      throw new Error('No authentication token found. Please sign in to view your reviews.');
+    }
+    
+    const response = await fetch(`${API_BASE_URL}/reviews/my-reviews`, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      
+      if (response.status === 401) {
+        throw new Error('Authentication required. Please sign in to view your reviews.');
+      } else {
+        throw new Error(errorData.error || `Failed to fetch reviews: ${response.status}`);
+      }
+    }
+    
+    const data = await response.json();
+    console.log('Fetched my reviews:', data.reviews);
+    
+    // Map the backend review format to our Review interface
+    return data.reviews.map((review: any) => ({
+      id: review.id,
+      author: review.author,
+      text: review.text,
+      rating: review.rating,
+      date: review.date
+    }));
+  } catch (error) {
+    console.error('Error in getMyReviews:', error);
     throw error;
   }
 }

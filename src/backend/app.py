@@ -12,7 +12,7 @@ from routes.folder_routes import register_folder_routes
 from routes.diagnostic_routes import register_diagnostic_routes
 from routes.temp_preferences import temp_preferences_bp
 from routes.auth_routes import auth_bp
-from routes.ai_meal_planner import ai_meal_planner_bp
+# from routes.ai_meal_planner import ai_meal_planner_bp  # Commented out to avoid route conflict
 from routes.mealdb_routes import register_mealdb_routes
 from services.recipe_cache_service import RecipeCacheService
 from services.user_preferences_service import UserPreferencesService
@@ -94,7 +94,7 @@ register_folder_routes(app, recipe_cache)
 register_diagnostic_routes(app)
 register_mealdb_routes(app)
 app.register_blueprint(temp_preferences_bp, url_prefix='/api')
-app.register_blueprint(ai_meal_planner_bp, url_prefix='/api')
+# app.register_blueprint(ai_meal_planner_bp, url_prefix='/api')  # Commented out to avoid route conflict
 app.register_blueprint(auth_bp, url_prefix='/api/auth')
 print("Recipe routes registered successfully")
 print("Temp preferences routes registered successfully")

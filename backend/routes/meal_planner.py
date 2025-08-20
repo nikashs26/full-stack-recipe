@@ -230,27 +230,32 @@ def build_llama_prompt(preferences, budget=None, dietary_goals=None, currency='$
     
     return prompt
 
-def generate_meal_plan_with_llm(prompt, model_name="llama3.2"):
+def generate_meal_plan_with_llm(prompt, user_id, preferences=None, model_name="llama3.2"):
     """Generate a meal plan using the LLM agent"""
     try:
         logger.info("Generating meal plan with LLM agent...")
         
-        # Convert the prompt to the format expected by the LLM agent
-        preferences = {
-            'dietaryRestrictions': prompt.get('user_preferences', {}).get('dietary_restrictions', []),
-            'favoriteCuisines': prompt.get('user_preferences', {}).get('preferred_cuisines', ['International']),
-            'allergens': prompt.get('user_preferences', {}).get('allergens', []),
-            'cookingSkillLevel': prompt.get('user_preferences', {}).get('cooking_skill_level', 'beginner'),
-            'favoriteFoods': prompt.get('user_preferences', {}).get('favorite_foods', []),
-            'healthGoals': prompt.get('user_preferences', {}).get('health_goals', ['General wellness']),
-            'maxCookingTime': prompt.get('user_preferences', {}).get('max_cooking_time', '30 minutes'),
-            'budget': prompt.get('user_preferences', {}).get('budget'),
-            'targetMacros': prompt.get('requirements', {}).get('nutritional_targets', {})
-        }
+        # Generate the meal plan using the LLM agent with user_id and preferences
+        logger.info(f"Calling LLM agent to generate meal plan for user: {user_id}")
+        if preferences:
+            # Use the provided preferences instead of loading from database
+            result = free_llm_meal_planner.generate_weekly_meal_plan_with_preferences(user_id, preferences)
+        else:
+            # Fall back to loading preferences from database
+            result = free_llm_meal_planner.generate_weekly_meal_plan(user_id)
         
-        # Generate the meal plan using the LLM agent
-        logger.info("Calling LLM agent to generate meal plan...")
-        meal_plan = free_llm_meal_planner.generate_weekly_meal_plan(preferences)
+        # Check if the LLM agent returned an error
+        if 'error' in result:
+            logger.error(f"LLM agent returned error: {result['error']}")
+            raise ValueError(f"LLM agent error: {result['error']}")
+        
+        # Check if the result has the expected structure
+        if not result.get('success') or 'meal_plan' not in result:
+            logger.error("LLM agent returned invalid response structure")
+            raise ValueError("Invalid response structure from LLM agent")
+        
+        # Extract the actual meal plan from the result
+        meal_plan = result.get('meal_plan', {})
         
         if not meal_plan or 'days' not in meal_plan:
             logger.error("Failed to generate valid meal plan from LLM agent")
@@ -311,14 +316,33 @@ def ai_meal_plan():
         dietary_goals = data.get('dietary_goals', [])
         currency = data.get('currency', '$')
         
-        # Get meal preferences and nutrition targets from request
+        # Get preferences from request (this is the main preferences object)
+        request_preferences = data.get('preferences', {})
         meal_preferences = data.get('meal_preferences', {})
         nutrition_targets = data.get('nutrition_targets', {})
         
+        logger.debug(f"Request preferences: {request_preferences}")
         logger.debug(f"Meal preferences: {meal_preferences}")
         logger.debug(f"Nutrition targets: {nutrition_targets}")
         
-        # Update preferences with request data
+        # Update preferences with request data - prioritize request preferences over stored ones
+        if request_preferences:
+            # Update main preferences from request
+            preferences.update({
+                'dietaryRestrictions': request_preferences.get('dietaryRestrictions', preferences.get('dietaryRestrictions', [])),
+                'favoriteCuisines': request_preferences.get('favoriteCuisines', preferences.get('favoriteCuisines', [])),
+                'allergens': request_preferences.get('allergens', preferences.get('allergens', [])),
+                'cookingSkillLevel': request_preferences.get('cookingSkillLevel', preferences.get('cookingSkillLevel', 'beginner')),
+                'favoriteFoods': request_preferences.get('favoriteFoods', preferences.get('favoriteFoods', [])),
+                'healthGoals': request_preferences.get('healthGoals', preferences.get('healthGoals', [])),
+                'maxCookingTime': request_preferences.get('maxCookingTime', preferences.get('maxCookingTime', '30 minutes')),
+                'targetCalories': request_preferences.get('targetCalories', preferences.get('targetCalories', 2000)),
+                'targetProtein': request_preferences.get('targetProtein', preferences.get('targetProtein', 150)),
+                'targetCarbs': request_preferences.get('targetCarbs', preferences.get('targetCarbs', 200)),
+                'targetFat': request_preferences.get('targetFat', preferences.get('targetFat', 65))
+            })
+        
+        # Update meal preferences if provided
         if meal_preferences:
             preferences.update({
                 'includeBreakfast': meal_preferences.get('includeBreakfast', True),
@@ -327,7 +351,7 @@ def ai_meal_plan():
                 'includeSnacks': meal_preferences.get('includeSnacks', False)
             })
             
-        # Update nutrition targets if provided
+        # Update nutrition targets if provided (override any from request preferences)
         if nutrition_targets:
             preferences.update({
                 'targetCalories': nutrition_targets.get('calories'),
@@ -336,7 +360,7 @@ def ai_meal_plan():
                 'targetFat': nutrition_targets.get('fat')
             })
         
-        logger.debug(f"Updated preferences: {preferences}")
+        logger.debug(f"Final merged preferences: {preferences}")
         
         # Build structured prompt with all parameters
         try:
@@ -356,7 +380,8 @@ def ai_meal_plan():
         
         # Generate meal plan using LLM
         try:
-            result = generate_meal_plan_with_llm(prompt)
+            # Pass the updated preferences to the LLM agent
+            result = generate_meal_plan_with_llm(prompt, user_id, preferences)
             logger.debug(f"LLM response: {result}")
         except Exception as e:
             logger.error(f"Error generating meal plan with LLM: {str(e)}", exc_info=True)
@@ -403,7 +428,7 @@ def ai_meal_plan():
         
         return jsonify({
             'success': True,
-            'data': meal_plan,
+            'meal_plan': meal_plan,
             'message': 'Meal plan generated successfully'
         })
         

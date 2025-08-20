@@ -11,7 +11,7 @@ import { RecipeFolderActions } from '../components/RecipeFolderActions';
 import { ShoppingListItem } from '../types/recipe';
 import { v4 as uuidv4 } from 'uuid';
 import RecipeReviews, { Review } from '../components/RecipeReviews';
-import { getReviewsByRecipeId, addReview } from '../utils/chromaReviewUtils';
+import { getReviewsByRecipeId, addReview, deleteReview } from '../utils/chromaReviewUtils';
 import { useAuth } from '../context/AuthContext';
 
 const RecipeDetailPage: React.FC = () => {
@@ -146,18 +146,17 @@ const RecipeDetailPage: React.FC = () => {
   };
 
   // Handler for submitting reviews
-  const handleReviewSubmit = async (reviewData: { text: string, rating: number, author: string }) => {
+  const handleReviewSubmit = async (reviewData: { text: string, rating: number }) => {
     if (!id) return;
     
-    const { text, rating, author } = reviewData;
+    const { text, rating } = reviewData;
     
     try {
-      console.log('Submitting review:', { text, rating, author, recipeId: id });
+      console.log('Submitting review:', { text, rating, recipeId: id });
       
       const savedReview = await addReview({
         recipeId: id,
         recipeType: 'local',
-        author: author || "Anonymous",
         text,
         rating
       });
@@ -177,6 +176,22 @@ const RecipeDetailPage: React.FC = () => {
       toast({
         title: 'Error',
         description: error instanceof Error ? error.message : 'An unexpected error occurred while saving your review.',
+        variant: 'destructive'
+      });
+    }
+  };
+
+  // Handler for deleting reviews
+  const handleDeleteReview = async (reviewId: string) => {
+    try {
+      await deleteReview(reviewId);
+      // Remove the deleted review from the local state
+      setReviews(prevReviews => prevReviews.filter(review => review.id !== reviewId));
+    } catch (error) {
+      console.error('Error in handleDeleteReview:', error);
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to delete review.',
         variant: 'destructive'
       });
     }
@@ -557,6 +572,7 @@ const RecipeDetailPage: React.FC = () => {
               <RecipeReviews
                 reviews={reviews}
                 onSubmitReview={handleReviewSubmit}
+                onDeleteReview={handleDeleteReview}
                 recipeType="local"
               />
             </div>

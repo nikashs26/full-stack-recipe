@@ -56,7 +56,7 @@ const MealDBRecipesPage: React.FC = () => {
 
   const handleRecipeClick = (recipe: Recipe) => {
     // Navigate to recipe detail page or show details in a modal
-    navigate(`/recipe/${recipe.id}`, { state: { recipe, source: 'themealdb' } });
+    navigate(`/external-recipe/${recipe.id}`, { state: { recipe, source: 'themealdb' } });
   };
 
   return (
@@ -119,7 +119,12 @@ const MealDBRecipesPage: React.FC = () => {
                   className="cursor-pointer transform transition-transform hover:scale-105"
                   onClick={() => handleRecipeClick(recipe)}
                 >
-                  <RecipeCard recipe={recipe} />
+                  <RecipeCard 
+                    recipe={recipe} 
+                    onToggleFavorite={(updatedRecipe) => {
+                      // The recipe is already updated in storage and queries will be invalidated
+                    }}
+                  />
                 </div>
               ))}
             </div>

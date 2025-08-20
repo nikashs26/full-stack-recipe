@@ -1,12 +1,13 @@
 
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { UtensilsCrossed, Menu, X, Plus, Folder } from 'lucide-react';
-import UserMenu from './UserMenu';
+import { UtensilsCrossed, Menu, X, ChefHat, Settings, Star } from 'lucide-react';
+import UserHoverTab from './UserHoverTab';
 
 const Header: React.FC = () => {
   const [scrolled, setScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
   
   useEffect(() => {
     const handleScroll = () => {
@@ -19,15 +20,18 @@ const Header: React.FC = () => {
     };
   }, []);
 
+
+
   const toggleMobileMenu = () => {
     setMobileMenuOpen(!mobileMenuOpen);
   };
 
   return (
-    <header className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
+    <header className={`fixed top-0 left-0 right-0 z-[60] transition-all duration-300 ${
       scrolled ? 'bg-white/95 shadow-md backdrop-blur-sm py-2' : 'bg-white py-4'
     }`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center">
+        {/* Logo */}
         <Link to="/" className="flex items-center space-x-2 text-recipe-primary hover:text-recipe-primary/90 transition-colors">
           <UtensilsCrossed className="h-8 w-8" />
           <h1 className="text-2xl font-bold">Better Bulk</h1>
@@ -43,111 +47,90 @@ const Header: React.FC = () => {
         </button>
         
         {/* Desktop Navigation */}
-        <nav className="hidden md:block">
-          <ul className="flex space-x-6 items-center">
-            <li>
-              <Link 
-                to="/" 
-                className="text-gray-600 hover:text-recipe-primary transition-colors"
-              >
-                Home
-              </Link>
-            </li>
-            <li>
-              <Link 
-                to="/recipes" 
-                className="text-gray-600 hover:text-recipe-primary transition-colors"
-              >
-                Recipes
-              </Link>
-            </li>
-            <li>
-              <Link 
-                to="/meal-planner" 
-                className="text-gray-600 hover:text-recipe-primary transition-colors font-medium"
-              >
-                AI Meal Planner
-              </Link>
-            </li>
-            <li>
-              <Link 
-                to="/shopping-list" 
-                className="text-gray-600 hover:text-recipe-primary transition-colors"
-              >
-                Shopping List
-              </Link>
-            </li>
-            <li>
-              <Link 
-                to="/preferences" 
-                className="text-gray-600 hover:text-recipe-primary transition-colors"
-              >
-                Preferences
-              </Link>
-            </li>
-            <li>
-              <Link 
-                to="/folders" 
-                className="flex items-center text-gray-600 hover:text-recipe-primary transition-colors"
-              >
-                <Folder className="mr-1 h-4 w-4" />
-                My Folders
-              </Link>
-            </li>
-            <li>
-              <UserMenu />
-            </li>
-          </ul>
+        <nav className="hidden md:flex items-center space-x-6">
+          {/* Primary Navigation */}
+          <div className="flex items-center space-x-6">
+            <Link 
+              to="/" 
+              className="text-gray-600 hover:text-recipe-primary transition-colors font-medium"
+            >
+              Home
+            </Link>
+            <Link 
+              to="/recipes" 
+              className="text-gray-600 hover:text-recipe-primary transition-colors font-medium"
+            >
+              Recipes
+            </Link>
+            
+            {/* AI Meal Planner - Normal Text */}
+            <Link 
+              to="/meal-planner"
+              className="text-gray-600 hover:text-recipe-primary transition-colors font-medium"
+            >
+              AI Meal Planner
+            </Link>
+          </div>
+
+          {/* Right Side Actions */}
+          <div className="flex items-center space-x-3">
+            {/* User Hover Tab */}
+            <UserHoverTab />
+          </div>
         </nav>
       </div>
 
       {/* Mobile Navigation */}
       {mobileMenuOpen && (
         <div className="md:hidden bg-white border-t">
-          <div className="px-4 py-3 space-y-3">
+          <div className="px-4 py-3 space-y-1">
+            {/* Primary Mobile Navigation */}
             <Link 
               to="/"
-              className="block text-gray-600 hover:text-recipe-primary"
+              className="block px-4 py-2 text-gray-700 hover:bg-gray-50 rounded-md font-medium"
               onClick={() => setMobileMenuOpen(false)}
             >
               Home
             </Link>
             <Link 
               to="/recipes"
-              className="block text-gray-600 hover:text-recipe-primary"
+              className="block px-4 py-2 text-gray-700 hover:bg-gray-50 rounded-md font-medium"
               onClick={() => setMobileMenuOpen(false)}
             >
               Recipes
             </Link>
+            
+            {/* AI Meal Planner - Mobile */}
             <Link 
               to="/meal-planner"
-              className="block text-gray-600 hover:text-recipe-primary font-medium"
+              className="block px-4 py-2 text-gray-700 hover:bg-gray-50 rounded-md font-medium"
               onClick={() => setMobileMenuOpen(false)}
             >
               AI Meal Planner
             </Link>
-            <Link 
-              to="/shopping-list"
-              className="block text-gray-600 hover:text-recipe-primary"
-              onClick={() => setMobileMenuOpen(false)}
-            >
-              Shopping List
-            </Link>
-            <Link 
-              to="/preferences" 
-              className="block px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-md"
-              onClick={() => setMobileMenuOpen(false)}
-            >
-              Preferences
-            </Link>
-            <Link 
-              to="/folders" 
-              className="flex items-center px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-md"
-              onClick={() => setMobileMenuOpen(false)}
-            >
-              <Folder className="mr-2 h-4 w-4" />
-              My Folders
-            </Link>
+            
+            {/* Mobile Account Section */}
+            <div className="border-t border-gray-100 pt-3 mt-3">
+              <div className="px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                Account
+              </div>
+              <Link 
+                to="/preferences"
+                className="flex items-center px-4 py-2 text-gray-700 hover:bg-gray-50 rounded-md"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                <Settings className="mr-3 h-4 w-4" />
+                Preferences
+              </Link>
+              <Link 
+                to="/my-reviews"
+                className="flex items-center px-4 py-2 text-gray-700 hover:bg-gray-50 rounded-md"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                <Star className="mr-3 h-4 w-4" />
+                My Reviews
+              </Link>
+            </div>
           </div>
         </div>
       )}

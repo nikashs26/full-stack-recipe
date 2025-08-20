@@ -23,7 +23,7 @@ const AddRecipePage: React.FC = () => {
       description: "Your new recipe has been added successfully.",
     });
     
-    navigate(`/recipe/${newRecipe.id}`);
+    navigate(`/recipes/${newRecipe.id}`);
   };
 
   return (

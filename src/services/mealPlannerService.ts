@@ -165,8 +165,8 @@ export const generateMealPlan = async (options?: MealPlanOptions): Promise<MealP
     
     console.log('🎯 Sending preferences to meal planner:', mealPlanPreferences);
     
-    // Use the simple meal planner endpoint with user preferences
-    const response = await apiCall('/api/ai/simple_meal_plan', {
+    // Use the AI meal planner endpoint with user preferences
+    const response = await apiCall('/api/ai/meal_plan', {
       method: 'POST',
       body: JSON.stringify({ preferences: mealPlanPreferences })
     });
@@ -182,11 +182,11 @@ export const generateMealPlan = async (options?: MealPlanOptions): Promise<MealP
     const data = await response.json();
     console.log('📦 Received response:', data);
     
-    // Handle the response format from the simple LLM meal planner
-    if (data.success && data.plan) {
-      console.log('✅ Converting plan data:', data.plan);
-      // Convert the simple plan format to our expected format
-      return convertSimplePlanToMealPlanData(data.plan, mealPlanPreferences);
+    // Handle the response format from the AI meal planner
+    if (data.success && data.meal_plan) {
+      console.log('✅ Converting meal plan data:', data.meal_plan);
+      // Convert the AI meal plan format to our expected format
+      return convertSimplePlanToMealPlanData(data.meal_plan, mealPlanPreferences);
     } else if (data.error) {
       throw new Error(data.error);
     }
@@ -206,7 +206,28 @@ function convertSimplePlanToMealPlanData(simplePlan: any, preferences?: any): Me
   const days: MealDay[] = [];
   const today = new Date();
   
-  // Handle different response formats from free LLM agent
+  console.log('Converting plan data:', simplePlan);
+  
+  // Check if the meal plan already has the correct format (days array)
+  if (simplePlan.days && Array.isArray(simplePlan.days)) {
+    console.log('✅ Plan data already in correct format with days array');
+    // The backend already returns the correct format, just return it with some cleanup
+    return {
+      days: simplePlan.days,
+      shopping_list: simplePlan.shopping_list || { ingredients: [], estimated_cost: 0 },
+      nutrition_summary: simplePlan.nutrition_summary || {
+        daily_average: { calories: 0, protein: '0g', carbs: '0g', fat: '0g' },
+        weekly_totals: { calories: 0, protein: '0g', carbs: '0g', fat: '0g' },
+        dietary_considerations: [],
+        meal_inclusions: { breakfast: true, lunch: true, dinner: true, snacks: false }
+      },
+      generated_at: simplePlan.generated_at || new Date().toISOString(),
+      preferences_used: simplePlan.preferences_used || preferences || {},
+      plan_type: simplePlan.plan_type || 'llm_generated'
+    };
+  }
+  
+  // Handle legacy format (day names as keys)
   let planData = simplePlan;
   
   // If the response has a 'plan' property, use that
@@ -214,19 +235,14 @@ function convertSimplePlanToMealPlanData(simplePlan: any, preferences?: any): Me
     planData = simplePlan.plan;
   }
   
-  // If the response has a 'days' property, use that
-  if (simplePlan.days) {
-    planData = simplePlan.days;
-  }
-  
   // If the response has a 'meal_plan' property, use that
   if (simplePlan.meal_plan) {
     planData = simplePlan.meal_plan;
   }
   
-  console.log('Converting plan data:', planData);
+  console.log('Converting legacy plan data:', planData);
   
-  // Convert the simple plan format to our expected format
+  // Convert the legacy plan format to our expected format
   const dayNames = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
   
   dayNames.forEach((dayName, index) => {

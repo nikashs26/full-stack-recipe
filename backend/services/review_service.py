@@ -22,7 +22,7 @@ class ReviewService:
         )
     
     def add_review(self, user_id: str, recipe_id: str, recipe_type: str, 
-                   author: str, text: str, rating: int) -> Dict[str, Any]:
+                   text: str, rating: int) -> Dict[str, Any]:
         """
         Add a new review to ChromaDB
         
@@ -30,7 +30,6 @@ class ReviewService:
             user_id: Authenticated user ID from JWT
             recipe_id: ID of the recipe being reviewed
             recipe_type: Type of recipe ('local', 'external', 'manual')
-            author: Display name for the review
             text: Review text content
             rating: Rating from 1-5
             
@@ -38,6 +37,17 @@ class ReviewService:
             Dictionary with review data including generated ID
         """
         try:
+            # Get the user's real name from the user service
+            from services.user_service import UserService
+            user_service = UserService()
+            user = user_service.get_user_by_id(user_id)
+            
+            if not user:
+                raise Exception("User not found")
+            
+            # Use the user's real name, fallback to email if no name
+            author = user.get('full_name', '').strip() or user.get('email', 'Anonymous')
+            
             review_id = str(uuid.uuid4())
             timestamp = datetime.now().isoformat()
             
@@ -78,7 +88,7 @@ class ReviewService:
                 ids=[review_id]
             )
             
-            print(f"✅ Review added successfully: {review_id}")
+            print(f"✅ Review added successfully: {review_id} by {author}")
             return review_data
             
         except Exception as e:

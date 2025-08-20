@@ -10,6 +10,7 @@ import ExternalRecipeDetailPage from "./pages/ExternalRecipeDetailPage";
 import AddRecipePage from "./pages/AddRecipePage";
 import EditRecipePage from "./pages/EditRecipePage";
 import MealDBRecipesPage from "./pages/MealDBRecipesPage";
+import MyReviewsPage from "./pages/MyReviewsPage";
 
 import NotFound from "./pages/NotFound";
 import Footer from "./components/Footer";
@@ -26,6 +27,8 @@ import { Database, Utensils } from "lucide-react";
 import { AuthProvider } from "./context/AuthContext";
 
 import ManualRecipeDetailPage from "./pages/ManualRecipeDetailPage";
+import MealHistoryPage from "./pages/MealHistoryPage";
+import CookbookPage from "./pages/CookbookPage";
 
 import { FolderDetail } from './components/folders/FolderDetail';
 import MealPlannerPage from './pages/MealPlannerPage';
@@ -60,6 +63,9 @@ const App = () => (
                 <Route path="/verify-email" element={<VerifyEmailPage />} />
                 <Route path="/preferences" element={<UserPreferencesPage />} />
                 <Route path="/meal-planner" element={<MealPlannerPage />} />
+                <Route path="/my-reviews" element={<MyReviewsPage />} />
+                <Route path="/meal-history" element={<MealHistoryPage />} />
+                <Route path="/cookbook" element={<CookbookPage />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </div>

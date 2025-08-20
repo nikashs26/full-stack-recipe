@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { User, Settings, ChefHat, ShoppingCart, LogOut, LogIn, UserPlus } from 'lucide-react';
+import { User, Settings, ChefHat, ShoppingCart, LogOut, LogIn, UserPlus, Star, Folder } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const UserMenu: React.FC = () => {
@@ -68,40 +68,48 @@ const UserMenu: React.FC = () => {
       </Button>
       
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-56 bg-white rounded-md shadow-lg border border-gray-200 z-50">
+        <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
           <div className="py-1">
             <div className="px-4 py-2 text-sm font-medium text-gray-900 border-b border-gray-100">
               {user?.full_name || user?.email || 'User'}
             </div>
             <Link
-              to="/preferences"
-              className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+              to="/shopping-list"
+              className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
               onClick={() => setIsOpen(false)}
             >
-              <Settings className="mr-2 h-4 w-4" />
+              <ShoppingCart className="mr-3 h-4 w-4" />
+              Shopping List
+            </Link>
+            <Link
+              to="/folders"
+              className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+              onClick={() => setIsOpen(false)}
+            >
+              <Folder className="mr-3 h-4 w-4" />
+              My Folders
+            </Link>
+            <Link
+              to="/preferences"
+              className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+              onClick={() => setIsOpen(false)}
+            >
+              <Settings className="mr-3 h-4 w-4" />
               Preferences
             </Link>
             <Link
-              to="/meal-planner"
-              className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+              to="/my-reviews"
+              className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
               onClick={() => setIsOpen(false)}
             >
-              <ChefHat className="mr-2 h-4 w-4" />
-              AI Meal Planner
-            </Link>
-            <Link
-              to="/shopping-list"
-              className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-              onClick={() => setIsOpen(false)}
-            >
-              <ShoppingCart className="mr-2 h-4 w-4" />
-              Shopping List
+              <Star className="mr-3 h-4 w-4" />
+              My Reviews
             </Link>
             <button
               onClick={handleSignOut}
-              className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 border-t border-gray-100 mt-1"
+              className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 border-t border-gray-100 mt-1"
             >
-              <LogOut className="mr-2 h-4 w-4" />
+              <LogOut className="mr-3 h-4 w-4" />
               Sign Out
             </button>
           </div>

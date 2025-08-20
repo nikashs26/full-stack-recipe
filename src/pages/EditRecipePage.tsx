@@ -40,7 +40,7 @@ const EditRecipePage: React.FC = () => {
         description: "Your recipe has been updated successfully.",
       });
       
-      navigate(`/recipe/${recipe.id}`);
+      navigate(`/recipes/${recipe.id}`);
     }
   };
 

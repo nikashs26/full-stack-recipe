@@ -89,6 +89,8 @@ type NormalizedRecipe = {
   cuisines: string[];
   dietaryRestrictions: string[];
   type: 'saved' | 'manual' | 'spoonacular' | 'external';
+  nutrition?: any;
+  macrosPerServing?: any;
 };
 
 const RecipesPage: React.FC = () => {
@@ -475,7 +477,10 @@ const RecipesPage: React.FC = () => {
         summary: recipe.type === 'spoonacular' ? (recipe as SpoonacularRecipe).summary : '',
         analyzedInstructions: recipe.type === 'spoonacular' 
           ? (recipe as SpoonacularRecipe).analyzedInstructions 
-          : []
+          : [],
+        // Preserve nutrition/macros if present so cards can display macros
+        nutrition: (recipe as any).nutrition || (recipe as any).nutritionalInfo || undefined,
+        macrosPerServing: (recipe as any).macrosPerServing || undefined
       };
     });
   }, [recipesData.recipes]);
@@ -681,6 +686,8 @@ const RecipesPage: React.FC = () => {
       type: (recipe.type === 'saved' ? 'manual' : recipe.type) || 'manual',
       ratings: [],
       comments: [],
+      nutrition: (recipe as any).nutrition,
+      ...(recipe as any).macrosPerServing ? { macrosPerServing: (recipe as any).macrosPerServing } : {},
 
       ...(recipe.type === 'spoonacular' && { source: 'spoonacular' }),
       ...(recipe.type === 'external' && { source: 'backend' })
@@ -691,18 +698,9 @@ const RecipesPage: React.FC = () => {
         <RecipeCard 
           recipe={recipeForCard}
           isExternal={recipe.type === 'spoonacular' || recipe.type === 'external'}
-          onClick={() => {
-            if (recipe.type === 'spoonacular') {
-              navigate(`/external-recipe/${recipe.id}`, { 
-                state: { source: 'spoonacular' } 
-              });
-            } else if (recipe.type === 'external') {
-              navigate(`/external-recipe/${recipe.id}`, { 
-                state: { source: 'backend' } 
-              });
-            } else {
-              navigate(`/recipe/${recipe.id}`);
-            }
+          onToggleFavorite={(updatedRecipe) => {
+            // The recipe is already updated in storage and queries will be invalidated
+            // No need to update local state as the component will refresh
           }}
         />
       </div>
@@ -724,9 +722,14 @@ const RecipesPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen relative">
-      {/* Background Image */}
-      <div className="fixed inset-0 -z-10 bg-kitchen"></div>
+    <div className="min-h-screen relative" style={{
+      backgroundImage: 'url("https://images.unsplash.com/photo-1504674900247-087703934569?ixlib=rb-1.2.1&auto=format&fit=crop&w=1920&q=80")',
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+      backgroundRepeat: 'no-repeat',
+      backgroundAttachment: 'fixed',
+      backgroundColor: '#f5f5f5' // Fallback color
+    }}>
       
       {/* Content Container */}
       <div className="relative z-10">

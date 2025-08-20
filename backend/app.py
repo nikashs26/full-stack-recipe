@@ -9,6 +9,7 @@ from routes.recipe_routes import register_recipe_routes
 from routes.auth_routes import auth_bp
 from routes.preferences import preferences_bp
 from routes.meal_planner import meal_planner_bp
+# from routes.ai_meal_planner import ai_meal_planner_bp  # Commented out to avoid route conflict
 from routes.health import health_bp
 from routes.review_routes import review_bp
 from routes.folder_routes import folder_bp
@@ -26,6 +27,12 @@ configure_logging(debug_mode)
 # Initialize Flask app
 app = Flask(__name__)
 
+# Configure session for authentication
+app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', 'dev-secret-key-change-in-production')
+app.config['SESSION_COOKIE_SECURE'] = False  # Set to True in production with HTTPS
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+
 # Configure CORS for development and production
 allowed_origins = [
     "http://localhost:8081", "http://127.0.0.1:8081", 
@@ -34,36 +41,15 @@ allowed_origins = [
     "https://betterbulk.netlify.app",  # Your actual Netlify frontend URL
 ]
 
-# Allow all origins in development, restrict in production
-if os.environ.get("FLASK_ENV") == "production":
-    cors = CORS(app, 
-        resources={
-            r"/*": {
-                "origins": allowed_origins,
-                "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-                "allow_headers": ["Content-Type", "Authorization", "X-Requested-With", "x-requested-with"],
-                "expose_headers": ["Content-Type", "Authorization", "X-Requested-With", "x-requested-with"],
-                "supports_credentials": True,
-                "max_age": 3600
-            }
-        },
-        supports_credentials=True
-    )
-else:
-    # Development: allow all origins
-    cors = CORS(app, 
-        resources={
-            r"/*": {
-                "origins": ["*"],
-                "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-                "allow_headers": ["Content-Type", "Authorization", "X-Requested-With", "x-requested-with"],
-                "expose_headers": ["Content-Type", "Authorization", "X-Requested-With", "x-requested-with"],
-                "supports_credentials": True,
-                "max_age": 3600
-            }
-        },
-        supports_credentials=True
-    )
+# Configure CORS properly to handle preflight requests
+cors = CORS(app, 
+    origins=allowed_origins,
+    methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    allow_headers=["Content-Type", "Authorization", "X-Requested-With", "x-requested-with"],
+    expose_headers=["Content-Type", "Authorization", "X-Requested-With", "x-requested-with"],
+    supports_credentials=True,
+    max_age=3600
+)
 
 # Initialize services
 recipe_cache = RecipeCacheService()
@@ -77,6 +63,7 @@ app = register_recipe_routes(app, recipe_cache)
 app.register_blueprint(auth_bp, url_prefix='/api/auth')
 app.register_blueprint(preferences_bp, url_prefix='/api')
 app.register_blueprint(meal_planner_bp, url_prefix='/api')
+# app.register_blueprint(ai_meal_planner_bp, url_prefix='/api')  # Commented out to avoid route conflict
 app.register_blueprint(health_bp)  # Health check routes
 app.register_blueprint(review_bp, url_prefix='/api')  # Review routes
 app.register_blueprint(folder_bp, url_prefix='/api')  # Folder routes

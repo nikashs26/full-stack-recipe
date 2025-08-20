@@ -5,7 +5,18 @@ from middleware.auth_middleware import require_auth, get_current_user_id
 folder_bp = Blueprint('folders', __name__)
 folder_service = FolderService()
 
-@folder_bp.route('/folders', methods=['POST', 'OPTIONS'])
+@folder_bp.route('/folders', methods=['OPTIONS'])
+def handle_folders_options():
+    """Handle CORS preflight request for folders endpoint"""
+    response = jsonify({})
+    response.headers.add('Access-Control-Allow-Origin', 'http://localhost:8081')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With')
+    response.headers.add('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+    response.headers.add('Access-Control-Allow-Credentials', 'true')
+    response.headers.add('Access-Control-Max-Age', '3600')
+    return response
+
+@folder_bp.route('/folders', methods=['POST'])
 @require_auth
 def create_folder():
     """Create a new folder"""
@@ -29,7 +40,7 @@ def create_folder():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@folder_bp.route('/folders', methods=['GET', 'OPTIONS'])
+@folder_bp.route('/folders', methods=['GET'])
 @require_auth
 def get_my_folders():
     """Get all folders for the current user"""
@@ -41,7 +52,7 @@ def get_my_folders():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@folder_bp.route('/folders/<folder_id>', methods=['GET', 'OPTIONS'])
+@folder_bp.route('/folders/<folder_id>', methods=['GET'])
 @require_auth
 def get_folder(folder_id):
     """Get a specific folder with its contents"""
@@ -57,7 +68,7 @@ def get_folder(folder_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@folder_bp.route('/folders/<folder_id>', methods=['PUT', 'OPTIONS'])
+@folder_bp.route('/folders/<folder_id>', methods=['PUT'])
 @require_auth
 def update_folder(folder_id):
     """Update folder details"""
@@ -84,7 +95,7 @@ def update_folder(folder_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@folder_bp.route('/folders/<folder_id>', methods=['DELETE', 'OPTIONS'])
+@folder_bp.route('/folders/<folder_id>', methods=['DELETE'])
 @require_auth
 def delete_folder(folder_id):
     """Delete a folder and all its contents"""

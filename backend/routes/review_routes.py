@@ -23,7 +23,6 @@ def add_review():
         recipe_type = data['recipe_type']
         text = data['text'].strip()
         rating = data['rating']
-        author = data.get('author', 'Anonymous').strip() or 'Anonymous'
         
         # Validate recipe_type
         if recipe_type not in ['local', 'external', 'manual']:
@@ -37,12 +36,11 @@ def add_review():
         if not text:
             return jsonify({"error": "Review text cannot be empty"}), 400
         
-        # Add the review
+        # Add the review (author is automatically set from user's real name)
         review = review_service.add_review(
             user_id=user_id,
             recipe_id=recipe_id,
             recipe_type=recipe_type,
-            author=author,
             text=text,
             rating=rating
         )

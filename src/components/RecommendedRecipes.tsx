@@ -316,6 +316,9 @@ const RecommendedRecipes: React.FC = () => {
                   key={`${recipe.type}-${recipe.id}`}
                   recipe={recipe as Recipe}
                   isExternal={recipe.type === 'external'}
+                  onToggleFavorite={(updatedRecipe) => {
+                    // The recipe is already updated in storage and queries will be invalidated
+                  }}
                 />
               );
             }

@@ -1,27 +1,34 @@
 
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Clock, Star, Trash2, Clock3, Utensils, Users, BarChart2, Flame, Droplet, Carrot } from 'lucide-react';
+import { Clock, Star, Trash2, Clock3, Utensils, Users, BarChart2, Flame, Droplet, Carrot, Heart } from 'lucide-react';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from './ui/hover-card';
 import { ExtendedRecipe, Recipe } from '../types/recipe';
 import { useRecipeClickTracking } from '../utils/clickTracking';
 import { getReliableImageUrl } from '../utils/recipeUtils';
 import { cleanRecipeDescription } from '../utils/recipeDescriptionCleaner';
+import { updateRecipe } from '../utils/storage';
+import { useToast } from '@/hooks/use-toast';
+import { useQueryClient } from '@tanstack/react-query';
 
 interface RecipeCardProps {
   recipe: ExtendedRecipe | Recipe;
   isExternal?: boolean;
   onDelete?: (id: string | number) => void;
   onClick?: (recipe: ExtendedRecipe | Recipe) => void;
+  onToggleFavorite?: (recipe: ExtendedRecipe | Recipe) => void;
 }
 
 const RecipeCard: React.FC<RecipeCardProps> = React.memo(({ 
   recipe, 
   isExternal = false, 
   onDelete,
-  onClick 
+  onClick,
+  onToggleFavorite
 }) => {
   const { trackClick } = useRecipeClickTracking();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   // Handle recipe name from various sources
   const recipeName = React.useMemo(() => {
@@ -29,6 +36,34 @@ const RecipeCard: React.FC<RecipeCardProps> = React.memo(({
     if ('name' in recipe && recipe.name) return recipe.name;
     return "Untitled Recipe";
   }, [recipe]);
+
+  // Handle favorite toggle
+  const handleToggleFavorite = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const updatedRecipe = {
+      ...recipe,
+      isFavorite: !recipe.isFavorite
+    } as Recipe;
+    
+    // Update the recipe
+    updateRecipe(updatedRecipe);
+    
+    // Call the parent callback if provided
+    if (onToggleFavorite) {
+      onToggleFavorite(updatedRecipe);
+    }
+    
+    // Show toast notification
+    toast({
+      title: updatedRecipe.isFavorite ? "Added to favorites" : "Removed from favorites",
+      description: `"${recipeName}" has been ${updatedRecipe.isFavorite ? 'added to' : 'removed from'} your favorites.`,
+    });
+    
+    // Invalidate queries to refresh the UI
+    queryClient.invalidateQueries({ queryKey: ['recipes'] });
+  };
   
   // Debug log the recipe data
   React.useEffect(() => {
@@ -306,6 +341,21 @@ const RecipeCard: React.FC<RecipeCardProps> = React.memo(({
               }
             }}
           />
+          
+          {/* Favorite Button Overlay */}
+          <button
+            onClick={handleToggleFavorite}
+            className="absolute top-3 right-3 p-2 bg-white/90 hover:bg-white rounded-full shadow-md transition-all duration-200 hover:scale-110 z-10"
+            title={recipe.isFavorite ? "Remove from favorites" : "Add to favorites"}
+          >
+            <Heart 
+              className={`h-5 w-5 transition-colors duration-200 ${
+                recipe.isFavorite 
+                  ? 'text-red-500 fill-red-500' 
+                  : 'text-gray-600 hover:text-red-500'
+              }`}
+            />
+          </button>
         </div>
         
         <div className="p-4 flex-grow">
