@@ -722,19 +722,23 @@ const RecipesPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen relative" style={{
-      backgroundImage: 'url("https://images.unsplash.com/photo-1504674900247-087703934569?ixlib=rb-1.2.1&auto=format&fit=crop&w=1920&q=80")',
-      backgroundSize: 'cover',
-      backgroundPosition: 'center',
-      backgroundRepeat: 'no-repeat',
-      backgroundAttachment: 'fixed',
-      backgroundColor: '#f5f5f5' // Fallback color
-    }}>
+    <div 
+      className="min-h-screen relative search-page-background"
+      style={{
+        backgroundImage: 'url("https://media.istockphoto.com/id/1313187927/vector/cooking-food-and-vegetables-background.jpg?s=612x612&w=0&k=20&c=qC9BPv5TLtYEh-_myYacOZSugAEUx4S_uq5s6H33-ss=")',
+        backgroundSize: 'contain',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
+        backgroundColor: '#f5f5f5'
+      }}
+    >
+      {/* Dark Overlay for Readability */}
+      <div className="absolute inset-0 bg-green-800/50 z-0"></div>
       
       {/* Content Container */}
       <div className="relative z-10">
         {/* Hero Section with Overlay */}
-        <div className="relative h-[500px] w-full bg-black/30">
+        <div className="relative h-[500px] w-full">
           <div className="absolute inset-0 flex flex-col items-center justify-center px-4">
             <div className="text-center mb-8">
               <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-4 drop-shadow-lg">Discover Amazing Recipes</h1>
@@ -743,7 +747,7 @@ const RecipesPage: React.FC = () => {
             
             {/* Search Container */}
             <div className="w-full max-w-4xl mx-auto">
-              <div className="bg-white/90 backdrop-blur rounded-2xl p-6 shadow-xl border border-white/30">
+              <div className="bg-white/80 backdrop-blur rounded-2xl p-6 shadow-xl border border-white/30">
                 <div className="space-y-4 mb-2">
                   {/* Recipe Name Search */}
                   <div className="relative">
@@ -814,8 +818,8 @@ const RecipesPage: React.FC = () => {
         </div>
       </div>
       
-      <main className="container mx-auto px-4 pb-12 relative z-10 -mt-16">
-        <div className="bg-white/95 backdrop-blur-sm rounded-3xl shadow-xl px-6 py-8 border border-white/30">
+      <main className="max-w-[1400px] mx-auto px-4 pb-12 relative z-10 -mt-16">
+        <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl px-6 py-8 border border-white/30">
           {/* Main Content Area */}
           <div className="flex flex-col lg:flex-row gap-8">
             {/* Filters - Left Sidebar */}
@@ -889,7 +893,7 @@ const RecipesPage: React.FC = () => {
                 </div>
 
                 {isLoadingRecipes ? (
-                  <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                  <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-4 gap-8">
                     {[...Array(8)].map((_, i) => (
                       <div key={i} className="bg-white rounded-lg shadow-md p-4 animate-pulse">
                         <div className="bg-gray-200 h-48 rounded-lg mb-4"></div>
@@ -900,7 +904,7 @@ const RecipesPage: React.FC = () => {
                   </div>
                 ) : filteredRecipes.length > 0 ? (
                   <>
-                    <div className="grid md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6">
+                    <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-4 gap-8">
                       {displayRecipes.map((recipe, index) => renderRecipeCard(recipe, index))}
                     </div>
                   </>

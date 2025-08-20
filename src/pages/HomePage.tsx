@@ -1204,7 +1204,7 @@ const HomePage: React.FC = () => {
                     ))}
                   </div>
                 ) : (
-                  <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+                  <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-4 gap-6">
                     {organizedRecipes.recommended.map((recipe, index) => {
                       console.log('Recommended recipe:', { id: recipe.id, type: recipe.type, isExternal: recipe.type === 'external' });
                       return (
@@ -1289,7 +1289,7 @@ const HomePage: React.FC = () => {
                   ))}
                 </div>
               ) : (
-                <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-4 gap-6">
                   {organizedRecipes.popular.map((recipe, index) => {
                     console.log('Popular recipe:', { id: recipe.id, type: recipe.type, isExternal: recipe.type === 'external' });
                     return (

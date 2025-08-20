@@ -227,7 +227,7 @@ export async function fetchPopularRecipes(limit: number = 8, userId?: string, ex
  */
 export async function getHomepagePopularRecipes(userId?: string, existingRecipes?: Recipe[]): Promise<Recipe[]> {
   try {
-    const popularRecipes = await fetchPopularRecipes(4, userId, existingRecipes); // Pass existing recipes to avoid duplicates
+    const popularRecipes = await fetchPopularRecipes(8, userId, existingRecipes); // Pass existing recipes to avoid duplicates
     
     // If we have enough popular recipes based on clicks/ratings, use them
     if (popularRecipes.length >= 4) {

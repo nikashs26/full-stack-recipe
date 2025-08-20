@@ -56,6 +56,30 @@
   .search-container {
     @apply bg-white/90 backdrop-blur-sm rounded-2xl p-6 shadow-xl border border-white/20 w-full max-w-4xl mx-auto;
   }
+
+  /* Force search page background to stay visible */
+  .search-page-background {
+    background-image: url('https://media.istockphoto.com/id/1313187927/vector/cooking-food-and-vegetables-background.jpg?s=612x612&w=0&k=20&c=qC9BPv5TLtYEh-_myYacOZSugAEUx4S_uq5s6H33-ss=') !important;
+    background-size: cover !important;
+    background-position: center !important;
+    background-repeat: no-repeat !important;
+    background-color: #f5f5f5 !important;
+    background-attachment: fixed !important;
+    position: relative !important;
+    z-index: 0 !important;
+  }
+
+  /* Even more specific override */
+  div.search-page-background {
+    background-image: url('https://media.istockphoto.com/id/1313187927/vector/cooking-food-and-vegetables-background.jpg?s=612x612&w=0&k=20&c=qC9BPv5TLtYEh-_myYacOZSugAEUx4S_uq5s6H33-ss=') !important;
+    background-size: cover !important;
+    background-position: center !important;
+    background-repeat: no-repeat !important;
+    background-color: #f5f5f5 !important;
+    background-attachment: fixed !important;
+    position: relative !important;
+    z-index: 0 !important;
+  }
 }
 
 @layer base {
