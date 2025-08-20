@@ -741,7 +741,7 @@ const RecipesPage: React.FC = () => {
         <div className="relative h-[500px] w-full">
           <div className="absolute inset-0 flex flex-col items-center justify-center px-4">
             <div className="text-center mb-8">
-              <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-4 drop-shadow-lg">Discover Amazing Recipes</h1>
+              <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-4 drop-shadow-lg title-gradient-flow">Discover Amazing Recipes</h1>
               <p className="text-xl text-gray-100 max-w-2xl mx-auto drop-shadow-md">Find the perfect recipe for any occasion, ingredient, or cuisine</p>
             </div>
             

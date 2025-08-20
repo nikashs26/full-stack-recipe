@@ -1072,7 +1072,7 @@ const HomePage: React.FC = () => {
           
           <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
             <div className="max-w-4xl mx-auto">
-              <h1 className="text-5xl md:text-7xl font-bold text-white mb-6 leading-tight">
+              <h1 className="text-5xl md:text-7xl font-bold mb-6 leading-tight title-gradient-flow">
                 {welcomeMessage.title}
               </h1>
               <p className="text-xl md:text-2xl text-white/90 mb-10 max-w-3xl mx-auto leading-relaxed">
@@ -1107,32 +1107,79 @@ const HomePage: React.FC = () => {
         </section>
 
         {/* Stats Section */}
-        <section className="py-16 bg-white border-b">
+        <section className="py-16 bg-white/40 border-b border-white/60 backdrop-blur">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
-              <div>
-                <div className="text-3xl md:text-4xl font-bold text-recipe-primary mb-2">
-                  1000+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 md:gap-8">
+              {/* Stat 1 */}
+              <div className="relative group rounded-2xl p-6 bg-white/70 backdrop-blur border border-white/60 shadow-sm hover:shadow-lg transition-transform duration-300 hover:-translate-y-1">
+                <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-green-500/10 to-amber-500/10 opacity-0 group-hover:opacity-100 transition-opacity" aria-hidden></div>
+                <div className="relative flex flex-col items-center text-center">
+                  <div className="mb-4">
+                    <div className="p-[2px] rounded-full bg-gradient-to-br from-green-500 to-amber-500">
+                      <div className="rounded-full bg-white p-3">
+                        <Award className="h-6 w-6 text-amber-600" />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-3xl md:text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-green-600 to-amber-500 mb-1">
+                    1000+
+                  </div>
+                  <div className="text-sm md:text-base text-gray-700 font-medium">Recipes Available</div>
                 </div>
-                <div className="text-gray-600">Recipes Available</div>
               </div>
-              <div>
-                <div className="text-3xl md:text-4xl font-bold text-recipe-primary mb-2">
-                  {isAuthenticated ? 'AI-Powered' : 'Free'}
+
+              {/* Stat 2 */}
+              <div className="relative group rounded-2xl p-6 bg-white/70 backdrop-blur border border-white/60 shadow-sm hover:shadow-lg transition-transform duration-300 hover:-translate-y-1">
+                <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-green-500/10 to-amber-500/10 opacity-0 group-hover:opacity-100 transition-opacity" aria-hidden></div>
+                <div className="relative flex flex-col items-center text-center">
+                  <div className="mb-4">
+                    <div className="p-[2px] rounded-full bg-gradient-to-br from-green-500 to-amber-500">
+                      <div className="rounded-full bg-white p-3">
+                        <ChefHat className="h-6 w-6 text-green-600" />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-3xl md:text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-green-600 to-amber-500 mb-1">
+                    AI-Powered
+                  </div>
+                  <div className="text-sm md:text-base text-gray-700 font-medium">Meal Planning</div>
                 </div>
-                <div className="text-gray-600">Meal Planning</div>
               </div>
-              <div>
-                <div className="text-3xl md:text-4xl font-bold text-recipe-primary mb-2">
-                  Personalized
+
+              {/* Stat 3 */}
+              <div className="relative group rounded-2xl p-6 bg-white/70 backdrop-blur border border-white/60 shadow-sm hover:shadow-lg transition-transform duration-300 hover:-translate-y-1">
+                <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-green-500/10 to-amber-500/10 opacity-0 group-hover:opacity-100 transition-opacity" aria-hidden></div>
+                <div className="relative flex flex-col items-center text-center">
+                  <div className="mb-4">
+                    <div className="p-[2px] rounded-full bg-gradient-to-br from-green-500 to-amber-500">
+                      <div className="rounded-full bg-white p-3">
+                        <Users className="h-6 w-6 text-emerald-600" />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-3xl md:text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-green-600 to-amber-500 mb-1">
+                    Personalized
+                  </div>
+                  <div className="text-sm md:text-base text-gray-700 font-medium">Recommendations</div>
                 </div>
-                <div className="text-gray-600">Recommendations</div>
               </div>
-              <div>
-                <div className="text-3xl md:text-4xl font-bold text-recipe-primary mb-2">
-                  {isAuthenticated ? 'Unlimited' : 'Basic'}
+
+              {/* Stat 4 */}
+              <div className="relative group rounded-2xl p-6 bg-white/70 backdrop-blur border border-white/60 shadow-sm hover:shadow-lg transition-transform duration-300 hover:-translate-y-1">
+                <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-green-500/10 to-amber-500/10 opacity-0 group-hover:opacity-100 transition-opacity" aria-hidden></div>
+                <div className="relative flex flex-col items-center text-center">
+                  <div className="mb-4">
+                    <div className="p-[2px] rounded-full bg-gradient-to-br from-green-500 to-amber-500">
+                      <div className="rounded-full bg-white p-3">
+                        <Zap className="h-6 w-6 text-amber-600" />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-3xl md:text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-green-600 to-amber-500 mb-1">
+                    Unlimited
+                  </div>
+                  <div className="text-sm md:text-base text-gray-700 font-medium">Access</div>
                 </div>
-                <div className="text-gray-600">Access</div>
               </div>
             </div>
           </div>
@@ -1186,11 +1233,7 @@ const HomePage: React.FC = () => {
                       {refreshFeedback}
                     </div>
                   )}
-                  <div className="text-xs text-gray-500 flex items-center gap-2">
-                    <span>Refresh #{refreshCounter}</span>
-                    <span>•</span>
-                    <span>New recipes each time</span>
-                  </div>
+                  
                 </div>
 
                 {isLoading ? (

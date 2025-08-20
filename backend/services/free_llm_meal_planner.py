@@ -20,11 +20,12 @@ class FreeLLMMealPlannerAgent:
     def __init__(self, user_preferences_service):
         self.user_preferences_service = user_preferences_service
         self.ollama_url = os.getenv('OLLAMA_URL', 'http://localhost:11434')
+        self.ollama_model = os.getenv('OLLAMA_MODEL', 'llama3.2:latest')
         self.hf_api_key = os.getenv('HUGGINGFACE_API_KEY')
         self.hf_api_url = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2"
         
         # LLM configuration
-        self.ollama_timeout = 60  # Increased to 60 seconds for comprehensive prompts
+        self.ollama_timeout = 30  # Reduced timeout for faster responses
         self.ollama_max_tokens = 2000  # Increased for detailed responses
         self.hf_max_tokens = 2000
         
@@ -63,19 +64,31 @@ class FreeLLMMealPlannerAgent:
             
             # Try Ollama first (preferred)
             try:
+                logger.info("🤖 Attempting to generate with Ollama...")
                 meal_plan = self._generate_with_ollama(preferences)
-                if meal_plan and self._validate_meal_plan(meal_plan):
-                    logger.info("✅ Ollama generated valid meal plan")
-                    # Convert the LLM response to the format expected by the frontend
-                    converted_plan = self._convert_to_frontend_format(meal_plan, preferences)
-                    return {
-                        "success": True,
-                        "meal_plan": converted_plan,
-                        "source": "ollama",
-                        "generated_at": datetime.now().isoformat()
-                    }
+                logger.info(f"🔍 Ollama returned meal plan: {type(meal_plan)}")
+                
+                if meal_plan:
+                    logger.info("📝 Validating meal plan structure...")
+                    if self._validate_meal_plan(meal_plan):
+                        logger.info("✅ Ollama generated valid meal plan")
+                        # Convert the LLM response to the format expected by the frontend
+                        converted_plan = self._convert_to_frontend_format(meal_plan, preferences)
+                        return {
+                            "success": True,
+                            "meal_plan": converted_plan,
+                            "source": "ollama",
+                            "generated_at": datetime.now().isoformat()
+                        }
+                    else:
+                        logger.error("❌ Meal plan validation failed")
+                        logger.error(f"Meal plan structure: {meal_plan}")
+                else:
+                    logger.error("❌ Ollama returned None/empty meal plan")
             except Exception as e:
                 logger.warning(f"⚠️ Ollama failed: {e}")
+                import traceback
+                logger.warning(f"Traceback: {traceback.format_exc()}")
             
             # Try Hugging Face as backup
             if self.hf_api_key:
@@ -110,36 +123,59 @@ class FreeLLMMealPlannerAgent:
         prompt = self._create_meal_plan_prompt(preferences)
         
         payload = {
-            "model": "llama3.2:latest",  # Use llama3.2:latest since it works
+            "model": self.ollama_model,
             "prompt": prompt,
             "stream": False,
             "options": {
-                "temperature": 0.7,
+                "temperature": 0.3,
                 "top_p": 0.9,
-                "max_tokens": self.ollama_max_tokens
+                "num_predict": 800,
+                "num_ctx": 2048
             }
         }
         
         logger.info(f"🚀 Sending prompt to Ollama ({len(prompt)} chars)")
+        logger.info(f"🔧 Using model: {self.ollama_model}")
+        logger.info(f"🔗 URL: {self.ollama_url}/api/generate")
         
-        response = requests.post(
-            f"{self.ollama_url}/api/generate",
-            json=payload,
-            timeout=self.ollama_timeout
-        )
-        
-        if response.status_code == 200:
-            result = response.json()
-            response_text = result.get('response', '')
-            logger.info(f"📝 Ollama response received ({len(response_text)} chars)")
-            logger.debug(f"📋 Raw Ollama response: {response_text[:1000]}...")
+        try:
+            response = requests.post(
+                f"{self.ollama_url}/api/generate",
+                json=payload,
+                timeout=self.ollama_timeout
+            )
             
-            # Parse the response
-            meal_plan = self._parse_meal_plan_response(response_text)
-            return meal_plan
-        else:
-            logger.error(f"❌ Ollama request failed: {response.status_code}")
-            raise Exception(f"Ollama request failed: {response.status_code}")
+            logger.info(f"📡 Ollama response status: {response.status_code}")
+            
+            if response.status_code == 200:
+                result = response.json()
+                response_text = result.get('response', '')
+                logger.info(f"📝 Ollama response received ({len(response_text)} chars)")
+                logger.info(f"📋 Full Ollama response: {response_text}")  # Log full response to see what we got
+                
+                # Parse the simple text response into a structured format
+                meal_plan = self._parse_simple_text_response(response_text)
+                if meal_plan:
+                    logger.info("✅ Successfully parsed meal plan from Ollama")
+                    return meal_plan
+                else:
+                    logger.error("❌ Failed to parse meal plan from Ollama response")
+                    logger.error(f"Raw response: {response_text}")
+                    return None
+            else:
+                logger.error(f"❌ Ollama request failed: {response.status_code}")
+                logger.error(f"Response text: {response.text}")
+                raise Exception(f"Ollama request failed: {response.status_code}")
+                
+        except requests.exceptions.Timeout:
+            logger.error(f"⏰ Ollama request timed out after {self.ollama_timeout} seconds")
+            raise Exception("Ollama request timed out")
+        except requests.exceptions.ConnectionError:
+            logger.error(f"🔌 Could not connect to Ollama at {self.ollama_url}")
+            raise Exception("Could not connect to Ollama")
+        except Exception as e:
+            logger.error(f"❌ Unexpected error calling Ollama: {str(e)}")
+            raise
     
     def _generate_with_huggingface(self, preferences: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Generate meal plan using Hugging Face Inference API."""
@@ -197,90 +233,26 @@ class FreeLLMMealPlannerAgent:
             'fat': preferences.get('targetFat', 65)
         }
         
-        # Build a comprehensive, well-structured prompt using best practices
-        prompt = f"""You are an expert nutritionist and meal planning specialist with 15+ years of experience. Your task is to create a personalized, balanced, and delicious 7-day meal plan.
+        # Build a focused but contextual prompt 
+        cuisine_list = ', '.join(cuisines) if cuisines else 'American, Chinese, Mexican'
+        prompt = f"""You are a professional meal planner creating a diverse weekly menu. Generate varied, appealing meal names using these cuisines: {cuisine_list}
 
-**USER PROFILE:**
-- Dietary Requirements: {', '.join(dietary) if dietary else 'No restrictions'}
-- Preferred Cuisines: {', '.join(cuisines)}
-- Allergens to Avoid: {', '.join(allergens) if allergens else 'None'}
-- Cooking Skill Level: {skill}
-- Favorite Foods: {', '.join(favorite_foods) if favorite_foods else 'Open to variety'}
-- Health & Fitness Goals: {', '.join(health_goals)}
-- Maximum Cooking Time per Meal: {max_time}
-- Daily Nutritional Targets: {macros['calories']} calories, {macros['protein']}g protein, {macros['carbs']}g carbs, {macros['fat']}g fat
+Requirements:
+- Each day needs 3 different meals (breakfast, lunch, dinner)
+- Ensure variety - no repeated meals across the week
+- Mix cooking styles (grilled, stir-fried, baked, etc.)
+- Include both simple and interesting options
+- Match cuisines appropriately (e.g., Chinese dishes should be labeled Chinese)
 
-**MEAL PLANNING REQUIREMENTS:**
-1. Create exactly 7 days (Monday through Sunday)
-2. Include breakfast, lunch, and dinner for each day
-3. Ensure variety - no meal should repeat during the week
-4. Respect ALL dietary restrictions and allergen avoidances
-5. Stay within the specified cooking time limits
-6. Incorporate the user's favorite foods multiple times throughout the week
-7. Align with health and fitness goals
-8. Balance flavors, textures, and nutritional content
-9. Consider meal prep efficiency where appropriate
-10. Ensure meals are practical and achievable for the specified skill level
+Monday: Breakfast, Lunch, Dinner
+Tuesday: Breakfast, Lunch, Dinner  
+Wednesday: Breakfast, Lunch, Dinner
+Thursday: Breakfast, Lunch, Dinner
+Friday: Breakfast, Lunch, Dinner
+Saturday: Breakfast, Lunch, Dinner
+Sunday: Breakfast, Lunch, Dinner
 
-**CUISINE INTEGRATION:**
-- Primarily focus on {', '.join(cuisines)} cuisine styles
-- Incorporate authentic flavors and cooking techniques
-- Suggest appropriate spices, herbs, and cooking methods
-
-**NUTRITIONAL CONSIDERATIONS:**
-- Balance macronutrients across each day
-- Ensure adequate fiber, vitamins, and minerals
-- Consider meal timing for optimal energy levels
-- Include healthy fats, complex carbohydrates, and complete proteins
-
-**OUTPUT FORMAT:**
-Return ONLY valid JSON in this exact structure:
-{{
-  "week_plan": {{
-    "monday": {{
-      "breakfast": "Detailed meal name with key ingredients (calories: X, protein: Xg)",
-      "lunch": "Detailed meal name with key ingredients (calories: X, protein: Xg)",
-      "dinner": "Detailed meal name with key ingredients (calories: X, protein: Xg)"
-    }},
-    "tuesday": {{
-      "breakfast": "Detailed meal name with key ingredients (calories: X, protein: Xg)",
-      "lunch": "Detailed meal name with key ingredients (calories: X, protein: Xg)",
-      "dinner": "Detailed meal name with key ingredients (calories: X, protein: Xg)"
-    }},
-    "wednesday": {{
-      "breakfast": "Detailed meal name with key ingredients (calories: X, protein: Xg)",
-      "lunch": "Detailed meal name with key ingredients (calories: X, protein: Xg)",
-      "dinner": "Detailed meal name with key ingredients (calories: X, protein: Xg)"
-    }},
-    "thursday": {{
-      "breakfast": "Detailed meal name with key ingredients (calories: X, protein: Xg)",
-      "lunch": "Detailed meal name with key ingredients (calories: X, protein: Xg)",
-      "dinner": "Detailed meal name with key ingredients (calories: X, protein: Xg)"
-    }},
-    "friday": {{
-      "breakfast": "Detailed meal name with key ingredients (calories: X, protein: Xg)",
-      "lunch": "Detailed meal name with key ingredients (calories: X, protein: Xg)",
-      "dinner": "Detailed meal name with key ingredients (calories: X, protein: Xg)"
-    }},
-    "saturday": {{
-      "breakfast": "Detailed meal name with key ingredients (calories: X, protein: Xg)",
-      "lunch": "Detailed meal name with key ingredients (calories: X, protein: Xg)",
-      "dinner": "Detailed meal name with key ingredients (calories: X, protein: Xg)"
-    }},
-    "sunday": {{
-      "breakfast": "Detailed meal name with key ingredients (calories: X, protein: Xg)",
-      "lunch": "Detailed meal name with key ingredients (calories: X, protein: Xg)",
-      "dinner": "Detailed meal name with key ingredients (calories: X, protein: Xg)"
-    }}
-  }}
-}}
-
-**CRITICAL INSTRUCTIONS:**
-- Include calorie and protein estimates in each meal name
-- Make meal names descriptive and appetizing
-- Ensure total daily calories align with target ({macros['calories']} calories)
-- Return ONLY the JSON structure, no additional text or explanations
-- Double-check that all dietary restrictions and allergens are respected"""
+Provide specific meal names for each slot."""
 
         return prompt
     
@@ -409,6 +381,74 @@ Return ONLY valid JSON in this exact structure:
             logger.error(f"❌ JSON extraction failed: {e}")
             return None
     
+    def _parse_simple_text_response(self, response_text: str) -> Optional[Dict[str, Any]]:
+        """Parse a simple text response into meal plan structure."""
+        try:
+            lines = response_text.strip().split('\n')
+            week_plan = {}
+            current_day = None
+            
+            day_names = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+            meal_types = ['breakfast', 'lunch', 'dinner']
+            
+            logger.info(f"🔍 Parsing response with {len(lines)} lines")
+            
+            for line in lines:
+                line = line.strip()
+                if not line or line.startswith('Here are'):
+                    continue
+                
+                logger.info(f"📝 Processing line: '{line}'")
+                
+                # Check if line starts with a day name
+                line_lower = line.lower()
+                for day in day_names:
+                    if line_lower.startswith(day):
+                        current_day = day
+                        week_plan[current_day] = {}
+                        logger.info(f"📅 Found day: {current_day}")
+                        break
+                
+                # Check if line contains a meal (format: "- Breakfast: Meal Name")
+                if current_day and line.startswith('-'):
+                    # Parse lines like "- Breakfast: Egg Rolls & Oatmeal"
+                    if ':' in line:
+                        meal_part = line[1:].strip()  # Remove the '-'
+                        meal_type_text, meal_name = meal_part.split(':', 1)
+                        meal_type = meal_type_text.strip().lower()
+                        meal_name = meal_name.strip()
+                        
+                        if meal_type in meal_types and meal_name:
+                            week_plan[current_day][meal_type] = meal_name
+                            logger.info(f"🍽️ Added {meal_type}: {meal_name} for {current_day}")
+            
+            # If we didn't get a proper structure, create a simple default one
+            if not week_plan:
+                logger.warning("Could not parse day structure, creating default meal plan")
+                default_meals = {
+                    'breakfast': 'Scrambled Eggs with Toast',
+                    'lunch': 'Grilled Chicken Salad', 
+                    'dinner': 'Beef Stir-Fry with Rice'
+                }
+                for day in day_names:
+                    week_plan[day] = default_meals.copy()
+            
+            # Ensure all days have all meal types
+            for day in day_names:
+                if day not in week_plan:
+                    week_plan[day] = {}
+                for meal_type in meal_types:
+                    if meal_type not in week_plan[day]:
+                        week_plan[day][meal_type] = f"Simple {meal_type}"
+                        logger.warning(f"⚠️ Missing {meal_type} for {day}, using default")
+            
+            logger.info(f"✅ Parsed meal plan with {len(week_plan)} days")
+            return {"week_plan": week_plan}
+            
+        except Exception as e:
+            logger.error(f"Failed to parse simple text response: {e}")
+            return None
+    
     def regenerate_specific_meal(self, user_id: str, day: str, meal_type: str, current_plan: Dict[str, Any]) -> Dict[str, Any]:
         """Regenerate a specific meal using the LLM."""
         try:
@@ -505,6 +545,10 @@ IMPORTANT: Return ONLY the JSON, no other text."""
             
             day_names = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
             
+            # Cache favorite cuisines for rotation to ensure variety that matches preferences
+            favorite_cuisines: List[str] = preferences.get('favoriteCuisines', []) or []
+            num_cuisines: int = len(favorite_cuisines)
+
             for index, day_name in enumerate(day_names):
                 # Calculate the date for this day
                 day_date = today + timedelta(days=index)
@@ -513,7 +557,7 @@ IMPORTANT: Return ONLY the JSON, no other text."""
                 meals = []
                 
                 # Convert each meal type
-                for meal_type in ['breakfast', 'lunch', 'dinner']:
+                for meal_index, meal_type in enumerate(['breakfast', 'lunch', 'dinner']):
                     meal_name = day_data.get(meal_type, f"Default {meal_type}")
                     
                     # Extract calories and protein from the meal name if present
@@ -532,15 +576,51 @@ IMPORTANT: Return ONLY the JSON, no other text."""
                     
                     # Clean the meal name (remove calorie/protein info)
                     clean_name = re.sub(r'\s*\(\d+[^)]*\)', '', meal_name).strip()
+
+                    # Choose cuisine by rotating through the user's favorites across days/meals
+                    if num_cuisines > 0:
+                        cuisine = favorite_cuisines[(index * 3 + meal_index) % num_cuisines]
+                    else:
+                        cuisine = 'International'
+
+                    # Provide slightly better placeholder ingredients based on meal name heuristics
+                    lower_name = clean_name.lower()
+                    if 'salad' in lower_name:
+                        ingredients = ["mixed greens", "protein of choice", "assorted vegetables", "dressing"]
+                    elif 'stir-fry' in lower_name or 'stir fry' in lower_name:
+                        ingredients = ["protein of choice", "mixed vegetables", "stir-fry sauce", "oil"]
+                    elif 'wrap' in lower_name or 'burrito' in lower_name:
+                        ingredients = ["tortilla", "protein", "vegetables", "sauce"]
+                    elif 'omelette' in lower_name or 'omelet' in lower_name:
+                        ingredients = ["eggs", "fillings of choice", "salt", "pepper"]
+                    elif 'toast' in lower_name:
+                        ingredients = ["bread", "toppings of choice"]
+                    elif 'bowl' in lower_name or 'quinoa' in lower_name:
+                        ingredients = ["grain base", "protein", "vegetables", "sauce"]
+                    elif 'parfait' in lower_name:
+                        ingredients = ["yogurt", "fruit", "granola", "sweetener (optional)"]
+                    elif 'skewer' in lower_name:
+                        ingredients = ["protein", "vegetables", "marinade"]
+                    elif 'quesadilla' in lower_name:
+                        ingredients = ["tortillas", "cheese", "filling of choice"]
+                    else:
+                        ingredients = ["See recipe details"]
+
+                    # Replace generic instruction with a brief cuisine-specific guide
+                    instructions = [
+                        f"Gather ingredients for {clean_name}.",
+                        f"Cook using typical {cuisine} techniques appropriate for {meal_type}.",
+                        "Taste, adjust seasoning, and serve."
+                    ]
                     
                     meals.append({
                         "name": clean_name,
                         "meal_type": meal_type,
-                        "cuisine": preferences.get('favoriteCuisines', ['International'])[0] if preferences.get('favoriteCuisines') else 'International',
+                        "cuisine": cuisine,
                         "is_vegetarian": 'vegetarian' in preferences.get('dietaryRestrictions', []),
                         "is_vegan": 'vegan' in preferences.get('dietaryRestrictions', []),
-                        "ingredients": ["Fresh ingredients"],  # Simplified for now
-                        "instructions": ["Follow standard cooking methods"],  # Simplified for now
+                        "ingredients": ingredients,
+                        "instructions": instructions,
                         "nutrition": {
                             "calories": calories,
                             "protein": protein,

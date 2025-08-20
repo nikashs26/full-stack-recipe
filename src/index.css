@@ -80,6 +80,28 @@
     position: relative !important;
     z-index: 0 !important;
   }
+
+  /* Animated flowing gradient for hero titles (mostly white with an orange streak) */
+  .title-gradient-flow {
+    background-image: linear-gradient(90deg,
+      rgba(255,255,255,1) 0%,
+      rgb(211, 135, 42) 45%,
+      rgba(251,146,60,1) 50%,
+      rgba(255,255,255,1) 55%,
+      rgba(255,255,255,1) 100%
+    );
+    background-size: 300% 100%;
+    animation: titleFlow 5s linear infinite;
+    will-change: background-position;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+}
+
+@keyframes titleFlow {
+  0% { background-position: 0% 0; }
+  100% { background-position: 100% 0; }
 }
 
 @layer base {
