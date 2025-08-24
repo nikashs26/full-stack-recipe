@@ -1,0 +1,35 @@
+# Frontend files (not needed for backend deployment)
+src/
+public/
+node_modules/
+package*.json
+vite.config.ts
+tailwind.config.ts
+postcss.config.js
+eslint.config.js
+tsconfig.json
+
+# Build outputs
+dist/
+build/
+
+# Development files
+*.log
+.env.local
+.env.development
+
+# Git and IDE files
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Keep only backend files and root deployment files for Railway
+!backend/
+!railway.json
+!railway.toml
+!Dockerfile
+!README.md
+!deploy.sh
