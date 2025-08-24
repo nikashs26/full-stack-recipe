@@ -10,10 +10,14 @@ export const API_BASE_URL = cleanApiUrl;
 // Railway deployment URL (update this with your actual Railway URL)
 export const RAILWAY_API_URL = 'https://full-stack-recipe-production.up.railway.app';
 
-// Use Railway URL in production, fallback to localhost for development
+// Use localhost for recipes (your 1115 recipes), Railway for health checks
 export const getApiUrl = () => {
-  if (import.meta.env.PROD) {
-    return RAILWAY_API_URL;
-  }
-  return cleanApiUrl;
+  // For recipe endpoints, use localhost to get your 1115 recipes
+  // For health checks, use Railway
+  return 'http://localhost:5003';
+};
+
+// Use Railway only for health checks and basic endpoints
+export const getRailwayUrl = () => {
+  return RAILWAY_API_URL;
 };
