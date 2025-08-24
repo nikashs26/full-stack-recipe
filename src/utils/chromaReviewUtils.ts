@@ -1,6 +1,8 @@
 import { Review } from '../components/RecipeReviews';
+import { getApiUrl } from '../config/api';
 
-const API_BASE_URL = "http://localhost:5003/api";
+// Use the Railway backend API URL
+const API_BASE_URL = `${getApiUrl()}/api`;
 
 // Function to add a new review using ChromaDB backend
 export async function addReview(

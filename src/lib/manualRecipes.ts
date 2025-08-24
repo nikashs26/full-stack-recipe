@@ -1,6 +1,7 @@
+import { getApiUrl } from '../config/api';
 
-// Use the main backend API URL
-const API_BASE_URL = "http://localhost:5003";
+// Use the Railway backend API URL
+const API_BASE_URL = getApiUrl();
 
 export interface ManualRecipe {
   id: string | number;

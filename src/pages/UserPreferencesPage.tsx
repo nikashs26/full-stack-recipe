@@ -4,7 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useAuth } from '../context/AuthContext';
 import { apiCall } from '../utils/apiUtils';
-import { API_BASE_URL } from '../config/api';
+import { getApiUrl } from '../config/api';
 import { useToast } from '@/hooks/use-toast';
 import Header from '../components/Header';
 import { Button } from '@/components/ui/button';
@@ -126,7 +126,7 @@ const loadUserPreferences = async (): Promise<UserPreferences> => {
     // If authentication fails, try the session-based endpoint
     if (response.status === 401) {
       console.log('Authentication failed, trying session-based preferences...');
-      response = await fetch(`${API_BASE_URL}/preferences`, {
+      response = await fetch(`${getApiUrl()}/preferences`, {
         method: 'GET',
         headers: {
           'Accept': 'application/json',

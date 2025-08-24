@@ -1,5 +1,5 @@
 import { apiCall } from '../utils/apiUtils';
-import { API_BASE_URL } from '../config/api';
+import { getApiUrl } from '../config/api';
 import { loadUserPreferences, UserPreferences } from './preferencesService';
 
 export interface MealPlanOptions {
@@ -164,7 +164,7 @@ export interface MealPlanResponse {
 }
 
 // Update the API base URL for deployment
-const API_BASE_URL_FINAL = API_BASE_URL;
+const API_BASE_URL_FINAL = getApiUrl();
 
 export const generateMealPlan = async (options?: MealPlanOptions, abortSignal?: AbortSignal): Promise<MealPlanData> => {
   try {

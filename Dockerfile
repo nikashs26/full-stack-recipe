@@ -43,7 +43,6 @@ allowed_origins = [\n\
     "http://localhost:8081", "http://127.0.0.1:8081",\n\
     "http://localhost:8083", "http://127.0.0.1:8083",\n\
     "https://betterbulk.netlify.app",\n\
-    "https://your-app-name.netlify.app",\n\
 ]\n\
 \n\
 # Configure CORS properly\n\
