@@ -8,7 +8,7 @@ const cleanApiUrl = API_URL.endsWith('/') ? API_URL.slice(0, -1) : API_URL;
 export const API_BASE_URL = cleanApiUrl;
 
 // Railway deployment URL (update this with your actual Railway URL)
-export const RAILWAY_API_URL = 'https://your-app-name-production.up.railway.app';
+export const RAILWAY_API_URL = 'https://full-stack-recipe-production.up.railway.app';
 
 // Use Railway URL in production, fallback to localhost for development
 export const getApiUrl = () => {
