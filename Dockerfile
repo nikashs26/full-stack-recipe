@@ -16,12 +16,12 @@ RUN apt-get update && \
 # Set work directory
 WORKDIR /app
 
-# Create requirements.txt directly in the Dockerfile
-RUN echo "flask==2.3.3\nflask-cors==4.0.0\npython-dotenv==1.0.0\ngunicorn==21.2.0" > requirements.txt
+# Create requirements.txt with explicit dependencies to prevent missing modules
+RUN echo "flask==2.3.3\nflask-cors==4.0.0\npython-dotenv==1.0.0\ngunicorn==21.2.0\nwerkzeug==2.3.7\nclick==8.1.7\nitsdangerous==2.1.2\njinja2==3.1.2\nblinker==1.6.3" > requirements.txt
 
-# Install Python dependencies with aggressive optimizations
+# Install Python dependencies WITHOUT --no-deps to ensure all dependencies are installed
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir --no-deps -r requirements.txt && \
+    pip install --no-cache-dir -r requirements.txt && \
     pip cache purge
 
 # Create the minimal Flask app directly in the Dockerfile
