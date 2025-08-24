@@ -61,6 +61,29 @@ const UserHoverTab: React.FC = () => {
     setIsHovered(false); // Reset hover state when clicking
   };
 
+  // Add right-edge hover detection
+  useEffect(() => {
+    const handleMouseMove = (event: MouseEvent) => {
+      const windowWidth = window.innerWidth;
+      const mouseX = event.clientX;
+      
+      // If mouse is within 30px of the right edge and sidebar is not clicked open
+      if (windowWidth - mouseX <= 30 && !isClicked) {
+        setIsHovered(true);
+      } else if (windowWidth - mouseX > 30 && !isClicked && !sidebarRef.current?.matches(':hover')) {
+        // Only close if mouse is not hovering over the sidebar itself
+        setIsHovered(false);
+      }
+    };
+
+    // Add the listener when component mounts and sidebar is not clicked
+    document.addEventListener('mousemove', handleMouseMove);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+    };
+  }, [isClicked]);
+
   // Handle hover on right side
   const handleRightSideHover = () => {
     if (!isClicked) { // Only allow hover to open if not clicked
@@ -108,9 +131,13 @@ const UserHoverTab: React.FC = () => {
     <>
       {/* Hover Trigger Area - Right side of screen */}
       <div 
-        className="fixed top-0 right-0 h-full w-4 z-[55]"
+        className="fixed top-0 right-0 h-full w-6 z-[55]"
         onMouseEnter={handleRightSideHover}
         onMouseLeave={handleRightSideLeave}
+        style={{ 
+          backgroundColor: 'transparent',
+          cursor: 'default'
+        }}
       />
       
       {/* User Icon Trigger - Clickable to open manually */}
@@ -126,7 +153,7 @@ const UserHoverTab: React.FC = () => {
       {/* Full Height Aside Tab */}
       <div 
         ref={sidebarRef}
-        className={`fixed top-0 right-0 h-full w-80 shadow-2xl border-l border-gray-200 z-[55] transform transition-transform duration-300 ease-out ${
+        className={`fixed top-0 right-0 h-full w-80 shadow-2xl border-l border-gray-200 z-[55] transform transition-transform duration-300 ease-out bg-white ${
           isSidebarVisible ? 'translate-x-0' : 'translate-x-full'
         }`}
         onMouseEnter={() => {
@@ -140,15 +167,15 @@ const UserHoverTab: React.FC = () => {
           }
         }}
         style={{ 
-          backgroundColor: '#ffffff',
-          backdropFilter: 'none',
+          backgroundColor: '#ffffff !important',
+          backdropFilter: 'none !important',
           isolation: 'isolate'
         }}
       >
         {/* Background Layer */}
         <div 
-          className="absolute inset-0 bg-white"
-          style={{ zIndex: -1 }}
+          className="absolute inset-0 bg-white !important"
+          style={{ zIndex: -1, backgroundColor: '#ffffff !important' }}
         />
         {/* Close Button */}
         <button
@@ -162,7 +189,7 @@ const UserHoverTab: React.FC = () => {
         </button>
 
         {/* User Header */}
-        <div className="px-6 py-8 bg-gradient-to-b from-recipe-primary/5 to-transparent border-b border-gray-100">
+        <div className="px-6 py-8 bg-white border-b border-gray-100">
           <div className="flex items-center space-x-4">
             <div className="h-16 w-16 rounded-full bg-recipe-primary/20 flex items-center justify-center">
               <User className="h-8 w-8 text-recipe-primary" />
@@ -179,7 +206,7 @@ const UserHoverTab: React.FC = () => {
         </div>
         
         {/* Quick Actions */}
-        <div className="p-6 border-b border-gray-100">
+        <div className="p-6 border-b border-gray-100 bg-white">
           <div className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-4">
             Quick Actions
           </div>
@@ -202,8 +229,8 @@ const UserHoverTab: React.FC = () => {
         </div>
         
         {/* Navigation Links */}
-        <div className="flex-1 overflow-y-auto">
-          <div className="p-6 space-y-2">
+        <div className="flex-1 overflow-y-auto bg-white" style={{ backgroundColor: '#ffffff !important' }}>
+          <div className="p-6 space-y-2 bg-white" style={{ backgroundColor: '#ffffff !important' }}>
             <div className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-4">
               My Account
             </div>
@@ -240,20 +267,14 @@ const UserHoverTab: React.FC = () => {
               className="flex items-center px-4 py-3 text-gray-700 hover:text-recipe-primary hover:bg-gray-50 rounded-lg transition-all duration-200 group"
             >
               <Clock className="mr-4 h-5 w-5 group-hover:text-recipe-primary" />
-              <span className="font-medium">Meal History</span>
+              <span className="font-medium">Meal Planner History</span>
             </Link>
-            <Link
-              to="/cookbook"
-              className="flex items-center px-4 py-3 text-gray-700 hover:text-recipe-primary hover:bg-gray-50 rounded-lg transition-all duration-200 group"
-            >
-              <BookOpen className="mr-4 h-5 w-5 group-hover:text-recipe-primary" />
-              <span className="font-medium">My Cookbook</span>
-            </Link>
+
           </div>
         </div>
         
         {/* Sign Out */}
-        <div className="border-t border-gray-100 p-6">
+        <div className="border-t border-gray-100 p-6 bg-white" style={{ backgroundColor: '#ffffff !important' }}>
           <button
             onClick={handleSignOut}
             className="flex items-center w-full px-4 py-3 text-gray-700 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all duration-200 group"

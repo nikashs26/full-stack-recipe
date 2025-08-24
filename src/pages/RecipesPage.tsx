@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Search, X, Utensils, ChevronLeft, ChevronRight, ChefHat, Leaf, Clock, Star, Heart, FolderPlus, Share2, Filter, Plus, Minus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,6 +13,7 @@ import { fetchManualRecipes } from '@/lib/manualRecipes';
 import { DietaryRestriction, ExtendedRecipe } from '@/types/recipe';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { updateRecipe } from '../utils/storage';
 
 // Recipe type definitions
 type BaseRecipe = {
@@ -95,6 +96,8 @@ type NormalizedRecipe = {
 
 const RecipesPage: React.FC = () => {
   const navigate = useNavigate();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [ingredientSearch, setIngredientSearch] = useState('');
@@ -120,6 +123,52 @@ const RecipesPage: React.FC = () => {
   const updateCurrentPage = useCallback((page: number) => {
     setCurrentPage(page);
   }, []);
+
+  // Handle favorite toggle for recipes
+  const handleToggleFavorite = async (recipe: any) => {
+    console.log('🎯 RecipesPage: Toggling favorite for recipe:', {
+      id: recipe.id,
+      title: recipe.title || recipe.name,
+      currentFavorite: recipe.isFavorite,
+      type: recipe.type
+    });
+    
+    const updatedRecipe = {
+      ...recipe,
+      isFavorite: !recipe.isFavorite
+    };
+    
+    // Update the recipe in storage
+    updateRecipe(updatedRecipe);
+    
+    console.log('✅ RecipesPage: Recipe favorite updated in storage:', {
+      id: updatedRecipe.id,
+      newFavorite: updatedRecipe.isFavorite
+    });
+    
+    // Update query cache data directly without invalidating (prevents refresh)
+    queryClient.setQueryData(
+      ['recipes', searchQuery, ingredientSearch, selectedCuisines, selectedDiets, currentPage, recipesPerPage, previousSearchResults], 
+      (oldData: any) => {
+        if (!oldData || !oldData.recipes) return oldData;
+        return {
+          ...oldData,
+          recipes: oldData.recipes.map((r: any) => r.id === updatedRecipe.id ? updatedRecipe : r)
+        };
+      }
+    );
+    
+    // Only invalidate the local recipes query for favorites page updates
+    queryClient.invalidateQueries({ queryKey: ['recipes'] });
+    
+    // Show toast notification
+    toast({
+      title: updatedRecipe.isFavorite ? "Added to favorites" : "Removed from favorites",
+      description: `"${recipe.title || recipe.name}" has been ${updatedRecipe.isFavorite ? 'added to' : 'removed from'} your favorites.`,
+    });
+    
+    console.log('🔄 RecipesPage: Cache updated directly without refresh');
+  };
 
   // Fetch paginated recipes from ChromaDB with search and filters
   const { 
@@ -698,10 +747,7 @@ const RecipesPage: React.FC = () => {
         <RecipeCard 
           recipe={recipeForCard}
           isExternal={recipe.type === 'spoonacular' || recipe.type === 'external'}
-          onToggleFavorite={(updatedRecipe) => {
-            // The recipe is already updated in storage and queries will be invalidated
-            // No need to update local state as the component will refresh
-          }}
+          onToggleFavorite={handleToggleFavorite}
         />
       </div>
     );
@@ -818,8 +864,8 @@ const RecipesPage: React.FC = () => {
         </div>
       </div>
       
-      <main className="max-w-[1400px] mx-auto px-4 pb-12 relative z-10 -mt-16">
-        <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl px-6 py-8 border border-white/30">
+              <main className="max-w-[1600px] mx-auto px-4 pb-12 relative z-10 -mt-16">
+        <div className="bg-white rounded-3xl shadow-xl px-6 py-8 border border-gray-200">
           {/* Main Content Area */}
           <div className="flex flex-col lg:flex-row gap-8">
             {/* Filters - Left Sidebar */}

@@ -458,17 +458,26 @@ def debug_recommendations():
         }), 500
 
 @smart_features_bp.route('/meal-history/log', methods=['POST'])
+@cross_origin(origins=['http://localhost:8081', 'http://localhost:5173'], supports_credentials=True)
+@require_auth
 def log_meal_generation():
     """
     Log when a meal plan is generated
     """
     try:
         data = request.get_json()
-        user_id = data.get('user_id', 'demo_user')
+        user_id = get_current_user_id()
+        if not user_id:
+            return jsonify({'error': 'Not authenticated'}), 401
+            
+        print(f"💾 Logging meal generation for user: {user_id}")
+        
         meal_plan = data.get('meal_plan', {})
         preferences_used = data.get('preferences_used', {})
         
         meal_history_service.log_meal_generated(user_id, meal_plan, preferences_used)
+        
+        print(f"✅ Meal generation logged successfully for user: {user_id}")
         
         return jsonify({
             "success": True,
@@ -476,6 +485,7 @@ def log_meal_generation():
         }), 200
         
     except Exception as e:
+        print(f"❌ Error logging meal generation: {e}")
         return jsonify({"error": str(e)}), 500
 
 @smart_features_bp.route('/meal-history/feedback', methods=['POST'])
@@ -729,4 +739,75 @@ def get_meal_success_rate():
         }), 200
         
     except Exception as e:
-        return jsonify({"error": str(e)}), 500 
+        return jsonify({"error": str(e)}), 500
+
+@smart_features_bp.route('/meal-history', methods=['GET'])
+@cross_origin(origins=['http://localhost:8081', 'http://localhost:5173'], supports_credentials=True)
+@require_auth
+def get_meal_plan_history():
+    """
+    Get user's meal plan generation history
+    """
+    try:
+        user_id = get_current_user_id()
+        if not user_id:
+            return jsonify({'error': 'Not authenticated'}), 401
+        
+        print(f"🔍 Getting meal history for user: {user_id}")
+        
+        limit = request.args.get('limit', 20, type=int)
+        limit = max(1, min(limit, 50))  # Bound between 1 and 50
+        
+        history = meal_history_service.get_user_meal_plan_history(user_id, limit)
+        
+        print(f"📊 Found {len(history)} meal plans in history")
+        
+        return jsonify({
+            "success": True,
+            "user_id": user_id,
+            "history": history,
+            "total": len(history),
+            "limit_used": limit
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error retrieving meal plan history: {e}")
+        return jsonify({
+            "success": False,
+            "error": "Failed to retrieve meal plan history",
+            "details": str(e)
+        }), 500
+
+@smart_features_bp.route('/meal-history/<plan_id>', methods=['GET'])
+@cross_origin(origins=['http://localhost:8081', 'http://localhost:5173'], supports_credentials=True)
+@require_auth
+def get_meal_plan_details(plan_id):
+    """
+    Get detailed information about a specific meal plan
+    """
+    try:
+        user_id = get_current_user_id()
+        if not user_id:
+            return jsonify({'error': 'Not authenticated'}), 401
+        
+        plan_details = meal_history_service.get_meal_plan_details(user_id, plan_id)
+        
+        if not plan_details:
+            return jsonify({
+                "success": False,
+                "error": "Meal plan not found"
+            }), 404
+        
+        return jsonify({
+            "success": True,
+            "user_id": user_id,
+            "plan_details": plan_details
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error retrieving meal plan details: {e}")
+        return jsonify({
+            "success": False,
+            "error": "Failed to retrieve meal plan details",
+            "details": str(e)
+        }), 500 

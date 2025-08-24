@@ -9,6 +9,13 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
+# Import after dotenv loading to ensure environment variables are available
+try:
+    from services.meal_history_service import MealHistoryService
+except ImportError:
+    # Handle circular import by using late import
+    MealHistoryService = None
+
 logger = logging.getLogger(__name__)
 
 class FreeLLMMealPlannerAgent:
@@ -19,6 +26,17 @@ class FreeLLMMealPlannerAgent:
     
     def __init__(self, user_preferences_service):
         self.user_preferences_service = user_preferences_service
+        
+        # Initialize meal history service for logging
+        if MealHistoryService:
+            try:
+                self.meal_history_service = MealHistoryService()
+            except Exception as e:
+                logger.warning(f"Failed to initialize meal history service: {e}")
+                self.meal_history_service = None
+        else:
+            self.meal_history_service = None
+        
         self.ollama_url = os.getenv('OLLAMA_URL', 'http://localhost:11434')
         self.ollama_model = os.getenv('OLLAMA_MODEL', 'llama3.2:latest')
         self.hf_api_key = os.getenv('HUGGINGFACE_API_KEY')
@@ -83,6 +101,15 @@ class FreeLLMMealPlannerAgent:
                             logger.info("✅ Ollama generated valid meal plan")
                             # Convert the LLM response to the format expected by the frontend
                             converted_plan = self._convert_to_frontend_format(meal_plan, preferences)
+                            
+                            # Log to meal history
+                            if self.meal_history_service:
+                                try:
+                                    self.meal_history_service.log_meal_generated(user_id, converted_plan, preferences)
+                                    logger.info("📝 Logged meal plan to history")
+                                except Exception as e:
+                                    logger.warning(f"Failed to log meal plan to history: {e}")
+                            
                             return {
                                 "success": True,
                                 "meal_plan": converted_plan,
@@ -93,6 +120,15 @@ class FreeLLMMealPlannerAgent:
                             logger.warning("⚠️ Meal plan may not meet macro targets, but proceeding")
                             # Still proceed but log the warning
                             converted_plan = self._convert_to_frontend_format(meal_plan, preferences)
+                            
+                            # Log to meal history even with warning
+                            if self.meal_history_service:
+                                try:
+                                    self.meal_history_service.log_meal_generated(user_id, converted_plan, preferences)
+                                    logger.info("📝 Logged meal plan to history (with macro warning)")
+                                except Exception as e:
+                                    logger.warning(f"Failed to log meal plan to history: {e}")
+                            
                             return {
                                 "success": True,
                                 "meal_plan": converted_plan,
@@ -118,6 +154,15 @@ class FreeLLMMealPlannerAgent:
                         logger.info("✅ Hugging Face generated valid meal plan")
                         # Convert the LLM response to the format expected by the frontend
                         converted_plan = self._convert_to_frontend_format(meal_plan, preferences)
+                        
+                        # Log to meal history
+                        if self.meal_history_service:
+                            try:
+                                self.meal_history_service.log_meal_generated(user_id, converted_plan, preferences)
+                                logger.info("📝 Logged meal plan to history (HuggingFace)")
+                            except Exception as e:
+                                logger.warning(f"Failed to log meal plan to history: {e}")
+                        
                         return {
                             "success": True,
                             "meal_plan": converted_plan,

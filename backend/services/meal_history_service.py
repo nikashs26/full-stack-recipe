@@ -10,11 +10,17 @@ class MealHistoryService:
     """
     
     def __init__(self):
-        self.client = chromadb.PersistentClient(path="./chroma_db")
+        # Use absolute path to ensure ChromaDB is created in the right location
+        import os
+        chroma_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "chroma_db")
+        
+        self.client = chromadb.PersistentClient(path=chroma_path)
+        
         self.meal_history_collection = self.client.get_or_create_collection(
             name="meal_history",
             metadata={"description": "User meal history and interactions"}
         )
+        
         self.meal_feedback_collection = self.client.get_or_create_collection(
             name="meal_feedback",
             metadata={"description": "User feedback on meals"}
@@ -27,29 +33,58 @@ class MealHistoryService:
         log_id = str(uuid.uuid4())
         timestamp = datetime.now().isoformat()
         
-        # Create searchable text for the meal plan
-        meal_descriptions = []
-        for day, meals in meal_plan.items():
-            for meal_type, meal in meals.items():
-                if meal:
-                    meal_descriptions.append(f"{day} {meal_type}: {meal.get('name', '')} ({meal.get('cuisine', '')})")
+
         
-        searchable_text = " | ".join(meal_descriptions)
+        # Handle both legacy format (day keys) and new format (days array)
+        meal_descriptions = []
+        cuisines = set()
+        difficulties = set()
+        meal_count = 0
+        
+        # Check if it's the new format with 'days' array
+        if 'days' in meal_plan and isinstance(meal_plan['days'], list):
+            # New format: days array
+            for day_data in meal_plan['days']:
+                day_name = day_data.get('day', 'Unknown')
+                meals = day_data.get('meals', [])
+                for meal in meals:
+                    if meal:
+                        meal_count += 1
+                        meal_name = meal.get('name', 'Unknown')
+                        meal_cuisine = meal.get('cuisine', 'Unknown')
+                        meal_difficulty = meal.get('difficulty', 'Unknown')
+                        
+                        meal_descriptions.append(f"{day_name} {meal.get('meal_type', 'meal')}: {meal_name} ({meal_cuisine})")
+                        if meal_cuisine:
+                            cuisines.add(meal_cuisine)
+                        if meal_difficulty:
+                            difficulties.add(meal_difficulty)
+        else:
+            # Legacy format: day keys
+            for day, meals in meal_plan.items():
+                for meal_type, meal in meals.items():
+                    if meal:
+                        meal_count += 1
+                        meal_name = meal.get('name', 'Unknown')
+                        meal_cuisine = meal.get('cuisine', 'Unknown')
+                        meal_difficulty = meal.get('difficulty', 'Unknown')
+                        
+                        meal_descriptions.append(f"{day} {meal_type}: {meal_name} ({meal_cuisine})")
+                        if meal_cuisine:
+                            cuisines.add(meal_cuisine)
+                        if meal_difficulty:
+                            difficulties.add(meal_difficulty)
+        
+        searchable_text = " | ".join(meal_descriptions) if meal_descriptions else "Meal plan generated"
         
         metadata = {
             "user_id": user_id,
             "event_type": "meal_plan_generated",
             "timestamp": timestamp,
             "preferences_used": json.dumps(preferences_used),
-            "meal_count": len([m for day in meal_plan.values() for m in day.values() if m]),
-            "cuisines": json.dumps(list(set([
-                meal.get('cuisine', '') for day in meal_plan.values() 
-                for meal in day.values() if meal and meal.get('cuisine')
-            ]))),
-            "difficulties": json.dumps(list(set([
-                meal.get('difficulty', '') for day in meal_plan.values() 
-                for meal in day.values() if meal and meal.get('difficulty')
-            ])))
+            "meal_count": meal_count,
+            "cuisines": json.dumps(list(cuisines)),
+            "difficulties": json.dumps(list(difficulties))
         }
         
         self.meal_history_collection.add(
@@ -96,8 +131,10 @@ class MealHistoryService:
         # Get recent meal history
         history_results = self.meal_history_collection.get(
             where={
-                "user_id": user_id,
-                "timestamp": {"$gte": cutoff_date}
+                "$and": [
+                    {"user_id": user_id},
+                    {"timestamp": {"$gte": cutoff_date}}
+                ]
             },
             include=['metadatas']
         )
@@ -105,8 +142,10 @@ class MealHistoryService:
         # Get feedback data
         feedback_results = self.meal_feedback_collection.get(
             where={
-                "user_id": user_id,
-                "timestamp": {"$gte": cutoff_date}
+                "$and": [
+                    {"user_id": user_id},
+                    {"timestamp": {"$gte": cutoff_date}}
+                ]
             },
             include=['metadatas']
         )
@@ -194,8 +233,10 @@ class MealHistoryService:
             recent_cutoff = (datetime.now() - timedelta(days=7)).isoformat()
             recent_history = self.meal_history_collection.get(
                 where={
-                    "user_id": user_id,
-                    "timestamp": {"$gte": recent_cutoff}
+                    "$and": [
+                        {"user_id": user_id},
+                        {"timestamp": {"$gte": recent_cutoff}}
+                    ]
                 },
                 include=['documents']
             )
@@ -261,6 +302,138 @@ class MealHistoryService:
         
         return [{"meal_id": meal_id, "score": score} for meal_id, score in trending]
     
+    def get_user_meal_plan_history(self, user_id: str, limit: int = 20) -> List[Dict[str, Any]]:
+        """
+        Get user's meal plan generation history with full meal plan details
+        """
+        try:
+            # Get meal history for the user, ordered by timestamp (most recent first)
+            results = self.meal_history_collection.get(
+                where={
+                    "$and": [
+                        {"user_id": user_id},
+                        {"event_type": "meal_plan_generated"}
+                    ]
+                },
+                include=['metadatas', 'documents']
+            )
+            
+            if not results or not results['metadatas']:
+                return []
+            
+            # Convert to list of dicts with full meal plan info
+            history = []
+            for i, metadata in enumerate(results['metadatas']):
+                try:
+                    preferences_used = json.loads(metadata.get('preferences_used', '{}'))
+                    cuisines = json.loads(metadata.get('cuisines', '[]'))
+                    difficulties = json.loads(metadata.get('difficulties', '[]'))
+                    
+                    # Parse the meal plan from the searchable text
+                    meal_descriptions = results['documents'][i] if i < len(results['documents']) else ""
+                    
+                    history_item = {
+                        "id": metadata.get('timestamp', ''),  # Use timestamp as ID
+                        "generated_at": metadata.get('timestamp', ''),
+                        "preferences_used": preferences_used,
+                        "meal_count": metadata.get('meal_count', 0),
+                        "cuisines": cuisines,
+                        "difficulties": difficulties,
+                        "meal_descriptions": meal_descriptions,
+                        "preview": meal_descriptions[:200] + "..." if len(meal_descriptions) > 200 else meal_descriptions
+                    }
+                    
+                    history.append(history_item)
+                    
+                except (json.JSONDecodeError, KeyError) as e:
+                    # Skip malformed entries
+                    continue
+            
+            # Sort by timestamp (most recent first) and limit
+            history.sort(key=lambda x: x['generated_at'], reverse=True)
+            return history[:limit]
+            
+        except Exception as e:
+            print(f"Error retrieving meal plan history: {e}")
+            return []
+    
+    def get_meal_plan_details(self, user_id: str, plan_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Get detailed information about a specific meal plan
+        """
+        try:
+            results = self.meal_history_collection.get(
+                where={
+                    "$and": [
+                        {"user_id": user_id},
+                        {"timestamp": plan_id}  # Using timestamp as plan ID
+                    ]
+                },
+                include=['metadatas', 'documents']
+            )
+            
+            if not results or not results['metadatas']:
+                return None
+            
+            metadata = results['metadatas'][0]
+            meal_descriptions = results['documents'][0] if results['documents'] else ""
+            
+            # Parse meal plan from descriptions
+            meal_plan = self._parse_meal_descriptions(meal_descriptions)
+            
+            return {
+                "id": plan_id,
+                "generated_at": metadata.get('timestamp', ''),
+                "preferences_used": json.loads(metadata.get('preferences_used', '{}')),
+                "meal_count": metadata.get('meal_count', 0),
+                "cuisines": json.loads(metadata.get('cuisines', '[]')),
+                "difficulties": json.loads(metadata.get('difficulties', '[]')),
+                "meal_plan": meal_plan,
+                "raw_descriptions": meal_descriptions
+            }
+            
+        except Exception as e:
+            print(f"Error retrieving meal plan details: {e}")
+            return None
+    
+    def _parse_meal_descriptions(self, descriptions: str) -> Dict[str, Dict[str, str]]:
+        """
+        Parse meal descriptions back into structured meal plan format
+        """
+        meal_plan = {}
+        
+        # Split by " | " to get individual meal entries
+        meals = descriptions.split(" | ")
+        
+        for meal_entry in meals:
+            try:
+                # Parse format: "day meal_type: meal_name (cuisine)"
+                if ": " in meal_entry:
+                    day_meal, meal_info = meal_entry.split(": ", 1)
+                    
+                    # Extract day and meal type
+                    day_meal_parts = day_meal.strip().split(" ")
+                    if len(day_meal_parts) >= 2:
+                        day = day_meal_parts[0].lower()
+                        meal_type = day_meal_parts[1].lower()
+                        
+                        # Extract meal name (everything before the last parenthesis)
+                        meal_name = meal_info
+                        if " (" in meal_info and meal_info.endswith(")"):
+                            meal_name = meal_info.rsplit(" (", 1)[0]
+                        
+                        # Initialize day if not exists
+                        if day not in meal_plan:
+                            meal_plan[day] = {}
+                        
+                        meal_plan[day][meal_type] = meal_name
+                        
+            except Exception:
+                # Skip malformed entries
+                continue
+        
+        return meal_plan
+
     def cleanup_old_data(self, days_to_keep: int = 90) -> None:
         """
         Clean up old meal history data to keep the database manageable

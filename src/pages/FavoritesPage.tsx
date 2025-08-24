@@ -3,7 +3,7 @@ import React from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Header from '../components/Header';
 import RecipeCard from '../components/RecipeCard';
-import { loadRecipes, deleteRecipe as deleteRecipeFromStorage, updateRecipe } from '../utils/storage';
+import { loadRecipes, updateRecipe } from '../utils/storage';
 import { Recipe } from '../types/recipe';
 import { Heart } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -21,16 +21,7 @@ const FavoritesPage: React.FC = () => {
   // Filter favorites
   const favoriteRecipes = recipes.filter((recipe: Recipe) => recipe.isFavorite);
 
-  const handleDeleteRecipe = (id: string) => {
-    if (window.confirm('Are you sure you want to delete this recipe?')) {
-      deleteRecipeFromStorage(id);
-      toast({
-        title: "Recipe deleted",
-        description: "The recipe has been successfully deleted.",
-      });
-      queryClient.invalidateQueries({ queryKey: ['recipes'] });
-    }
-  };
+
 
   const handleToggleFavorite = (recipe: Recipe) => {
     const updatedRecipe = {
@@ -38,18 +29,24 @@ const FavoritesPage: React.FC = () => {
       isFavorite: false
     };
     updateRecipe(updatedRecipe);
+    
+    // Update query cache data directly without invalidating (prevents refresh)
+    queryClient.setQueryData(['recipes'], (oldData: Recipe[]) => {
+      if (!oldData) return oldData;
+      return oldData.map(r => r.id === updatedRecipe.id ? updatedRecipe : r);
+    });
+    
     toast({
       title: "Removed from favorites",
       description: `"${recipe.name}" has been removed from your favorites.`,
     });
-    queryClient.invalidateQueries({ queryKey: ['recipes'] });
   };
 
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
       <div className="pt-24 md:pt-28">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="flex items-center mb-8 gap-2">
             <Heart className="text-red-500 h-6 w-6" fill="currentColor" />
             <h1 className="text-3xl font-bold">My Favorite Recipes</h1>
@@ -61,7 +58,6 @@ const FavoritesPage: React.FC = () => {
                 <RecipeCard 
                   key={recipe.id}
                   recipe={recipe}
-                  onDelete={handleDeleteRecipe}
                   onToggleFavorite={handleToggleFavorite}
                   isExternal={false}
                 />

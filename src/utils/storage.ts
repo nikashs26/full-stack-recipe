@@ -10,10 +10,10 @@ const RECIPES_STORAGE_KEY = 'dietary-delight-recipes';
 export const getLocalRecipes = (): Recipe[] => {
   try {
     const storedRecipes = localStorage.getItem(RECIPES_STORAGE_KEY);
-    return storedRecipes ? JSON.parse(storedRecipes) : initialRecipes;
+    return storedRecipes ? JSON.parse(storedRecipes) : [];
   } catch (error) {
     console.error('Failed to load recipes from localStorage:', error);
-    return initialRecipes;
+    return [];
   }
 };
 
@@ -59,9 +59,20 @@ export const addRecipe = (recipe: Omit<Recipe, 'id'>): Recipe => {
 
 export const updateRecipe = (updatedRecipe: Recipe): void => {
   const recipes = getLocalRecipes();
-  const updatedRecipes = recipes.map(recipe => 
-    recipe.id === updatedRecipe.id ? updatedRecipe : recipe
-  );
+  const existingRecipeIndex = recipes.findIndex(recipe => recipe.id === updatedRecipe.id);
+  
+  let updatedRecipes: Recipe[];
+  if (existingRecipeIndex !== -1) {
+    // Recipe exists, update it
+    updatedRecipes = recipes.map(recipe => 
+      recipe.id === updatedRecipe.id ? updatedRecipe : recipe
+    );
+  } else {
+    // Recipe doesn't exist in localStorage, add it
+    // This handles external recipes that weren't previously saved locally
+    updatedRecipes = [...recipes, updatedRecipe];
+  }
+  
   saveRecipes(updatedRecipes);
 };
 

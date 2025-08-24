@@ -4,7 +4,7 @@ import { Folder, Recipe } from '../types/recipe';
 import { Plus, Folder as FolderIcon, Trash2, Edit2 } from 'lucide-react';
 import { useToast } from './ui/use-toast';
 import RecipeCard from './RecipeCard';
-import { deleteRecipe, updateRecipe } from '../utils/storage';
+import { updateRecipe } from '../utils/storage';
 
 interface FolderListProps {
   folders: Folder[];
@@ -73,18 +73,7 @@ const FolderList: React.FC<FolderListProps> = ({
     setEditingFolder(null);
   };
 
-  const handleDeleteRecipe = (id: string) => {
-    if (window.confirm('Are you sure you want to delete this recipe?')) {
-      deleteRecipe(id);
-      toast({
-        title: "Recipe deleted",
-        description: "The recipe has been successfully deleted.",
-      });
-      
-      // Update the local recipes list
-      setRecipes(prevRecipes => prevRecipes.filter(recipe => recipe.id !== id));
-    }
-  };
+
 
   const handleToggleFavorite = (recipe: Recipe) => {
     const updatedRecipe = {
@@ -287,7 +276,6 @@ const FolderList: React.FC<FolderListProps> = ({
                 <RecipeCard
                   key={recipe.id}
                   recipe={recipe}
-                  onDelete={handleDeleteRecipe}
                   onToggleFavorite={handleToggleFavorite}
                   folderName={selectedFolder.name}
                 />

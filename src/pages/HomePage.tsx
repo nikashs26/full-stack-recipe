@@ -14,9 +14,12 @@ import { getHomepagePopularRecipes } from '../services/popularRecipesService';
 import { getQualityBasedRecipes } from '../services/popularRecipesService';
 import { addSampleClicks } from '../utils/testClickTracking';
 import { apiCall } from '../utils/apiUtils';
+import { updateRecipe } from '../utils/storage';
+import { useToast } from '@/hooks/use-toast';
 
 const HomePage: React.FC = () => {
   const { isAuthenticated, user } = useAuth();
+  const { toast } = useToast();
 
   // Load user preferences separately (since AuthContext User doesn't include preferences)
   const [userPreferences, setUserPreferences] = useState<any>(null);
@@ -1055,9 +1058,56 @@ const HomePage: React.FC = () => {
 
   const welcomeMessage = getWelcomeMessage();
 
-  // Placeholder handlers for recipe interactions
-  const handleDeleteRecipe = () => {
-    // Placeholder for delete functionality
+
+
+  // Handle favorite toggle for recipes
+  const handleToggleFavorite = async (recipe: any) => {
+    console.log('🎯 HomePage: Toggling favorite for recipe:', {
+      id: recipe.id,
+      title: recipe.title || recipe.name,
+      currentFavorite: recipe.isFavorite,
+      type: recipe.type
+    });
+    
+    const updatedRecipe = {
+      ...recipe,
+      isFavorite: !recipe.isFavorite
+    };
+    
+    // Update the recipe in storage
+    updateRecipe(updatedRecipe);
+    
+    console.log('✅ HomePage: Recipe favorite updated in storage:', {
+      id: updatedRecipe.id,
+      newFavorite: updatedRecipe.isFavorite
+    });
+    
+    // Update query cache data directly without invalidating (prevents refresh)
+    queryClient.setQueryData(['backend-recipes', isAuthenticated, userPreferences, refreshCounter], (oldData: any) => {
+      if (!oldData) return oldData;
+      return oldData.map((r: any) => r.id === updatedRecipe.id ? updatedRecipe : r);
+    });
+    
+    queryClient.setQueryData(['popular-recipes', user?.user_id], (oldData: any) => {
+      if (!oldData) return oldData;
+      return oldData.map((r: any) => r.id === updatedRecipe.id ? updatedRecipe : r);
+    });
+    
+    queryClient.setQueryData(['personal-popular-recipes', user?.user_id], (oldData: any) => {
+      if (!oldData) return oldData;
+      return oldData.map((r: any) => r.id === updatedRecipe.id ? updatedRecipe : r);
+    });
+    
+    // Only invalidate the local recipes query for favorites page updates
+    queryClient.invalidateQueries({ queryKey: ['recipes'] });
+    
+    // Show toast notification
+    toast({
+      title: updatedRecipe.isFavorite ? "Added to favorites" : "Removed from favorites",
+      description: `"${recipe.title || recipe.name}" has been ${updatedRecipe.isFavorite ? 'added to' : 'removed from'} your favorites.`,
+    });
+    
+    console.log('🔄 HomePage: Cache updated directly without refresh');
   };
 
   return (
@@ -1068,7 +1118,7 @@ const HomePage: React.FC = () => {
         {/* Hero Section */}
         <section className="relative overflow-hidden bg-gradient-to-br from-recipe-primary via-recipe-primary/90 to-recipe-accent py-20 md:py-32">
           <div className="absolute inset-0 bg-black/10"></div>
-          <div className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-20" style={{ backgroundImage: 'url(https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTzYG7CW6gEKFIWucy8dyslT0yw3yTHUS8YAQ&s)' }}></div>
+          <div className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-20" style={{ backgroundImage: 'url(https://t4.ftcdn.net/jpg/04/43/37/07/360_F_443370711_sqHRnSIQovW6uyQ5ZwDpd4kjCG8Q6swm.jpg)' }}></div>
           
           <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
             <div className="max-w-4xl mx-auto">
@@ -1255,10 +1305,7 @@ const HomePage: React.FC = () => {
                           key={`recommended-${recipe.id}-${index}`} 
                           recipe={recipe} 
                           isExternal={recipe.type === 'external'}
-                          onDelete={handleDeleteRecipe}
-                          onToggleFavorite={(updatedRecipe) => {
-                            // The recipe is already updated in storage and queries will be invalidated
-                          }}
+                          onToggleFavorite={handleToggleFavorite}
                         />
                       );
                     })}
@@ -1340,10 +1387,7 @@ const HomePage: React.FC = () => {
                         key={`popular-${recipe.id}-${index}`} 
                         recipe={recipe} 
                         isExternal={recipe.type === 'external'}
-                        onDelete={handleDeleteRecipe}
-                        onToggleFavorite={(updatedRecipe) => {
-                          // The recipe is already updated in storage and queries will be invalidated
-                        }}
+                        onToggleFavorite={handleToggleFavorite}
                       />
                     );
                   })}

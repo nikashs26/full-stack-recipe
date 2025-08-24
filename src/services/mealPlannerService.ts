@@ -119,6 +119,44 @@ export interface MealPlanData {
   plan_type: string;
 }
 
+/**
+ * Save a meal plan to history
+ */
+export const saveMealPlanToHistory = async (mealPlan: MealPlanData, preferences?: any): Promise<void> => {
+  try {
+    console.log('💾 Attempting to save meal plan to history...');
+    console.log('📦 Meal plan data:', mealPlan);
+    console.log('⚙️ Preferences:', preferences);
+    
+    const historyData = {
+      meal_plan: mealPlan,
+      preferences_used: preferences || mealPlan.preferences_used,
+      generated_at: mealPlan.generated_at || new Date().toISOString()
+    };
+
+    console.log('📤 Sending history data:', historyData);
+    console.log('🔗 Calling endpoint: /api/meal-history/log');
+
+    const response = await apiCall('/api/meal-history/log', {
+      method: 'POST',
+      body: JSON.stringify(historyData)
+    });
+
+    console.log('📥 Response status:', response.status);
+    console.log('📥 Response ok:', response.ok);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.warn('❌ Failed to save meal plan to history:', response.status, errorText);
+    } else {
+      const successData = await response.json();
+      console.log('✅ Meal plan saved to history successfully:', successData);
+    }
+  } catch (error) {
+    console.error('❌ Error saving meal plan to history:', error);
+  }
+};
+
 export interface MealPlanResponse {
   success: boolean;
   data: MealPlanData;
@@ -128,7 +166,7 @@ export interface MealPlanResponse {
 // Update the API base URL for deployment
 const API_BASE_URL_FINAL = API_BASE_URL;
 
-export const generateMealPlan = async (options?: MealPlanOptions): Promise<MealPlanData> => {
+export const generateMealPlan = async (options?: MealPlanOptions, abortSignal?: AbortSignal): Promise<MealPlanData> => {
   try {
     console.log('🚀 Generating meal plan...');
     console.log('🔗 Using API URL:', API_BASE_URL_FINAL);
@@ -173,7 +211,8 @@ export const generateMealPlan = async (options?: MealPlanOptions): Promise<MealP
     // Use the AI meal planner endpoint with user preferences
     const response = await apiCall('/api/ai/meal_plan', {
       method: 'POST',
-      body: JSON.stringify({ preferences: mealPlanPreferences })
+      body: JSON.stringify({ preferences: mealPlanPreferences }),
+      signal: abortSignal
     });
 
     if (!response.ok) {

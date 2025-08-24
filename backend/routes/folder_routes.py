@@ -9,11 +9,7 @@ folder_service = FolderService()
 def handle_folders_options():
     """Handle CORS preflight request for folders endpoint"""
     response = jsonify({})
-    response.headers.add('Access-Control-Allow-Origin', 'http://localhost:8081')
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With')
-    response.headers.add('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
-    response.headers.add('Access-Control-Allow-Credentials', 'true')
-    response.headers.add('Access-Control-Max-Age', '3600')
+    response.status_code = 200
     return response
 
 @folder_bp.route('/folders', methods=['POST'])
@@ -111,7 +107,7 @@ def delete_folder(folder_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@folder_bp.route('/folders/<folder_id>/items', methods=['POST', 'OPTIONS'])
+@folder_bp.route('/folders/<folder_id>/items', methods=['POST'])
 @require_auth
 def add_to_folder(folder_id):
     """Add a recipe to a folder"""
@@ -144,7 +140,14 @@ def add_to_folder(folder_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@folder_bp.route('/folders/items/<item_id>', methods=['DELETE', 'OPTIONS'])
+@folder_bp.route('/folders/<folder_id>/items', methods=['OPTIONS'])
+def handle_add_to_folder_options(folder_id):
+    """Handle CORS preflight request for add to folder endpoint"""
+    response = jsonify({})
+    response.status_code = 200
+    return response
+
+@folder_bp.route('/folders/items/<item_id>', methods=['DELETE'])
 @require_auth
 def remove_from_folder(item_id):
     """Remove a recipe from a folder"""
@@ -181,7 +184,14 @@ def remove_from_folder(item_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@folder_bp.route('/recipes/<recipe_type>/<recipe_id>/folders', methods=['GET', 'OPTIONS'])
+@folder_bp.route('/folders/items/<item_id>', methods=['OPTIONS'])
+def handle_remove_from_folder_options(item_id):
+    """Handle CORS preflight request for remove from folder endpoint"""
+    response = jsonify({})
+    response.status_code = 200
+    return response
+
+@folder_bp.route('/recipes/<recipe_type>/<recipe_id>/folders', methods=['GET'])
 @require_auth
 def get_folders_for_recipe(recipe_type, recipe_id):
     """Get all folders containing a specific recipe"""
@@ -193,7 +203,14 @@ def get_folders_for_recipe(recipe_type, recipe_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@folder_bp.route('/folders/search', methods=['GET', 'OPTIONS'])
+@folder_bp.route('/recipes/<recipe_type>/<recipe_id>/folders', methods=['OPTIONS'])
+def handle_recipe_folders_options(recipe_type, recipe_id):
+    """Handle CORS preflight request for recipe folders endpoint"""
+    response = jsonify({})
+    response.status_code = 200
+    return response
+
+@folder_bp.route('/folders/search', methods=['GET'])
 @require_auth
 def search_folders():
     """Search user's folders by name or description"""
@@ -209,3 +226,10 @@ def search_folders():
         
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@folder_bp.route('/folders/search', methods=['OPTIONS'])
+def handle_search_folders_options():
+    """Handle CORS preflight request for search folders endpoint"""
+    response = jsonify({})
+    response.status_code = 200
+    return response

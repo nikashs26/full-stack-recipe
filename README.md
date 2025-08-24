@@ -1,69 +1,144 @@
-# Welcome to your Lovable project
+# Full-Stack Recipe App
 
-## Project info
+A modern recipe management application with AI-powered meal planning, built with React + TypeScript frontend and Flask + Python backend.
 
-**URL**: https://lovable.dev/projects/c058f855-be4b-479b-96af-dd9c46f69618
+## 🚀 Live Demo
 
-## How can I edit this code?
+- **Frontend**: [Netlify](https://your-app-name.netlify.app) (update with your actual URL)
+- **Backend**: [Railway](https://your-app-name-production.up.railway.app) (update with your actual URL)
 
-There are several ways of editing your application.
+## 🛠️ Tech Stack
 
-**Use Lovable**
+### Frontend
+- **React 18** with TypeScript
+- **Vite** for fast development and building
+- **Tailwind CSS** for styling
+- **shadcn/ui** for UI components
+- **Netlify** for hosting
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/c058f855-be4b-479b-96af-dd9c46f69618) and start prompting.
+### Backend
+- **Flask** Python web framework
+- **ChromaDB** for vector storage and recipe search
+- **Railway** for hosting
+- **Docker** for containerization
 
-Changes made via Lovable will be committed automatically to this repo.
+## 🚀 Quick Start
 
-**Use your preferred IDE**
+### Prerequisites
+- Node.js 18+ and npm
+- Python 3.11+
+- Git
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+### Local Development
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/your-username/full-stack-recipe.git
+   cd full-stack-recipe
+   ```
 
-Follow these steps:
+2. **Frontend Setup**
+   ```bash
+   npm install
+   npm run dev
+   ```
+   Frontend will be available at `http://localhost:8081`
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+3. **Backend Setup**
+   ```bash
+   cd backend
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   pip install -r requirements.txt
+   python app.py
+   ```
+   Backend will be available at `http://localhost:5003`
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+## 🌐 Deployment
 
-# Step 3: Install the necessary dependencies.
-npm i
+### Free Deployment Setup
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+This app is configured for **completely free deployment** using:
+- **Railway** (backend) - 500 hours/month free
+- **Netlify** (frontend) - 100GB bandwidth/month free
+
+📖 **Complete deployment guide**: [RAILWAY_DEPLOYMENT_GUIDE.md](./RAILWAY_DEPLOYMENT_GUIDE.md)
+
+### Quick Deploy Steps
+
+1. **Backend (Railway)**
+   - Connect GitHub repo to Railway
+   - Set source directory to `backend`
+   - Add environment variables
+   - Deploy
+
+2. **Frontend (Netlify)**
+   - Connect GitHub repo to Netlify
+   - Set build command: `npm run build`
+   - Set publish directory: `dist`
+   - Add backend URL environment variable
+   - Deploy
+
+## 🔧 Configuration
+
+### Environment Variables
+
+**Backend (.env)**
+```bash
+FLASK_SECRET_KEY=your-secret-key
+DEBUG=false
 ```
 
-**Edit a file directly in GitHub**
+**Frontend (.env.local)**
+```bash
+VITE_BACKEND_URL=http://localhost:5003
+```
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## 📱 Features
 
-**Use GitHub Codespaces**
+- 🍳 Recipe management and search
+- 🤖 AI-powered meal planning
+- 📱 Responsive design
+- 🔐 User authentication
+- 📁 Recipe organization
+- 🛒 Shopping list generation
+- 📊 Nutritional information
+- 🌍 International cuisine support
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+## 🚨 Troubleshooting
 
-## What technologies are used for this project?
+### Common Issues
 
-This project is built with .
+1. **Railway crashes**: Check memory usage (free tier: 512MB)
+2. **Frontend can't connect**: Verify CORS settings and backend URL
+3. **Build failures**: Check Node.js version and dependencies
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+### Health Checks
 
-## How can I deploy this project?
+Test your Railway backend:
+```bash
+cd backend
+python health_check.py https://your-railway-url.up.railway.app
+```
 
-Simply open [Lovable](https://lovable.dev/projects/c058f855-be4b-479b-96af-dd9c46f69618) and click on Share -> Publish.
+## 🤝 Contributing
 
-## I want to use a custom domain - is that possible?
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Test thoroughly
+5. Submit a pull request
 
-We don't support custom domains (yet). If you want to deploy your project under your own domain then we recommend using Netlify. Visit our docs for more details: [Custom domains](https://docs.lovable.dev/tips-tricks/custom-domain/)
+## 📄 License
+
+This project is open source and available under the [MIT License](LICENSE).
+
+## 🆘 Support
+
+- **Railway**: [Discord](https://discord.gg/railway)
+- **Netlify**: [Community](https://community.netlify.com)
+- **GitHub Issues**: For code-specific problems
+
+---
+
+**Happy Cooking! 👨‍🍳**

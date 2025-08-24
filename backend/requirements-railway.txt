@@ -1,0 +1,13 @@
+# Minimal requirements for Railway deployment
+flask==2.3.3
+flask-cors==4.0.0
+python-dotenv==1.0.0
+requests==2.31.0
+gunicorn==21.2.0
+
+# Database and vector storage (commented out for Railway free tier)
+# chromadb==0.4.18
+
+# Note: Railway free tier has memory limitations
+# ChromaDB may cause crashes due to memory constraints
+# Consider using a separate database service for production

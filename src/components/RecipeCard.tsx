@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Clock, Star, Trash2, Clock3, Utensils, Users, BarChart2, Flame, Droplet, Carrot, Heart } from 'lucide-react';
+import { Clock, Star, Clock3, Utensils, Users, BarChart2, Flame, Droplet, Carrot, Heart } from 'lucide-react';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from './ui/hover-card';
 import { ExtendedRecipe, Recipe } from '../types/recipe';
 import { useRecipeClickTracking } from '../utils/clickTracking';
@@ -14,7 +14,6 @@ import { useQueryClient } from '@tanstack/react-query';
 interface RecipeCardProps {
   recipe: ExtendedRecipe | Recipe;
   isExternal?: boolean;
-  onDelete?: (id: string | number) => void;
   onClick?: (recipe: ExtendedRecipe | Recipe) => void;
   onToggleFavorite?: (recipe: ExtendedRecipe | Recipe) => void;
 }
@@ -22,7 +21,6 @@ interface RecipeCardProps {
 const RecipeCard: React.FC<RecipeCardProps> = React.memo(({ 
   recipe, 
   isExternal = false, 
-  onDelete,
   onClick,
   onToggleFavorite
 }) => {
@@ -470,21 +468,7 @@ const RecipeCard: React.FC<RecipeCardProps> = React.memo(({
         </div>
           </Link>
           
-          {/* Admin actions */}
-          {onDelete && (
-        <div className="p-4 bg-gray-50 border-t border-gray-100 flex justify-end">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete(recipe.id as string);
-            }}
-            className="text-red-600 hover:text-red-800 text-sm font-medium flex items-center"
-          >
-            <Trash2 className="w-4 h-4 mr-1" />
-            Delete Recipe
-          </button>
-            </div>
-          )}
+
         </div>
       </HoverCardTrigger>
       

@@ -137,12 +137,18 @@ const RecipeDetailPage: React.FC = () => {
     
     updateRecipe(updatedRecipe);
     
+    // Update query cache data directly without invalidating (prevents refresh)
+    queryClient.setQueryData(['recipes'], (oldData: any) => {
+      if (!oldData) return oldData;
+      return Array.isArray(oldData) 
+        ? oldData.map((r: any) => r.id === updatedRecipe.id ? updatedRecipe : r)
+        : oldData;
+    });
+    
     toast({
       title: updatedRecipe.isFavorite ? "Added to favorites" : "Removed from favorites",
       description: `"${recipe.title || recipe.name}" has been ${updatedRecipe.isFavorite ? 'added to' : 'removed from'} your favorites.`,
     });
-    
-    queryClient.invalidateQueries({ queryKey: ['recipes'] });
   };
 
   // Handler for submitting reviews
