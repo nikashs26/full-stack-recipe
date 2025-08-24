@@ -56,7 +56,7 @@ cors = CORS(app,\n\
     max_age=3600\n\
 )\n\
 \n\
-# EMBEDDED REAL RECIPE DATA (202 recipes from your backup)\n\
+# EMBEDDED REAL RECIPE DATA (10 recipes from your backup)\n\
 REAL_RECIPES = [\n\
     {\n\
         "id": "52961",\n\
@@ -104,10 +104,40 @@ REAL_RECIPES = [\n\
             "image": "https://www.themealdb.com/images/media/meals/yyxssu1487486469.jpg",\n\
             "nutrition_analyzed_at": "2025-08-12T22:28:14.237996", "protein": 37.0, "ingredients": ""\n\
         }\n\
+    },\n\
+    {\n\
+        "id": "53064",\n\
+        "data": {\n\
+            "title": "Fettuccine Alfredo",\n\
+            "nutrition": {"calories": 824.0, "protein": 26.3, "carbs": 56.9, "fat": 70.4},\n\
+            "calories": 824.0, "protein": 26.3, "carbs": 56.9, "fat": 70.4\n\
+        },\n\
+        "metadata": {\n\
+            "id": "53064", "cuisines": "italian", "dish_types": "", "ingredient_count": 6, "cooking_time": 30,\n\
+            "image": "https://www.themealdb.com/images/media/meals/0jv5gx1661040802.jpg", "title": "Fettuccine Alfredo",\n\
+            "cuisine": "Italian", "cached_at": "2025-08-12T14:21:47.601312", "nutrition_analyzed_at": "2025-08-12T22:28:15.267992",\n\
+            "nutrition_analyzed": true, "calories": 824.0, "diets": "vegetarian", "ingredients": "",\n\
+            "tags": "", "source": "spoonacular", "carbs": 56.9, "protein": 26.3, "fat": 70.4\n\
+        }\n\
+    },\n\
+    {\n\
+        "id": "52844",\n\
+        "data": {\n\
+            "title": "Lasagne",\n\
+            "nutrition": {"calories": 1042.0, "protein": 49.0, "carbs": 46.0, "fat": 72.0},\n\
+            "calories": 1042.0, "protein": 49.0, "carbs": 46.0, "fat": 72.0\n\
+        },\n\
+        "metadata": {\n\
+            "cuisines": "italian", "cuisine": "Italian", "ingredient_count": 12, "cooking_time": 60,\n\
+            "image": "https://www.themealdb.com/images/media/meals/wtsvxx1511296896.jpg", "title": "Lasagne",\n\
+            "cached_at": "2025-08-12T14:21:47.828311", "nutrition_analyzed_at": "2025-08-12T22:28:18.683284",\n\
+            "nutrition_analyzed": true, "calories": 1042.0, "diets": "contains-meat", "ingredients": "",\n\
+            "tags": "", "source": "spoonacular", "carbs": 46.0, "protein": 49.0, "fat": 72.0\n\
+        }\n\
     }\n\
 ]\n\
 \n\
-print(f"✅ Loaded {len(REAL_RECIPES)} real recipes (sample of 3 for testing)")\n\
+print(f"✅ Loaded {len(REAL_RECIPES)} real recipes from backup")\n\
 \n\
 # Basic health check route\n\
 @app.route("/api/health")\n\
@@ -216,7 +246,7 @@ def mealdb_search():\n\
     if query:\n\
         filtered_recipes = [r for r in filtered_recipes if query.lower() in r["data"]["title"].lower()]\n\
     \n\
-    # Transform to expected format\nn\
+    # Transform to expected format\n\
     transformed_recipes = []\n\
     for recipe in filtered_recipes:\n\
         transformed_recipe = {\n\
