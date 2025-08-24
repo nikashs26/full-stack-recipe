@@ -1,52 +1,49 @@
-# Exclude everything except what's needed for the minimal backend
-*
-
-# Include only backend files needed for deployment
-!backend/app_super_minimal.py
-!backend/requirements-minimal.txt
-
-# Exclude all other backend files to reduce build context
-backend/*
-!backend/app_super_minimal.py
-!backend/requirements-minimal.txt
-
-# Exclude all frontend files
+# Exclude obvious non-essential files since Dockerfile is self-contained
 src/
 public/
 node_modules/
-package*.json
-vite.config.ts
-tailwind.config.ts
-postcss.config.js
-eslint.config.js
-tsconfig.json
-
-# Exclude build outputs
 dist/
 build/
-
-# Exclude development files
 *.log
 .env*
-.env.local
-.env.development
-
-# Exclude Git and IDE files
 .git/
 .vscode/
 .idea/
-
-# Exclude OS files
 .DS_Store
 Thumbs.db
-
-# Exclude documentation (not needed for build)
 *.md
 docs/
-
-# Exclude scripts and utilities
 scripts/
 utils/
-*.py
-!backend/app_super_minimal.py
-!backend/requirements-minimal.txt
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+.installed.cfg
+*.egg-info
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+venv/
+env/
+ENV/
+.venv/
+temp/
+tmp/
+*.tmp
+*.zip
+*.tar.gz
+*.csv
+chroma_db/
+chromadb_backups/
