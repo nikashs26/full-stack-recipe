@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Filter, Leaf, X } from 'lucide-react';
+import { getApiUrl } from '../config/api';
 
 interface MealDBSearchProps {
   onSearch: (recipes: any[]) => void;
@@ -24,7 +25,7 @@ const MealDBSearch: React.FC<MealDBSearchProps> = ({ onSearch }) => {
   useEffect(() => {
     const fetchCuisines = async () => {
       try {
-        const response = await fetch('http://localhost:5003/api/recipes/cuisines');
+        const response = await fetch(`${getApiUrl()}/api/recipes/cuisines`);
         if (response.ok) {
           const data = await response.json();
           setCuisines(data);
@@ -49,9 +50,7 @@ const MealDBSearch: React.FC<MealDBSearchProps> = ({ onSearch }) => {
       if (cuisine) params.append('cuisine', cuisine);
       
       // For dietary preferences, we'll do client-side filtering
-      const response = await fetch(
-        `http://localhost:5003/get_recipes?${params.toString()}`
-      );
+      const response = await fetch(`${getApiUrl()}/get_recipes?${params.toString()}`);
 
       if (response.ok) {
         const result = await response.json();

@@ -1,4 +1,5 @@
 import { Recipe } from '../types/recipe';
+import { getApiUrl } from '../config/api';
 
 /**
  * Shared service for consistent recipe data processing across the application
@@ -186,7 +187,7 @@ export async function fetchNormalizedRecipes(
     }
     
     const queryString = params.toString();
-    const url = `http://localhost:5003/get_recipes${queryString ? `?${queryString}` : ''}`;
+    const url = `${getApiUrl()}/get_recipes${queryString ? `?${queryString}` : ''}`;
     
     console.log('Fetching normalized recipes from:', url);
     

@@ -1,4 +1,5 @@
 import { getAllRecipes } from '../lib/spoonacular';
+import { getApiUrl } from '../config/api';
 
 // Check ChromaDB connection status with retries
 export const checkChromaDBConnection = async (retryCount = 2): Promise<boolean> => {
@@ -42,7 +43,7 @@ export const getDatabaseStatus = async (): Promise<{
   try {
     // First try direct API endpoint for testing ChromaDB
     try {
-      const testResponse = await fetch('http://localhost:5003/api/health');
+      const testResponse = await fetch(`${getApiUrl()}/api/health`);
       if (testResponse.ok) {
         const testData = await testResponse.json();
         console.log("ChromaDB health check:", testData);
@@ -138,7 +139,7 @@ export const testDirectConnection = async (): Promise<{
   details?: any;
 }> => {
   try {
-    const response = await fetch('http://localhost:5003/test-mongodb');
+    const response = await fetch(`${getApiUrl()}/test-mongodb`);
     if (!response.ok) {
       throw new Error(`Failed to test MongoDB connection: ${response.status} ${response.statusText}`);
     }

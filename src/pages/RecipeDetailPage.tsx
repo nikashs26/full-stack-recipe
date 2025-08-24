@@ -13,6 +13,7 @@ import { v4 as uuidv4 } from 'uuid';
 import RecipeReviews, { Review } from '../components/RecipeReviews';
 import { getReviewsByRecipeId, addReview, deleteReview } from '../utils/chromaReviewUtils';
 import { useAuth } from '../context/AuthContext';
+import { getApiUrl } from '../config/api';
 
 const RecipeDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -29,7 +30,7 @@ const RecipeDetailPage: React.FC = () => {
     queryFn: async () => {
       if (!id) return null;
       try {
-        const response = await fetch(`http://localhost:5003/get_recipe_by_id?id=${id}`);
+        const response = await fetch(`${getApiUrl()}/get_recipe_by_id?id=${id}`);
         if (!response.ok) {
           throw new Error('Recipe not found');
         }

@@ -1,6 +1,7 @@
 import { Recipe } from '../types/recipe';
 import { getQualityBasedRecipesNormalized, fetchNormalizedRecipes, NormalizedRecipe } from './recipeDataService';
 import { getPopularRecipesFromCurrentData } from '../utils/clickTracking';
+import { getApiUrl } from '../config/api';
 
 export interface PopularRecipe extends Recipe {
   popularity?: any;
@@ -117,7 +118,7 @@ export async function fetchPopularRecipes(limit: number = 8, userId?: string, ex
               // If still not found, try fallback API
               if (!recipeData) {
                 try {
-                  const fallbackResponse = await fetch(`http://localhost:5003/get_recipe_by_id?id=${popularRecipe.recipe_id}`);
+                  const fallbackResponse = await fetch(`${getApiUrl()}/get_recipe_by_id?id=${popularRecipe.recipe_id}`);
                   if (fallbackResponse.ok) {
                     const fallbackData = await fallbackResponse.json();
                     if (fallbackData) {
@@ -176,7 +177,7 @@ export async function fetchPopularRecipes(limit: number = 8, userId?: string, ex
               // If still not found, try fallback API
               if (!recipeData) {
                 try {
-                  const fallbackResponse = await fetch(`http://localhost:5003/get_recipe_by_id?id=${popularRecipe.recipe_id}`);
+                  const fallbackResponse = await fetch(`${getApiUrl()}/get_recipe_by_id?id=${popularRecipe.recipe_id}`);
                   if (fallbackResponse.ok) {
                     const fallbackData = await fallbackResponse.json();
                     if (fallbackData) {

@@ -1,3 +1,5 @@
+import { getApiUrl } from '../config/api';
+
 // ChromaDB-based click tracking using localStorage as fallback
 
 export interface RecipeClick {
@@ -134,7 +136,7 @@ export function clearOldClickTrackingData() {
 export async function getPopularRecipesFromCurrentData(limit: number = 10): Promise<RecipePopularity[]> {
   try {
     // Get current recipe data from backend API
-    const response = await fetch('http://localhost:5003/get_recipes');
+    const response = await fetch(`${getApiUrl()}/get_recipes`);
     if (!response.ok) {
       console.error('Failed to fetch recipes from backend for popularity calculation');
       return [];
@@ -162,7 +164,7 @@ export async function getPopularRecipesFromCurrentData(limit: number = 10): Prom
         let totalRating = 0;
         
         // Try external type first (correct type for backend recipes)
-        const externalReviewsResponse = await fetch(`http://localhost:5003/api/reviews/external/${recipe.id}`);
+        const externalReviewsResponse = await fetch(`${getApiUrl()}/api/reviews/external/${recipe.id}`);
         if (externalReviewsResponse.ok) {
           const externalReviewsData = await externalReviewsResponse.json();
           const externalReviews = externalReviewsData.reviews || [];
@@ -171,7 +173,7 @@ export async function getPopularRecipesFromCurrentData(limit: number = 10): Prom
         }
         
         // Also check local type (for existing reviews that were saved with wrong type)
-        const localReviewsResponse = await fetch(`http://localhost:5003/api/reviews/local/${recipe.id}`);
+        const localReviewsResponse = await fetch(`${getApiUrl()}/api/reviews/local/${recipe.id}`);
         if (localReviewsResponse.ok) {
           const localReviewsData = await localReviewsResponse.json();
           const localReviews = localReviewsData.reviews || [];
@@ -260,7 +262,7 @@ export async function getPopularRecipes(limit: number = 10): Promise<RecipePopul
     const clicksData = JSON.parse(localStorage.getItem('recipe_clicks') || '[]');
 
     // Get recipe data from backend API
-    const response = await fetch('http://localhost:5003/get_recipes');
+    const response = await fetch(`${getApiUrl()}/get_recipes`);
     if (!response.ok) {
       console.error('Failed to fetch recipes from backend for popularity calculation');
       return [];
@@ -293,7 +295,7 @@ export async function getPopularRecipes(limit: number = 10): Promise<RecipePopul
         const totalClicks = clicksByRecipe.get(recipeKey) || 0;
         
         // Fetch reviews for this recipe from the backend
-        const reviewsResponse = await fetch(`http://localhost:5003/api/reviews/external/${recipe.id}`);
+        const reviewsResponse = await fetch(`${getApiUrl()}/api/reviews/external/${recipe.id}`);
         let totalReviews = 0;
         let averageRating = 0;
         
@@ -375,7 +377,7 @@ export async function getPersonalPopularRecipes(userId: string, limit: number = 
     const userClicks = clicksData.filter((click: any) => click.user_id === userId);
 
     // Get recipe data from backend API
-    const response = await fetch('http://localhost:5003/get_recipes');
+    const response = await fetch(`${getApiUrl()}/get_recipes`);
     if (!response.ok) {
       console.error('Failed to fetch recipes from backend for personal popularity calculation');
       return [];
@@ -408,7 +410,7 @@ export async function getPersonalPopularRecipes(userId: string, limit: number = 
         const totalClicks = clicksByRecipe.get(recipeKey) || 0;
         
         // Fetch reviews for this recipe from the backend
-        const reviewsResponse = await fetch(`http://localhost:5003/api/reviews/external/${recipe.id}`);
+        const reviewsResponse = await fetch(`${getApiUrl()}/api/reviews/external/${recipe.id}`);
         let totalReviews = 0;
         let averageRating = 0;
         

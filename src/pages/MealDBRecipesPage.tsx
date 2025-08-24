@@ -4,6 +4,7 @@ import { Search, Clock, Filter, Utensils } from 'lucide-react';
 import RecipeCard from '../components/RecipeCard';
 import Header from '../components/Header';
 import { Recipe } from '../types/recipe';
+import { getApiUrl } from '../config/api';
 
 const MealDBRecipesPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -17,7 +18,7 @@ const MealDBRecipesPage: React.FC = () => {
   useEffect(() => {
     const fetchCuisines = async () => {
       try {
-        const response = await fetch('http://localhost:5003/api/mealdb/cuisines');
+        const response = await fetch(`${getApiUrl()}/api/mealdb/cuisines`);
         if (response.ok) {
           const data = await response.json();
           setCuisines(data);
@@ -41,7 +42,7 @@ const MealDBRecipesPage: React.FC = () => {
       if (searchTerm) params.append('query', searchTerm);
       if (cuisine) params.append('cuisine', cuisine);
       
-      const response = await fetch(`http://localhost:5003/api/mealdb/search?${params.toString()}`);
+      const response = await fetch(`${getApiUrl()}/api/mealdb/search?${params.toString()}`);
       
       if (response.ok) {
         const data = await response.json();

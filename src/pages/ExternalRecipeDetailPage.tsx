@@ -12,6 +12,7 @@ import { cleanRecipeDescription } from '../utils/recipeDescriptionCleaner';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Recipe } from '../types/recipe';
+import { getApiUrl } from '../config/api';
 
 type RecipeSource = 'spoonacular' | 'themealdb';
 
@@ -35,11 +36,11 @@ const ExternalRecipeDetailPage: React.FC = () => {
       // Check if this is a backend recipe (starts with 'mealdb_' or is a number)
       if (id && (id.startsWith('mealdb_') || /^\d+$/.test(id))) {
         // This is a backend recipe, fetch from the general backend endpoint
-        const response = await fetch(`http://localhost:5003/get_recipe_by_id?id=${id}`);
+        const response = await fetch(`${getApiUrl()}/get_recipe_by_id?id=${id}`);
         if (!response.ok) throw new Error('Failed to fetch recipe from backend');
         return await response.json();
       } else if (source === 'themealdb') {
-        const response = await fetch(`http://localhost:5003/api/mealdb/recipe/${id}`);
+        const response = await fetch(`${getApiUrl()}/api/mealdb/recipe/${id}`);
         if (!response.ok) throw new Error('Failed to fetch recipe from TheMealDB');
         return await response.json();
       } else {
