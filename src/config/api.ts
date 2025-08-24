@@ -10,10 +10,11 @@ export const API_BASE_URL = cleanApiUrl;
 // Railway deployment URL (update this with your actual Railway URL)
 export const RAILWAY_API_URL = 'https://full-stack-recipe-production.up.railway.app';
 
-// Use localhost for recipes (your 1115 recipes), Railway for health checks
+// Use Railway URL for production (Netlify), localhost for development
 export const getApiUrl = () => {
-  // For recipe endpoints, use localhost to get your 1115 recipes
-  // For health checks, use Railway
+  if (import.meta.env.PROD) {
+    return RAILWAY_API_URL;
+  }
   return 'http://localhost:5003';
 };
 

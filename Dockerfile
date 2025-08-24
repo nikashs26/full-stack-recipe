@@ -24,7 +24,10 @@ RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt && \
     pip cache purge
 
-# Create a more complete Flask app with recipe endpoints
+# Copy the real recipe data
+COPY recipe_backup_20250812_155632_202_recipes.json .
+
+# Create a complete Flask app with real recipe data
 RUN echo 'from flask import Flask, request, jsonify\n\
 from flask_cors import CORS\n\
 import os\n\
@@ -56,44 +59,20 @@ cors = CORS(app,\n\
     max_age=3600\n\
 )\n\
 \n\
-# Sample recipe data for testing\n\
-SAMPLE_RECIPES = [\n\
-    {\n\
-        "id": "1",\n\
-        "title": "Chicken Curry",\n\
-        "description": "Delicious spicy chicken curry",\n\
-        "cuisine": ["Indian"],\n\
-        "ingredients": ["chicken", "curry powder", "onions", "tomatoes"],\n\
-        "instructions": ["Cook chicken", "Add spices", "Simmer"],\n\
-        "ready_in_minutes": 45,\n\
-        "image": "https://via.placeholder.com/300x200?text=Chicken+Curry"\n\
-    },\n\
-    {\n\
-        "id": "2",\n\
-        "title": "Pasta Carbonara",\n\
-        "description": "Classic Italian pasta dish",\n\
-        "cuisine": ["Italian"],\n\
-        "ingredients": ["pasta", "eggs", "bacon", "cheese"],\n\
-        "instructions": ["Boil pasta", "Cook bacon", "Mix with eggs"],\n\
-        "ready_in_minutes": 30,\n\
-        "image": "https://via.placeholder.com/300x200?text=Pasta+Carbonara"\n\
-    },\n\
-    {\n\
-        "id": "3",\n\
-        "title": "Vegetable Stir Fry",\n\
-        "description": "Healthy vegetable stir fry",\n\
-        "cuisine": ["Asian"],\n\
-        "ingredients": ["broccoli", "carrots", "soy sauce", "ginger"],\n\
-        "instructions": ["Chop vegetables", "Stir fry", "Add sauce"],\n\
-        "ready_in_minutes": 25,\n\
-        "image": "https://via.placeholder.com/300x200?text=Stir+Fry"\n\
-    }\n\
-]\n\
+# Load real recipe data\n\
+try:\n\
+    with open("recipe_backup_20250812_155632_202_recipes.json", "r") as f:\n\
+        recipe_data = json.load(f)\n\
+        REAL_RECIPES = recipe_data["recipes"]\n\
+        print(f"✅ Loaded {len(REAL_RECIPES)} real recipes from backup")\n\
+except Exception as e:\n\
+    print(f"❌ Error loading recipes: {e}")\n\
+    REAL_RECIPES = []\n\
 \n\
 # Basic health check route\n\
 @app.route("/api/health")\n\
 def health_check():\n\
-    return {"status": "healthy", "message": "Railway backend is running"}\n\
+    return {"status": "healthy", "message": f"Railway backend is running with {len(REAL_RECIPES)} recipes"}\n\
 \n\
 # Basic test route\n\
 @app.route("/api/test")\n\
@@ -103,7 +82,7 @@ def test():\n\
 # Root route\n\
 @app.route("/")\n\
 def root():\n\
-    return {"message": "Recipe App Backend API"}\n\
+    return {"message": f"Recipe App Backend API with {len(REAL_RECIPES)} recipes"}\n\
 \n\
 # Recipe endpoints\n\
 @app.route("/get_recipes")\n\
@@ -114,20 +93,36 @@ def get_recipes():\n\
     limit = int(request.args.get("limit", 20))\n\
     \n\
     # Filter recipes based on query and ingredient\n\
-    filtered_recipes = SAMPLE_RECIPES\n\
+    filtered_recipes = REAL_RECIPES\n\
     \n\
     if query:\n\
-        filtered_recipes = [r for r in filtered_recipes if query.lower() in r["title"].lower()]\n\
-    \n\
-    if ingredient:\n\
-        filtered_recipes = [r for r in filtered_recipes if any(ingredient.lower() in ing.lower() for ing in r["ingredients"])]\n\
+        filtered_recipes = [r for r in filtered_recipes if query.lower() in r["data"]["title"].lower()]\n\
     \n\
     # Apply pagination\n\
     total = len(filtered_recipes)\n\
     paginated_recipes = filtered_recipes[offset:offset + limit]\n\
     \n\
+    # Transform to expected format\n\
+    transformed_recipes = []\n\
+    for recipe in paginated_recipes:\n\
+        transformed_recipe = {\n\
+            "id": recipe["id"],\n\
+            "title": recipe["data"]["title"],\n\
+            "description": f"{recipe[\'metadata\'][\'cuisine\']} cuisine - {recipe[\'metadata\'][\'cooking_time\']} minutes",\n\
+            "cuisine": [recipe["metadata"]["cuisine"]] if recipe["metadata"]["cuisine"] else [],\n\
+            "ingredients": [],\n\
+            "instructions": [],\n\
+            "ready_in_minutes": recipe["metadata"].get("cooking_time", 30),\n\
+            "image": recipe["metadata"].get("image", ""),\n\
+            "calories": recipe["data"].get("calories", 0),\n\
+            "protein": recipe["data"].get("protein", 0),\n\
+            "carbs": recipe["data"].get("carbs", 0),\n\
+            "fat": recipe["data"].get("fat", 0)\n\
+        }\n\
+        transformed_recipes.append(transformed_recipe)\n\
+    \n\
     return jsonify({\n\
-        "recipes": paginated_recipes,\n\
+        "recipes": transformed_recipes,\n\
         "total": total,\n\
         "offset": offset,\n\
         "limit": limit\n\
@@ -136,21 +131,36 @@ def get_recipes():\n\
 @app.route("/get_recipe_by_id")\n\
 def get_recipe_by_id():\n\
     recipe_id = request.args.get("id")\n\
-    recipe = next((r for r in SAMPLE_RECIPES if r["id"] == recipe_id), None)\n\
+    recipe = next((r for r in REAL_RECIPES if r["id"] == recipe_id), None)\n\
     \n\
     if recipe:\n\
-        return jsonify(recipe)\n\
+        transformed_recipe = {\n\
+            "id": recipe["id"],\n\
+            "title": recipe["data"]["title"],\n\
+            "description": f"{recipe[\'metadata\'][\'cuisine\']} cuisine - {recipe[\'metadata\'][\'cooking_time\']} minutes",\n\
+            "cuisine": [recipe["metadata"]["cuisine"]] if recipe["metadata"]["cuisine"] else [],\n\
+            "ingredients": [],\n\
+            "instructions": [],\n\
+            "ready_in_minutes": recipe["metadata"].get("cooking_time", 30),\n\
+            "image": recipe["metadata"].get("image", ""),\n\
+            "calories": recipe["data"].get("calories", 0),\n\
+            "protein": recipe["data"].get("protein", 0),\n\
+            "carbs": recipe["data"].get("carbs", 0),\n\
+            "fat": recipe["data"].get("fat", 0)\n\
+        }\n\
+        return jsonify(transformed_recipe)\n\
     else:\n\
         return jsonify({"error": "Recipe not found"}), 404\n\
 \n\
 @app.route("/api/recipes/cuisines")\n\
 def get_cuisines():\n\
-    cuisines = list(set([cuisine for recipe in SAMPLE_RECIPES for cuisine in recipe["cuisine"]]))\n\
+    cuisines = list(set([r["metadata"]["cuisine"] for r in REAL_RECIPES if r["metadata"]["cuisine"]]))\n\
     return jsonify(cuisines)\n\
 \n\
 @app.route("/api/mealdb/cuisines")\n\
 def get_mealdb_cuisines():\n\
-    return jsonify(["Italian", "Indian", "Asian", "Mexican", "American"])\n\
+    cuisines = list(set([r["metadata"]["cuisine"] for r in REAL_RECIPES if r["metadata"]["cuisine"]]))\n\
+    return jsonify(cuisines)\n\
 \n\
 @app.route("/api/mealdb/search")\n\
 def mealdb_search():\n\
@@ -158,25 +168,50 @@ def mealdb_search():\n\
     query = request.args.get("query", "")\n\
     \n\
     # Filter recipes by cuisine and query\n\
-    filtered_recipes = SAMPLE_RECIPES\n\
+    filtered_recipes = REAL_RECIPES\n\
     \n\
     if cuisine:\n\
-        filtered_recipes = [r for r in filtered_recipes if cuisine in r["cuisine"]]\n\
+        filtered_recipes = [r for r in filtered_recipes if cuisine.lower() in r["metadata"]["cuisine"].lower()]\n\
     \n\
     if query:\n\
-        filtered_recipes = [r for r in filtered_recipes if query.lower() in r["title"].lower()]\n\
+        filtered_recipes = [r for r in filtered_recipes if query.lower() in r["data"]["title"].lower()]\n\
+    \n\
+    # Transform to expected format\n\
+    transformed_recipes = []\n\
+    for recipe in filtered_recipes:\n\
+        transformed_recipe = {\n\
+            "id": recipe["id"],\n\
+            "title": recipe["data"]["title"],\n\
+            "description": f"{recipe[\'metadata\'][\'cuisine\']} cuisine - {recipe[\'metadata\'][\'cooking_time\']} minutes",\n\
+            "image": recipe["metadata"].get("image", "")\n\
+        }\n\
+        transformed_recipes.append(transformed_recipe)\n\
     \n\
     return jsonify({\n\
-        "meals": filtered_recipes,\n\
-        "total": len(filtered_recipes)\n\
+        "meals": transformed_recipes,\n\
+        "total": len(transformed_recipes)\n\
     })\n\
 \n\
 @app.route("/api/mealdb/recipe/<recipe_id>")\n\
 def get_mealdb_recipe(recipe_id):\n\
-    recipe = next((r for r in SAMPLE_RECIPES if r["id"] == recipe_id), None)\n\
+    recipe = next((r for r in REAL_RECIPES if r["id"] == recipe_id), None)\n\
     \n\
     if recipe:\n\
-        return jsonify(recipe)\n\
+        transformed_recipe = {\n\
+            "id": recipe["id"],\n\
+            "title": recipe["data"]["title"],\n\
+            "description": f"{recipe[\'metadata\'][\'cuisine\']} cuisine - {recipe[\'metadata\'][\'cooking_time\']} minutes",\n\
+            "cuisine": [recipe["metadata"]["cuisine"]] if recipe["metadata"]["cuisine"] else [],\n\
+            "ingredients": [],\n\
+            "instructions": [],\n\
+            "ready_in_minutes": recipe["metadata"].get("cooking_time", 30),\n\
+            "image": recipe["metadata"].get("image", ""),\n\
+            "calories": recipe["data"].get("calories", 0),\n\
+            "protein": recipe["data"].get("protein", 0),\n\
+            "carbs": recipe["data"].get("carbs", 0),\n\
+            "fat": recipe["data"].get("fat", 0)\n\
+        }\n\
+        return jsonify(transformed_recipe)\n\
     else:\n\
         return jsonify({"error": "Recipe not found"}), 404\n\
 \n\
