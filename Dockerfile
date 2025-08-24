@@ -234,3 +234,4 @@ HEALTHCHECK --interval=120s --timeout=5s --start-period=60s --retries=1 \
 
 # Run with ultra-minimal memory footprint
 CMD gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --timeout 30 --keep-alive 1 --max-requests 100 --max-requests-jitter 10
+# Force redeploy Sat Aug 23 21:59:17 PDT 2025
