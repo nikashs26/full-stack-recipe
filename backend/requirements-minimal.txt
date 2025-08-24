@@ -1,0 +1,10 @@
+# Minimal requirements for Railway free tier deployment
+# Only essential packages to reduce memory usage during build
+
+flask==2.3.3
+flask-cors==4.0.0
+python-dotenv==1.0.0
+gunicorn==21.2.0
+
+# Note: Removed requests package to save memory
+# The app_railway.py doesn't use external HTTP requests
