@@ -1,11 +1,25 @@
 [build]
   publish = "dist"
-  command = "cd src && npm run build"
+  command = "npm run build"
 
 [build.environment]
   NODE_VERSION = "18"
+  NPM_VERSION = "9"
+
+# Environment variables for build time
+[build.environment]
+  VITE_APP_NAME = "Recipe App"
+  VITE_APP_VERSION = "1.0.0"
 
 [[redirects]]
   from = "/*"
   to = "/index.html"
-  status = 200 
+  status = 200
+
+# Headers for API calls
+[[headers]]
+  for = "/api/*"
+  [headers.values]
+    Access-Control-Allow-Origin = "*"
+    Access-Control-Allow-Methods = "GET, POST, PUT, DELETE, OPTIONS"
+    Access-Control-Allow-Headers = "Content-Type, Authorization" 
