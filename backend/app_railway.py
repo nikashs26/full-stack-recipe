@@ -9,6 +9,7 @@ from routes.recipe_routes import register_recipe_routes
 from routes.auth_routes import auth_bp
 from routes.preferences import preferences_bp
 from routes.meal_planner import meal_planner_bp
+from routes.ai_meal_planner import ai_meal_planner_bp
 from routes.health import health_bp
 from routes.review_routes import review_bp
 from routes.folder_routes import folder_bp
@@ -51,6 +52,36 @@ cors = CORS(app,
 try:
     recipe_cache = RecipeCacheService()
     print("✓ Recipe cache service initialized")
+    
+    # Populate Railway with recipes from backup if cache is empty
+    try:
+        recipe_count = recipe_cache.get_recipe_count()
+        if recipe_count == 0:
+            print("📝 Railway cache is empty, populating from backup recipes...")
+            try:
+                from populate_railway_from_backup import populate_railway_from_backup
+                success = populate_railway_from_backup()
+                if success:
+                    print("✅ Successfully populated Railway from backup recipes")
+                else:
+                    print("⚠️ Failed to populate from backup, falling back to basic recipes")
+                    from populate_railway_recipes import populate_railway
+                    populate_railway()
+            except ImportError:
+                print("⚠️ Backup population script not found, using basic recipes")
+                from populate_railway_recipes import populate_railway
+                populate_railway()
+        else:
+            print(f"📊 Railway cache has {recipe_count} recipes")
+    except Exception as e:
+        print(f"⚠️ Could not check/populate recipe cache: {e}")
+        print("📝 Attempting to populate with basic recipes...")
+        try:
+            from populate_railway_recipes import populate_railway
+            populate_railway()
+        except Exception as e2:
+            print(f"⚠️ Could not populate with basic recipes either: {e2}")
+        
 except Exception as e:
     print(f"⚠️ Recipe cache service failed to initialize: {e}")
     recipe_cache = None
@@ -72,6 +103,7 @@ else:
 app.register_blueprint(auth_bp, url_prefix='/api/auth')
 app.register_blueprint(preferences_bp, url_prefix='/api')
 app.register_blueprint(meal_planner_bp, url_prefix='/api')
+app.register_blueprint(ai_meal_planner_bp, url_prefix='/api')
 app.register_blueprint(health_bp)
 app.register_blueprint(review_bp, url_prefix='/api')
 app.register_blueprint(folder_bp, url_prefix='/api')
