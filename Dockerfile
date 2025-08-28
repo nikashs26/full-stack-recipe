@@ -1,5 +1,5 @@
 # Root-level Dockerfile that builds the real backend (backend/app_railway.py)
-# This delegates to the backend/ source but keeps the Dockerfile at repo root
+# Copies entire repo to avoid path issues in different build contexts
 
 FROM public.ecr.aws/docker/library/python:3.11-slim
 
@@ -19,20 +19,15 @@ RUN apt-get update && apt-get install -y \
 # Workdir
 WORKDIR /app
 
-# Copy backend requirements and install
-COPY backend/requirements-railway.txt requirements.txt
+# Copy entire repository (safer for varing build contexts)
+COPY . .
+
+# Install backend requirements
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+    pip install --no-cache-dir -r backend/requirements-railway.txt
 
-# Copy backend application code
-COPY backend/ .
-
-# Copy real ChromaDB dataset from repo into the image
-COPY chroma_db /app/chroma_db
-
-# Copy backup JSON as fallback and expose path for population script
-COPY chroma_db_backup_20250812_204552/recipes_backup.json /app/recipes_backup.json
-ENV BACKUP_RECIPES_PATH=/app/recipes_backup.json
+# Hint for population script: prefer URL, not file copy
+# Set BACKUP_RECIPES_URL in Railway to something like https://your-site.netlify.app/recipes_backup.json
 
 # Non-root
 RUN useradd --create-home --shell /bin/bash app && \
