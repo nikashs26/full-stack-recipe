@@ -27,6 +27,11 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Copy application code
 COPY . .
 
+# Also copy the backup recipes into the image so we can populate on startup
+# (build context is repo root, so we can reference the path directly)
+COPY chroma_db_backup_20250812_204552/recipes_backup.json /app/recipes_backup.json
+ENV BACKUP_RECIPES_PATH=/app/recipes_backup.json
+
 # Create non-root user for security
 RUN useradd --create-home --shell /bin/bash app && \
     chown -R app:app /app
@@ -39,5 +44,5 @@ EXPOSE $PORT
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:$PORT/api/health || exit 1
 
-# Run the Railway-optimized application
-CMD gunicorn app_railway:app --bind 0.0.0.0:$PORT --workers 1 --timeout 120 --keep-alive 2 --max-requests 1000 --max-requests-jitter 100
+# Run the Railway-optimized application (use proper module path)
+CMD gunicorn backend.app_railway:app --bind 0.0.0.0:$PORT --workers 1 --timeout 120 --keep-alive 2 --max-requests 1000 --max-requests-jitter 100

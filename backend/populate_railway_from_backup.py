@@ -19,9 +19,19 @@ except ImportError as e:
     print("This script should be run from the backend directory")
     sys.exit(1)
 
-def load_backup_recipes(backup_path: str = "../chroma_db_backup_20250812_204552/recipes_backup.json") -> List[Dict[str, Any]]:
+def resolve_backup_path() -> str:
+    """Resolve backup path from env or default repo location"""
+    env_path = os.environ.get('BACKUP_RECIPES_PATH')
+    if env_path and os.path.exists(env_path):
+        return env_path
+    # Fallback to repo path relative to backend/
+    repo_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'chroma_db_backup_20250812_204552', 'recipes_backup.json')
+    return repo_path
+
+def load_backup_recipes(backup_path: str = None) -> List[Dict[str, Any]]:
     """Load recipes from your backup file"""
     try:
+        backup_path = backup_path or resolve_backup_path()
         print(f"📂 Loading recipes from backup: {backup_path}")
         
         if not os.path.exists(backup_path):
@@ -169,8 +179,8 @@ def main():
     print("🚀 Railway Recipe Population from Backup")
     print("=" * 50)
     
-    # Check if backup file exists
-    backup_path = "../chroma_db_backup_20250812_204552/recipes_backup.json"
+    # Resolve backup file
+    backup_path = resolve_backup_path()
     if not os.path.exists(backup_path):
         print(f"❌ Backup file not found: {backup_path}")
         print("💡 Make sure you're running this from the backend directory")
