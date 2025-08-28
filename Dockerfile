@@ -19,15 +19,13 @@ RUN apt-get update && apt-get install -y \
 # Workdir
 WORKDIR /app
 
-# Copy entire repository (safer for varing build contexts)
-COPY . .
-
-# Install backend requirements
+# Copy backend requirements first and install deps (more reliable in CI)
+COPY backend/requirements-railway.txt /app/requirements.txt
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r backend/requirements-railway.txt
+    pip install --no-cache-dir -r /app/requirements.txt
 
-# Hint for population script: prefer URL, not file copy
-# Set BACKUP_RECIPES_URL in Railway to something like https://your-site.netlify.app/recipes_backup.json
+# Copy entire repository
+COPY . .
 
 # Non-root
 RUN useradd --create-home --shell /bin/bash app && \
