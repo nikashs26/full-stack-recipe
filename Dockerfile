@@ -1,5 +1,5 @@
 # Root-level Dockerfile that builds the real backend (backend/app_railway.py)
-# Copies entire repo to avoid path issues in different build contexts
+# Copies only what's needed reliably and minimizes base layer installs
 
 FROM public.ecr.aws/docker/library/python:3.11-slim
 
@@ -9,22 +9,22 @@ ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app
 ENV PORT=8000
 
-# System deps
-RUN apt-get update && apt-get install -y \
-    gcc \
-    g++ \
+# System deps (curl for healthcheck)
+RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Workdir
 WORKDIR /app
 
-# Copy backend requirements first and install deps (more reliable in CI)
-COPY backend/requirements-railway.txt /app/requirements.txt
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r /app/requirements.txt
+# Copy backend sources first into a stable path
+COPY backend/ /app/backend/
 
-# Copy entire repository
+# Install backend requirements
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r /app/backend/requirements-railway.txt
+
+# Copy the rest of the repo (ignored by .dockerignore as configured)
 COPY . .
 
 # Non-root
