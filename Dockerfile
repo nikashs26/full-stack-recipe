@@ -1,7 +1,7 @@
 # Root-level Dockerfile that builds the real backend (backend/app_railway.py)
 # This delegates to the backend/ source but keeps the Dockerfile at repo root
 
-FROM python:3.11-slim
+FROM public.ecr.aws/docker/library/python:3.11-slim
 
 # Environment
 ENV PYTHONDONTWRITEBYTECODE=1
