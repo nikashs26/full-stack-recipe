@@ -24,11 +24,14 @@ COPY requirements-railway.txt requirements.txt
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
+# Copy application code (backend folder)
 COPY . .
 
-# Also copy the backup recipes into the image so we can populate on startup
-# (build context is repo root, so we can reference the path directly)
+# Copy your existing local ChromaDB so the backend uses your real dataset
+# Paths are relative to the build context (repo root)
+COPY chroma_db /app/chroma_db
+
+# Also copy the backup recipes into the image so we can populate on startup if empty
 COPY chroma_db_backup_20250812_204552/recipes_backup.json /app/recipes_backup.json
 ENV BACKUP_RECIPES_PATH=/app/recipes_backup.json
 
