@@ -53,51 +53,12 @@ try:
     recipe_cache = RecipeCacheService()
     print("✓ Recipe cache service initialized")
     
-    # Populate Railway with recipes from sync data if cache is empty
+    # Skip automatic population on startup - will be done manually
     try:
         recipe_count = recipe_cache.get_recipe_count()
-        if recipe_count == 0:
-            print("📝 Railway cache is empty, populating from sync data...")
-            try:
-                from populate_railway_from_sync_data import populate_railway_from_sync_data
-                success = populate_railway_from_sync_data()
-                if success:
-                    print("✅ Successfully populated Railway from sync data")
-                else:
-                    print("⚠️ Failed to populate from sync data, trying backup...")
-                    from populate_railway_from_backup import populate_railway_from_backup
-                    success = populate_railway_from_backup()
-                    if success:
-                        print("✅ Successfully populated Railway from backup recipes")
-                    else:
-                        print("⚠️ Failed to populate from backup, falling back to basic recipes")
-                        from populate_railway_recipes import populate_railway
-                        populate_railway()
-            except ImportError:
-                print("⚠️ Sync data population script not found, trying backup...")
-                try:
-                    from populate_railway_from_backup import populate_railway_from_backup
-                    success = populate_railway_from_backup()
-                    if success:
-                        print("✅ Successfully populated Railway from backup recipes")
-                    else:
-                        print("⚠️ Failed to populate from backup, using basic recipes")
-                        from populate_railway_recipes import populate_railway
-                        populate_railway()
-                except ImportError:
-                    print("⚠️ Backup population script not found, using basic recipes")
-                    from populate_railway_recipes import populate_railway
-                    populate_railway()
-        else:
-            print(f"📊 Railway cache has {recipe_count} recipes")
+        print(f"📊 Railway cache has {recipe_count} recipes")
     except Exception as e:
-        print(f"⚠️ Could not check/populate recipe cache: {e}")
-        print("📝 Attempting to populate with basic recipes...")
-        try:
-            from populate_railway_recipes import populate_railway
-            populate_railway()
-        except Exception as e2:
-            print(f"⚠️ Could not populate with basic recipes either: {e2}")
+        print(f"⚠️ Could not check recipe cache: {e}")
         
 except Exception as e:
     print(f"⚠️ Recipe cache service failed to initialize: {e}")
