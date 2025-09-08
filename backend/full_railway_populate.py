@@ -42,16 +42,16 @@ def restore_full_database():
                 break
         
         if not sync_file:
-            print(f"❌ No sync data file found. Creating sample data...")
-            from create_sync_data import create_sync_data
-            sync_file = create_sync_data()
-            
-        print(f"📂 Loading sync data from: {sync_file}")
-        with open(sync_file, 'r') as f:
-            sync_data = json.load(f)
+            print(f"❌ No sync data file found. Using comprehensive recipe data...")
+            from full_recipe_data import get_full_recipe_data
+            recipes = get_full_recipe_data()
+        else:
+            print(f"📂 Loading sync data from: {sync_file}")
+            with open(sync_file, 'r') as f:
+                sync_data = json.load(f)
+            recipes = sync_data.get('recipes', [])
         
-        recipes = sync_data.get('recipes', [])
-        print(f"📊 Found {len(recipes)} recipes in sync data")
+        print(f"📊 Found {len(recipes)} recipes for population")
         
         if not recipes:
             print("❌ No recipes found in sync data")
