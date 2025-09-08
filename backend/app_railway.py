@@ -161,6 +161,36 @@ def debug_sync_data():
     except Exception as e:
         return {'status': 'error', 'message': f'Error: {str(e)}'}, 500
 
+# Debug endpoint to check recipe collection
+@app.route('/api/debug-recipes', methods=['GET'])
+def debug_recipes():
+    """Debug endpoint to check recipe collection contents"""
+    try:
+        from services.recipe_cache_service import RecipeCacheService
+        
+        cache = RecipeCacheService()
+        
+        # Check recipe collection count
+        if cache.recipe_collection:
+            count = cache.recipe_collection.count()
+            
+            # Get a few sample recipes
+            sample_recipes = cache.recipe_collection.get(limit=3, include=['metadatas', 'documents'])
+            
+            return {
+                'status': 'success',
+                'recipe_collection_count': count,
+                'sample_recipes': sample_recipes.get('metadatas', []),
+                'sample_titles': [meta.get('title', 'No title') for meta in sample_recipes.get('metadatas', [])]
+            }
+        else:
+            return {
+                'status': 'error',
+                'message': 'Recipe collection not initialized'
+            }
+    except Exception as e:
+        return {'status': 'error', 'message': f'Error: {str(e)}'}, 500
+
 # Manual population endpoint
 @app.route('/api/populate', methods=['POST'])
 def manual_populate():
