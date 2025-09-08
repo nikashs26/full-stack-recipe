@@ -23,10 +23,21 @@ def populate_railway_simple():
         cache = RecipeCacheService()
         print("✓ Cache service initialized")
         
-        # Load sync data
-        sync_file = "railway_sync_data_20250907_210446.json"
-        if not os.path.exists(sync_file):
-            print(f"❌ Sync data file not found: {sync_file}")
+        # Load sync data - try multiple possible locations
+        sync_files = [
+            "railway_sync_data.json",  # Dockerfile copies it here
+            "railway_sync_data_20250907_210446.json",  # Original filename
+            os.environ.get('SYNC_DATA_PATH', '')  # Environment variable
+        ]
+        
+        sync_file = None
+        for file_path in sync_files:
+            if file_path and os.path.exists(file_path):
+                sync_file = file_path
+                break
+        
+        if not sync_file:
+            print(f"❌ No sync data file found. Tried: {sync_files}")
             return False
             
         print(f"📂 Loading sync data from: {sync_file}")
