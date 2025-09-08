@@ -1,0 +1,11 @@
+{
+  "total_recipes": 1115,
+  "missing_cuisine": 0,
+  "empty_cuisine": 0,
+  "invalid_cuisine": 0,
+  "valid_cuisine": 1115,
+  "cuisine_distribution": {
+    "international": 1115
+  },
+  "recipes_missing_cuisine": []
+}

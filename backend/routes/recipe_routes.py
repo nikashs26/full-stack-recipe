@@ -114,25 +114,20 @@ def register_recipe_routes(app, recipe_cache):
             return jsonify({"error": "Recipe ID is required"}), 400
         
         try:
-            # Search for the recipe by ID in the cache
-            recipes = recipe_cache.get_cached_recipes()
-            
-            # Find the recipe with matching ID
-            found_recipe = None
-            for recipe in recipes:
-                if str(recipe.get('id', '')) == str(recipe_id):
-                    found_recipe = recipe
-                    break
-            
-            if not found_recipe:
+            # Use the proper recipe service instead of searching through all recipes
+            recipe = await recipe_service.get_recipe_by_id(recipe_id)
+                                
+            if recipe:
+                return jsonify(recipe), 200
+            else:
                 return jsonify({"error": "Recipe not found"}), 404
             
-            # Return the recipe in the expected format
-            return jsonify(found_recipe), 200
-            
         except Exception as e:
-            print(f"Error fetching recipe by ID {recipe_id}: {e}")
-            return jsonify({"error": "Internal server error"}), 500
+            print(f"Error fetching recipe {recipe_id}: {e}")
+            return jsonify({
+                "error": "Failed to fetch recipe",
+                "details": str(e)
+            }), 500
 
     @app.route("/api/get_recipes", methods=["GET", "OPTIONS"])
     @cross_origin(origins=["http://localhost:8081", "http://localhost:5173", "https://betterbulk.netlify.app"], 
@@ -229,34 +224,5 @@ def register_recipe_routes(app, recipe_cache):
                 "details": str(e)
             }), 500
 
-    @app.route("/api/get_recipe_by_id", methods=["GET", "OPTIONS"])
-    @cross_origin(origins=["http://localhost:8081", "http://localhost:5173", "https://betterbulk.netlify.app"], 
-                 supports_credentials=True)
-    @async_route
-    async def get_recipe_by_id():
-        if request.method == "OPTIONS":
-            response = make_response()
-            response.headers.add('Access-Control-Allow-Methods', 'GET,OPTIONS')
-            response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-            return response
-            
-        recipe_id = request.args.get("id")
-        if not recipe_id:
-            return jsonify({"error": "Recipe ID is required"}), 400
-        
-        try:
-            recipe = await recipe_service.get_recipe_by_id(recipe_id)
-                                
-            if recipe:
-                return jsonify(recipe), 200
-            else:
-                return jsonify({"error": "Recipe not found"}), 404
-            
-        except Exception as e:
-            print(f"Error fetching recipe {recipe_id}: {e}")
-            return jsonify({
-                "error": "Failed to fetch recipe",
-                "details": str(e)
-            }), 500
 
     return app
