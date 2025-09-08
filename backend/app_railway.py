@@ -118,6 +118,45 @@ print("✓ All route blueprints registered")
 def health_check():
     return {'status': 'healthy', 'message': 'Railway backend is running', 'routes': 'all registered'}
 
+# Upload sync data file (JSON) to container: /app/railway_sync_data.json
+@app.route('/api/upload-sync', methods=['POST'])
+def upload_sync():
+    try:
+        if 'file' not in request.files:
+            return {'status': 'error', 'message': 'No file part'}, 400
+        file = request.files['file']
+        if file.filename == '':
+            return {'status': 'error', 'message': 'No selected file'}, 400
+        contents = file.read()
+        if not contents:
+            return {'status': 'error', 'message': 'Empty file'}, 400
+        dest_path = '/app/railway_sync_data.json'
+        with open(dest_path, 'wb') as f:
+            f.write(contents)
+        return {'status': 'success', 'message': 'Sync data uploaded', 'path': dest_path}
+    except Exception as e:
+        return {'status': 'error', 'message': f'Upload failed: {str(e)}'}, 500
+
+# Download sync data JSON from a URL and save to /app/railway_sync_data.json
+@app.route('/api/populate-from-url', methods=['POST'])
+def populate_from_url():
+    try:
+        import requests as pyrequests
+        url = request.args.get('url') or (request.json.get('url') if request.is_json else None)
+        if not url:
+            return {'status': 'error', 'message': 'Missing url parameter'}, 400
+        resp = pyrequests.get(url, timeout=60)
+        if resp.status_code != 200:
+            return {'status': 'error', 'message': f'Failed to download: HTTP {resp.status_code}'}, 400
+        if not resp.content:
+            return {'status': 'error', 'message': 'Downloaded file is empty'}, 400
+        dest_path = '/app/railway_sync_data.json'
+        with open(dest_path, 'wb') as f:
+            f.write(resp.content)
+        return {'status': 'success', 'message': 'Sync data downloaded', 'path': dest_path}
+    except Exception as e:
+        return {'status': 'error', 'message': f'Download failed: {str(e)}'}, 500
+
 # Debug endpoint to check sync data
 @app.route('/api/debug-sync', methods=['GET'])
 def debug_sync_data():
