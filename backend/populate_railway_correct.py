@@ -54,10 +54,23 @@ def populate_railway_correct():
         )
         print("✓ Created new collections")
         
-        # Load sync data
-        sync_file = "sync_data.json"
-        if not os.path.exists(sync_file):
-            print(f"❌ Sync data file not found: {sync_file}")
+        # Load sync data - try multiple locations
+        sync_files = [
+            "sync_data.json",  # Local development
+            "/app/sync_data.json",  # Railway container
+            "backend/sync_data.json",  # Alternative path
+            os.environ.get('SYNC_DATA_PATH', '')  # Environment variable
+        ]
+        
+        sync_file = None
+        for file_path in sync_files:
+            if file_path and os.path.exists(file_path):
+                sync_file = file_path
+                break
+        
+        if not sync_file:
+            print(f"❌ Sync data file not found. Tried: {sync_files}")
+            print("💡 Make sure sync_data.json is available in the Railway container")
             return False
         
         print(f"📂 Loading sync data from: {sync_file}")

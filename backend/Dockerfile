@@ -27,6 +27,9 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Copy application code (backend folder)
 COPY . .
 
+# Copy sync data file for population
+COPY sync_data.json /app/sync_data.json
+
 # ChromaDB will be created and populated from sync data on startup
 
 # Sync data will be created programmatically
