@@ -27,10 +27,11 @@ def restore_full_database():
         cache = RecipeCacheService()
         print("✓ Cache service initialized")
         
-        # Load sync data
+        # Load sync data (prefer committed sync_data.json if present)
         sync_files = [
             "/app/railway_sync_data.json",  # Railway container path
-            "railway_sync_data.json",  # Local path
+            "sync_data.json",               # Committed file in backend/
+            "railway_sync_data.json",       # Local path
             "railway_sync_data_20250907_210446.json",  # Original filename
             os.environ.get('SYNC_DATA_PATH', '')  # Environment variable
         ]
