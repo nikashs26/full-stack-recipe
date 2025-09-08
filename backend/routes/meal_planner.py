@@ -283,7 +283,7 @@ def generate_meal_plan_with_llm(prompt, user_id, preferences=None, model_name="l
         }
 
 @meal_planner_bp.route('/ai/meal_plan', methods=['POST', 'OPTIONS'])
-@cross_origin(origins=['http://localhost:8081'], 
+@cross_origin(origins=['http://localhost:8081', 'https://betterbulk.netlify.app'], 
              methods=['POST', 'OPTIONS'],
              allow_headers=['Content-Type', 'Authorization', 'X-Requested-With'],
              supports_credentials=True)
@@ -684,7 +684,7 @@ def ai_meal_plan():
         }), 500
 
 @meal_planner_bp.route('/ai/simple_meal_plan', methods=['POST', 'OPTIONS'])
-@cross_origin(origins=['http://localhost:8081'], 
+@cross_origin(origins=['http://localhost:8081', 'https://betterbulk.netlify.app'], 
              methods=['POST', 'OPTIONS'],
              allow_headers=['Content-Type', 'Authorization', 'X-Requested-With'],
              supports_credentials=True)
@@ -888,7 +888,7 @@ def health_check():
         }), 500
 
 @meal_planner_bp.route('/test/meal_plan', methods=['GET'])
-@cross_origin(origins=['http://localhost:8081'])
+@cross_origin(origins=['http://localhost:8081', 'https://betterbulk.netlify.app'])
 def test_meal_plan():
     """Test endpoint that returns a sample meal plan"""
     try:
@@ -1228,7 +1228,7 @@ def test_meal_plan():
         }), 500
 
 @meal_planner_bp.route('/debug/user-preferences', methods=['GET'])
-@cross_origin(origins=['http://localhost:8081'])
+@cross_origin(origins=['http://localhost:8081', 'https://betterbulk.netlify.app'])
 @require_auth
 def debug_user_preferences():
     """Debug endpoint to check user ID and preferences"""
@@ -1255,7 +1255,7 @@ def debug_user_preferences():
         }), 500
 
 @meal_planner_bp.route('/simple-meal-plan', methods=['GET'])
-@cross_origin(origins=['http://localhost:8081'])
+@cross_origin(origins=['http://localhost:8081', 'https://betterbulk.netlify.app'])
 @require_auth
 def simple_meal_plan():
     """Generate a simple meal plan using user preferences (no LLM required)"""

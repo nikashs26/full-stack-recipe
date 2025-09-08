@@ -1,4 +1,4 @@
-from flask import Flask
+from flask import Flask, request, make_response
 from flask_cors import CORS
 import os
 from dotenv import load_dotenv
@@ -30,23 +30,47 @@ app.config['SESSION_COOKIE_SECURE'] = True  # Enable secure cookies for HTTPS
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
-# Configure CORS for Railway deployment - update with your actual Netlify URL
+# Configure CORS for Railway deployment
 allowed_origins = [
     "http://localhost:8081", "http://127.0.0.1:8081", 
     "http://localhost:8083", "http://127.0.0.1:8083",
-    "https://betterbulk.netlify.app",  # Update this with your actual Netlify URL
-    "https://*.netlify.app",  # Allow all Netlify subdomains
+    "https://betterbulk.netlify.app",
+    "https://betterbulk.netlify.app/",  # Include trailing slash variant
 ]
 
-# Configure CORS properly
+# Configure CORS properly - use regex for wildcard support
 cors = CORS(app, 
     origins=allowed_origins,
     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-    allow_headers=["Content-Type", "Authorization", "X-Requested-With", "x-requested-with"],
+    allow_headers=["Content-Type", "Authorization", "X-Requested-With", "x-requested-with", "Accept"],
     expose_headers=["Content-Type", "Authorization", "X-Requested-With", "x-requested-with"],
     supports_credentials=True,
     max_age=3600
 )
+
+# Additional CORS configuration for Netlify wildcard support
+@app.after_request
+def after_request(response):
+    origin = request.headers.get('Origin')
+    if origin and ('netlify.app' in origin or origin in allowed_origins):
+        response.headers['Access-Control-Allow-Origin'] = origin
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
+        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS, PATCH'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With, x-requested-with, Accept'
+    return response
+
+# Global OPTIONS handler for all routes
+@app.before_request
+def handle_preflight():
+    if request.method == "OPTIONS":
+        response = make_response()
+        origin = request.headers.get('Origin')
+        if origin and ('netlify.app' in origin or origin in allowed_origins):
+            response.headers['Access-Control-Allow-Origin'] = origin
+            response.headers['Access-Control-Allow-Credentials'] = 'true'
+            response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS, PATCH'
+            response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With, x-requested-with, Accept'
+        return response
 
 # Initialize services
 try:

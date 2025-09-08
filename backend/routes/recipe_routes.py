@@ -81,7 +81,7 @@ def register_recipe_routes(app, recipe_cache):
     user_preferences_service = UserPreferencesService()
     
     @app.route("/api/recipe-counts", methods=["GET"])
-    @cross_origin(origins=["http://localhost:5173"], supports_credentials=True)
+    @cross_origin(origins=["http://localhost:5173", "https://betterbulk.netlify.app"], supports_credentials=True)
     def get_recipe_counts():
         """Get the count of recipes in the cache"""
         try:
@@ -97,14 +97,16 @@ def register_recipe_routes(app, recipe_cache):
             }), 500
     
     @app.route("/get_recipes", methods=["GET", "OPTIONS"])
-    @cross_origin(origins=["http://localhost:8081", "http://localhost:5173"], 
+    @cross_origin(origins=["http://localhost:8081", "http://localhost:5173", "https://betterbulk.netlify.app"], 
                  supports_credentials=True)
     @async_route
     async def get_recipes():
         if request.method == "OPTIONS":
             response = make_response()
+            response.headers.add('Access-Control-Allow-Origin', request.headers.get('Origin', '*'))
             response.headers.add('Access-Control-Allow-Methods', 'GET,OPTIONS')
-            response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+            response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With')
+            response.headers.add('Access-Control-Allow-Credentials', 'true')
             return response
             
         start_time = time.time()
@@ -186,7 +188,7 @@ def register_recipe_routes(app, recipe_cache):
             }), 500
 
     @app.route("/get_recipe_by_id", methods=["GET", "OPTIONS"])
-    @cross_origin(origins=["http://localhost:8081", "http://localhost:5173"], 
+    @cross_origin(origins=["http://localhost:8081", "http://localhost:5173", "https://betterbulk.netlify.app"], 
                  supports_credentials=True)
     @async_route
     async def get_recipe_by_id():

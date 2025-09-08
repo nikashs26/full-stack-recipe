@@ -277,7 +277,7 @@ def get_simple_recommendations():
         return jsonify({"error": str(e)}), 500
 
 @smart_features_bp.route('/recommendations/test-balance', methods=['GET'])
-@cross_origin(origins=["http://localhost:5173"], supports_credentials=True)
+@cross_origin(origins=["http://localhost:5173", "https://betterbulk.netlify.app"], supports_credentials=True)
 def test_recommendation_balance():
     """Test endpoint to check recommendation balance and distribution"""
     try:
@@ -351,7 +351,7 @@ def test_recommendation_balance():
         }), 500
 
 @smart_features_bp.route('/recommendations/debug', methods=['GET'])
-@cross_origin(origins=["http://localhost:5173"], supports_credentials=True)
+@cross_origin(origins=["http://localhost:5173", "https://betterbulk.netlify.app"], supports_credentials=True)
 def debug_recommendations():
     """Debug endpoint to investigate cuisine distribution issues"""
     try:
@@ -458,7 +458,7 @@ def debug_recommendations():
         }), 500
 
 @smart_features_bp.route('/meal-history/log', methods=['POST'])
-@cross_origin(origins=['http://localhost:8081', 'http://localhost:5173'], supports_credentials=True)
+@cross_origin(origins=['http://localhost:8081', 'http://localhost:5173', 'https://betterbulk.netlify.app'], supports_credentials=True)
 @require_auth
 def log_meal_generation():
     """
@@ -742,7 +742,7 @@ def get_meal_success_rate():
         return jsonify({"error": str(e)}), 500
 
 @smart_features_bp.route('/meal-history', methods=['GET'])
-@cross_origin(origins=['http://localhost:8081', 'http://localhost:5173'], supports_credentials=True)
+@cross_origin(origins=['http://localhost:8081', 'http://localhost:5173', 'https://betterbulk.netlify.app'], supports_credentials=True)
 @require_auth
 def get_meal_plan_history():
     """
@@ -779,7 +779,7 @@ def get_meal_plan_history():
         }), 500
 
 @smart_features_bp.route('/meal-history/<plan_id>', methods=['GET'])
-@cross_origin(origins=['http://localhost:8081', 'http://localhost:5173'], supports_credentials=True)
+@cross_origin(origins=['http://localhost:8081', 'http://localhost:5173', 'https://betterbulk.netlify.app'], supports_credentials=True)
 @require_auth
 def get_meal_plan_details(plan_id):
     """
