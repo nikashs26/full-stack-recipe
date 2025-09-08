@@ -194,7 +194,21 @@ def debug_recipes():
 # Manual population endpoint
 @app.route('/api/populate', methods=['POST'])
 def manual_populate():
-    """Manually trigger population with sample recipes"""
+    """Manually trigger full population from backup"""
+    try:
+        from full_railway_populate import restore_full_database
+        success = restore_full_database()
+        if success:
+            return {'status': 'success', 'message': 'Railway populated with complete database successfully'}
+        else:
+            return {'status': 'error', 'message': 'Failed to populate Railway'}, 500
+    except Exception as e:
+        return {'status': 'error', 'message': f'Error: {str(e)}'}, 500
+
+# Minimal population endpoint (for testing)
+@app.route('/api/populate-minimal', methods=['POST'])
+def minimal_populate():
+    """Manually trigger minimal population with sample recipes"""
     try:
         from minimal_populate import populate_railway_minimal
         success = populate_railway_minimal()
