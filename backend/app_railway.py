@@ -118,6 +118,49 @@ print("✓ All route blueprints registered")
 def health_check():
     return {'status': 'healthy', 'message': 'Railway backend is running', 'routes': 'all registered'}
 
+# Debug endpoint to check sync data
+@app.route('/api/debug-sync', methods=['GET'])
+def debug_sync_data():
+    """Debug endpoint to check sync data availability"""
+    try:
+        import os
+        import json
+        
+        # Check for sync data files
+        sync_files = [
+            "railway_sync_data.json",
+            "railway_sync_data_20250907_210446.json",
+            os.environ.get('SYNC_DATA_PATH', '')
+        ]
+        
+        found_files = []
+        for file_path in sync_files:
+            if file_path and os.path.exists(file_path):
+                found_files.append({
+                    'path': file_path,
+                    'size': os.path.getsize(file_path),
+                    'exists': True
+                })
+            else:
+                found_files.append({
+                    'path': file_path,
+                    'exists': False
+                })
+        
+        # Check current directory contents
+        current_dir = os.listdir('.')
+        json_files = [f for f in current_dir if f.endswith('.json')]
+        
+        return {
+            'status': 'success',
+            'sync_files': found_files,
+            'current_dir_files': current_dir[:10],  # First 10 files
+            'json_files': json_files,
+            'working_dir': os.getcwd()
+        }
+    except Exception as e:
+        return {'status': 'error', 'message': f'Error: {str(e)}'}, 500
+
 # Manual population endpoint
 @app.route('/api/populate', methods=['POST'])
 def manual_populate():
