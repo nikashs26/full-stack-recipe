@@ -332,6 +332,86 @@ def fix_missing_cuisines():
     except Exception as e:
         return {'status': 'error', 'message': f'Error: {str(e)}'}, 500
 
+@app.route('/api/export-preferences', methods=['GET'])
+def export_preferences():
+    """Export all user preferences from local ChromaDB."""
+    try:
+        from services.user_preferences_service import UserPreferencesService
+        prefs_service = UserPreferencesService()
+        
+        # Get all preferences
+        all_prefs = prefs_service.collection.get(include=['documents', 'metadatas'])
+        
+        preferences_data = []
+        for i, (doc, meta) in enumerate(zip(all_prefs['documents'], all_prefs['metadatas'])):
+            try:
+                import json
+                pref_data = json.loads(doc)
+                preferences_data.append({
+                    'user_id': meta.get('user_id'),
+                    'preferences': pref_data
+                })
+            except Exception as e:
+                print(f"Error parsing preferences for user {meta.get('user_id', 'unknown')}: {e}")
+                continue
+        
+        return {
+            'status': 'success',
+            'count': len(preferences_data),
+            'preferences': preferences_data
+        }
+    except Exception as e:
+        return {'status': 'error', 'message': f'Error: {str(e)}'}, 500
+
+@app.route('/api/import-preferences', methods=['POST'])
+def import_preferences():
+    """Import user preferences to Railway ChromaDB."""
+    try:
+        from services.user_preferences_service import UserPreferencesService
+        import json
+        
+        data = request.get_json()
+        if not data or 'preferences' not in data:
+            return {'status': 'error', 'message': 'No preferences data provided'}, 400
+        
+        prefs_service = UserPreferencesService()
+        imported_count = 0
+        
+        for pref_data in data['preferences']:
+            try:
+                user_id = pref_data.get('user_id')
+                preferences = pref_data.get('preferences', {})
+                
+                if user_id and preferences:
+                    prefs_service.save_preferences(user_id, preferences)
+                    imported_count += 1
+            except Exception as e:
+                print(f"Error importing preferences for user {pref_data.get('user_id', 'unknown')}: {e}")
+                continue
+        
+        return {
+            'status': 'success',
+            'message': f'Imported {imported_count} user preferences',
+            'count': imported_count
+        }
+    except Exception as e:
+        return {'status': 'error', 'message': f'Error: {str(e)}'}, 500
+
+@app.route('/api/preferences-status', methods=['GET'])
+def preferences_status():
+    """Check user preferences count in Railway ChromaDB."""
+    try:
+        from services.user_preferences_service import UserPreferencesService
+        prefs_service = UserPreferencesService()
+        count = prefs_service.collection.count()
+        return {
+            'status': 'success',
+            'count': count,
+            'message': f'Found {count} user preferences in Railway'
+        }
+    except Exception as e:
+        return {'status': 'error', 'message': f'Error: {str(e)}'}, 500
+
 # Minimal population endpoint (for testing)
 @app.route('/api/populate-minimal', methods=['POST'])
 def minimal_populate():
