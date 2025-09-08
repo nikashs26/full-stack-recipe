@@ -136,9 +136,14 @@ def populate_railway_minimal():
         total_added = 0
         for recipe in recipes:
             try:
-                cache.add_recipe(recipe)
-                total_added += 1
-                print(f"✓ Added recipe: {recipe['title']}")
+                # add_recipe is async, so we need to await it
+                import asyncio
+                result = asyncio.run(cache.add_recipe(recipe))
+                if result:
+                    total_added += 1
+                    print(f"✓ Added recipe: {recipe['title']}")
+                else:
+                    print(f"⚠️ Failed to add recipe {recipe['title']}: add_recipe returned False")
             except Exception as e:
                 print(f"⚠️ Failed to add recipe {recipe['title']}: {e}")
                 continue
