@@ -50,7 +50,7 @@ const MealDBSearch: React.FC<MealDBSearchProps> = ({ onSearch }) => {
       if (cuisine) params.append('cuisine', cuisine);
       
       // For dietary preferences, we'll do client-side filtering
-      const response = await fetch(`${getApiUrl()}/get_recipes?${params.toString()}`);
+      const response = await fetch(`${getApiUrl()}/api/get_recipes?${params.toString()}`);
 
       if (response.ok) {
         const result = await response.json();

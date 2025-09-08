@@ -187,7 +187,7 @@ export async function fetchNormalizedRecipes(
     }
     
     const queryString = params.toString();
-    const url = `${getApiUrl()}/get_recipes${queryString ? `?${queryString}` : ''}`;
+    const url = `${getApiUrl()}/api/get_recipes${queryString ? `?${queryString}` : ''}`;
     
     console.log('Fetching normalized recipes from:', url);
     

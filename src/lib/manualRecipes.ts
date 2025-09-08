@@ -112,7 +112,7 @@ export const fetchManualRecipes = async (
     }
     
     const queryString = params.toString();
-    const url = `${API_BASE_URL}/get_recipes${queryString ? `?${queryString}` : ''}`;
+    const url = `${API_BASE_URL}/api/get_recipes${queryString ? `?${queryString}` : ''}`;
     console.log('🔍 Final API call details:');
     console.log('  - Base URL:', API_BASE_URL);
     console.log('  - Query string:', queryString);
@@ -188,21 +188,25 @@ export const fetchManualRecipes = async (
     if (recipes.length > 0) {
       // Transform the response to match ManualRecipe format with enhanced dietary info
       const transformedRecipes = recipes.map((recipe: any) => {
+        // Extract data from nested structure (Railway API format)
+        const recipeData = recipe.data || recipe;
+        const metadata = recipe.metadata || {};
+        
         // Normalize dietary restrictions
         let diets: string[] = [];
-        if (Array.isArray(recipe.diets)) {
+        if (Array.isArray(recipeData.diets)) {
           // Ensure all diet values are strings and trim whitespace
-          diets = recipe.diets
+          diets = recipeData.diets
             .map((d: any) => (typeof d === 'string' ? d.trim().toLowerCase() : ''))
             .filter(Boolean);
-        } else if (typeof recipe.diets === 'string' && recipe.diets.trim()) {
+        } else if (typeof recipeData.diets === 'string' && recipeData.diets.trim()) {
           // Handle case where diets is a comma-separated string
-          diets = recipe.diets.split(',').map(d => d.trim().toLowerCase()).filter(Boolean);
+          diets = recipeData.diets.split(',').map(d => d.trim().toLowerCase()).filter(Boolean);
         }
         
         // Also check dietary_restrictions field
-        if (Array.isArray(recipe.dietary_restrictions)) {
-          const restrictions = recipe.dietary_restrictions
+        if (Array.isArray(recipeData.dietary_restrictions)) {
+          const restrictions = recipeData.dietary_restrictions
             .map((d: any) => (typeof d === 'string' ? d.trim().toLowerCase() : ''))
             .filter(Boolean);
           // Merge with diets, avoiding duplicates
@@ -211,55 +215,55 @@ export const fetchManualRecipes = async (
         
         // Normalize tags
         let tags: string[] = [];
-        if (Array.isArray(recipe.tags)) {
-          tags = recipe.tags
+        if (Array.isArray(recipeData.tags)) {
+          tags = recipeData.tags
             .map((t: any) => (typeof t === 'string' ? t.trim() : ''))
             .filter(Boolean);
-        } else if (typeof recipe.tags === 'string' && recipe.tags.trim()) {
+        } else if (typeof recipeData.tags === 'string' && recipeData.tags.trim()) {
           // Handle case where tags is a comma-separated string
-          tags = recipe.tags.split(',').map(t => t.trim()).filter(Boolean);
+          tags = recipeData.tags.split(',').map(t => t.trim()).filter(Boolean);
         }
         
         // Normalize dish types
         let dishTypes: string[] = [];
-        if (Array.isArray(recipe.dish_types)) {
-          dishTypes = recipe.dish_types
+        if (Array.isArray(recipeData.dish_types)) {
+          dishTypes = recipeData.dish_types
             .map((t: any) => (typeof t === 'string' ? t.trim() : ''))
             .filter(Boolean);
-        } else if (typeof recipe.dish_types === 'string' && recipe.dish_types.trim()) {
+        } else if (typeof recipeData.dish_types === 'string' && recipeData.dish_types.trim()) {
           // Handle case where dish_types is a comma-separated string
-          dishTypes = recipe.dish_types.split(',').map(t => t.trim()).filter(Boolean);
+          dishTypes = recipeData.dish_types.split(',').map(t => t.trim()).filter(Boolean);
         }
         
         // Normalize cuisines - check both cuisine and cuisines fields
         let cuisines: string[] = [];
         
         // First try to get cuisines from the cuisines field
-        if (recipe.cuisines) {
-          if (Array.isArray(recipe.cuisines)) {
-            cuisines = recipe.cuisines
+        if (recipeData.cuisines) {
+          if (Array.isArray(recipeData.cuisines)) {
+            cuisines = recipeData.cuisines
               .map((c: any) => typeof c === 'string' ? c.trim() : '')
               .filter(Boolean);
-          } else if (typeof recipe.cuisines === 'string' && recipe.cuisines.trim()) {
-            cuisines = [recipe.cuisines.trim()];
+          } else if (typeof recipeData.cuisines === 'string' && recipeData.cuisines.trim()) {
+            cuisines = [recipeData.cuisines.trim()];
           }
         }
         
         // If no cuisines found, try the cuisine field
-        if (cuisines.length === 0 && recipe.cuisine) {
-          if (Array.isArray(recipe.cuisine)) {
-            cuisines = recipe.cuisine
+        if (cuisines.length === 0 && recipeData.cuisine) {
+          if (Array.isArray(recipeData.cuisine)) {
+            cuisines = recipeData.cuisine
               .map((c: any) => typeof c === 'string' ? c.trim() : '')
               .filter(Boolean);
-          } else if (typeof recipe.cuisine === 'string' && recipe.cuisine.trim()) {
-            cuisines = [recipe.cuisine.trim()];
+          } else if (typeof recipeData.cuisine === 'string' && recipeData.cuisine.trim()) {
+            cuisines = [recipeData.cuisine.trim()];
           }
         }
         
         // If still no cuisines found, try to extract from tags or other fields
-        if (cuisines.length === 0 && recipe.tags && Array.isArray(recipe.tags)) {
+        if (cuisines.length === 0 && recipeData.tags && Array.isArray(recipeData.tags)) {
           const cuisineTags = ['italian', 'mexican', 'chinese', 'indian', 'japanese', 'thai', 'french', 'greek', 'spanish', 'mediterranean', 'american'];
-          for (const tag of recipe.tags) {
+          for (const tag of recipeData.tags) {
             if (typeof tag === 'string' && cuisineTags.includes(tag.toLowerCase())) {
               cuisines = [tag];
               break;
@@ -269,13 +273,15 @@ export const fetchManualRecipes = async (
           
         // Handle image URL - try multiple possible fields
         let imageUrl = '';
-        if (recipe.image) {
-          imageUrl = recipe.image;
-        } else if (recipe.imageUrl) {
-          imageUrl = recipe.imageUrl;
-        } else if (recipe.source === 'themealdb' && recipe.id) {
+        if (recipeData.image) {
+          imageUrl = recipeData.image;
+        } else if (recipeData.imageUrl) {
+          imageUrl = recipeData.imageUrl;
+        } else if (metadata.image) {
+          imageUrl = metadata.image;
+        } else if (recipeData.source === 'themealdb' && recipeData.id) {
           // Special handling for TheMealDB images
-          const recipeName = recipe.title ? recipe.title.replace(/\s+/g, '%20') : '';
+          const recipeName = recipeData.title ? recipeData.title.replace(/\s+/g, '%20') : '';
           imageUrl = `https://www.themealdb.com/images/ingredients/${recipeName}.png`;
         } else {
           // Only use fallback if no image is available at all
@@ -283,25 +289,26 @@ export const fetchManualRecipes = async (
         }
         
         return {
-          id: recipe.id || `recipe-${Math.random().toString(36).substr(2, 9)}`,
-          title: recipe.title || 'Untitled Recipe',
-          description: recipe.summary || recipe.description || '',
-          ready_in_minutes: recipe.ready_in_minutes || recipe.readyInMinutes || 30,
-          cuisine: cuisines.length > 0 ? cuisines : [],
+          id: recipe.id || recipeData.id || `recipe-${Math.random().toString(36).substr(2, 9)}`,
+          title: recipeData.title || 'Untitled Recipe',
+          description: recipeData.summary || recipeData.description || '',
+          ready_in_minutes: recipeData.ready_in_minutes || recipeData.readyInMinutes || metadata.readyInMinutes || 30,
+          cuisine: cuisines.length > 0 ? cuisines[0] : undefined,
+          cuisines: cuisines,
           diets: diets,
           tags: tags,
           dietary_restrictions: diets, // Use the merged diets array
           dish_types: dishTypes,
           image: imageUrl,
-          ingredients: Array.isArray(recipe.ingredients) 
-            ? recipe.ingredients.map((ing: any) => ({
+          ingredients: Array.isArray(recipeData.ingredients) 
+            ? recipeData.ingredients.map((ing: any) => ({
                 name: ing.name || '',
                 amount: ing.amount?.toString() || '',
                 unit: ing.unit || ''
               }))
             : [],
-          created_at: recipe.created_at || new Date().toISOString(),
-          updated_at: recipe.updated_at || new Date().toISOString(),
+          created_at: recipeData.created_at || new Date().toISOString(),
+          updated_at: recipeData.updated_at || new Date().toISOString(),
           // Include source for debugging
           source: recipe.source || 'unknown'
         };

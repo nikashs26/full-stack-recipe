@@ -136,7 +136,7 @@ export function clearOldClickTrackingData() {
 export async function getPopularRecipesFromCurrentData(limit: number = 10): Promise<RecipePopularity[]> {
   try {
     // Get current recipe data from backend API
-    const response = await fetch(`${getApiUrl()}/get_recipes`);
+    const response = await fetch(`${getApiUrl()}/api/get_recipes`);
     if (!response.ok) {
       console.error('Failed to fetch recipes from backend for popularity calculation');
       return [];
@@ -262,7 +262,7 @@ export async function getPopularRecipes(limit: number = 10): Promise<RecipePopul
     const clicksData = JSON.parse(localStorage.getItem('recipe_clicks') || '[]');
 
     // Get recipe data from backend API
-    const response = await fetch(`${getApiUrl()}/get_recipes`);
+    const response = await fetch(`${getApiUrl()}/api/get_recipes`);
     if (!response.ok) {
       console.error('Failed to fetch recipes from backend for popularity calculation');
       return [];
@@ -377,7 +377,7 @@ export async function getPersonalPopularRecipes(userId: string, limit: number = 
     const userClicks = clicksData.filter((click: any) => click.user_id === userId);
 
     // Get recipe data from backend API
-    const response = await fetch(`${getApiUrl()}/get_recipes`);
+    const response = await fetch(`${getApiUrl()}/api/get_recipes`);
     if (!response.ok) {
       console.error('Failed to fetch recipes from backend for personal popularity calculation');
       return [];
