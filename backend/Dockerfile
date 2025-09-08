@@ -32,6 +32,10 @@ COPY . .
 # Sync data will be created programmatically
 # No need to copy sync data file during build
 
+# Create data directory for persistent storage
+RUN mkdir -p /app/data && \
+    chmod 755 /app/data
+
 # Create non-root user for security
 RUN useradd --create-home --shell /bin/bash app && \
     chown -R app:app /app

@@ -12,7 +12,13 @@ class MealHistoryService:
     def __init__(self):
         # Use absolute path to ensure ChromaDB is created in the right location
         import os
-        chroma_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "chroma_db")
+        chroma_path = os.environ.get('CHROMA_DB_PATH', './chroma_db')
+        
+        # For Railway deployment, use persistent volume
+        if os.environ.get('RAILWAY_ENVIRONMENT'):
+            chroma_path = os.environ.get('CHROMA_DB_PATH', '/app/data/chroma_db')
+        
+        chroma_path = os.path.abspath(chroma_path)
         
         self.client = chromadb.PersistentClient(path=chroma_path)
         

@@ -19,7 +19,17 @@ class RecipeCacheService:
         """
         try:
             # Initialize ChromaDB with persistent storage
-            self.client = chromadb.PersistentClient(path="./chroma_db")
+            # Use Railway persistent volume if available, fallback to local storage
+            import os
+            chroma_path = os.environ.get('CHROMA_DB_PATH', './chroma_db')
+            
+            # For Railway deployment, use persistent volume
+            if os.environ.get('RAILWAY_ENVIRONMENT'):
+                chroma_path = os.environ.get('CHROMA_DB_PATH', '/app/data/chroma_db')
+            
+            # Ensure directory exists
+            os.makedirs(chroma_path, exist_ok=True)
+            self.client = chromadb.PersistentClient(path=chroma_path)
             
             # Create embedding function
             self.embedding_function = chromadb.utils.embedding_functions.DefaultEmbeddingFunction()
@@ -41,7 +51,7 @@ class RecipeCacheService:
             # TTL is disabled - recipes will never expire
             self.cache_ttl = None
             logger.info("ChromaDB recipe cache initialized with TTL disabled - recipes will never expire")
-            logger.info(f"Using persistent storage at ./chroma_db")
+            logger.info(f"Using persistent storage at {chroma_path}")
         except Exception as e:
             logger.error(f"Failed to initialize ChromaDB recipe cache: {e}")
             self.client = None
