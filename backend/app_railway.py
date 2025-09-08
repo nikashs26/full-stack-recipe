@@ -244,6 +244,84 @@ def manual_populate():
     except Exception as e:
         return {'status': 'error', 'message': f'Error: {str(e)}'}, 500
 
+# Background population support to avoid HTTP timeouts on long runs
+# Simple in-process status tracking
+population_status = {
+    'running': False,
+    'started_at': None,
+    'finished_at': None,
+    'success': None,
+    'message': None
+}
+
+@app.route('/api/populate-async', methods=['POST'])
+def populate_async():
+    """Start population in background and return immediately."""
+    try:
+        import threading
+        from datetime import datetime
+        from full_railway_populate import restore_full_database
+
+        if population_status.get('running'):
+            return {
+                'status': 'in_progress',
+                'message': 'Population already running',
+                'started_at': population_status.get('started_at')
+            }, 202
+
+        def _run():
+            try:
+                population_status.update({
+                    'running': True,
+                    'started_at': datetime.utcnow().isoformat() + 'Z',
+                    'finished_at': None,
+                    'success': None,
+                    'message': 'Population started'
+                })
+                ok = restore_full_database()
+                population_status.update({
+                    'running': False,
+                    'finished_at': datetime.utcnow().isoformat() + 'Z',
+                    'success': bool(ok),
+                    'message': 'Completed successfully' if ok else 'Completed with errors'
+                })
+            except Exception as e:
+                population_status.update({
+                    'running': False,
+                    'finished_at': datetime.utcnow().isoformat() + 'Z',
+                    'success': False,
+                    'message': f'Exception: {str(e)}'
+                })
+
+        t = threading.Thread(target=_run, daemon=True)
+        t.start()
+        return {
+            'status': 'started',
+            'message': 'Population kicked off in background',
+            'started_at': population_status.get('started_at')
+        }, 202
+    except Exception as e:
+        return {'status': 'error', 'message': f'Error: {str(e)}'}, 500
+
+@app.route('/api/populate-status', methods=['GET'])
+def populate_status():
+    """Check background population status."""
+    try:
+        # Also include current recipe count for convenience
+        current_count = None
+        try:
+            if recipe_cache:
+                current_count = recipe_cache.get_recipe_count()
+        except Exception:
+            current_count = None
+        return {
+            'status': 'success',
+            'population': population_status,
+            'recipe_count': current_count
+        }
+    except Exception as e:
+        return {'status': 'error', 'message': f'Error: {str(e)}'}, 500
+
 # Minimal population endpoint (for testing)
 @app.route('/api/populate-minimal', methods=['POST'])
 def minimal_populate():
