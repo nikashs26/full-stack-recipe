@@ -16,7 +16,7 @@ COPY . .
 
 # Install backend requirements
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r backend/requirements-railway.txt
+    pip install --no-cache-dir -r requirements-railway.txt
 
 # Non-root
 RUN useradd --create-home --shell /bin/bash app && \
