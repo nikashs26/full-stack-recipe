@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { ChefHat, Loader2, RefreshCw, Settings, Lock, History, X, Clock, ChevronLeft, ChevronRight, AlertCircle } from 'lucide-react';
 import { generateMealPlan, regenerateMeal, saveMealPlanToHistory, type MealPlanData, type MealDay, type Meal } from '../services/mealPlannerService';
 import MealPlannerAdvancedSettings, { type MealPlannerSettings } from '../components/MealPlannerAdvancedSettings';
-import MealPlanHistory from '../components/MealPlanHistory';
+import MealPlan from '../components/MealPlanHistory';
 
 const MealPlannerPage: React.FC = () => {
   const { isAuthenticated, isLoading: authLoading, user } = useAuth();

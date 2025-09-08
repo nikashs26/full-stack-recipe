@@ -444,6 +444,20 @@ def clear_and_populate_real():
     except Exception as e:
         return {'status': 'error', 'message': f'Error: {str(e)}'}, 500
 
+# Correct population endpoint with proper 1115 recipes
+@app.route('/api/populate-correct', methods=['POST'])
+def populate_correct():
+    """Populate Railway with the correct 1115 recipes from sync_data.json"""
+    try:
+        from populate_railway_correct import populate_railway_correct
+        success = populate_railway_correct()
+        if success:
+            return {'status': 'success', 'message': 'Railway populated with correct 1115 recipes successfully'}
+        else:
+            return {'status': 'error', 'message': 'Failed to populate Railway with correct recipes'}, 500
+    except Exception as e:
+        return {'status': 'error', 'message': f'Error: {str(e)}'}, 500
+
 # Root route
 @app.route('/')
 def root():
