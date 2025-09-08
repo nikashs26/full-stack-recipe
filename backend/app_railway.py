@@ -123,8 +123,8 @@ def health_check():
 def manual_populate():
     """Manually trigger population from sync data"""
     try:
-        from manual_populate_railway import populate_railway_manually
-        success = populate_railway_manually()
+        from simple_populate_railway import populate_railway_simple
+        success = populate_railway_simple()
         if success:
             return {'status': 'success', 'message': 'Railway populated successfully'}
         else:

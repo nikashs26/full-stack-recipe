@@ -1,0 +1,106 @@
+{
+  "backup_timestamp": "2025-08-16T11:05:17.363318",
+  "backup_type": "recipe_backup_1115",
+  "source_path": "/Users/nikashshanbhag/Desktop/full-stack-recipe/backend/chroma_db",
+  "recipe_count": 4812,
+  "expected_recipes": 1115,
+  "collections": [
+    {
+      "name": "user_preferences",
+      "count": 2,
+      "metadata": null
+    },
+    {
+      "name": "ingredients",
+      "count": 5,
+      "metadata": {
+        "description": "Ingredient knowledge base with relationships and substitutions"
+      }
+    },
+    {
+      "name": "meal_feedback",
+      "count": 0,
+      "metadata": {
+        "description": "User feedback on meals"
+      }
+    },
+    {
+      "name": "recipe_folders",
+      "count": 4,
+      "metadata": {
+        "description": "Recipe folders for organizing recipes"
+      }
+    },
+    {
+      "name": "shopping_lists",
+      "count": 0,
+      "metadata": {
+        "description": "User shopping lists with context"
+      }
+    },
+    {
+      "name": "verification_tokens",
+      "count": 5,
+      "metadata": null
+    },
+    {
+      "name": "store_layouts",
+      "count": 0,
+      "metadata": {
+        "description": "Store layouts for shopping optimization"
+      }
+    },
+    {
+      "name": "meal_history",
+      "count": 0,
+      "metadata": {
+        "description": "User meal history and interactions"
+      }
+    },
+    {
+      "name": "recipe_reviews",
+      "count": 24,
+      "metadata": {
+        "description": "Recipe reviews with user authentication"
+      }
+    },
+    {
+      "name": "folder_items",
+      "count": 4,
+      "metadata": {
+        "description": "Items within recipe folders"
+      }
+    },
+    {
+      "name": "recipe_details_cache",
+      "count": 1115,
+      "metadata": null
+    },
+    {
+      "name": "recipes",
+      "count": 0,
+      "metadata": {
+        "description": "Recipe collection with semantic search capabilities"
+      }
+    },
+    {
+      "name": "recipe_search_cache",
+      "count": 3649,
+      "metadata": {
+        "description": "Cache for recipe search results"
+      }
+    },
+    {
+      "name": "users",
+      "count": 4,
+      "metadata": null
+    }
+  ],
+  "total_size_bytes": 308835476,
+  "file_count": 57,
+  "backup_verification": {
+    "recipe_count_match": false,
+    "collections_accessible": true,
+    "chromadb_healthy": true
+  }
+}
