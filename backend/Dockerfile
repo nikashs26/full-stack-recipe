@@ -30,7 +30,7 @@ COPY . .
 # ChromaDB will be created and populated from sync data on startup
 
 # Copy the sync data file for population
-COPY railway_sync_data_*.json /app/railway_sync_data.json
+COPY railway_sync_data_20250907_210446.json /app/railway_sync_data.json
 ENV SYNC_DATA_PATH=/app/railway_sync_data.json
 
 # Create non-root user for security
