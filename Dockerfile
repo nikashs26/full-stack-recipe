@@ -26,5 +26,5 @@ USER app
 # Expose
 EXPOSE $PORT
 
-# Run the full backend app
-CMD gunicorn backend.app_railway:app --bind 0.0.0.0:$PORT --workers 1 --timeout 120 --keep-alive 2 --max-requests 1000 --max-requests-jitter 100
+# Run the minimal backend app for testing
+CMD gunicorn backend.app_railway_minimal:app --bind 0.0.0.0:$PORT --workers 1 --timeout 120 --keep-alive 2 --max-requests 1000 --max-requests-jitter 100
