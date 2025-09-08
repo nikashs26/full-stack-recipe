@@ -27,17 +27,10 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Copy application code (backend folder)
 COPY . .
 
-# Copy sync data file for population
-COPY sync_data.json /app/sync_data.json
-
 # ChromaDB will be created and populated from sync data on startup
 
 # Sync data will be created programmatically
 # No need to copy sync data file during build
-
-# Create data directory for persistent storage
-RUN mkdir -p /app/data && \
-    chmod 755 /app/data
 
 # Create non-root user for security
 RUN useradd --create-home --shell /bin/bash app && \

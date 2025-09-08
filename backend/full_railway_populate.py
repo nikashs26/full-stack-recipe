@@ -27,34 +27,10 @@ def restore_full_database():
         cache = RecipeCacheService()
         print("✓ Cache service initialized")
         
-        # Clear existing data first
-        print("🧹 Clearing existing database...")
-        try:
-            # Delete and recreate collections to clear all data
-            cache.client.delete_collection("recipe_details_cache")
-            cache.client.delete_collection("recipe_search_cache")
-            print("✓ Cleared existing collections")
-        except Exception as e:
-            print(f"⚠️ Error clearing collections (may not exist): {e}")
-        
-        # Recreate collections
-        cache.recipe_collection = cache.client.get_or_create_collection(
-            name="recipe_details_cache",
-            metadata={"description": "Cache for individual recipe details"},
-            embedding_function=cache.embedding_function
-        )
-        
-        cache.search_collection = cache.client.get_or_create_collection(
-            name="recipe_search_cache",
-            metadata={"description": "Cache for recipe search results"},
-            embedding_function=cache.embedding_function
-        )
-        print("✓ Recreated collections")
-        
         # Load sync data (prefer committed sync_data.json if present)
         sync_files = [
-            "sync_data.json",               # Committed file in backend/ - YOUR REAL 1115 RECIPES
             "/app/railway_sync_data.json",  # Railway container path
+            "sync_data.json",               # Committed file in backend/
             "railway_sync_data.json",       # Local path
             "railway_sync_data_20250907_210446.json",  # Original filename
             os.environ.get('SYNC_DATA_PATH', '')  # Environment variable

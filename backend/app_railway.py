@@ -18,10 +18,6 @@ from routes.smart_features import smart_features_bp
 # Load environment variables
 load_dotenv()
 
-# Set Railway environment variable for persistent storage
-os.environ['RAILWAY_ENVIRONMENT'] = 'true'
-os.environ['CHROMA_DB_PATH'] = '/app/data/chroma_db'
-
 # Configure logging
 configure_logging(False)  # Disable debug logging in production
 
@@ -427,34 +423,6 @@ def minimal_populate():
             return {'status': 'success', 'message': 'Railway populated with sample recipes successfully'}
         else:
             return {'status': 'error', 'message': 'Failed to populate Railway'}, 500
-    except Exception as e:
-        return {'status': 'error', 'message': f'Error: {str(e)}'}, 500
-
-# Clear and populate with real recipes endpoint
-@app.route('/api/clear-and-populate-real', methods=['POST'])
-def clear_and_populate_real():
-    """Clear current data and populate with real 1115 recipes"""
-    try:
-        from clear_and_populate_real_recipes import clear_and_populate_real_recipes
-        success = clear_and_populate_real_recipes()
-        if success:
-            return {'status': 'success', 'message': 'Railway cleared and populated with real recipes successfully'}
-        else:
-            return {'status': 'error', 'message': 'Failed to clear and populate Railway'}, 500
-    except Exception as e:
-        return {'status': 'error', 'message': f'Error: {str(e)}'}, 500
-
-# Correct population endpoint with proper 1115 recipes
-@app.route('/api/populate-correct', methods=['POST'])
-def populate_correct():
-    """Populate Railway with the correct 1115 recipes from sync_data.json"""
-    try:
-        from populate_railway_correct import populate_railway_correct
-        success = populate_railway_correct()
-        if success:
-            return {'status': 'success', 'message': 'Railway populated with correct 1115 recipes successfully'}
-        else:
-            return {'status': 'error', 'message': 'Failed to populate Railway with correct recipes'}, 500
     except Exception as e:
         return {'status': 'error', 'message': f'Error: {str(e)}'}, 500
 

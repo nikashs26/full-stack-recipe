@@ -11,16 +11,7 @@ class SmartShoppingService:
     """
     
     def __init__(self):
-        import os
-        chroma_path = os.environ.get('CHROMA_DB_PATH', './chroma_db')
-        
-        # For Railway deployment, use persistent volume
-        if os.environ.get('RAILWAY_ENVIRONMENT'):
-            chroma_path = os.environ.get('CHROMA_DB_PATH', '/app/data/chroma_db')
-        
-        chroma_path = os.path.abspath(chroma_path)
-        os.makedirs(chroma_path, exist_ok=True)
-        self.client = chromadb.PersistentClient(path=chroma_path)
+        self.client = chromadb.PersistentClient(path="./chroma_db")
         
         # Collection for ingredient knowledge base
         self.ingredient_collection = self.client.get_or_create_collection(

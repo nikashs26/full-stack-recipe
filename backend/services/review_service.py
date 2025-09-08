@@ -13,13 +13,7 @@ class ReviewService:
     def __init__(self):
         # Use the new ChromaDB client configuration with absolute path
         import os
-        chroma_path = os.environ.get('CHROMA_DB_PATH', './chroma_db')
-        
-        # For Railway deployment, use persistent volume
-        if os.environ.get('RAILWAY_ENVIRONMENT'):
-            chroma_path = os.environ.get('CHROMA_DB_PATH', '/app/data/chroma_db')
-        
-        chroma_path = os.path.abspath(chroma_path)
+        chroma_path = os.path.abspath("./chroma_db")
         os.makedirs(chroma_path, exist_ok=True)
         self.client = chromadb.PersistentClient(path=chroma_path)
         self.collection = self.client.get_or_create_collection(
