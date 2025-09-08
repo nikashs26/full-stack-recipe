@@ -27,9 +27,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Copy application code (backend folder)
 COPY . .
 
-# Copy your existing local ChromaDB so the backend uses your real dataset
-# Paths are relative to the build context (repo root)
-COPY chroma_db /app/chroma_db
+# ChromaDB will be created and populated from sync data on startup
 
 # Copy the sync data file for population
 COPY railway_sync_data_*.json /app/railway_sync_data.json
