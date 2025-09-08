@@ -96,7 +96,7 @@ def register_recipe_routes(app, recipe_cache):
                 "message": f"Failed to get recipe counts: {str(e)}"
             }), 500
     
-    @app.route("/get_recipes", methods=["GET", "OPTIONS"])
+    @app.route("/api/get_recipes", methods=["GET", "OPTIONS"])
     @cross_origin(origins=["http://localhost:8081", "http://localhost:5173", "https://betterbulk.netlify.app"], 
                  supports_credentials=True)
     @async_route
@@ -191,7 +191,7 @@ def register_recipe_routes(app, recipe_cache):
                 "details": str(e)
             }), 500
 
-    @app.route("/get_recipe_by_id", methods=["GET", "OPTIONS"])
+    @app.route("/api/get_recipe_by_id", methods=["GET", "OPTIONS"])
     @cross_origin(origins=["http://localhost:8081", "http://localhost:5173", "https://betterbulk.netlify.app"], 
                  supports_credentials=True)
     @async_route
