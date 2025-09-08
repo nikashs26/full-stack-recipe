@@ -1,6 +1,7 @@
 from flask import Flask, request, make_response
 from flask_cors import CORS
 import os
+import json
 from dotenv import load_dotenv
 from config.logging_config import configure_logging
 from services.recipe_cache_service import RecipeCacheService
@@ -140,6 +141,54 @@ def upload_sync():
         return {'status': 'success', 'message': 'Sync data uploaded', 'path': dest_path}
     except Exception as e:
         return {'status': 'error', 'message': f'Upload failed: {str(e)}'}, 500
+
+# Populate from uploaded sync data file
+@app.route('/api/populate-from-file', methods=['POST'])
+def populate_from_file():
+    try:
+        sync_file_path = '/app/railway_sync_data.json'
+        if not os.path.exists(sync_file_path):
+            return {'status': 'error', 'message': 'No sync data file found'}, 404
+        
+        with open(sync_file_path, 'r') as f:
+            sync_data = json.load(f)
+        
+        if not recipe_cache:
+            return {'status': 'error', 'message': 'Recipe cache not available'}, 500
+        
+        # Process recipes from sync data
+        recipes = sync_data.get('recipes', [])
+        if not recipes:
+            return {'status': 'error', 'message': 'No recipes in sync data'}, 400
+        
+        print(f"Processing {len(recipes)} recipes from sync data...")
+        
+        # Add recipes to cache
+        for i, recipe_info in enumerate(recipes):
+            try:
+                recipe_id = recipe_info['id']
+                metadata = recipe_info['metadata']
+                recipe_data = recipe_info['data']
+                
+                # Store in recipe collection
+                recipe_cache.recipe_collection.upsert(
+                    ids=[recipe_id],
+                    documents=[json.dumps(recipe_data)],
+                    metadatas=[metadata]
+                )
+                
+                if (i + 1) % 100 == 0:
+                    print(f"Processed {i + 1}/{len(recipes)} recipes...")
+                    
+            except Exception as e:
+                print(f"Error processing recipe {recipe_id}: {e}")
+                continue
+        
+        print(f"Successfully processed {len(recipes)} recipes")
+        return {'status': 'success', 'message': f'Successfully populated {len(recipes)} recipes'}
+        
+    except Exception as e:
+        return {'status': 'error', 'message': f'Population failed: {str(e)}'}, 500
 
 # Download sync data JSON from a URL and save to /app/railway_sync_data.json
 @app.route('/api/populate-from-url', methods=['POST'])
