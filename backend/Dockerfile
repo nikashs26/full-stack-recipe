@@ -29,8 +29,9 @@ COPY . .
 
 # ChromaDB will be created and populated from sync data on startup
 
-# Copy backup file for full population
-COPY chromadb_backups/railwayChromaBU09072025_20250907_210141.zip /app/backup.zip
+# Copy sync data file for full population
+COPY railway_sync_data_20250907_210446.json /app/railway_sync_data.json
+ENV SYNC_DATA_PATH=/app/railway_sync_data.json
 
 # Create non-root user for security
 RUN useradd --create-home --shell /bin/bash app && \

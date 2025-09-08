@@ -16,128 +16,78 @@ from typing import Dict, List, Any
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 def restore_full_database():
-    """Restore complete database from backup to Railway"""
+    """Restore complete database from sync data to Railway"""
     try:
         from services.recipe_cache_service import RecipeCacheService
-        import chromadb
+        import asyncio
         
-        print("🚀 Starting full Railway population from backup...")
+        print("🚀 Starting full Railway population from sync data...")
         
         # Initialize cache service
         cache = RecipeCacheService()
         print("✓ Cache service initialized")
         
-        # Path to the backup file (copied to Railway container)
-        backup_file = "/app/backup.zip"
+        # Load sync data
+        sync_files = [
+            "railway_sync_data.json",  # Dockerfile copies it here
+            "railway_sync_data_20250907_210446.json",  # Original filename
+            os.environ.get('SYNC_DATA_PATH', '')  # Environment variable
+        ]
         
-        if not os.path.exists(backup_file):
-            print(f"❌ Backup file not found: {backup_file}")
+        sync_file = None
+        for file_path in sync_files:
+            if file_path and os.path.exists(file_path):
+                sync_file = file_path
+                break
+        
+        if not sync_file:
+            print(f"❌ No sync data file found. Tried: {sync_files}")
             return False
             
-        print(f"📂 Found backup file: {backup_file}")
+        print(f"📂 Loading sync data from: {sync_file}")
+        with open(sync_file, 'r') as f:
+            sync_data = json.load(f)
         
-        # Create temporary directory for extraction
-        with tempfile.TemporaryDirectory() as temp_dir:
-            print(f"📦 Extracting backup to temporary directory...")
+        recipes = sync_data.get('recipes', [])
+        print(f"📊 Found {len(recipes)} recipes in sync data")
+        
+        if not recipes:
+            print("❌ No recipes found in sync data")
+            return False
+        
+        # Add recipes to cache in batches
+        batch_size = 50
+        total_added = 0
+        
+        print(f"🔄 Adding {len(recipes)} recipes to Railway...")
+        
+        for i in range(0, len(recipes), batch_size):
+            batch = recipes[i:i + batch_size]
+            print(f"📦 Processing batch {i//batch_size + 1}/{(len(recipes) + batch_size - 1)//batch_size} ({len(batch)} recipes)")
             
-            # Extract backup
-            with zipfile.ZipFile(backup_file, 'r') as zip_ref:
-                zip_ref.extractall(temp_dir)
-            
-            # Path to extracted ChromaDB
-            extracted_db_path = os.path.join(temp_dir, "chroma_db")
-            
-            if not os.path.exists(extracted_db_path):
-                print("❌ ChromaDB directory not found in backup")
-                return False
-            
-            print("✓ Backup extracted successfully")
-            
-            # Create a temporary ChromaDB client to read from backup
-            temp_client = chromadb.PersistentClient(path=extracted_db_path)
-            
-            # Get all collections from backup
-            collections = temp_client.list_collections()
-            print(f"📊 Found {len(collections)} collections in backup:")
-            
-            total_items = 0
-            for collection in collections:
-                count = collection.count()
-                total_items += count
-                print(f"  - {collection.name}: {count} items")
-            
-            print(f"📈 Total items to migrate: {total_items}")
-            
-            # Migrate each collection
-            migrated_count = 0
-            
-            for collection in collections:
-                collection_name = collection.name
-                print(f"\\n🔄 Migrating collection: {collection_name}")
-                
+            for recipe in batch:
                 try:
-                    # Get all data from source collection
-                    source_data = collection.get(include=['documents', 'metadatas', 'embeddings'])
-                    
-                    if not source_data.get('ids'):
-                        print(f"  ⚠️ No data in {collection_name}, skipping...")
-                        continue
-                    
-                    # Get or create target collection
-                    try:
-                        target_collection = cache.client.get_collection(collection_name)
-                    except:
-                        target_collection = cache.client.create_collection(
-                            name=collection_name,
-                            metadata=collection.metadata or {}
-                        )
-                    
-                    # Prepare data for migration
-                    ids = source_data['ids']
-                    documents = source_data.get('documents', [])
-                    metadatas = source_data.get('metadatas', [])
-                    embeddings = source_data.get('embeddings', [])
-                    
-                    # Migrate in batches to avoid memory issues
-                    batch_size = 100
-                    for i in range(0, len(ids), batch_size):
-                        batch_ids = ids[i:i + batch_size]
-                        batch_docs = documents[i:i + batch_size] if documents else None
-                        batch_metas = metadatas[i:i + batch_size] if metadatas else None
-                        batch_embeds = embeddings[i:i + batch_size] if embeddings else None
-                        
-                        # Prepare upsert data
-                        upsert_data = {'ids': batch_ids}
-                        if batch_docs:
-                            upsert_data['documents'] = batch_docs
-                        if batch_metas:
-                            upsert_data['metadatas'] = batch_metas
-                        if batch_embeds:
-                            upsert_data['embeddings'] = batch_embeds
-                        
-                        # Upsert to target collection
-                        target_collection.upsert(**upsert_data)
-                        
-                        migrated_count += len(batch_ids)
-                        print(f"  ✓ Migrated batch {i//batch_size + 1}/{(len(ids) + batch_size - 1)//batch_size} ({len(batch_ids)} items)")
-                    
-                    print(f"  ✅ Successfully migrated {collection_name}: {len(ids)} items")
-                    
+                    # add_recipe is async, so we need to await it
+                    result = asyncio.run(cache.add_recipe(recipe))
+                    if result:
+                        total_added += 1
+                    else:
+                        print(f"⚠️ Failed to add recipe {recipe.get('title', 'Unknown')}: add_recipe returned False")
                 except Exception as e:
-                    print(f"  ❌ Failed to migrate {collection_name}: {e}")
+                    print(f"⚠️ Failed to add recipe {recipe.get('title', 'Unknown')}: {e}")
                     continue
             
-            print(f"\\n🎉 Migration completed!")
-            print(f"📊 Total items migrated: {migrated_count}")
-            
-            # Verify migration
-            print("\\n🔍 Verifying migration...")
-            current_collections = cache.client.list_collections()
-            for collection in current_collections:
-                count = collection.count()
-                print(f"  - {collection.name}: {count} items")
-            
-            return True
+            print(f"✓ Added {total_added} recipes so far...")
+        
+        print(f"🎉 Successfully populated Railway with {total_added} recipes!")
+        
+        # Verify migration
+        print("\\n🔍 Verifying migration...")
+        if cache.recipe_collection:
+            count = cache.recipe_collection.count()
+            print(f"  - recipe_details_cache: {count} items")
+        
+        return True
             
     except Exception as e:
         print(f"❌ Error during full population: {e}")
