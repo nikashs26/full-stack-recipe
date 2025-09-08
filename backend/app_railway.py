@@ -133,6 +133,20 @@ print("✓ All route blueprints registered")
 def health_check():
     return {'status': 'healthy', 'message': 'Railway backend is running', 'routes': 'all registered'}
 
+# Manual population endpoint
+@app.route('/api/populate', methods=['POST'])
+def manual_populate():
+    """Manually trigger population from sync data"""
+    try:
+        from manual_populate_railway import populate_railway_manually
+        success = populate_railway_manually()
+        if success:
+            return {'status': 'success', 'message': 'Railway populated successfully'}
+        else:
+            return {'status': 'error', 'message': 'Failed to populate Railway'}, 500
+    except Exception as e:
+        return {'status': 'error', 'message': f'Error: {str(e)}'}, 500
+
 # Root route
 @app.route('/')
 def root():
