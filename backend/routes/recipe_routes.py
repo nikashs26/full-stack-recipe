@@ -165,8 +165,12 @@ def register_recipe_routes(app, recipe_cache):
         print(f"Request args values: {dict(request.args)}")
         
         try:
+            # Create service instance for this request
+            from services.recipe_service import RecipeService
+            service = RecipeService(recipe_cache)
+            
             # Search recipes from all sources with pagination and filters
-            result = await recipe_service.search_recipes(
+            result = await service.search_recipes(
                 query=query,
                 ingredient=ingredient,
                 offset=offset,

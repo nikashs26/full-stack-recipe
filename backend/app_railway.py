@@ -18,6 +18,10 @@ from routes.smart_features import smart_features_bp
 # Load environment variables
 load_dotenv()
 
+# Set Railway environment variable for persistent storage
+os.environ['RAILWAY_ENVIRONMENT'] = 'true'
+os.environ['CHROMA_DB_PATH'] = '/app/data/chroma_db'
+
 # Configure logging
 configure_logging(False)  # Disable debug logging in production
 
