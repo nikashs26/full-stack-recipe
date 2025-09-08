@@ -43,7 +43,9 @@ temp/
 tmp/
 *.tmp
 *.zip
+!chromadb_backups/railwayChromaBU09072025_20250907_210141.zip
 *.tar.gz
 *.csv
 chroma_db/
-chromadb_backups/
+chromadb_backups/*
+!chromadb_backups/railwayChromaBU09072025_20250907_210141.zip
