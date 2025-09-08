@@ -164,12 +164,12 @@ def debug_sync_data():
 # Manual population endpoint
 @app.route('/api/populate', methods=['POST'])
 def manual_populate():
-    """Manually trigger population from sync data"""
+    """Manually trigger population with sample recipes"""
     try:
-        from simple_populate_railway import populate_railway_simple
-        success = populate_railway_simple()
+        from minimal_populate import populate_railway_minimal
+        success = populate_railway_minimal()
         if success:
-            return {'status': 'success', 'message': 'Railway populated successfully'}
+            return {'status': 'success', 'message': 'Railway populated with sample recipes successfully'}
         else:
             return {'status': 'error', 'message': 'Failed to populate Railway'}, 500
     except Exception as e:
