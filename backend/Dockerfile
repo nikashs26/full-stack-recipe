@@ -31,9 +31,9 @@ COPY . .
 # Paths are relative to the build context (repo root)
 COPY chroma_db /app/chroma_db
 
-# Also copy the backup recipes into the image so we can populate on startup if empty
-COPY chroma_db_backup_20250812_204552/recipes_backup.json /app/recipes_backup.json
-ENV BACKUP_RECIPES_PATH=/app/recipes_backup.json
+# Copy the sync data file for population
+COPY railway_sync_data_*.json /app/railway_sync_data.json
+ENV SYNC_DATA_PATH=/app/railway_sync_data.json
 
 # Create non-root user for security
 RUN useradd --create-home --shell /bin/bash app && \
