@@ -29,7 +29,8 @@ def restore_full_database():
         
         # Load sync data
         sync_files = [
-            "railway_sync_data.json",  # Dockerfile copies it here
+            "/app/railway_sync_data.json",  # Railway container path
+            "railway_sync_data.json",  # Local path
             "railway_sync_data_20250907_210446.json",  # Original filename
             os.environ.get('SYNC_DATA_PATH', '')  # Environment variable
         ]
@@ -41,8 +42,9 @@ def restore_full_database():
                 break
         
         if not sync_file:
-            print(f"❌ No sync data file found. Tried: {sync_files}")
-            return False
+            print(f"❌ No sync data file found. Creating sample data...")
+            from create_sync_data import create_sync_data
+            sync_file = create_sync_data()
             
         print(f"📂 Loading sync data from: {sync_file}")
         with open(sync_file, 'r') as f:
