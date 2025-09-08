@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { apiCall } from '@/utils/apiUtils';
-import { API_BASE_URL } from '../config/api';
+import { getApiUrl } from '../config/api';
 
 interface User {
   user_id: string;

@@ -1,4 +1,4 @@
-import { API_BASE_URL } from '../config/api';
+import { getApiUrl } from '../config/api';
 
 export const apiCall = async (endpoint: string, options: RequestInit = {}) => {
   const token = localStorage.getItem('auth_token');
@@ -18,7 +18,7 @@ export const apiCall = async (endpoint: string, options: RequestInit = {}) => {
   }
 
   // Handle absolute URLs (starting with http:// or https://)
-  const url = endpoint.startsWith('http') ? endpoint : `${API_BASE_URL}${endpoint}`;
+  const url = endpoint.startsWith('http') ? endpoint : `${getApiUrl()}${endpoint}`;
   
   console.log('🌐 Making API call to:', url);
   console.log('📤 Request headers:', headers);
@@ -34,7 +34,7 @@ export const apiCall = async (endpoint: string, options: RequestInit = {}) => {
     console.log('🔄 Got 401, attempting token refresh...');
     
     try {
-      const refreshResponse = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
+      const refreshResponse = await fetch(`${getApiUrl()}/api/auth/refresh`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
