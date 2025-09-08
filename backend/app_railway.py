@@ -322,6 +322,16 @@ def populate_status():
     except Exception as e:
         return {'status': 'error', 'message': f'Error: {str(e)}'}, 500
 
+@app.route('/api/fix-missing-cuisines', methods=['POST'])
+def fix_missing_cuisines():
+    """Backfill cuisine metadata for recipes that are missing it."""
+    try:
+        from scripts.update_recipe_cuisines import update_recipe_cuisines
+        update_recipe_cuisines()
+        return {'status': 'success', 'message': 'Cuisine metadata backfill completed'}
+    except Exception as e:
+        return {'status': 'error', 'message': f'Error: {str(e)}'}, 500
+
 # Minimal population endpoint (for testing)
 @app.route('/api/populate-minimal', methods=['POST'])
 def minimal_populate():
