@@ -1,12 +1,20 @@
 import chromadb
 import json
 from typing import List, Dict, Any, Optional
-from sentence_transformers import SentenceTransformer
 import numpy as np
 from datetime import datetime
 import logging
 import random
 from services.recipe_cache_service import RecipeCacheService
+
+# Optional import for enhanced embeddings
+try:
+    from sentence_transformers import SentenceTransformer
+    SENTENCE_TRANSFORMERS_AVAILABLE = True
+except ImportError:
+    SENTENCE_TRANSFORMERS_AVAILABLE = False
+    logger = logging.getLogger(__name__)
+    logger.warning("sentence-transformers not available - using ChromaDB default embeddings")
 
 logger = logging.getLogger(__name__)
 
@@ -71,12 +79,16 @@ class RecipeSearchService:
             logger.warning(f"Failed to initialize RecipeCacheService: {e}")
             self.cache_service = None
         
-        try:
-            # Initialize sentence transformer for better embeddings
-            self.encoder = SentenceTransformer('all-MiniLM-L6-v2')
-            logger.info("Using SentenceTransformer for enhanced embeddings")
-        except Exception as e:
-            logger.warning(f"Failed to load SentenceTransformer, falling back to ChromaDB default: {e}")
+        # Initialize sentence transformer for better embeddings (if available)
+        if SENTENCE_TRANSFORMERS_AVAILABLE:
+            try:
+                self.encoder = SentenceTransformer('all-MiniLM-L6-v2')
+                logger.info("Using SentenceTransformer for enhanced embeddings")
+            except Exception as e:
+                logger.warning(f"Failed to load SentenceTransformer, falling back to ChromaDB default: {e}")
+                self.encoder = None
+        else:
+            logger.info("SentenceTransformer not available - using ChromaDB default embeddings")
             self.encoder = None
     
     def index_recipe(self, recipe: Dict[str, Any]) -> None:
