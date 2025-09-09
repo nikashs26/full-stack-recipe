@@ -12,8 +12,24 @@ CORS(app, origins=["*"])
 # Load recipes from JSON file
 def load_recipes():
     try:
-        with open('recipes_data.json', 'r') as f:
-            return json.load(f)
+        # Try multiple possible paths
+        possible_paths = [
+            'recipes_data.json',
+            './recipes_data.json',
+            '/app/recipes_data.json',
+            os.path.join(os.path.dirname(__file__), 'recipes_data.json')
+        ]
+        
+        for path in possible_paths:
+            if os.path.exists(path):
+                print(f"Loading recipes from: {path}")
+                with open(path, 'r') as f:
+                    return json.load(f)
+        
+        print(f"Recipes file not found. Tried paths: {possible_paths}")
+        print(f"Current directory: {os.getcwd()}")
+        print(f"Files in current directory: {os.listdir('.')}")
+        return []
     except Exception as e:
         print(f"Error loading recipes: {e}")
         return []
