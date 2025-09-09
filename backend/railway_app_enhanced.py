@@ -337,6 +337,75 @@ def user_preferences():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+# Non-API endpoints for frontend compatibility (without /api prefix)
+@app.route('/get_recipe_by_id', methods=['GET'])
+def get_recipe_by_id_no_api():
+    """Get a specific recipe by ID (query parameter) - for frontend compatibility without /api"""
+    try:
+        recipe_id = request.args.get('id')
+        if not recipe_id:
+            return jsonify({"error": "Recipe ID required"}), 400
+        
+        recipe = next((r for r in RECIPES if str(r.get('id', '')) == str(recipe_id)), None)
+        if recipe:
+            return jsonify(recipe)
+        else:
+            return jsonify({"error": "Recipe not found"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/get_recipes', methods=['GET'])
+def get_recipes_no_api():
+    """Get recipes with enhanced filtering - for frontend compatibility without /api"""
+    try:
+        # Get query parameters
+        limit = int(request.args.get('limit', 20))
+        offset = int(request.args.get('offset', 0))
+        search = request.args.get('search', '').strip()
+        cuisine = request.args.get('cuisine', '').strip()
+        diet = request.args.get('diet', '').strip()
+        tag = request.args.get('tag', '').strip()
+        
+        # Parse multiple values
+        cuisines = [c.strip() for c in cuisine.split(',')] if cuisine else None
+        diets = [d.strip() for d in diet.split(',')] if diet else None
+        tags = [t.strip() for t in tag.split(',')] if tag else None
+        
+        # Filter recipes
+        filtered_recipes = search_recipes(RECIPES, search, cuisines, diets, tags)
+        
+        # Apply pagination
+        total = len(filtered_recipes)
+        paginated_recipes = filtered_recipes[offset:offset + limit]
+        
+        return jsonify({
+            "results": paginated_recipes,
+            "total": total,
+            "limit": limit,
+            "offset": offset
+        })
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/reviews/local/<recipe_id>', methods=['GET', 'POST'])
+def get_recipe_reviews_no_api(recipe_id):
+    """Get reviews for a recipe (placeholder) - for frontend compatibility without /api"""
+    try:
+        # Check if recipe exists
+        recipe = next((r for r in RECIPES if str(r.get('id', '')) == str(recipe_id)), None)
+        if not recipe:
+            return jsonify({"error": "Recipe not found"}), 404
+        
+        if request.method == 'GET':
+            # Return empty reviews for now
+            return jsonify([])
+        else:
+            # Placeholder - reviews not implemented yet
+            return jsonify({"message": "Review functionality not implemented yet"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8000))
     app.run(host='0.0.0.0', port=port, debug=False)
