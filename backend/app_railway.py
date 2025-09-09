@@ -170,10 +170,21 @@ def populate_from_file():
                 metadata = recipe_info['metadata']
                 recipe_data = recipe_info['data']
                 
+                # Use document field if available (merged data), otherwise merge data and metadata
+                if 'document' in recipe_info:
+                    document_data = recipe_info['document']
+                else:
+                    # Merge metadata into recipe data for frontend compatibility
+                    merged_recipe = recipe_data.copy()
+                    for key, value in metadata.items():
+                        if key not in merged_recipe or merged_recipe[key] is None or merged_recipe[key] == '':
+                            merged_recipe[key] = value
+                    document_data = json.dumps(merged_recipe)
+                
                 # Store in recipe collection
                 recipe_cache.recipe_collection.upsert(
                     ids=[recipe_id],
-                    documents=[json.dumps(recipe_data)],
+                    documents=[document_data],
                     metadatas=[metadata]
                 )
                 

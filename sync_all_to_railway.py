@@ -113,7 +113,7 @@ class RailwayDataSyncer:
                 }
             }
             
-            # Convert recipes to sync format
+            # Convert recipes to sync format with merged data structure
             for i, (recipe_id, metadata, document) in enumerate(zip(
                 all_recipes['ids'], 
                 all_recipes['metadatas'], 
@@ -121,10 +121,19 @@ class RailwayDataSyncer:
             )):
                 try:
                     recipe_data = json.loads(document)
+                    
+                    # Merge metadata into recipe data for frontend compatibility
+                    # This ensures tags and other metadata are available in the main recipe object
+                    merged_recipe = recipe_data.copy()
+                    for key, value in metadata.items():
+                        if key not in merged_recipe or merged_recipe[key] is None or merged_recipe[key] == '':
+                            merged_recipe[key] = value
+                    
                     sync_data['recipes'].append({
                         'id': recipe_id,
                         'metadata': metadata,
-                        'data': recipe_data
+                        'data': merged_recipe,  # Use merged data instead of original
+                        'document': json.dumps(merged_recipe)  # Store merged data as document
                     })
                     
                     if (i + 1) % 100 == 0:
@@ -151,15 +160,16 @@ class RailwayDataSyncer:
             if response.status_code == 200:
                 print("   ✅ Successfully uploaded to Railway")
                 
-                # Trigger population from the uploaded file
-                print("   🔄 Triggering population on Railway...")
-                populate_response = requests.post(f"{self.api_url}/populate-from-file")
+                # Trigger async population from the uploaded file
+                print("   🔄 Triggering async population on Railway...")
+                populate_response = requests.post(f"{self.api_url}/populate-async", timeout=60)
                 
-                if populate_response.status_code == 200:
-                    print("   ✅ Successfully populated Railway with recipes")
+                if populate_response.status_code in [200, 202]:
+                    print("   ✅ Successfully triggered async population on Railway")
+                    print("   ⏳ Population is running in background...")
                     return True
                 else:
-                    print(f"   ❌ Failed to populate Railway: {populate_response.status_code}")
+                    print(f"   ❌ Failed to trigger population: {populate_response.status_code}")
                     print(f"   Response: {populate_response.text}")
                     return False
             else:
@@ -257,6 +267,48 @@ class RailwayDataSyncer:
             print(f"   ❌ Error syncing preferences: {e}")
             return False
     
+    def monitor_population(self) -> bool:
+        """Monitor the population progress"""
+        print("\n📊 Monitoring population progress...")
+        
+        max_attempts = 60  # 5 minutes max
+        attempt = 0
+        
+        while attempt < max_attempts:
+            try:
+                response = requests.get(f"{self.api_url}/populate-status", timeout=30)
+                
+                if response.status_code == 200:
+                    status = response.json()
+                    recipe_count = status.get('recipe_count', {}).get('total', 0)
+                    population = status.get('population', {})
+                    
+                    print(f"   Recipes processed: {recipe_count}")
+                    
+                    if population.get('running'):
+                        print(f"   Status: {population.get('message', 'Processing...')}")
+                    elif population.get('finished_at'):
+                        print(f"   ✅ Population completed at {population.get('finished_at')}")
+                        return True
+                    else:
+                        print(f"   Status: {population.get('message', 'Unknown')}")
+                
+                attempt += 1
+                if attempt < max_attempts:
+                    print("   Waiting 5 seconds...")
+                    import time
+                    time.sleep(5)
+                    
+            except Exception as e:
+                print(f"   Error checking status: {e}")
+                attempt += 1
+                if attempt < max_attempts:
+                    import time
+                    time.sleep(5)
+        
+        print("⚠️ Population monitoring timed out")
+        return False
+    
     def run_sync(self) -> bool:
         """Run the complete sync process"""
         print("🚀 Starting Railway Data Sync")
@@ -277,7 +329,9 @@ class RailwayDataSyncer:
         success = True
         success &= self.sync_recipes_to_railway()
         
+        # Step 4: Monitor population progress
         if success:
+            self.monitor_population()
             success &= self.verify_railway_recipes()
         
         # Step 4: Sync other data (placeholders for now)
