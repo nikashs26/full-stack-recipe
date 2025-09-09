@@ -1436,7 +1436,13 @@ class RecipeCacheService:
             #     logger.info(f"Cache entry expired for recipe ID: {recipe_id}")
             #     self.recipe_collection.delete(ids=[recipe_id])
             #     return None
-                
+            
+            # Merge metadata into recipe data for frontend compatibility
+            # This ensures tags and other metadata are available in the main recipe object
+            for key, value in metadata.items():
+                if key not in recipe or recipe[key] is None or recipe[key] == '':
+                    recipe[key] = value
+                    
             logger.debug(f"Successfully retrieved recipe from cache: {recipe.get('title', 'Untitled')} (ID: {recipe_id})")
             return recipe
             
