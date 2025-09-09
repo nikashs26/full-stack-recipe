@@ -49,6 +49,6 @@ EXPOSE $PORT
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:$PORT/api/health || exit 1
 
-# Run the simple application temporarily to get recipes working
-# This will enable basic recipe functionality without ChromaDB
-CMD gunicorn railway_app_simple:app --bind 0.0.0.0:$PORT --workers 1 --timeout 120 --keep-alive 2 --max-requests 1000 --max-requests-jitter 100
+# Run the enhanced application with proper search and filtering
+# This will enable full recipe functionality with proper metadata
+CMD gunicorn railway_app_enhanced:app --bind 0.0.0.0:$PORT --workers 1 --timeout 120 --keep-alive 2 --max-requests 1000 --max-requests-jitter 100
