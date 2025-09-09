@@ -118,6 +118,17 @@ def register_recipe_routes(app, recipe_cache):
             recipe = await recipe_service.get_recipe_by_id(recipe_id)
                                 
             if recipe:
+                # Fix data structure - if recipe has nested data, use the document field
+                if 'document' in recipe and isinstance(recipe['document'], str):
+                    try:
+                        import json
+                        document_data = json.loads(recipe['document'])
+                        # Return the merged document data instead of the nested structure
+                        return jsonify(document_data), 200
+                    except:
+                        pass
+                
+                # If no document field or parsing failed, return the recipe as-is
                 return jsonify(recipe), 200
             else:
                 return jsonify({"error": "Recipe not found"}), 404
