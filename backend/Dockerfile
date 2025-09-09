@@ -49,6 +49,6 @@ EXPOSE $PORT
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:$PORT/api/health || exit 1
 
-# Run the application with ChromaDB - Updated to use app_railway.py with proper database
-# This will enable recipe uploads via API and use persistent storage
-CMD gunicorn app_railway:app --bind 0.0.0.0:$PORT --workers 1 --timeout 120 --keep-alive 2 --max-requests 1000 --max-requests-jitter 100
+# Run the simple application temporarily to get recipes working
+# This will enable basic recipe functionality without ChromaDB
+CMD gunicorn railway_app_simple:app --bind 0.0.0.0:$PORT --workers 1 --timeout 120 --keep-alive 2 --max-requests 1000 --max-requests-jitter 100

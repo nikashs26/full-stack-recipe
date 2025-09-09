@@ -9,148 +9,167 @@ app = Flask(__name__)
 # Configure CORS
 CORS(app, origins=["*"])
 
-# Load recipes from JSON file
-def load_recipes():
-    try:
-        # Try multiple possible paths
-        possible_paths = [
-            'recipes_data.json',
-            './recipes_data.json',
-            '/app/recipes_data.json',
-            os.path.join(os.path.dirname(__file__), 'recipes_data.json')
-        ]
-        
-        for path in possible_paths:
-            if os.path.exists(path):
-                print(f"Loading recipes from: {path}")
-                with open(path, 'r') as f:
-                    return json.load(f)
-        
-        print(f"Recipes file not found. Tried paths: {possible_paths}")
-        print(f"Current directory: {os.getcwd()}")
-        print(f"Files in current directory: {os.listdir('.')}")
-        return []
-    except Exception as e:
-        print(f"Error loading recipes: {e}")
-        return []
+# Simple recipe data for testing
+RECIPES = [
+    {
+        "id": "1",
+        "title": "Chicken Curry",
+        "cuisine": "indian",
+        "cuisines": ["indian"],
+        "diets": ["gluten-free"],
+        "ingredients": [
+            {"name": "Chicken", "amount": "500g"},
+            {"name": "Onions", "amount": "2 medium"},
+            {"name": "Tomatoes", "amount": "3 medium"},
+            {"name": "Ginger", "amount": "1 inch"},
+            {"name": "Garlic", "amount": "4 cloves"},
+            {"name": "Curry Powder", "amount": "2 tbsp"},
+            {"name": "Coconut Milk", "amount": "400ml"},
+            {"name": "Oil", "amount": "2 tbsp"},
+            {"name": "Salt", "amount": "to taste"}
+        ],
+        "instructions": [
+            "Heat oil in a large pan",
+            "Add chopped onions and cook until golden",
+            "Add ginger and garlic, cook for 1 minute",
+            "Add chicken and cook until browned",
+            "Add curry powder and cook for 1 minute",
+            "Add tomatoes and cook until soft",
+            "Add coconut milk and simmer for 20 minutes",
+            "Season with salt and serve"
+        ],
+        "calories": 350.0,
+        "protein": 25.0,
+        "carbs": 15.0,
+        "fat": 20.0,
+        "image": "https://example.com/chicken-curry.jpg",
+        "description": "A delicious and aromatic chicken curry"
+    },
+    {
+        "id": "2",
+        "title": "Pasta Carbonara",
+        "cuisine": "italian",
+        "cuisines": ["italian"],
+        "diets": ["vegetarian"],
+        "ingredients": [
+            {"name": "Pasta", "amount": "400g"},
+            {"name": "Eggs", "amount": "4 large"},
+            {"name": "Parmesan Cheese", "amount": "100g"},
+            {"name": "Bacon", "amount": "200g"},
+            {"name": "Black Pepper", "amount": "1 tsp"},
+            {"name": "Salt", "amount": "to taste"}
+        ],
+        "instructions": [
+            "Cook pasta according to package instructions",
+            "Fry bacon until crispy",
+            "Beat eggs with parmesan and black pepper",
+            "Drain pasta and add to bacon pan",
+            "Remove from heat and add egg mixture",
+            "Toss quickly to create creamy sauce",
+            "Serve immediately"
+        ],
+        "calories": 450.0,
+        "protein": 20.0,
+        "carbs": 45.0,
+        "fat": 18.0,
+        "image": "https://example.com/carbonara.jpg",
+        "description": "Classic Italian pasta dish"
+    }
+]
 
-# Load recipes at startup
-RECIPES = load_recipes()
-print(f"Loaded {len(RECIPES)} recipes")
-
-@app.route('/')
-def root():
+@app.route('/api/health', methods=['GET'])
+def health_check():
     return jsonify({
-        "message": "Recipe App API", 
-        "status": "running",
-        "total_recipes": len(RECIPES),
-        "endpoints": ["/api/health", "/api/recipes", "/api/recipes/cuisines", "/get_recipe_by_id"]
+        "status": "healthy",
+        "message": "Recipe app is running"
     })
 
-@app.route('/api/health')
-def health():
-    return jsonify({"status": "healthy", "message": "Recipe app is running"})
-
-@app.route('/api/recipe-counts')
-def recipe_counts():
-    return jsonify({
-        "total": len(RECIPES),
-        "by_cuisine": {},
-        "by_diet": {}
-    })
-
-@app.route('/api/recipes')
+@app.route('/api/get_recipes', methods=['GET'])
 def get_recipes():
-    limit = request.args.get('limit', 20, type=int)
-    offset = request.args.get('offset', 0, type=int)
-    cuisine = request.args.get('cuisine', '')
-    diet = request.args.get('diet', '')
-    search = request.args.get('search', '')
-    
-    filtered_recipes = RECIPES
-    
-    # Filter by cuisine
-    if cuisine:
-        filtered_recipes = [r for r in filtered_recipes if cuisine.lower() in [c.lower() for c in r.get('cuisines', [])]]
-    
-    # Filter by diet
-    if diet:
-        filtered_recipes = [r for r in filtered_recipes if diet.lower() in [d.lower() for d in r.get('diets', [])]]
-    
-    # Filter by search term
-    if search:
-        search_lower = search.lower()
-        filtered_recipes = [r for r in filtered_recipes if 
-                           search_lower in r.get('title', '').lower() or 
-                           search_lower in r.get('description', '').lower() or
-                           any(search_lower in ing.get('name', '').lower() for ing in r.get('ingredients', []))]
-    
-    # Apply pagination
-    total = len(filtered_recipes)
-    paginated_recipes = filtered_recipes[offset:offset + limit]
-    
-    return jsonify({
-        "results": paginated_recipes,
-        "total": total,
-        "limit": limit,
-        "offset": offset
-    })
+    """Get recipes with optional filtering"""
+    try:
+        # Get query parameters
+        limit = int(request.args.get('limit', 20))
+        offset = int(request.args.get('offset', 0))
+        search = request.args.get('search', '').lower()
+        cuisine = request.args.get('cuisine', '').lower()
+        diet = request.args.get('diet', '').lower()
+        
+        # Filter recipes
+        filtered_recipes = RECIPES
+        
+        if search:
+            filtered_recipes = [r for r in filtered_recipes if search in r['title'].lower()]
+        
+        if cuisine:
+            filtered_recipes = [r for r in filtered_recipes if cuisine in [c.lower() for c in r['cuisines']]]
+        
+        if diet:
+            filtered_recipes = [r for r in filtered_recipes if diet in [d.lower() for d in r['diets']]]
+        
+        # Apply pagination
+        total = len(filtered_recipes)
+        paginated_recipes = filtered_recipes[offset:offset + limit]
+        
+        return jsonify({
+            "results": paginated_recipes,
+            "total": total,
+            "limit": limit,
+            "offset": offset
+        })
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
-@app.route('/api/recipes/cuisines')
-def get_cuisines():
-    cuisines = set()
-    for recipe in RECIPES:
-        cuisines.update(recipe.get('cuisines', []))
-    return jsonify(list(cuisines))
+@app.route('/api/get_recipe/<recipe_id>', methods=['GET'])
+def get_recipe(recipe_id):
+    """Get a specific recipe by ID"""
+    try:
+        recipe = next((r for r in RECIPES if r['id'] == recipe_id), None)
+        if recipe:
+            return jsonify(recipe)
+        else:
+            return jsonify({"error": "Recipe not found"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
-@app.route('/get_recipe_by_id')
-def get_recipe_by_id():
-    recipe_id = request.args.get('id')
-    if not recipe_id:
-        return jsonify({"error": "Recipe ID is required"}), 400
-    
-    recipe = next((r for r in RECIPES if r['id'] == recipe_id), None)
-    if recipe:
-        return jsonify(recipe)
-    else:
-        return jsonify({"error": "Recipe not found"}), 404
-
-@app.route('/api/get_recipes')
-def get_recipes_legacy():
-    limit = request.args.get('limit', 20, type=int)
-    offset = request.args.get('offset', 0, type=int)
-    cuisine = request.args.get('cuisine', '')
-    diet = request.args.get('diet', '')
-    search = request.args.get('search', '')
-    
-    filtered_recipes = RECIPES
-    
-    # Filter by cuisine
-    if cuisine:
-        filtered_recipes = [r for r in filtered_recipes if cuisine.lower() in [c.lower() for c in r.get('cuisines', [])]]
-    
-    # Filter by diet
-    if diet:
-        filtered_recipes = [r for r in filtered_recipes if diet.lower() in [d.lower() for d in r.get('diets', [])]]
-    
-    # Filter by search term
-    if search:
-        search_lower = search.lower()
-        filtered_recipes = [r for r in filtered_recipes if 
-                           search_lower in r.get('title', '').lower() or 
-                           search_lower in r.get('description', '').lower() or
-                           any(search_lower in ing.get('name', '').lower() for ing in r.get('ingredients', []))]
-    
-    # Apply pagination
-    total = len(filtered_recipes)
-    paginated_recipes = filtered_recipes[offset:offset + limit]
-    
-    return jsonify({
-        "results": paginated_recipes,
-        "total": total,
-        "limit": limit,
-        "offset": offset
-    })
+@app.route('/api/search_recipes', methods=['POST'])
+def search_recipes():
+    """Search recipes with advanced filtering"""
+    try:
+        data = request.get_json() or {}
+        
+        search_term = data.get('search', '').lower()
+        cuisines = data.get('cuisines', [])
+        diets = data.get('diets', [])
+        limit = data.get('limit', 20)
+        offset = data.get('offset', 0)
+        
+        # Filter recipes
+        filtered_recipes = RECIPES
+        
+        if search_term:
+            filtered_recipes = [r for r in filtered_recipes if search_term in r['title'].lower()]
+        
+        if cuisines:
+            filtered_recipes = [r for r in filtered_recipes if any(c.lower() in [cu.lower() for cu in r['cuisines']] for c in cuisines)]
+        
+        if diets:
+            filtered_recipes = [r for r in filtered_recipes if any(d.lower() in [di.lower() for di in r['diets']] for d in diets)]
+        
+        # Apply pagination
+        total = len(filtered_recipes)
+        paginated_recipes = filtered_recipes[offset:offset + limit]
+        
+        return jsonify({
+            "results": paginated_recipes,
+            "total": total,
+            "limit": limit,
+            "offset": offset
+        })
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8000))
