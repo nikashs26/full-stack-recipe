@@ -135,6 +135,14 @@ def check_and_restore_data():
 # Check data on startup
 check_and_restore_data()
 
+# Run persistence check
+try:
+    from ensure_persistence import main as ensure_persistence_main
+    print("🔍 Running persistence check...")
+    ensure_persistence_main()
+except Exception as e:
+    print(f"⚠️ Persistence check failed: {e}")
+
 # Basic health check route
 @app.route('/api/health')
 def health_check():
