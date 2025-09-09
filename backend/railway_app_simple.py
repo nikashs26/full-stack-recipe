@@ -9,7 +9,7 @@ app = Flask(__name__)
 # Configure CORS
 CORS(app, origins=["*"])
 
-# Simple recipe data for testing
+# Recipe storage - start with sample data, will be populated via uploads
 RECIPES = [
     {
         "id": "1",
@@ -168,6 +168,74 @@ def search_recipes():
             "offset": offset
         })
         
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/upload-recipes', methods=['POST'])
+def upload_recipes():
+    """Upload multiple recipes in batch"""
+    try:
+        data = request.get_json()
+        if not data or 'recipes' not in data:
+            return jsonify({"error": "No recipes provided"}), 400
+        
+        recipes_to_upload = data['recipes']
+        batch_info = data.get('batch_info', {})
+        
+        uploaded_count = 0
+        for recipe in recipes_to_upload:
+            # Ensure recipe has required fields
+            if 'id' not in recipe:
+                recipe['id'] = str(len(RECIPES) + 1)
+            
+            # Add to recipes list
+            RECIPES.append(recipe)
+            uploaded_count += 1
+        
+        return jsonify({
+            "message": f"Successfully uploaded {uploaded_count} recipes",
+            "uploaded_count": uploaded_count,
+            "total_recipes": len(RECIPES),
+            "batch_info": batch_info
+        })
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/add-recipe', methods=['POST'])
+def add_recipe():
+    """Add a single recipe"""
+    try:
+        recipe = request.get_json()
+        if not recipe:
+            return jsonify({"error": "No recipe provided"}), 400
+        
+        # Ensure recipe has required fields
+        if 'id' not in recipe:
+            recipe['id'] = str(len(RECIPES) + 1)
+        
+        # Add to recipes list
+        RECIPES.append(recipe)
+        
+        return jsonify({
+            "message": "Recipe added successfully",
+            "recipe_id": recipe['id'],
+            "total_recipes": len(RECIPES)
+        })
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/clear-recipes', methods=['POST'])
+def clear_recipes():
+    """Clear all recipes (for testing)"""
+    try:
+        global RECIPES
+        RECIPES.clear()
+        return jsonify({
+            "message": "All recipes cleared",
+            "total_recipes": len(RECIPES)
+        })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
