@@ -67,9 +67,9 @@
       {
         "id": "user_21d49b2e-5349-4a7c-af9b-fcf11257064d",
         "metadata": {
+          "user_id": "user_21d49b2e-5349-4a7c-af9b-fcf11257064d",
           "is_verified": true,
           "created_at": "2025-09-08T22:36:10.265740",
-          "user_id": "user_21d49b2e-5349-4a7c-af9b-fcf11257064d",
           "email": "nikash.06@gmail.com",
           "type": "user"
         },
@@ -86,7 +86,7 @@
     ],
     "metadata": {
       "total_users": 1,
-      "migration_timestamp": 1757393897.148812,
+      "migration_timestamp": 1757394964.001853,
       "source": "local_chromadb"
     }
   },
@@ -132,8 +132,8 @@
       {
         "user_id": "test_user_empty_foods",
         "metadata": {
-          "type": "preferences",
-          "user_id": "test_user_empty_foods"
+          "user_id": "test_user_empty_foods",
+          "type": "preferences"
         },
         "data": {
           "favoriteFoods": [
@@ -191,8 +191,8 @@
       {
         "user_id": "test_user_empty_foods_save",
         "metadata": {
-          "type": "preferences",
-          "user_id": "test_user_empty_foods_save"
+          "user_id": "test_user_empty_foods_save",
+          "type": "preferences"
         },
         "data": {
           "favoriteFoods": [],
@@ -280,8 +280,8 @@
       {
         "user_id": "user_21d49b2e-5349-4a7c-af9b-fcf11257064d",
         "metadata": {
-          "type": "preferences",
-          "user_id": "user_21d49b2e-5349-4a7c-af9b-fcf11257064d"
+          "user_id": "user_21d49b2e-5349-4a7c-af9b-fcf11257064d",
+          "type": "preferences"
         },
         "data": {
           "dietaryRestrictions": [],
@@ -308,9 +308,9 @@
     ],
     "metadata": {
       "total_preferences": 7,
-      "migration_timestamp": 1757393897.149036,
+      "migration_timestamp": 1757394964.002089,
       "source": "local_chromadb"
     }
   },
-  "migration_timestamp": 1757393897.149072
+  "migration_timestamp": 1757394964.0021172
 }

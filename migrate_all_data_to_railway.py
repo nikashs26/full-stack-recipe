@@ -27,7 +27,7 @@ class CompleteRailwayMigrator:
         # Local services
         self.local_recipe_cache = RecipeCacheService()
         self.local_user_service = UserService()
-        self.local_preferences_service = UserPreferencesService()
+        self.local_preferences_service = UserPreferencesService() 
         self.local_meal_history_service = MealHistoryService()
         
         print(f"🚀 Complete Railway Migrator initialized")

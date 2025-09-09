@@ -1,35 +1,26 @@
-# Frontend files (not needed for backend deployment)
-src/
-public/
-node_modules/
-package*.json
-vite.config.ts
-tailwind.config.ts
-postcss.config.js
-eslint.config.js
-tsconfig.json
+# Exclude large files that aren't needed for deployment
+backend/railway_app_with_recipes.py
+backend/populate_railway_20250907_210446.py
+backend/full_railway_populate.py
 
-# Build outputs
-dist/
-build/
-
-# Development files
+# Exclude backup and temporary files
 *.log
-.env.local
-.env.development
+*.backup
+*_backup_*
+chroma_db/
+chroma_db_backup_*/
 
-# Git and IDE files
-.vscode/
-.idea/
+# Exclude test files
+test_*.py
+debug_*.py
 
-# OS files
-.DS_Store
-Thumbs.db
+# Exclude migration scripts
+migrate_*.py
+sync_*.py
+restore_*.py
+backup_*.py
 
-# Keep only backend files and root deployment files for Railway
-!backend/
-!railway.json
-!railway.toml
-!Dockerfile
-!README.md
-!deploy.sh
+# Exclude large data files
+complete_*.json
+railway_*.json
+sync_data*.json
