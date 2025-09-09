@@ -20,7 +20,12 @@ class ReviewService:
             chroma_path = os.environ.get('CHROMA_DB_PATH', '/app/data/chroma_db')
         
         chroma_path = os.path.abspath(chroma_path)
-        os.makedirs(chroma_path, exist_ok=True)
+        try:
+            os.makedirs(chroma_path, exist_ok=True)
+        except PermissionError:
+            # Directory might already exist with correct permissions
+            if not os.path.exists(chroma_path):
+                raise PermissionError(f"Cannot create ChromaDB directory at {chroma_path}. Please ensure the directory exists and has correct permissions.")
         self.client = chromadb.PersistentClient(path=chroma_path)
         self.collection = self.client.get_or_create_collection(
             name="recipe_reviews",
