@@ -140,6 +140,14 @@ def register_recipe_routes(app, recipe_cache):
                 "details": str(e)
             }), 500
 
+    # Add alias for frontend compatibility
+    @app.route("/api/recipes", methods=["GET", "OPTIONS"])
+    @cross_origin(origins=["http://localhost:8081", "http://localhost:5173", "https://betterbulk.netlify.app"], 
+                 supports_credentials=True)
+    @async_route
+    async def get_recipes_alias():
+        return await get_recipes()
+
     @app.route("/api/get_recipes", methods=["GET", "OPTIONS"])
     @cross_origin(origins=["http://localhost:8081", "http://localhost:5173", "https://betterbulk.netlify.app"], 
                  supports_credentials=True)
@@ -232,6 +240,29 @@ def register_recipe_routes(app, recipe_cache):
             print(f"Error searching recipes: {e}")
             return jsonify({
                 "error": "Failed to search recipes",
+                "details": str(e)
+            }), 500
+
+    @app.route("/api/recipes/cuisines", methods=["GET", "OPTIONS"])
+    @cross_origin(origins=["http://localhost:8081", "http://localhost:5173", "https://betterbulk.netlify.app"], 
+                 supports_credentials=True)
+    def get_cuisines():
+        if request.method == "OPTIONS":
+            response = make_response()
+            response.headers.add('Access-Control-Allow-Origin', request.headers.get('Origin', '*'))
+            response.headers.add('Access-Control-Allow-Methods', 'GET,OPTIONS')
+            response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With')
+            response.headers.add('Access-Control-Allow-Credentials', 'true')
+            return response
+            
+        try:
+            # Get all unique cuisines from the recipe cache
+            cuisines = recipe_service.get_all_cuisines()
+            return jsonify({"cuisines": cuisines}), 200
+        except Exception as e:
+            print(f"Error fetching cuisines: {e}")
+            return jsonify({
+                "error": "Failed to fetch cuisines",
                 "details": str(e)
             }), 500
 

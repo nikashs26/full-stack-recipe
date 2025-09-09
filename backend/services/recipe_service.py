@@ -990,3 +990,33 @@ class RecipeService:
             "results": paginated_recipes,
             "total": total_matching_recipes  # Total count of ALL matching recipes, not just current page
         }
+    
+    def get_all_cuisines(self) -> List[str]:
+        """
+        Get all unique cuisines from the recipe cache.
+        
+        Returns:
+            List of unique cuisine names
+        """
+        try:
+            # Get all recipes from cache
+            all_recipes = self.recipe_cache.get_all_recipes()
+            cuisines = set()
+            
+            for recipe in all_recipes:
+                # Check both 'cuisine' and 'cuisines' fields
+                if 'cuisine' in recipe and recipe['cuisine']:
+                    cuisines.add(recipe['cuisine'].lower().strip())
+                
+                if 'cuisines' in recipe and recipe['cuisines']:
+                    if isinstance(recipe['cuisines'], list):
+                        for cuisine in recipe['cuisines']:
+                            if cuisine:
+                                cuisines.add(cuisine.lower().strip())
+                    elif isinstance(recipe['cuisines'], str):
+                        cuisines.add(recipe['cuisines'].lower().strip())
+            
+            return sorted(list(cuisines))
+        except Exception as e:
+            logger.error(f"Error fetching cuisines: {e}")
+            return []
