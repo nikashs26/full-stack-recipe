@@ -1000,7 +1000,7 @@ class RecipeService:
         """
         try:
             # Get all recipes from cache
-            all_recipes = self.recipe_cache.get_all_recipes()
+            all_recipes = self.recipe_cache.get_cached_recipes()
             cuisines = set()
             
             for recipe in all_recipes:

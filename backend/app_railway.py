@@ -118,6 +118,23 @@ app.register_blueprint(smart_features_bp, url_prefix='/api')
 
 print("✓ All route blueprints registered")
 
+# Check and restore data if needed
+def check_and_restore_data():
+    """Check if data exists and restore if needed"""
+    try:
+        # Check if we have any recipes
+        result = recipe_cache.recipe_collection.get(limit=1)
+        if not result['ids']:
+            print("⚠️ No recipes found in ChromaDB, data may have been lost")
+            print("💡 Data will need to be restored via sync script")
+        else:
+            print(f"✅ ChromaDB has {len(result['ids'])} recipes")
+    except Exception as e:
+        print(f"⚠️ Error checking ChromaDB: {e}")
+
+# Check data on startup
+check_and_restore_data()
+
 # Basic health check route
 @app.route('/api/health')
 def health_check():
