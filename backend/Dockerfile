@@ -36,9 +36,9 @@ COPY . .
 RUN useradd --create-home --shell /bin/bash app
 
 # Create data directory for persistent storage and give app user access
-RUN mkdir -p /app/data && \
+RUN mkdir -p /app/data/chroma_db && \
     chown -R app:app /app && \
-    chmod 755 /app/data
+    chmod -R 755 /app/data
 
 USER app
 
