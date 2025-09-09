@@ -24,9 +24,6 @@ COPY requirements-railway.txt requirements.txt
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Copy recipes data file first
-COPY recipes_data.json /app/recipes_data.json
-
 # Copy application code (backend folder)
 COPY . .
 
