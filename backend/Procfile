@@ -1,1 +1,1 @@
-web: gunicorn railway_app_with_recipes:app --bind 0.0.0.0:$PORT 
+web: gunicorn railway_app_working:app --bind 0.0.0.0:$PORT 
