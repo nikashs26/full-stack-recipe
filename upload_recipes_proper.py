@@ -95,6 +95,19 @@ class ProperRecipeUploader:
                         except:
                             processed_recipe['instructions'] = []
                     
+                    # If ingredients/instructions are empty, try to get them from metadata
+                    if not processed_recipe['ingredients'] and metadata.get('ingredients'):
+                        try:
+                            processed_recipe['ingredients'] = json.loads(metadata['ingredients'])
+                        except:
+                            pass
+                    
+                    if not processed_recipe['instructions'] and metadata.get('instructions'):
+                        try:
+                            processed_recipe['instructions'] = json.loads(metadata['instructions'])
+                        except:
+                            pass
+                    
                     # Ensure cuisines and diets are lists
                     if isinstance(processed_recipe['cuisines'], str):
                         processed_recipe['cuisines'] = [processed_recipe['cuisines']]
