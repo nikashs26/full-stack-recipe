@@ -13,18 +13,36 @@ from pathlib import Path
 def ensure_data_directory():
     """Ensure the data directory exists and is writable"""
     data_dir = Path("/app/data")
-    data_dir.mkdir(parents=True, exist_ok=True)
+    chroma_dir = data_dir / "chroma_db"
     
-    # Test if we can write to the directory
-    test_file = data_dir / "test_write.txt"
     try:
+        # Create directories with proper permissions
+        data_dir.mkdir(parents=True, exist_ok=True)
+        chroma_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Test if we can write to the directory
+        test_file = data_dir / "test_write.txt"
         test_file.write_text("test")
         test_file.unlink()
+        
         print(f"✅ Data directory is writable: {data_dir}")
+        print(f"✅ ChromaDB directory created: {chroma_dir}")
         return True
     except Exception as e:
         print(f"❌ Data directory not writable: {e}")
-        return False
+        print(f"   Trying to create with different permissions...")
+        
+        # Try to create with different approach
+        try:
+            import subprocess
+            subprocess.run(["mkdir", "-p", "/app/data/chroma_db"], check=True)
+            subprocess.run(["chmod", "755", "/app/data"], check=True)
+            subprocess.run(["chmod", "755", "/app/data/chroma_db"], check=True)
+            print(f"✅ Created directories with subprocess")
+            return True
+        except Exception as e2:
+            print(f"❌ Failed to create directories: {e2}")
+            return False
 
 def check_chromadb_data():
     """Check if ChromaDB has data"""

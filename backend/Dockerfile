@@ -32,13 +32,14 @@ COPY . .
 # Sync data will be created programmatically
 # No need to copy sync data file during build
 
-# Create data directory for persistent storage
+# Create non-root user for security
+RUN useradd --create-home --shell /bin/bash app
+
+# Create data directory for persistent storage and give app user access
 RUN mkdir -p /app/data && \
+    chown -R app:app /app && \
     chmod 755 /app/data
 
-# Create non-root user for security
-RUN useradd --create-home --shell /bin/bash app && \
-    chown -R app:app /app
 USER app
 
 # Expose port (Railway will override this)
