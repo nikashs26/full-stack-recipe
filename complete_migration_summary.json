@@ -1,7 +1,7 @@
 {
   "railway_status": {
     "status": "success",
-    "recipe_count": 1,
+    "recipe_count": 0,
     "population_running": false,
     "population_status": {}
   },
@@ -67,11 +67,11 @@
       {
         "id": "user_21d49b2e-5349-4a7c-af9b-fcf11257064d",
         "metadata": {
-          "user_id": "user_21d49b2e-5349-4a7c-af9b-fcf11257064d",
+          "is_verified": true,
           "created_at": "2025-09-08T22:36:10.265740",
-          "type": "user",
+          "user_id": "user_21d49b2e-5349-4a7c-af9b-fcf11257064d",
           "email": "nikash.06@gmail.com",
-          "is_verified": true
+          "type": "user"
         },
         "data": {
           "user_id": "user_21d49b2e-5349-4a7c-af9b-fcf11257064d",
@@ -86,7 +86,7 @@
     ],
     "metadata": {
       "total_users": 1,
-      "migration_timestamp": 1757392881.501717,
+      "migration_timestamp": 1757393897.148812,
       "source": "local_chromadb"
     }
   },
@@ -132,8 +132,8 @@
       {
         "user_id": "test_user_empty_foods",
         "metadata": {
-          "user_id": "test_user_empty_foods",
-          "type": "preferences"
+          "type": "preferences",
+          "user_id": "test_user_empty_foods"
         },
         "data": {
           "favoriteFoods": [
@@ -191,8 +191,8 @@
       {
         "user_id": "test_user_empty_foods_save",
         "metadata": {
-          "user_id": "test_user_empty_foods_save",
-          "type": "preferences"
+          "type": "preferences",
+          "user_id": "test_user_empty_foods_save"
         },
         "data": {
           "favoriteFoods": [],
@@ -217,8 +217,8 @@
       {
         "user_id": "test_user_recommendations",
         "metadata": {
-          "user_id": "test_user_recommendations",
-          "type": "preferences"
+          "type": "preferences",
+          "user_id": "test_user_recommendations"
         },
         "data": {
           "favoriteFoods": [
@@ -248,8 +248,8 @@
       {
         "user_id": "test_user_auth",
         "metadata": {
-          "user_id": "test_user_auth",
-          "type": "preferences"
+          "type": "preferences",
+          "user_id": "test_user_auth"
         },
         "data": {
           "favoriteFoods": [
@@ -280,8 +280,8 @@
       {
         "user_id": "user_21d49b2e-5349-4a7c-af9b-fcf11257064d",
         "metadata": {
-          "user_id": "user_21d49b2e-5349-4a7c-af9b-fcf11257064d",
-          "type": "preferences"
+          "type": "preferences",
+          "user_id": "user_21d49b2e-5349-4a7c-af9b-fcf11257064d"
         },
         "data": {
           "dietaryRestrictions": [],
@@ -308,9 +308,9 @@
     ],
     "metadata": {
       "total_preferences": 7,
-      "migration_timestamp": 1757392881.5019252,
+      "migration_timestamp": 1757393897.149036,
       "source": "local_chromadb"
     }
   },
-  "migration_timestamp": 1757392881.5019531
+  "migration_timestamp": 1757393897.149072
 }

@@ -42,6 +42,16 @@ print(f"Loaded {len(RECIPES)} recipes")
 def health():
     return jsonify({"status": "healthy", "message": "Recipe app is running"})
 
+@app.route('/api/debug')
+def debug():
+    return jsonify({
+        "current_directory": os.getcwd(),
+        "files_in_directory": os.listdir('.'),
+        "recipes_loaded": len(RECIPES),
+        "recipe_file_exists": os.path.exists('recipes_data.json'),
+        "recipe_file_size": os.path.getsize('recipes_data.json') if os.path.exists('recipes_data.json') else 0
+    })
+
 @app.route('/api/recipe-counts')
 def recipe_counts():
     return jsonify({
