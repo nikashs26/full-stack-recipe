@@ -115,6 +115,22 @@ def get_recipe(recipe_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/get_recipe_by_id', methods=['GET'])
+def get_recipe_by_id():
+    """Get a specific recipe by ID (query parameter) - for frontend compatibility"""
+    try:
+        recipe_id = request.args.get('id')
+        if not recipe_id:
+            return jsonify({"error": "Recipe ID required"}), 400
+        
+        recipe = next((r for r in RECIPES if str(r.get('id', '')) == str(recipe_id)), None)
+        if recipe:
+            return jsonify(recipe)
+        else:
+            return jsonify({"error": "Recipe not found"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/api/search_recipes', methods=['POST'])
 def search_recipes_endpoint():
     """Enhanced search recipes with advanced filtering"""
@@ -262,6 +278,62 @@ def clear_recipes():
             "message": "All recipes cleared",
             "total_recipes": len(RECIPES)
         })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# Additional endpoints for frontend compatibility
+@app.route('/api/reviews/local/<recipe_id>', methods=['GET'])
+def get_recipe_reviews(recipe_id):
+    """Get reviews for a recipe (placeholder - no reviews stored)"""
+    try:
+        # Check if recipe exists
+        recipe = next((r for r in RECIPES if str(r.get('id', '')) == str(recipe_id)), None)
+        if not recipe:
+            return jsonify({"error": "Recipe not found"}), 404
+        
+        # Return empty reviews for now
+        return jsonify([])
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/reviews/local/<recipe_id>', methods=['POST'])
+def add_recipe_review(recipe_id):
+    """Add a review for a recipe (placeholder)"""
+    try:
+        # Check if recipe exists
+        recipe = next((r for r in RECIPES if str(r.get('id', '')) == str(recipe_id)), None)
+        if not recipe:
+            return jsonify({"error": "Recipe not found"}), 404
+        
+        # Placeholder - reviews not implemented yet
+        return jsonify({"message": "Review functionality not implemented yet"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/meal-planner', methods=['POST'])
+def meal_planner():
+    """Meal planner endpoint (placeholder)"""
+    try:
+        return jsonify({"message": "Meal planner functionality not implemented yet"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/ai-meal-planner', methods=['POST'])
+def ai_meal_planner():
+    """AI meal planner endpoint (placeholder)"""
+    try:
+        return jsonify({"message": "AI meal planner functionality not implemented yet"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/user-preferences', methods=['GET', 'POST', 'PUT'])
+def user_preferences():
+    """User preferences endpoint (placeholder)"""
+    try:
+        if request.method == 'GET':
+            return jsonify({})
+        else:
+            return jsonify({"message": "User preferences functionality not implemented yet"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
