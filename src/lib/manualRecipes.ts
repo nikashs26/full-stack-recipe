@@ -77,8 +77,8 @@ export const fetchManualRecipes = async (
     } else {
       // Fallback: if no pagination options, use defaults
       params.append('offset', '0');
-      params.append('limit', '20');
-      console.log('⚠️ Using default pagination: offset 0, limit 20');
+      params.append('limit', '1000'); // Increased from 20 to 1000 to match backend default
+      console.log('⚠️ Using default pagination: offset 0, limit 1000');
     }
     
     // Handle cuisines filter

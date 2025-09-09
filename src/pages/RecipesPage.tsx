@@ -114,7 +114,7 @@ const RecipesPage: React.FC = () => {
   });
   const [gotoPage, setGotoPage] = useState<string>("");
   const [totalPages, setTotalPages] = useState(1);
-  const [recipesPerPage, setRecipesPerPage] = useState(20); // Show 20 recipes per page
+  const [recipesPerPage, setRecipesPerPage] = useState(100); // Show 100 recipes per page by default
   
   // Remove debounced search - we'll only search on explicit action
   // const debouncedSearchQuery = useDebounce(searchQuery, 500);

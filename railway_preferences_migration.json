@@ -1,0 +1,222 @@
+{
+  "preferences": [
+    {
+      "user_id": "test_user_123",
+      "metadata": {
+        "user_id": "test_user_123",
+        "type": "preferences"
+      },
+      "data": {
+        "favoriteFoods": [
+          "burger",
+          "pizza",
+          "chicken"
+        ],
+        "favoriteCuisines": [
+          "italian",
+          "american"
+        ],
+        "dietaryRestrictions": [
+          "vegetarian"
+        ],
+        "foodsToAvoid": [
+          "nuts"
+        ],
+        "cookingSkillLevel": "intermediate",
+        "healthGoals": [
+          "weight-loss"
+        ],
+        "maxCookingTime": "30 minutes",
+        "includeBreakfast": true,
+        "includeLunch": true,
+        "includeDinner": true,
+        "includeSnacks": false,
+        "targetCalories": 2000,
+        "targetProtein": 150,
+        "targetCarbs": 200,
+        "targetFat": 65
+      }
+    },
+    {
+      "user_id": "test_user_empty_foods",
+      "metadata": {
+        "user_id": "test_user_empty_foods",
+        "type": "preferences"
+      },
+      "data": {
+        "favoriteFoods": [
+          "",
+          "",
+          ""
+        ],
+        "favoriteCuisines": [
+          "italian"
+        ],
+        "dietaryRestrictions": [],
+        "foodsToAvoid": [],
+        "cookingSkillLevel": "beginner",
+        "healthGoals": [],
+        "maxCookingTime": "30 minutes",
+        "includeBreakfast": true,
+        "includeLunch": true,
+        "includeDinner": true,
+        "includeSnacks": false,
+        "targetCalories": 2000,
+        "targetProtein": 150,
+        "targetCarbs": 200,
+        "targetFat": 65
+      }
+    },
+    {
+      "user_id": "test_user_favorite_foods",
+      "metadata": {
+        "user_id": "test_user_favorite_foods",
+        "type": "preferences"
+      },
+      "data": {
+        "favoriteFoods": [
+          "burger",
+          "pizza"
+        ],
+        "favoriteCuisines": [
+          "italian"
+        ],
+        "dietaryRestrictions": [],
+        "foodsToAvoid": [],
+        "cookingSkillLevel": "beginner",
+        "healthGoals": [],
+        "maxCookingTime": "30 minutes",
+        "includeBreakfast": true,
+        "includeLunch": true,
+        "includeDinner": true,
+        "includeSnacks": false,
+        "targetCalories": 2000,
+        "targetProtein": 150,
+        "targetCarbs": 200,
+        "targetFat": 65
+      }
+    },
+    {
+      "user_id": "test_user_empty_foods_save",
+      "metadata": {
+        "type": "preferences",
+        "user_id": "test_user_empty_foods_save"
+      },
+      "data": {
+        "favoriteFoods": [],
+        "favoriteCuisines": [
+          "italian"
+        ],
+        "dietaryRestrictions": [],
+        "foodsToAvoid": [],
+        "cookingSkillLevel": "beginner",
+        "healthGoals": [],
+        "maxCookingTime": "30 minutes",
+        "includeBreakfast": true,
+        "includeLunch": true,
+        "includeDinner": true,
+        "includeSnacks": false,
+        "targetCalories": 2000,
+        "targetProtein": 150,
+        "targetCarbs": 200,
+        "targetFat": 65
+      }
+    },
+    {
+      "user_id": "test_user_recommendations",
+      "metadata": {
+        "type": "preferences",
+        "user_id": "test_user_recommendations"
+      },
+      "data": {
+        "favoriteFoods": [
+          "chicken",
+          "pasta",
+          "salad"
+        ],
+        "favoriteCuisines": [
+          "italian",
+          "american"
+        ],
+        "dietaryRestrictions": [],
+        "foodsToAvoid": [],
+        "cookingSkillLevel": "intermediate",
+        "healthGoals": [],
+        "maxCookingTime": "45 minutes",
+        "includeBreakfast": true,
+        "includeLunch": true,
+        "includeDinner": true,
+        "includeSnacks": false,
+        "targetCalories": 2000,
+        "targetProtein": 150,
+        "targetCarbs": 200,
+        "targetFat": 65
+      }
+    },
+    {
+      "user_id": "test_user_auth",
+      "metadata": {
+        "user_id": "test_user_auth",
+        "type": "preferences"
+      },
+      "data": {
+        "favoriteFoods": [
+          "chicken",
+          "pasta",
+          "salad",
+          "burger"
+        ],
+        "favoriteCuisines": [
+          "italian",
+          "american"
+        ],
+        "dietaryRestrictions": [],
+        "foodsToAvoid": [],
+        "cookingSkillLevel": "intermediate",
+        "healthGoals": [],
+        "maxCookingTime": "45 minutes",
+        "includeBreakfast": true,
+        "includeLunch": true,
+        "includeDinner": true,
+        "includeSnacks": false,
+        "targetCalories": 2000,
+        "targetProtein": 150,
+        "targetCarbs": 200,
+        "targetFat": 65
+      }
+    },
+    {
+      "user_id": "user_21d49b2e-5349-4a7c-af9b-fcf11257064d",
+      "metadata": {
+        "type": "preferences",
+        "user_id": "user_21d49b2e-5349-4a7c-af9b-fcf11257064d"
+      },
+      "data": {
+        "dietaryRestrictions": [],
+        "favoriteCuisines": [
+          "chinese",
+          "american"
+        ],
+        "foodsToAvoid": [],
+        "allergens": [],
+        "cookingSkillLevel": "beginner",
+        "healthGoals": [],
+        "maxCookingTime": "30 minutes",
+        "favoriteFoods": [],
+        "includeBreakfast": true,
+        "includeLunch": true,
+        "includeDinner": true,
+        "includeSnacks": false,
+        "targetCalories": 2000,
+        "targetProtein": 150,
+        "targetCarbs": 200,
+        "targetFat": 65
+      }
+    }
+  ],
+  "metadata": {
+    "total_preferences": 7,
+    "migration_timestamp": 1757392946.559123,
+    "source": "local_chromadb"
+  }
+}
