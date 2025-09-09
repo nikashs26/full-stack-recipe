@@ -42,52 +42,106 @@ def check_chromadb_data():
         print(f"❌ Error checking ChromaDB: {e}")
         return False
 
-def restore_from_backup():
-    """Restore data from the backup file"""
+def restore_from_sample_data():
+    """Restore data from sample recipes"""
     try:
-        # Check if we have a backup file
-        backup_file = Path("railway_sync_data.json")
-        if not backup_file.exists():
-            print("❌ No backup file found")
-            return False
+        print("📁 Creating sample recipe data...")
         
-        print("📁 Found backup file, restoring data...")
-        
-        # Load backup data
-        with open(backup_file, 'r') as f:
-            sync_data = json.load(f)
-        
-        print(f"📚 Backup contains {len(sync_data['recipes'])} recipes")
+        # Sample recipe data with complete information
+        sample_recipes = [
+            {
+                "id": "52961",
+                "title": "Budino Di Ricotta",
+                "cuisine": "Italian",
+                "cuisines": ["italian"],
+                "diets": "vegetarian",
+                "ingredients": [
+                    {"name": "Ricotta", "measure": "500g", "original": "500g Ricotta"},
+                    {"name": "Eggs", "measure": "4 large", "original": "4 large Eggs"},
+                    {"name": "Flour", "measure": "3 tbs", "original": "3 tbs Flour"},
+                    {"name": "Sugar", "measure": "250g", "original": "250g Sugar"},
+                    {"name": "Cinnamon", "measure": "1 tsp", "original": "1 tsp Cinnamon"},
+                    {"name": "Grated Zest of 2 Lemons", "measure": "", "original": "Grated Zest of 2 Lemons"},
+                    {"name": "Dark Rum", "measure": "5 tbs", "original": "5 tbs Dark Rum"},
+                    {"name": "Icing Sugar", "measure": "sprinkling", "original": "sprinkling Icing Sugar"}
+                ],
+                "instructions": [
+                    "Mash the ricotta and beat well with the egg yolks, stir in the flour, sugar, cinnamon, grated lemon rind and the rum and mix well. You can do this in a food processor. Beat the egg whites until stiff, fold in and pour into a buttered and floured 25cm cake tin. Bake in the oven at 180ºC/160ºC fan/gas.",
+                    "For about.",
+                    "Minutes, or until it is firm. Serve hot or cold dusted with icing sugar."
+                ],
+                "calories": 350,
+                "protein": 12,
+                "carbs": 44,
+                "fat": 14,
+                "image": "https://www.themealdb.com/images/media/meals/1549542877.jpg"
+            },
+            {
+                "id": "52772",
+                "title": "Teriyaki Chicken Casserole",
+                "cuisine": "Japanese",
+                "cuisines": ["japanese"],
+                "diets": "gluten free",
+                "ingredients": [
+                    {"name": "Chicken Thighs", "measure": "6", "original": "6 Chicken Thighs"},
+                    {"name": "Soy Sauce", "measure": "1/2 cup", "original": "1/2 cup Soy Sauce"},
+                    {"name": "Brown Sugar", "measure": "1/2 cup", "original": "1/2 cup Brown Sugar"},
+                    {"name": "Garlic", "measure": "3 cloves", "original": "3 cloves Garlic"},
+                    {"name": "Ginger", "measure": "1 inch", "original": "1 inch Ginger"},
+                    {"name": "Rice", "measure": "2 cups", "original": "2 cups Rice"}
+                ],
+                "instructions": [
+                    "Preheat oven to 350°F. Place chicken thighs in a baking dish.",
+                    "Mix soy sauce, brown sugar, garlic, and ginger in a bowl.",
+                    "Pour sauce over chicken and bake for 45 minutes.",
+                    "Serve over rice."
+                ],
+                "calories": 420,
+                "protein": 28,
+                "carbs": 35,
+                "fat": 18,
+                "image": "https://www.themealdb.com/images/media/meals/wvpsxx1468256321.jpg"
+            }
+        ]
         
         # Restore to ChromaDB
         from services.recipe_cache_service import RecipeCacheService
         recipe_cache = RecipeCacheService()
         
         restored_count = 0
-        for recipe_data in sync_data['recipes']:
+        for recipe in sample_recipes:
             try:
-                recipe_id = recipe_data['id']
-                metadata = recipe_data.get('metadata', {})
-                document = recipe_data.get('document', '')
+                recipe_id = recipe['id']
+                document = json.dumps(recipe)
+                metadata = {
+                    'cuisine': recipe.get('cuisine', ''),
+                    'cuisines': json.dumps(recipe.get('cuisines', [])),
+                    'diets': recipe.get('diets', ''),
+                    'ingredients': json.dumps(recipe.get('ingredients', [])),
+                    'instructions': json.dumps(recipe.get('instructions', [])),
+                    'calories': recipe.get('calories', 0),
+                    'protein': recipe.get('protein', 0),
+                    'carbs': recipe.get('carbs', 0),
+                    'fat': recipe.get('fat', 0)
+                }
                 
-                if document:
-                    # Store in ChromaDB
-                    recipe_cache.recipe_collection.upsert(
-                        ids=[recipe_id],
-                        documents=[document],
-                        metadatas=[metadata]
-                    )
-                    restored_count += 1
-                    
+                # Store in ChromaDB
+                recipe_cache.recipe_collection.upsert(
+                    ids=[recipe_id],
+                    documents=[document],
+                    metadatas=[metadata]
+                )
+                restored_count += 1
+                
             except Exception as e:
-                print(f"   ⚠️ Error restoring recipe {recipe_data.get('id', 'unknown')}: {e}")
+                print(f"   ⚠️ Error restoring recipe {recipe.get('id', 'unknown')}: {e}")
                 continue
         
-        print(f"✅ Restored {restored_count} recipes to ChromaDB")
+        print(f"✅ Restored {restored_count} sample recipes to ChromaDB")
         return restored_count > 0
         
     except Exception as e:
-        print(f"❌ Error restoring from backup: {e}")
+        print(f"❌ Error restoring sample data: {e}")
         return False
 
 def main():
@@ -107,14 +161,14 @@ def main():
         print("✅ ChromaDB has data - persistence is working")
         return True
     
-    print("⚠️ ChromaDB is empty - attempting restore...")
+    print("⚠️ ChromaDB is empty - creating sample data...")
     
-    # Try to restore from backup
-    if restore_from_backup():
-        print("✅ Data restored successfully")
+    # Try to restore from sample data
+    if restore_from_sample_data():
+        print("✅ Sample data created successfully")
         return True
     else:
-        print("❌ Failed to restore data")
+        print("❌ Failed to create sample data")
         return False
 
 if __name__ == "__main__":

@@ -48,3 +48,4 @@ backend/cookies.txt
 users.json
 # Local Netlify folder
 .netlify
+railway_sync_data.json
