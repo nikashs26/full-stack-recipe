@@ -53,6 +53,12 @@ class RecipeSearchService:
     """
     
     def __init__(self):
+        if not CHROMADB_AVAILABLE:
+            logger.warning("ChromaDB not available - RecipeSearchService starting in limited mode")
+            self.client = None
+            self.recipe_collection = None
+            self.cache_service = None
+            return
         import os
         chroma_path = os.environ.get('CHROMA_DB_PATH', './chroma_db')
         
