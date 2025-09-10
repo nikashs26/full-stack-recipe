@@ -7,7 +7,31 @@ except ImportError:
     print("Warning: ChromaDB not available, using fallback in-memory storage for recipe search")
 import json
 from typing import List, Dict, Any, Optional
-import numpy as np
+# Optional numpy import for numeric ops; fall back if unavailable
+try:
+    import numpy as np
+    NUMPY_AVAILABLE = True
+except ImportError:
+    NUMPY_AVAILABLE = False
+    class _NPFallback:
+        def array(self, x):
+            return x
+        def mean(self, x, axis=None):
+            if axis is None:
+                return sum(x) / (len(x) or 1)
+            # very basic axis handling
+            return [sum(col) / (len(col) or 1) for col in zip(*x)]
+        def clip(self, x, a_min=None, a_max=None):
+            def _clip_val(v):
+                if a_min is not None and v < a_min:
+                    v = a_min
+                if a_max is not None and v > a_max:
+                    v = a_max
+                return v
+            return [_clip_val(v) for v in x]
+    np = _NPFallback()
+    logger = logging.getLogger(__name__)
+    logger.warning("numpy not available - using lightweight fallbacks")
 from datetime import datetime
 import logging
 import random
