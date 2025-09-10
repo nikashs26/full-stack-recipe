@@ -1,8 +1,22 @@
-import chromadb
 import json
+
+# Try to import ChromaDB, fallback to in-memory storage if not available
+try:
+    import chromadb
+    CHROMADB_AVAILABLE = True
+except ImportError:
+    CHROMADB_AVAILABLE = False
+    print("Warning: ChromaDB not available, using fallback in-memory storage for user preferences")
 
 class UserPreferencesService:
     def __init__(self):
+        if not CHROMADB_AVAILABLE:
+            # Use fallback in-memory storage
+            self.preferences = {}  # In-memory storage
+            self.collection = self  # Mock collection interface
+            print("Using fallback in-memory user preferences storage")
+            return
+            
         # Use the new ChromaDB client configuration with absolute path
         import os
         chroma_path = os.environ.get('CHROMA_DB_PATH', './chroma_db')
@@ -25,6 +39,11 @@ class UserPreferencesService:
         self.collection = self.client.get_or_create_collection("user_preferences")
 
     def save_preferences(self, user_id: str, preferences: dict):
+        if not CHROMADB_AVAILABLE:
+            # Store in memory
+            self.preferences[user_id] = preferences
+            return
+            
         # Store preferences as a JSON document in ChromaDB
         # Convert preferences to JSON string for storage
         preferences_json = json.dumps(preferences)
@@ -37,6 +56,10 @@ class UserPreferencesService:
         )
 
     def get_preferences(self, user_id: str):
+        if not CHROMADB_AVAILABLE:
+            # Get from memory
+            return self.preferences.get(user_id)
+            
         print(f'🔥 USER_PREFERENCES_SERVICE: get_preferences called for user_id: {user_id}')
         
         results = self.collection.get(
