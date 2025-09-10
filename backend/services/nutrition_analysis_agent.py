@@ -5,7 +5,15 @@ import asyncio
 from typing import Dict, List, Any, Optional, Tuple
 from datetime import datetime
 import requests
-from dotenv import load_dotenv
+# Try to import dotenv, fallback if not available
+try:
+    from dotenv import load_dotenv
+    DOTENV_AVAILABLE = True
+except ImportError:
+    DOTENV_AVAILABLE = False
+    print("Warning: python-dotenv not available, using environment variables only")
+    def load_dotenv():
+        pass  # No-op fallback
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

@@ -3,7 +3,15 @@ import requests
 import os
 from flask import request, jsonify, make_response
 import time
-from dotenv import load_dotenv
+# Try to import dotenv, fallback if not available
+try:
+    from dotenv import load_dotenv
+    DOTENV_AVAILABLE = True
+except ImportError:
+    DOTENV_AVAILABLE = False
+    print("Warning: python-dotenv not available, using environment variables only")
+    def load_dotenv():
+        pass  # No-op fallback
 from services.recipe_service import RecipeService
 from services.user_preferences_service import UserPreferencesService
 from flask_cors import cross_origin

@@ -156,6 +156,7 @@ def root():
     return {'message': 'Recipe App Backend API - Render Deployment', 'url': 'https://dietary-delight.onrender.com'}
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8000))
+    port = int(os.environ.get("PORT", 10000))
     print(f"🚀 Starting Render Flask app on port {port}...")
+    print(f"🌐 Binding to host 0.0.0.0 and port {port}")
     app.run(host="0.0.0.0", port=port, debug=False)

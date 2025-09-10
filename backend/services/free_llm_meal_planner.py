@@ -4,7 +4,15 @@ import logging
 import requests
 from typing import Dict, Any, Optional, List
 from datetime import datetime, timedelta
-from dotenv import load_dotenv
+# Try to import dotenv, fallback if not available
+try:
+    from dotenv import load_dotenv
+    DOTENV_AVAILABLE = True
+except ImportError:
+    DOTENV_AVAILABLE = False
+    print("Warning: python-dotenv not available, using environment variables only")
+    def load_dotenv():
+        pass  # No-op fallback
 
 # Load environment variables
 load_dotenv()
