@@ -20,9 +20,16 @@ def seed_recipes():
     body = request.get_json(silent=True) or {}
     seed_path = body.get('path') or os.environ.get('SEED_RECIPES_FILE', 'recipes_data.json')
     limit = int(body.get('limit') or os.environ.get('SEED_RECIPES_LIMIT', '5000'))
+    truncate = bool(body.get('truncate', False))
 
     try:
         cache = RecipeCacheService()
+        # Optional truncate for in-memory fallback
+        if truncate and hasattr(cache, 'recipe_collection') and hasattr(cache.recipe_collection, 'recipes'):
+            try:
+                cache.recipe_collection.recipes.clear()
+            except Exception:
+                pass
         # Ensure we have a collection interface
         if not hasattr(cache, 'recipe_collection') or cache.recipe_collection is None:
             return jsonify({'error': 'Cache not available'}), 500
@@ -111,6 +118,7 @@ def seed_recipes():
                 'id': rid,
                 'title': title,
                 'image': image,
+                'imageUrl': image,
                 'ingredients': ingredients,
                 'instructions': instructions,
                 'cuisines': cuisines,
