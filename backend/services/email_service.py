@@ -1,7 +1,14 @@
 import os
-from flask_mail import Mail, Message
 from flask import Flask
 from typing import Dict, Any
+
+# Try to import flask_mail, fallback to mock if not available
+try:
+    from flask_mail import Mail, Message
+    FLASK_MAIL_AVAILABLE = True
+except ImportError:
+    FLASK_MAIL_AVAILABLE = False
+    print("Warning: flask_mail not available, email functionality will be disabled")
 
 
 class EmailService:
@@ -19,6 +26,10 @@ class EmailService:
     
     def init_app(self, app: Flask):
         """Initialize email service with Flask app"""
+        if not FLASK_MAIL_AVAILABLE:
+            print("Warning: Flask-Mail not available, email service disabled")
+            return
+            
         # Email configuration
         app.config['MAIL_SERVER'] = os.getenv('MAIL_SERVER', 'smtp.gmail.com')
         app.config['MAIL_PORT'] = int(os.getenv('MAIL_PORT', '587'))
@@ -34,7 +45,7 @@ class EmailService:
     def send_verification_email(self, email: str, verification_token: str, full_name: str = "") -> Dict[str, Any]:
         """Send email verification email"""
         try:
-            if not self.mail:
+            if not FLASK_MAIL_AVAILABLE or not self.mail:
                 # Email service not configured - return success with development info
                 frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:8081')
                 verification_url = f"{frontend_url}/verify-email?token={verification_token}"
