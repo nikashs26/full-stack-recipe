@@ -1,4 +1,3 @@
-import chromadb
 import json
 import hashlib
 from typing import List, Dict, Any, Optional
@@ -9,6 +8,15 @@ from datetime import datetime, timedelta
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Try to import ChromaDB, fallback to in-memory storage if not available
+try:
+    import chromadb
+    CHROMADB_AVAILABLE = True
+except ImportError:
+    CHROMADB_AVAILABLE = False
+    logger.warning("ChromaDB not available, using fallback in-memory storage")
+    from .fallback_recipe_cache import FallbackRecipeCacheService
+
 class RecipeCacheService:
     def __init__(self, cache_ttl_days: int = None):
         """
@@ -17,6 +25,15 @@ class RecipeCacheService:
         Args:
             cache_ttl_days: Number of days before cache entries expire (default: None - TTL disabled)
         """
+        if not CHROMADB_AVAILABLE:
+            # Use fallback in-memory storage
+            self.recipe_collection = FallbackRecipeCacheService()
+            self.search_collection = FallbackRecipeCacheService()
+            self.embedding_function = None
+            self.client = None
+            logger.info("Using fallback in-memory recipe cache service")
+            return
+            
         try:
             # Initialize ChromaDB with persistent storage
             # Use Railway persistent volume if available, fallback to local storage
