@@ -5,8 +5,8 @@
 [build.environment]
   NODE_VERSION = "18"
   NPM_VERSION = "9"
-  VITE_APP_NAME = "Recipe App"
-  VITE_APP_VERSION = "1.0.0"
+  VITE_BACKEND_URL = "https://dietary-delight.onrender.com"
+  MISE_DISABLE = "1"
 
 [[redirects]]
   from = "/*"
