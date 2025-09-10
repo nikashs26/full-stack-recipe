@@ -1,3 +1,8 @@
+# Core dependencies
+python-dotenv==1.0.0
+setuptools>=65.0.0
+wheel>=0.37.0
+
 # Flask and web framework
 flask==2.3.3
 flask-cors==4.0.0
@@ -14,7 +19,6 @@ bcrypt==4.0.1
 PyJWT==2.8.0
 
 # Utilities
-python-dotenv==1.0.0
 requests==2.31.0
 gunicorn==21.2.0
 numpy<2.0.0
@@ -25,10 +29,6 @@ psycopg2-binary==2.9.7
 # Email support
 itsdangerous==2.1.2
 werkzeug==2.3.7
-
-# Core dependencies for Render
-setuptools>=65.0.0
-wheel>=0.37.0
 
 # Optional AI dependencies (uncomment if needed)
 # sentence-transformers==2.2.2
