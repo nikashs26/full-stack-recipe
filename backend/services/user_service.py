@@ -58,6 +58,14 @@ class UserService:
         
         chroma_path = os.path.abspath(chroma_path)
         
+        # Check if ChromaDB is available
+        if not CHROMADB_AVAILABLE:
+            print("Warning: ChromaDB not available, using fallback in-memory storage for user service")
+            self.client = None
+            self.users_collection = None
+            self.verification_tokens_collection = None
+            return
+        
         # Try to create directory, but don't fail if it already exists or permission denied
         try:
             os.makedirs(chroma_path, exist_ok=True)
@@ -131,6 +139,8 @@ class UserService:
     
     def email_exists(self, email: str) -> bool:
         """Check if an email is already registered"""
+        if not CHROMADB_AVAILABLE or not self.users_collection:
+            return False
         try:
             results = self.users_collection.get(
                 where={"email": email},
@@ -142,6 +152,8 @@ class UserService:
     
     def register_user(self, email: str, password: str, full_name: str = "") -> Dict[str, Any]:
         """Register a new user"""
+        if not CHROMADB_AVAILABLE or not self.users_collection:
+            return {"success": False, "error": "Database not available"}
         try:
             # Check if email already exists
             if self.email_exists(email):
@@ -266,6 +278,8 @@ class UserService:
     
     def authenticate_user(self, email: str, password: str) -> Dict[str, Any]:
         """Authenticate user login"""
+        if not CHROMADB_AVAILABLE or not self.users_collection:
+            return {"success": False, "error": "Database not available"}
         try:
             # Find user by email
             results = self.users_collection.get(
@@ -306,6 +320,8 @@ class UserService:
     
     def get_user_by_id(self, user_id: str) -> Optional[Dict[str, Any]]:
         """Get user by user ID"""
+        if not CHROMADB_AVAILABLE or not self.users_collection:
+            return None
         try:
             results = self.users_collection.get(
                 ids=[user_id],
@@ -325,6 +341,8 @@ class UserService:
     
     def get_user_by_email(self, email: str) -> Optional[Dict[str, Any]]:
         """Get user by email"""
+        if not CHROMADB_AVAILABLE or not self.users_collection:
+            return None
         try:
             results = self.users_collection.get(
                 where={"email": email},
