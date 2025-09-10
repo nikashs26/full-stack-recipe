@@ -32,6 +32,15 @@ class RecipeCacheService:
             self.embedding_function = None
             self.client = None
             logger.info("Using fallback in-memory recipe cache service")
+            # Attempt to seed from local JSON if available
+            try:
+                import os
+                seed_path = os.environ.get('SEED_RECIPES_FILE', 'recipes_data.json')
+                seed_on_start = os.environ.get('SEED_RECIPES_ON_STARTUP', 'true').lower() == 'true'
+                if seed_on_start and os.path.exists(seed_path):
+                    self._seed_from_file(seed_path, limit=int(os.environ.get('SEED_RECIPES_LIMIT', '500')))
+            except Exception as e:
+                logger.warning(f"Seeding fallback cache failed: {e}")
             return
             
         try:
@@ -80,6 +89,42 @@ class RecipeCacheService:
             self.search_collection = None
             self.recipe_collection = None
             self.cache_ttl = None  # TTL disabled even if initialization fails
+
+    def _seed_from_file(self, path: str, limit: int = 500) -> None:
+        """Seed the fallback cache from a local JSON file if using in-memory storage.
+        The file can be a list of recipe objects or an object with a top-level 'recipes' list.
+        """
+        try:
+            with open(path, 'r') as f:
+                data = json.load(f)
+            if isinstance(data, dict) and 'recipes' in data:
+                recipes = data['recipes']
+            elif isinstance(data, list):
+                recipes = data
+            else:
+                logger.warning("Seed file format not recognized; expected list or {'recipes': [...]} ")
+                return
+            # Normalize minimal fields expected by fallback cache
+            count = 0
+            ids = []
+            docs = []
+            metas = []
+            for item in recipes:
+                if count >= max(0, limit):
+                    break
+                rid = str(item.get('id') or item.get('_id') or item.get('idMeal') or hash(item.get('title', '')))
+                title = item.get('title') or item.get('name') or item.get('strMeal') or 'Recipe'
+                doc = title
+                meta = item
+                ids.append(rid)
+                docs.append(doc)
+                metas.append(meta)
+                count += 1
+            if ids:
+                self.recipe_collection.add(ids=ids, documents=docs, metadatas=metas)
+                logger.info(f"Seeded {len(ids)} recipes into fallback cache from {path}")
+        except Exception as e:
+            logger.warning(f"Failed to seed from file {path}: {e}")
 
     def _generate_cache_key(self, query: str = "", ingredient: str = "", filters: Optional[Dict[str, Any]] = None) -> str:
         """Generate a unique cache key for the search parameters including filters"""

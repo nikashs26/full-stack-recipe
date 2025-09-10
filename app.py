@@ -22,6 +22,7 @@ from backend.routes.health import health_bp
 from backend.routes.review_routes import review_bp
 from backend.routes.folder_routes import folder_bp
 from backend.routes.smart_features import smart_features_bp
+from backend.routes.admin import admin_bp
 
 # Set Render environment variable for persistent storage
 os.environ['RENDER_ENVIRONMENT'] = 'true'
@@ -125,6 +126,7 @@ app.register_blueprint(health_bp)
 app.register_blueprint(review_bp, url_prefix='/api')
 app.register_blueprint(folder_bp, url_prefix='/api')
 app.register_blueprint(smart_features_bp, url_prefix='/api')
+app.register_blueprint(admin_bp, url_prefix='/')
 
 print("✓ All route blueprints registered")
 
