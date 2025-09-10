@@ -1,8 +1,15 @@
-import chromadb
 import json
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
 import uuid
+
+# Try to import ChromaDB, fallback to in-memory storage if not available
+try:
+    import chromadb
+    CHROMADB_AVAILABLE = True
+except ImportError:
+    CHROMADB_AVAILABLE = False
+    print("Warning: ChromaDB not available, using fallback in-memory storage for meal history")
 
 class MealHistoryService:
     """

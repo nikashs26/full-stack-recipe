@@ -1,8 +1,15 @@
-import chromadb
 import json
 import uuid
 from datetime import datetime
 from typing import List, Dict, Any, Optional
+
+# Try to import ChromaDB, fallback to in-memory storage if not available
+try:
+    import chromadb
+    CHROMADB_AVAILABLE = True
+except ImportError:
+    CHROMADB_AVAILABLE = False
+    print("Warning: ChromaDB not available, using fallback in-memory storage for review service")
 
 class ReviewService:
     """
@@ -11,6 +18,13 @@ class ReviewService:
     """
     
     def __init__(self):
+        # Check if ChromaDB is available
+        if not CHROMADB_AVAILABLE:
+            print("Warning: ChromaDB not available, using fallback in-memory storage for review service")
+            self.client = None
+            self.collection = None
+            return
+        
         # Use the new ChromaDB client configuration with absolute path
         import os
         chroma_path = os.environ.get('CHROMA_DB_PATH', './chroma_db')
@@ -47,6 +61,9 @@ class ReviewService:
         Returns:
             Dictionary with review data including generated ID
         """
+        if not CHROMADB_AVAILABLE or not self.collection:
+            return {"success": False, "error": "Database not available"}
+        
         try:
             # Get the user's real name from the user service
             from services.user_service import UserService
@@ -117,6 +134,9 @@ class ReviewService:
         Returns:
             List of review dictionaries
         """
+        if not CHROMADB_AVAILABLE or not self.collection:
+            return []
+        
         try:
             # Query ChromaDB for reviews matching recipe_id and recipe_type
             results = self.collection.get(
@@ -161,6 +181,9 @@ class ReviewService:
         Returns:
             List of review dictionaries
         """
+        if not CHROMADB_AVAILABLE or not self.collection:
+            return []
+        
         try:
             results = self.collection.get(
                 where={"user_id": user_id},
@@ -202,6 +225,9 @@ class ReviewService:
         Returns:
             True if deleted successfully, False otherwise
         """
+        if not CHROMADB_AVAILABLE or not self.collection:
+            return False
+        
         try:
             # First check if the review exists and belongs to the user
             results = self.collection.get(

@@ -1,8 +1,15 @@
-import chromadb
 import json
 import uuid
 from datetime import datetime
 from typing import List, Dict, Any, Optional
+
+# Try to import ChromaDB, fallback to in-memory storage if not available
+try:
+    import chromadb
+    CHROMADB_AVAILABLE = True
+except ImportError:
+    CHROMADB_AVAILABLE = False
+    print("Warning: ChromaDB not available, using fallback in-memory storage for folder service")
 
 class FolderService:
     """

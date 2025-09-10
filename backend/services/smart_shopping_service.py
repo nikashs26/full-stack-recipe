@@ -1,9 +1,16 @@
-import chromadb
 import json
 from typing import List, Dict, Any, Optional, Set
 from datetime import datetime
 import uuid
 import re
+
+# Try to import ChromaDB, fallback to in-memory storage if not available
+try:
+    import chromadb
+    CHROMADB_AVAILABLE = True
+except ImportError:
+    CHROMADB_AVAILABLE = False
+    print("Warning: ChromaDB not available, using fallback in-memory storage for smart shopping")
 
 class SmartShoppingService:
     """
