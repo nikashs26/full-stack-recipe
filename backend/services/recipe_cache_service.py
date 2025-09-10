@@ -1679,8 +1679,51 @@ class RecipeCacheService:
             return {"total": 0, "valid": 0, "expired": 0}
 
     def _get_all_recipes_from_cache(self, where: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
-        """Get all recipes from cache with optional filtering"""
+        """Get all recipes from cache with optional filtering.
+        Works with both ChromaDB and the in-memory fallback collection.
+        """
         try:
+            # Fallback in-memory path (no Chroma client)
+            if not self.client and hasattr(self, 'recipe_collection') and self.recipe_collection is not None and hasattr(self.recipe_collection, 'recipes'):
+                all_recipes = []
+                for entry in self.recipe_collection.recipes.values():
+                    try:
+                        meta = entry.get('metadata', {}) if isinstance(entry, dict) else {}
+                        doc = entry.get('document', '') if isinstance(entry, dict) else ''
+                        recipe = None
+                        # If document is a JSON string, try to parse it
+                        if isinstance(doc, str) and doc.strip().startswith('{'):
+                            try:
+                                recipe = json.loads(doc)
+                            except Exception:
+                                recipe = None
+                        # Otherwise, construct a minimal recipe from metadata/title
+                        if recipe is None:
+                            title = meta.get('title') or meta.get('name') or meta.get('strMeal') or str(doc) or 'Recipe'
+                            rid = meta.get('id') or meta.get('_id') or meta.get('idMeal') or entry.get('id')
+                            if rid is None:
+                                rid = str(hash(title))
+                            cuisines = meta.get('cuisines') or []
+                            if not cuisines and meta.get('cuisine'):
+                                cuisines = [meta.get('cuisine')]
+                            if not cuisines and meta.get('strArea'):
+                                cuisines = [str(meta.get('strArea')).lower()]
+                            ingredients = meta.get('ingredients') or []
+                            instructions = meta.get('instructions') or []
+                            recipe = {
+                                'id': str(rid),
+                                'title': title,
+                                'ingredients': ingredients if isinstance(ingredients, list) else [],
+                                'instructions': instructions if isinstance(instructions, list) else ([instructions] if isinstance(instructions, str) else []),
+                                'cuisines': cuisines if isinstance(cuisines, list) else ([cuisines] if cuisines else []),
+                                'diets': meta.get('diets') or meta.get('dietary_restrictions') or []
+                            }
+                        all_recipes.append(recipe)
+                    except Exception as e:
+                        logger.debug(f"Skipping invalid fallback entry: {e}")
+                        continue
+                return all_recipes
+
             if not self.client or not self.recipe_collection:
                 logger.warning("ChromaDB collections not initialized")
                 return []
