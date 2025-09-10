@@ -17,10 +17,7 @@ class UserPreferencesService:
         except PermissionError:
             # Directory might already exist with correct permissions
             if not os.path.exists(chroma_path):
-                # Try to use a fallback local directory
-                chroma_path = './chroma_db'
-                os.makedirs(chroma_path, exist_ok=True)
-                print(f"⚠️ Using fallback ChromaDB directory: {chroma_path}")
+                raise PermissionError(f"Cannot create ChromaDB directory at {chroma_path}. Please ensure the directory exists and has correct permissions.")
         self.client = chromadb.PersistentClient(path=chroma_path)
         self.collection = self.client.get_or_create_collection("user_preferences")
 

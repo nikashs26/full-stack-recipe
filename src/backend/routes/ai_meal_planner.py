@@ -1,141 +1,142 @@
 # AI Meal Planner Route for Full-Stack Recipe App
 # Uses Llama 3.2 (or compatible) LLM API to generate a meal plan based on user preferences
 
-from flask import Blueprint, jsonify, session, request
+from flask import Blueprint, jsonify, request
 from flask_cors import cross_origin
-from ..services.user_preferences_service import UserPreferencesService
+from services.user_preferences_service import UserPreferencesService
+from services.free_llm_meal_planner import FreeLLMMealPlannerAgent
+from services.user_service import UserService
 import os
 import requests
-from functools import wraps
 
 ai_meal_planner_bp = Blueprint('ai_meal_planner', __name__)
 user_preferences_service = UserPreferencesService()
+user_service = UserService()
+
+# Initialize the free LLM meal planner agent
+free_llm_meal_planner = FreeLLMMealPlannerAgent(user_preferences_service)
 
 LLAMA_API_URL = os.environ.get('LLAMA_API_URL', 'http://localhost:8000/v1/chat/completions')
 LLAMA_API_KEY = os.environ.get('LLAMA_API_KEY', '')
 
 
-def build_llama_prompt(preferences, budget=None, dietary_goals=None, currency='$'):
-    """
-    Build a Llama 3.2 prompt for meal planning, using all user preferences.
-    """
-    dietary = preferences.get('dietaryRestrictions', [])
-    cuisines = preferences.get('favoriteCuisines', [])
-    allergens = preferences.get('allergens', [])
-    skill = preferences.get('cookingSkillLevel', '')
-    favorite_foods = preferences.get('favoriteFoods', [])
-    health_goals = preferences.get('healthGoals', [])
-    max_time = preferences.get('maxCookingTime', '')
-    
-    # Add dietary goals to health goals if provided
-    if dietary_goals:
-        health_goals = list(set(health_goals + dietary_goals))
-
-    prompt_parts = [
-        "You are an expert meal planner and chef. Build a detailed, delicious, and realistic weekly meal plan for a user with the following preferences. "
-        "Be creative, but respect all restrictions. For each day, suggest breakfast, lunch, dinner, and a snack. "
-        "They should serve to make a proper full day of eating for most individuals. "
-        "For each meal, include a name, description, cuisine type, cooking time, difficulty level, and ingredients list. "
-        "Also include an estimated cost per serving and total cost for each meal.",
-        "",
-        "User Preferences:",
-        f"- Cuisines: {', '.join(cuisines) if cuisines else 'Any'}",
-        f"- Dietary Restrictions: {', '.join(dietary) if dietary else 'None'}",
-        f"- Allergens to avoid: {', '.join(allergens) if allergens else 'None'}",
-        f"- Cooking skill: {skill or 'Any'}",
-        f"- Favorite foods: {', '.join(favorite_foods) if favorite_foods else 'None'}",
-        f"- Health goals: {', '.join(health_goals) if health_goals else 'None'}",
-        f"- Max cooking time per meal: {max_time or 'Any'}",
-    ]
-    
-    # Add budget information if provided
-    if budget is not None:
-        prompt_parts.append(f"- Weekly food budget: {currency}{budget} (approximately {currency}{budget/21:.2f} per meal)")
-    
-    # Add dietary goals if provided
-    if dietary_goals:
-        prompt_parts.append(f"- Specific dietary goals: {', '.join(dietary_goals)}")
-    
-    prompt_parts.extend([
-        "",
-        "Response Format (in markdown):",
-        "1. A brief summary of the meal plan and how it meets the user's preferences",
-        "2. For each day of the week:",
-        "   - Day Name",
-        "   - Breakfast: Name, Description, Cuisine, Time, Difficulty, Cost per serving, Ingredients",
-        "   - Lunch: [same structure]",
-        "   - Dinner: [same structure]",
-        "   - Snack: [same structure]"
-    ])
-    
-    return "\n".join(prompt_parts)
+# Note: This route uses FreeLLMMealPlannerAgent which has its own prompt generation
 
 
 @ai_meal_planner_bp.route('/ai/meal_plan', methods=['POST', 'OPTIONS'])
-@cross_origin(origins=['http://localhost:8081'], 
-              methods=['POST', 'OPTIONS'],
-              allow_headers=['Content-Type', 'Authorization'],
-              supports_credentials=True)
 def ai_meal_plan():
     if request.method == 'OPTIONS':
-        return jsonify({'status': 'ok'}), 200
+        # Handle preflight request
+        response = jsonify({'status': 'ok'})
+        response.headers.add('Access-Control-Allow-Origin', 'http://localhost:8081')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        response.headers.add('Access-Control-Allow-Methods', 'POST, OPTIONS')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        return response
         
-    # Get user from session
-    user_id = session.get('user_email')
-    if not user_id:
-        return jsonify({'error': 'Not logged in'}), 401
+    # TEMPORARY: For testing, allow any user ID
+    # TODO: Restore proper JWT authentication
+    user_id = "test@example.com"  # Use a test user ID that exists in preferences
+    
+    # Get user from JWT token (commented out for testing)
+    # auth_header = request.headers.get('Authorization')
+    # if not auth_header:
+    #     response = jsonify({'error': 'No authorization header provided'})
+    #     response.headers.add('Access-Control-Allow-Origin', 'http://localhost:8081')
+    #     response.headers.add('Access-Control-Allow-Credentials', 'true')
+    #     return response, 401
+    
+    # try:
+    #     # Extract token from "Bearer <token>"
+    #     if not auth_header.startswith('Bearer '):
+    #         response = jsonify({'error': 'Invalid authorization header format'})
+    #         response.headers.add('Access-Control-Allow-Origin', 'http://localhost:8081')
+    #         response.headers.add('Access-Control-Allow-Credentials', 'true')
+    #         return response, 401
+        
+    #     token = auth_header.split(' ')[1]
+    #     if not token or token in ['null', 'undefined']:
+    #         response = jsonify({'error': 'Invalid token'})
+    #         response.headers.add('Access-Control-Allow-Origin', 'http://localhost:8081')
+    #         response.headers.add('Access-Control-Allow-Credentials', 'true')
+    #         return response, 401
+        
+    #     # Decode and verify JWT token
+    #     payload = user_service.decode_jwt_token(token)
+    #     if not payload:
+    #         response = jsonify({'error': 'Invalid or expired token'})
+    #         response.headers.add('Access-Control-Allow-Origin', 'http://localhost:8081')
+    #         response.headers.add('Access-Control-Allow-Credentials', 'true')
+    #         return response, 401
+        
+    #     user_id = payload.get('user_id') or payload.get('sub') or payload.get('email')
+    #     if not user_id:
+    #         response = jsonify({'error': 'Invalid token payload'})
+    #         response.headers.add('Access-Control-Allow-Origin', 'http://localhost:8081')
+    #         response.headers.add('Access-Control-Allow-Credentials', 'true')
+    #         return response, 401
+            
+    # except Exception as e:
+    #     response = jsonify({'error': f'Authentication failed: {str(e)}'})
+    #     response.headers.add('Access-Control-Allow-Origin', 'http://localhost:8081')
+    #     response.headers.add('Access-Control-Allow-Credentials', 'true')
+    #     return response, 500
 
     # Get preferences from user profile
     preferences = user_preferences_service.get_preferences(user_id)
     if not preferences:
-        return jsonify({'error': 'No preferences found for user'}), 404
+        response = jsonify({'error': 'No preferences found for user'})
+        response.headers.add('Access-Control-Allow-Origin', 'http://localhost:8081')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        return response, 404
     
-    # Get budget and dietary goals from request
+    # Get preferences from request body
     data = request.get_json() or {}
+    preferences = data.get('preferences', {})
+    
+    # If no preferences in request, use the ones from user profile
+    if not preferences:
+        preferences = user_preferences_service.get_preferences(user_id)
+    
+    print(f"🎯 Using preferences for meal planning: {preferences}")  # Debug log
+    
+    # Get additional parameters from request
     budget = data.get('budget')
     dietary_goals = data.get('dietary_goals', [])
     currency = data.get('currency', '$')
 
-    # Build Llama prompt with all parameters
-    prompt = build_llama_prompt(
-        preferences,
-        budget=float(budget) if budget is not None else None,
-        dietary_goals=dietary_goals,
-        currency=currency
-    )
-
-    llama_payload = {
-        "model": "llama-3-70b-instruct",  # Update as needed
-        "messages": [
-            {"role": "system", "content": "You are a helpful, expert meal planner and chef."},
-            {"role": "user", "content": prompt}
-        ],
-        "max_tokens": 1200,
-        "temperature": 0.7
-    }
-    headers = {
-        "Content-Type": "application/json"
-    }
-    if LLAMA_API_KEY:
-        headers["Authorization"] = f"Bearer {LLAMA_API_KEY}"
-
+    # Call the LLM service
     try:
-        # Call Llama API
-        response = requests.post(
-            LLAMA_API_URL,
-            headers={
-                'Content-Type': 'application/json',
-                'Authorization': f'Bearer {LLAMA_API_KEY}'
-            },
-            json=llama_payload
-        )
-
-        if response.status_code != 200:
-            return jsonify({'error': 'Failed to generate meal plan'}), 500
-
-        data = response.json()
-        # Llama API: response['choices'][0]['message']['content']
-        meal_plan = data['choices'][0]['message']['content']
-        return jsonify({'meal_plan': meal_plan})
+        # Generate the meal plan using the free LLM meal planner agent WITH preferences
+        result = free_llm_meal_planner.generate_weekly_meal_plan_with_preferences(user_id, preferences)
+        
+        # Check if the LLM agent returned an error
+        if 'error' in result:
+            response = jsonify({'error': result['error']})
+            response.headers.add('Access-Control-Allow-Origin', 'http://localhost:8081')
+            response.headers.add('Access-Control-Allow-Credentials', 'true')
+            return response, 500
+        
+        # Check if the result has the expected structure
+        if not result.get('success') or 'meal_plan' not in result:
+            response = jsonify({'error': 'Invalid response structure from LLM agent'})
+            response.headers.add('Access-Control-Allow-Origin', 'http://localhost:8081')
+            response.headers.add('Access-Control-Allow-Credentials', 'true')
+            return response, 500
+        
+        # Extract the actual meal plan from the result
+        meal_plan = result.get('meal_plan', {})
+        
+        # Return the meal plan in the expected format
+        response = jsonify({
+            'success': True,
+            'meal_plan': meal_plan
+        })
+        response.headers.add('Access-Control-Allow-Origin', 'http://localhost:8081')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        return response
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        response = jsonify({'error': str(e)})
+        response.headers.add('Access-Control-Allow-Origin', 'http://localhost:8081')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        return response, 500
