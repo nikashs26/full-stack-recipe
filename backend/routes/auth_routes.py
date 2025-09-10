@@ -388,7 +388,16 @@ def refresh_token():
         # Try to decode the token (even if expired)
         try:
             # Decode without verification to get user info
-            import jwt
+            try:
+                import jwt
+                JWT_AVAILABLE = True
+            except ImportError:
+                JWT_AVAILABLE = False
+                return jsonify({'error': 'JWT not available'}), 500
+            
+            if not JWT_AVAILABLE:
+                return jsonify({'error': 'JWT not available'}), 500
+                
             jwt_secret = user_service._get_jwt_secret()
             payload = jwt.decode(token, jwt_secret, algorithms=['HS256'], options={'verify_exp': False})
             user_id = payload.get('user_id')

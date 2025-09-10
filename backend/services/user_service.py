@@ -6,9 +6,16 @@ except ImportError:
     CHROMADB_AVAILABLE = False
     print("Warning: ChromaDB not available, using fallback in-memory storage for user service")
 import json
-import jwt
 import uuid
 from datetime import datetime, timedelta
+
+# Try to import jwt, fallback if not available
+try:
+    import jwt
+    JWT_AVAILABLE = True
+except ImportError:
+    JWT_AVAILABLE = False
+    print("Warning: JWT not available, authentication will be disabled")
 
 # Try to import bcrypt, fallback if not available
 try:
@@ -87,6 +94,8 @@ class UserService:
     
     def generate_jwt_token(self, user_id: str, email: str) -> str:
         """Generate a JWT token for authenticated user"""
+        if not JWT_AVAILABLE:
+            raise RuntimeError("JWT not available, cannot generate token")
         payload = {
             'user_id': user_id,
             'email': email,
@@ -97,6 +106,9 @@ class UserService:
     
     def decode_jwt_token(self, token: str) -> Optional[Dict[str, Any]]:
         """Decode and verify a JWT token"""
+        if not JWT_AVAILABLE:
+            print("❌ UserService - JWT not available, cannot decode token")
+            return None
         try:
             jwt_secret = self._get_jwt_secret()
             print(f"🔍 UserService - Attempting to decode token with secret: {jwt_secret[:20]}...")

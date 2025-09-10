@@ -1,8 +1,15 @@
-import jwt
 import os
 from functools import wraps
 from flask import request, jsonify, current_app
 from typing import Optional
+
+# Try to import jwt, fallback if not available
+try:
+    import jwt
+    JWT_AVAILABLE = True
+except ImportError:
+    JWT_AVAILABLE = False
+    print("Warning: JWT not available, authentication will be disabled")
 
 # This should match your Supabase JWT secret
 SUPABASE_JWT_SECRET = os.environ.get('SUPABASE_JWT_SECRET', 'your-supabase-jwt-secret')
