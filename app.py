@@ -25,7 +25,7 @@ from backend.routes.smart_features import smart_features_bp
 
 # Set Render environment variable for persistent storage
 os.environ['RENDER_ENVIRONMENT'] = 'true'
-os.environ['CHROMA_DB_PATH'] = '/opt/render/project/chroma_db'
+os.environ['CHROMA_DB_PATH'] = '/opt/render/project/src/chroma_db'
 
 # Configure logging
 configure_logging(False)  # Disable debug logging in production

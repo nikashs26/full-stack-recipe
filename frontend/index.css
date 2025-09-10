@@ -1,0 +1,217 @@
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom Styles */
+@layer components {
+  .bg-kitchen {
+    background-image: url('https://media.istockphoto.com/id/1313187927/vector/cooking-food-and-vegetables-background.jpg?s=612x612&w=0&k=20&c=qC9BPv5TLtYEh-_myYacOZSugAEUx4S_uq5s6H33-ss=') !important;
+    background-size: cover !important;
+    background-position: center !important;
+    background-repeat: no-repeat !important;
+    background-attachment: fixed !important;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    z-index: -10 !important;
+  }
+  
+  /* Alternative kitchen background if the main one doesn't load */
+  .bg-kitchen-alt {
+    background-image: url('https://media.istockphoto.com/id/1313187927/vector/cooking-food-and-vegetables-background.jpg?s=612x612&w=0&k=20&c=qC9BPv5TLtYEh-_myYacOZSugAEUx4S_uq5s6H33-ss=') !important;
+    background-size: cover !important;
+    background-position: center !important;
+    background-repeat: no-repeat !important;
+    background-attachment: fixed !important;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    z-index: -10 !important;
+  }
+  
+  /* Test background - simple solid color to verify CSS is working */
+  .bg-kitchen-test {
+    background-color: #4a90e2;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: -10;
+  }
+  
+  .search-input {
+    @apply pl-10 pr-4 py-6 text-base rounded-xl shadow-sm focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 w-full border-0 bg-white/90 hover:bg-white transition-colors duration-200;
+  }
+  
+  .search-container {
+    @apply bg-white/90 backdrop-blur-sm rounded-2xl p-6 shadow-xl border border-white/20 w-full max-w-4xl mx-auto;
+  }
+
+  /* Force search page background to stay visible */
+  .search-page-background {
+    background-image: url('https://media.istockphoto.com/id/1313187927/vector/cooking-food-and-vegetables-background.jpg?s=612x612&w=0&k=20&c=qC9BPv5TLtYEh-_myYacOZSugAEUx4S_uq5s6H33-ss=') !important;
+    background-size: cover !important;
+    background-position: center !important;
+    background-repeat: no-repeat !important;
+    background-color: #f5f5f5 !important;
+    background-attachment: fixed !important;
+    position: relative !important;
+    z-index: 0 !important;
+  }
+
+  /* Even more specific override */
+  div.search-page-background {
+    background-image: url('https://media.istockphoto.com/id/1313187927/vector/cooking-food-and-vegetables-background.jpg?s=612x612&w=0&k=20&c=qC9BPv5TLtYEh-_myYacOZSugAEUx4S_uq5s6H33-ss=') !important;
+    background-size: cover !important;
+    background-position: center !important;
+    background-repeat: no-repeat !important;
+    background-color: #f5f5f5 !important;
+    background-attachment: fixed !important;
+    position: relative !important;
+    z-index: 0 !important;
+  }
+
+  /* Animated flowing gradient for hero titles (mostly white with an orange streak) */
+  .title-gradient-flow {
+    background-image: linear-gradient(90deg,
+      rgba(255,255,255,1) 0%,
+      rgb(211, 135, 42) 45%,
+      rgba(251,146,60,1) 50%,
+      rgba(255,255,255,1) 55%,
+      rgba(255,255,255,1) 100%
+    );
+    background-size: 300% 100%;
+    animation: titleFlow 5s linear infinite;
+    will-change: background-position;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+}
+
+@keyframes titleFlow {
+  0% { background-position: 0% 0; }
+  100% { background-position: 100% 0; }
+}
+
+@layer base {
+  :root {
+    --background: 60 33% 99%;
+    --foreground: 20 14.3% 4.1%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 20 14.3% 4.1%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 20 14.3% 4.1%;
+
+    --primary: 100 54% 40%;
+    --primary-foreground: 60 9.1% 97.8%;
+
+    --secondary: 24 94% 53%;
+    --secondary-foreground: 60 9.1% 97.8%;
+
+    --muted: 60 4.8% 95.9%;
+    --muted-foreground: 25 5.3% 44.7%;
+
+    --accent: 160 84.1% 91.1%;
+    --accent-foreground: 20 40% 20%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 60 9.1% 97.8%;
+
+    --border: 20 5.9% 90%;
+    --input: 20 5.9% 90%;
+    --ring: 20 14.3% 4.1%;
+
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 20 14.3% 4.1%;
+    --foreground: 60 9.1% 97.8%;
+
+    --card: 20 14.3% 4.1%;
+    --card-foreground: 60 9.1% 97.8%;
+
+    --popover: 20 14.3% 4.1%;
+    --popover-foreground: 60 9.1% 97.8%;
+
+    --primary: 100 54% 40%;
+    --primary-foreground: 60 9.1% 97.8%;
+
+    --secondary: 24 94% 53%;
+    --secondary-foreground: 60 9.1% 97.8%;
+
+    --muted: 12 6.5% 15.1%;
+    --muted-foreground: 24 5.4% 63.9%;
+
+    --accent: 160 84.1% 15.1%;
+    --accent-foreground: 60 9.1% 97.8%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 60 9.1% 97.8%;
+
+    --border: 12 6.5% 15.1%;
+    --input: 12 6.5% 15.1%;
+    --ring: 24 5.7% 82.9%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+@layer components {
+  .recipe-card {
+    @apply bg-white overflow-hidden shadow-lg rounded-lg transition-all duration-300 hover:shadow-xl;
+  }
+  
+  .recipe-tag {
+    @apply inline-block px-2 py-1 text-xs rounded-full mr-2 mb-2;
+  }
+  
+  .vegetarian-tag {
+    @apply bg-recipe-accent text-recipe-primary;
+  }
+  
+  .vegan-tag {
+    @apply bg-green-100 text-green-800;
+  }
+  
+  .gluten-free-tag {
+    @apply bg-recipe-muted text-amber-800;
+  }
+  
+  .dairy-free-tag {
+    @apply bg-blue-100 text-blue-800;
+  }
+  
+  .keto-tag {
+    @apply bg-purple-100 text-purple-800;
+  }
+  
+  .paleo-tag {
+    @apply bg-orange-100 text-orange-800;
+  }
+  
+  .carnivore-tag {
+    @apply bg-red-100 text-red-800;
+  }
+}
