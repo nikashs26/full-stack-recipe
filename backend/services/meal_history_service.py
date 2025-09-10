@@ -17,6 +17,13 @@ class MealHistoryService:
     """
     
     def __init__(self):
+        # If ChromaDB isn't available, initialize with no-op storage
+        if not CHROMADB_AVAILABLE:
+            self.client = None
+            self.meal_history_collection = None
+            self.meal_feedback_collection = None
+            return
+        
         # Use absolute path to ensure ChromaDB is created in the right location
         import os
         chroma_path = os.environ.get('CHROMA_DB_PATH', './chroma_db')
@@ -43,6 +50,8 @@ class MealHistoryService:
         """
         Log when a meal plan is generated for a user
         """
+        if not CHROMADB_AVAILABLE or not self.meal_history_collection:
+            return
         log_id = str(uuid.uuid4())
         timestamp = datetime.now().isoformat()
         
@@ -112,6 +121,8 @@ class MealHistoryService:
         
         feedback_type: 'liked', 'disliked', 'cooked', 'skipped', 'rated'
         """
+        if not CHROMADB_AVAILABLE or not self.meal_feedback_collection:
+            return
         feedback_id = str(uuid.uuid4())
         timestamp = datetime.now().isoformat()
         

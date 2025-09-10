@@ -18,6 +18,12 @@ class SmartShoppingService:
     """
     
     def __init__(self):
+        if not CHROMADB_AVAILABLE:
+            self.client = None
+            self.ingredient_collection = None
+            self.shopping_list_collection = None
+            self.store_layout_collection = None
+            return
         import os
         chroma_path = os.environ.get('CHROMA_DB_PATH', './chroma_db')
         
