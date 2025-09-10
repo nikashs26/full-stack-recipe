@@ -23,8 +23,8 @@ class RecipeCacheService:
             import os
             chroma_path = os.environ.get('CHROMA_DB_PATH', './chroma_db')
             
-            # For Railway deployment, use persistent volume
-            if os.environ.get('RAILWAY_ENVIRONMENT'):
+            # For Railway/Render deployment, use persistent volume
+            if os.environ.get('RAILWAY_ENVIRONMENT') or os.environ.get('RENDER_ENVIRONMENT'):
                 chroma_path = os.environ.get('CHROMA_DB_PATH', '/app/data/chroma_db')
             
             # Ensure directory exists

@@ -2,8 +2,8 @@
 # Copy these variables to your Netlify dashboard under:
 # Site settings > Environment variables
 
-# Backend API URL (Railway deployment)
-VITE_BACKEND_URL=https://full-stack-recipe-production.up.railway.app
+# Backend API URL (Render deployment)
+VITE_BACKEND_URL=https://dietary-delight.onrender.com
 
 # Supabase Configuration (if using)
 VITE_SUPABASE_URL=your_supabase_url

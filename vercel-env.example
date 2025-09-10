@@ -1,0 +1,24 @@
+# Environment variables for Vercel deployment
+# Copy this to .env.local for local development
+
+# Flask Configuration
+FLASK_SECRET_KEY=your-secret-key-here
+FLASK_ENV=production
+
+# Database Configuration (for Supabase)
+SUPABASE_URL=your-supabase-url
+SUPABASE_KEY=your-supabase-key
+DATABASE_URL=your-database-url
+
+# Email Configuration
+MAIL_SERVER=smtp.gmail.com
+MAIL_PORT=587
+MAIL_USE_TLS=True
+MAIL_USERNAME=your-email@gmail.com
+MAIL_PASSWORD=your-app-password
+
+# JWT Configuration
+JWT_SECRET_KEY=your-jwt-secret-key
+
+# ChromaDB Configuration (if keeping local)
+CHROMA_DB_PATH=./chroma_db
