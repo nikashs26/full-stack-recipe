@@ -7,6 +7,8 @@ except ImportError:
     print("Warning: ChromaDB not available, using fallback in-memory storage for recipe search")
 import json
 from typing import List, Dict, Any, Optional
+import logging
+logger = logging.getLogger(__name__)
 # Optional numpy import for numeric ops; fall back if unavailable
 try:
     import numpy as np
@@ -30,7 +32,6 @@ except ImportError:
                 return v
             return [_clip_val(v) for v in x]
     np = _NPFallback()
-    logger = logging.getLogger(__name__)
     logger.warning("numpy not available - using lightweight fallbacks")
 from datetime import datetime
 import logging
@@ -43,10 +44,8 @@ try:
     SENTENCE_TRANSFORMERS_AVAILABLE = True
 except ImportError:
     SENTENCE_TRANSFORMERS_AVAILABLE = False
-    logger = logging.getLogger(__name__)
     logger.warning("sentence-transformers not available - using ChromaDB default embeddings")
 
-logger = logging.getLogger(__name__)
 
 class RecipeSearchService:
     """
