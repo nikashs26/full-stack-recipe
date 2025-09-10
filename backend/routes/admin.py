@@ -53,7 +53,30 @@ def seed_recipes():
         if not ids:
             return jsonify({'error': 'No recipes to import'}), 400
 
+        # Add to primary recipe store
         cache.recipe_collection.add(ids=ids, documents=docs, metadatas=metas)
+
+        # Also populate search cache so /api/get_recipes works immediately
+        try:
+            search_docs = []
+            for m in metas:
+                title = m.get('title') or m.get('name') or m.get('strMeal') or ''
+                ingredients = m.get('ingredients') or m.get('strIngredients') or []
+                if isinstance(ingredients, list):
+                    ing_text = ' '.join([
+                        (i.get('name') if isinstance(i, dict) else str(i))
+                        for i in ingredients
+                    ])
+                else:
+                    ing_text = str(ingredients)
+                cuisines = m.get('cuisines') or []
+                cuisine_text = ' '.join(cuisines) if isinstance(cuisines, list) else str(cuisines)
+                search_docs.append(f"{title} {ing_text} {cuisine_text}")
+            if hasattr(cache, 'search_collection') and cache.search_collection is not None:
+                cache.search_collection.add(ids=ids, documents=search_docs, metadatas=metas)
+        except Exception:
+            pass
+
         return jsonify({'status': 'ok', 'imported': len(ids), 'path': seed_path}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
