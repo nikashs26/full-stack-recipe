@@ -2,7 +2,14 @@ from flask import Flask, request, make_response
 from flask_cors import CORS
 import os
 import json
-from dotenv import load_dotenv
+
+# Try to load dotenv, but don't fail if it's not available
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    print("Warning: python-dotenv not available, using environment variables only")
+
 from backend.config.logging_config import configure_logging
 from backend.services.recipe_cache_service import RecipeCacheService
 from backend.services.email_service import EmailService
@@ -15,9 +22,6 @@ from backend.routes.health import health_bp
 from backend.routes.review_routes import review_bp
 from backend.routes.folder_routes import folder_bp
 from backend.routes.smart_features import smart_features_bp
-
-# Load environment variables
-load_dotenv()
 
 # Set Render environment variable for persistent storage
 os.environ['RENDER_ENVIRONMENT'] = 'true'
