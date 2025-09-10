@@ -1460,6 +1460,43 @@ class RecipeCacheService:
         Returns:
             The recipe dictionary if found and valid, None otherwise
         """
+        # Fallback in-memory path
+        if (not self.client) and hasattr(self, 'recipe_collection') and self.recipe_collection is not None and hasattr(self.recipe_collection, 'recipes'):
+            try:
+                entry = self.recipe_collection.get_recipe_by_id(recipe_id)
+                if not entry:
+                    return None
+                doc = entry.get('document')
+                meta = entry.get('metadata', {})
+                # If document is JSON, parse it; otherwise construct from metadata/title
+                recipe: Optional[Dict[str, Any]] = None
+                if isinstance(doc, str) and doc.strip().startswith('{'):
+                    try:
+                        recipe = json.loads(doc)
+                    except Exception:
+                        recipe = None
+                if recipe is None:
+                    title = meta.get('title') or meta.get('name') or meta.get('strMeal') or str(doc) or 'Recipe'
+                    image = meta.get('image') or meta.get('imageUrl') or meta.get('strMealThumb') or ''
+                    ingredients = meta.get('ingredients') or []
+                    instructions = meta.get('instructions') or []
+                    if isinstance(instructions, str):
+                        instructions = [instructions]
+                    cuisines = meta.get('cuisines') or ([] if not meta.get('strArea') else [str(meta.get('strArea')).lower()])
+                    recipe = {
+                        'id': str(recipe_id),
+                        'title': title,
+                        'image': image,
+                        'ingredients': ingredients if isinstance(ingredients, list) else [],
+                        'instructions': instructions if isinstance(instructions, list) else [],
+                        'cuisines': cuisines if isinstance(cuisines, list) else ([cuisines] if cuisines else []),
+                        'diets': meta.get('diets') or meta.get('dietary_restrictions') or []
+                    }
+                return recipe
+            except Exception as e:
+                logger.error(f"Fallback get_recipe_by_id error: {e}")
+                return None
+
         if not self.recipe_collection:
             logger.warning("Recipe collection not initialized")
             return None
