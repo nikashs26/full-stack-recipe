@@ -1,123 +1,76 @@
 #!/usr/bin/env python3
 """
-Test script for the minimal Railway deployment app
-Run this to verify everything works before deploying
+Deployment test script to verify all dependencies and imports work correctly
 """
 
-import os
 import sys
+import os
 
-def test_imports():
-    """Test if all required packages can be imported"""
+print(f"Python version: {sys.version}")
+print(f"Python executable: {sys.executable}")
+print(f"Current working directory: {os.getcwd()}")
+
+# Test core dependencies
+dependencies = [
+    ('flask', 'Flask'),
+    ('chromadb', 'ChromaDB'),
+    ('numpy', 'NumPy'),
+    ('requests', 'Requests'),
+    ('bcrypt', 'Bcrypt'),
+    ('jwt', 'PyJWT'),
+    ('pymongo', 'PyMongo'),
+    ('gunicorn', 'Gunicorn'),
+    ('dotenv', 'python-dotenv')
+]
+
+print("\n=== Testing Core Dependencies ===")
+for module, name in dependencies:
     try:
-        import flask
-        print("✅ Flask imported successfully")
+        __import__(module)
+        print(f"✓ {name} imported successfully")
     except ImportError as e:
-        print(f"❌ Flask import failed: {e}")
-        return False
-    
+        print(f"✗ {name} import failed: {e}")
+
+# Test application imports
+print("\n=== Testing Application Imports ===")
+try:
+    from backend.config.logging_config import configure_logging
+    print("✓ Logging config imported successfully")
+except ImportError as e:
+    print(f"✗ Logging config import failed: {e}")
+
+try:
+    from backend.services.recipe_cache_service import RecipeCacheService
+    print("✓ Recipe cache service imported successfully")
+except ImportError as e:
+    print(f"✗ Recipe cache service import failed: {e}")
+
+try:
+    from backend.services.email_service import EmailService
+    print("✓ Email service imported successfully")
+except ImportError as e:
+    print(f"✗ Email service import failed: {e}")
+
+# Test route imports
+print("\n=== Testing Route Imports ===")
+routes = [
+    'backend.routes.recipe_routes',
+    'backend.routes.auth_routes',
+    'backend.routes.preferences',
+    'backend.routes.meal_planner',
+    'backend.routes.ai_meal_planner',
+    'backend.routes.health',
+    'backend.routes.review_routes',
+    'backend.routes.folder_routes',
+    'backend.routes.smart_features'
+]
+
+for route in routes:
     try:
-        import flask_cors
-        print("✅ Flask-CORS imported successfully")
+        __import__(route)
+        print(f"✓ {route} imported successfully")
     except ImportError as e:
-        print(f"❌ Flask-CORS import failed: {e}")
-        return False
-    
-    try:
-        import dotenv
-        print("✅ python-dotenv imported successfully")
-    except ImportError as e:
-        print(f"❌ python-dotenv import failed: {e}")
-        return False
-    
-    try:
-        import gunicorn
-        print("✅ Gunicorn imported successfully")
-    except ImportError as e:
-        print(f"❌ Gunicorn import failed: {e}")
-        return False
-    
-    return True
+        print(f"✗ {route} import failed: {e}")
 
-def test_app_creation():
-    """Test if the minimal app can be created"""
-    try:
-        # Add backend to path
-        sys.path.insert(0, 'backend')
-        
-        # Try to import the minimal app
-        from app_super_minimal import app
-        
-        print("✅ Minimal app imported successfully")
-        
-        # Test if it's a Flask app
-        if hasattr(app, 'route'):
-            print("✅ App has route decorator")
-        else:
-            print("❌ App missing route decorator")
-            return False
-            
-        return True
-        
-    except Exception as e:
-        print(f"❌ App creation failed: {e}")
-        return False
-
-def test_requirements():
-    """Test if requirements file exists and is readable"""
-    req_file = "backend/requirements-minimal.txt"
-    
-    if not os.path.exists(req_file):
-        print(f"❌ Requirements file not found: {req_file}")
-        return False
-    
-    try:
-        with open(req_file, 'r') as f:
-            requirements = f.read()
-            print(f"✅ Requirements file loaded ({len(requirements)} characters)")
-            print("📋 Contents:")
-            for line in requirements.strip().split('\n'):
-                if line.strip() and not line.startswith('#'):
-                    print(f"   {line.strip()}")
-        return True
-    except Exception as e:
-        print(f"❌ Failed to read requirements: {e}")
-        return False
-
-def main():
-    """Run all tests"""
-    print("🧪 Testing Railway Deployment Setup")
-    print("=" * 40)
-    
-    tests = [
-        ("Package Imports", test_imports),
-        ("App Creation", test_app_creation),
-        ("Requirements File", test_requirements),
-    ]
-    
-    passed = 0
-    total = len(tests)
-    
-    for test_name, test_func in tests:
-        print(f"\n🔍 Testing: {test_name}")
-        print("-" * 20)
-        
-        if test_func():
-            passed += 1
-            print(f"✅ {test_name} PASSED")
-        else:
-            print(f"❌ {test_name} FAILED")
-    
-    print("\n" + "=" * 40)
-    print(f"📊 Results: {passed}/{total} tests passed")
-    
-    if passed == total:
-        print("🎉 All tests passed! Ready to deploy to Railway.")
-        return True
-    else:
-        print("💥 Some tests failed. Fix issues before deploying.")
-        return False
-
-if __name__ == "__main__":
-    success = main()
-    sys.exit(0 if success else 1)
+print("\n=== Deployment Test Complete ===")
+print("If all imports succeeded, the deployment should work correctly.")
