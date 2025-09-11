@@ -54,8 +54,9 @@ class UserService:
         chroma_path = os.environ.get('CHROMA_DB_PATH', './chroma_db')
         
         # For Railway/Render deployment, use persistent volume
-        if os.environ.get('RAILWAY_ENVIRONMENT') or os.environ.get('RENDER_ENVIRONMENT'):
-            # Use the path from environment or default Render path
+        if os.environ.get('RAILWAY_ENVIRONMENT'):
+            chroma_path = os.environ.get('CHROMA_DB_PATH', '/app/data/chroma_db')
+        elif os.environ.get('RENDER_ENVIRONMENT'):
             chroma_path = os.environ.get('CHROMA_DB_PATH', '/opt/render/project/src/chroma_db')
         
         chroma_path = os.path.abspath(chroma_path)
@@ -107,6 +108,11 @@ class UserService:
             
         except Exception as e:
             print(f"❌ Error initializing ChromaDB client: {e}")
+            print(f"   ChromaDB path: {chroma_path}")
+            print(f"   Path exists: {os.path.exists(chroma_path) if 'chroma_path' in locals() else 'N/A'}")
+            print(f"   Path is writable: {os.access(chroma_path, os.W_OK) if 'chroma_path' in locals() and os.path.exists(chroma_path) else 'N/A'}")
+            import traceback
+            print(f"   Full traceback: {traceback.format_exc()}")
             self.client = None
             self.users_collection = None
             self.verification_tokens_collection = None

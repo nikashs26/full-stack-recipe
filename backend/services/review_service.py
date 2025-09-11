@@ -266,6 +266,13 @@ class ReviewService:
         Returns:
             Dictionary with review statistics
         """
+        if not CHROMADB_AVAILABLE or not self.collection:
+            return {
+                "total_reviews": 0,
+                "average_rating": 0,
+                "rating_distribution": {1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
+            }
+        
         try:
             results = self.collection.get(
                 where={
