@@ -53,15 +53,20 @@ class UserService:
             self.client = get_chromadb_client()
             self.embedding_function = get_lightweight_embedding_function(use_token_based=True)
             
-            # User collections
-            self.users_collection = self.client.get_or_create_collection(
-                "users", 
-                embedding_function=self.embedding_function
-            )
-            self.verification_tokens_collection = self.client.get_or_create_collection(
-                "verification_tokens",
-                embedding_function=self.embedding_function
-            )
+            # User collections with error handling
+            if self.client is not None:
+                self.users_collection = self.client.get_or_create_collection(
+                    "users", 
+                    embedding_function=self.embedding_function
+                )
+                self.verification_tokens_collection = self.client.get_or_create_collection(
+                    "verification_tokens",
+                    embedding_function=self.embedding_function
+                )
+            else:
+                print("⚠️ ChromaDB client is None, using fallback collections")
+                self.users_collection = None
+                self.verification_tokens_collection = None
             print("✅ User collections created/verified")
             
         except Exception as e:
