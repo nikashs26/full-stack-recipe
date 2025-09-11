@@ -43,7 +43,7 @@ def add_review():
             return jsonify({"error": "Review text cannot be empty"}), 400
         
         # Add the review (author is automatically set from user's real name)
-        review = get_get_review_service()().add_review(
+        review = get_review_service().add_review(
             user_id=user_id,
             recipe_id=recipe_id,
             recipe_type=recipe_type,
