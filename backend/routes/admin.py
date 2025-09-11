@@ -225,23 +225,9 @@ def seed_recipes():
             if normalized.get('diets'):
                 metadata['diets'] = ','.join(normalized['diets']) if isinstance(normalized['diets'], list) else str(normalized.get('diets', ''))
                 
-            # Add nutrition as individual primitive fields
-            if item.get('calories'):
-                metadata['calories'] = float(item['calories']) if item['calories'] else 0.0
-            if item.get('protein'):
-                metadata['protein'] = float(item['protein']) if item['protein'] else 0.0
-            if item.get('carbs'):
-                metadata['carbs'] = float(item['carbs']) if item['carbs'] else 0.0
-            if item.get('fat'):
-                metadata['fat'] = float(item['fat']) if item['fat'] else 0.0
-                
-            # Handle nutrition object
-            if item.get('nutrition') and isinstance(item['nutrition'], dict):
-                nutrition = item['nutrition']
-                metadata['calories'] = float(nutrition.get('calories', 0)) if nutrition.get('calories') else 0.0
-                metadata['protein'] = float(nutrition.get('protein', 0)) if nutrition.get('protein') else 0.0
-                metadata['carbs'] = float(nutrition.get('carbs', 0)) if nutrition.get('carbs') else 0.0
-                metadata['fat'] = float(nutrition.get('fat', 0)) if nutrition.get('fat') else 0.0
+            # Skip all nutrition metadata to avoid ChromaDB issues
+            # The nutrition data will be stored in the document JSON instead
+            pass  # Nutrition data is preserved in the JSON document
             
             metas.append(metadata)
 
