@@ -4,7 +4,7 @@ services:
     env: python
     plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn --bind 0.0.0.0:$PORT app:app --workers 1 --threads 1 --timeout 120 --log-level info
+    startCommand: gunicorn --bind 0.0.0.0:$PORT app:app --workers 1 --threads 1 --timeout 300 --log-level info
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.0
@@ -30,3 +30,5 @@ services:
         value: 10000
       - key: ANONYMIZED_TELEMETRY
         value: "FALSE"
+      - key: DISABLE_SMART_FEATURES
+        value: "TRUE"

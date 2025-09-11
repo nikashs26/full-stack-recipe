@@ -48,6 +48,8 @@ class RecipeCacheService:
             # TTL is disabled - recipes will never expire
             self.cache_ttl = None
             logger.info("ChromaDB recipe cache initialized with TTL disabled - recipes will never expire")
+            from utils.chromadb_singleton import get_chromadb_path
+            chroma_path = get_chromadb_path()
             logger.info(f"Using persistent storage at {chroma_path}")
             
             # Seed ChromaDB from local JSON if available and collections are empty

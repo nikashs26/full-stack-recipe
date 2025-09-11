@@ -11,11 +11,31 @@ logger = logging.getLogger(__name__)
 
 smart_features_bp = Blueprint('smart_features', __name__)
 
-# Initialize services
+# Initialize services (except smart shopping which is lazy-loaded)
 recipe_search_service = RecipeSearchService()
 meal_history_service = MealHistoryService()
-smart_shopping_service = SmartShoppingService()
 user_preferences_service = UserPreferencesService()
+
+# Lazy-load smart shopping service to avoid startup failures
+_smart_shopping_service = None
+
+def get_smart_shopping_service():
+    """Get smart shopping service, initializing it only when needed."""
+    import os
+    
+    # Check if smart features are disabled
+    if os.environ.get('DISABLE_SMART_FEATURES', 'FALSE').upper() == 'TRUE':
+        return None
+    
+    global _smart_shopping_service
+    if _smart_shopping_service is None:
+        try:
+            _smart_shopping_service = SmartShoppingService()
+        except Exception as e:
+            logger.error(f"Failed to initialize SmartShoppingService: {e}")
+            # Return a minimal fallback service
+            _smart_shopping_service = None
+    return _smart_shopping_service
 
 @smart_features_bp.route('/search/semantic', methods=['POST'])
 def semantic_recipe_search():
@@ -590,7 +610,11 @@ def create_smart_shopping_list():
         if not meal_plans:
             return jsonify({"error": "meal_plans are required"}), 400
         
-        shopping_list = smart_shopping_service.create_smart_shopping_list(
+        service = get_smart_shopping_service()
+        if not service:
+            return jsonify({"error": "Smart shopping service unavailable"}), 503
+        
+        shopping_list = service.create_smart_shopping_list(
             user_id, meal_plans, dietary_restrictions
         )
         
@@ -614,7 +638,11 @@ def get_ingredient_substitutions():
         if not ingredient_name:
             return jsonify({"error": "ingredient parameter is required"}), 400
         
-        substitutions = smart_shopping_service.get_ingredient_substitutions(
+        service = get_smart_shopping_service()
+        if not service:
+            return jsonify({"error": "Smart shopping service unavailable"}), 503
+            
+        substitutions = service.get_ingredient_substitutions(
             ingredient_name, dietary_restrictions
         )
         
@@ -638,7 +666,11 @@ def find_missing_ingredients():
         user_pantry = data.get('user_pantry', [])
         shopping_list = data.get('shopping_list', [])
         
-        missing_ingredients = smart_shopping_service.find_missing_ingredients(
+        service = get_smart_shopping_service()
+        if not service:
+            return jsonify({"error": "Smart shopping service unavailable"}), 503
+            
+        missing_ingredients = service.find_missing_ingredients(
             user_pantry, shopping_list
         )
         
@@ -660,7 +692,11 @@ def get_shopping_history(user_id):
     try:
         limit = request.args.get('limit', 10, type=int)
         
-        history = smart_shopping_service.get_shopping_list_history(user_id, limit)
+        service = get_smart_shopping_service()
+        if not service:
+            return jsonify({"error": "Smart shopping service unavailable"}), 503
+            
+        history = service.get_shopping_list_history(user_id, limit)
         
         return jsonify({
             "success": True,

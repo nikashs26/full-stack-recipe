@@ -40,6 +40,11 @@ class ChromaDBSingleton:
     @classmethod
     def _initialize_client(cls):
         """Initialize the singleton ChromaDB client with consistent settings."""
+        # Aggressively disable telemetry before creating client
+        os.environ['ANONYMIZED_TELEMETRY'] = 'FALSE'
+        os.environ['CHROMA_CLIENT_AUTHN_PROVIDER'] = ''
+        os.environ['ALLOW_RESET'] = 'FALSE'
+        
         # Determine the correct ChromaDB path based on environment
         chroma_path = os.environ.get('CHROMA_DB_PATH', './chroma_db')
         

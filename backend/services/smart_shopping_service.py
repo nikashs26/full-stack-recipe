@@ -54,7 +54,11 @@ class SmartShoppingService:
         )
         
         # Initialize ingredient knowledge base
-        self._initialize_ingredient_knowledge()
+        try:
+            self._initialize_ingredient_knowledge()
+        except Exception as e:
+            print(f"⚠️ Failed to initialize ingredient knowledge base: {e}")
+            print("SmartShoppingService will continue with limited functionality")
     
     def _initialize_ingredient_knowledge(self) -> None:
         """
@@ -112,9 +116,13 @@ class SmartShoppingService:
             }
         ]
         
-        # Add to ChromaDB
+        # Add to ChromaDB with error handling
         for ingredient in ingredient_data:
-            self._add_ingredient_to_knowledge_base(ingredient)
+            try:
+                self._add_ingredient_to_knowledge_base(ingredient)
+            except Exception as e:
+                print(f"⚠️ Failed to add ingredient {ingredient.get('name', 'unknown')} to knowledge base: {e}")
+                # Continue with other ingredients
     
     def _add_ingredient_to_knowledge_base(self, ingredient_data: Dict[str, Any]) -> None:
         """

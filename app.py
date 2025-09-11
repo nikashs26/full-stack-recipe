@@ -3,6 +3,13 @@ from flask_cors import CORS
 import os
 import json
 
+# Disable ChromaDB telemetry IMMEDIATELY before any ChromaDB imports
+os.environ['ANONYMIZED_TELEMETRY'] = 'FALSE'
+os.environ['CHROMA_CLIENT_AUTHN_PROVIDER'] = ''
+# Additional telemetry disable attempts
+os.environ['ALLOW_RESET'] = 'FALSE'
+os.environ['CHROMA_DB_IMPL'] = 'duckdb+parquet'
+
 # Try to load dotenv, but don't fail if it's not available
 try:
     from dotenv import load_dotenv

@@ -44,49 +44,12 @@ class UserService:
     
     def __init__(self):
         # Initialize ChromaDB
-        import os
-        chroma_path = os.environ.get('CHROMA_DB_PATH', './chroma_db')
-        
-        # For Railway/Render deployment, use persistent volume
-        if os.environ.get('RAILWAY_ENVIRONMENT'):
-            chroma_path = os.environ.get('CHROMA_DB_PATH', '/app/data/chroma_db')
-        elif os.environ.get('RENDER_ENVIRONMENT'):
-            chroma_path = os.environ.get('CHROMA_DB_PATH', '/opt/render/project/src/chroma_db')
-        
-        chroma_path = os.path.abspath(chroma_path)
-        
-        
-        print(f"🔧 Initializing ChromaDB at path: {chroma_path}")
-        
-        # Try to create directory, but don't fail if it already exists or permission denied
-        try:
-            os.makedirs(chroma_path, exist_ok=True)
-            print(f"✅ ChromaDB directory created/verified: {chroma_path}")
-        except PermissionError as e:
-            print(f"⚠️ Permission error creating directory: {e}")
-            # Directory might already exist with correct permissions
-            if not os.path.exists(chroma_path):
-                print(f"❌ Directory does not exist and cannot be created: {chroma_path}")
-                self.client = None
-                self.users_collection = None
-                self.verification_tokens_collection = None
-                return
-            else:
-                print(f"✅ Directory exists: {chroma_path}")
-        except Exception as e:
-            print(f"❌ Error creating ChromaDB directory: {e}")
-            self.client = None
-            self.users_collection = None
-            self.verification_tokens_collection = None
-            return
-        
         try:
             # Import ChromaDB singleton to prevent multiple instances
             from utils.chromadb_singleton import get_chromadb_client
             
             # Use the singleton ChromaDB client
             self.client = get_chromadb_client()
-            print("✅ ChromaDB client initialized")
             
             # User collections
             self.users_collection = self.client.get_or_create_collection("users")
