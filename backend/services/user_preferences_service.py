@@ -8,11 +8,23 @@ class UserPreferencesService:
         # Use the singleton ChromaDB client and lightweight embeddings
         from utils.lightweight_embeddings import get_lightweight_embedding_function
         self.client = get_chromadb_client()
-        self.embedding_function = get_lightweight_embedding_function(use_token_based=True)
-        self.collection = self.client.get_or_create_collection(
-            "user_preferences",
-            embedding_function=self.embedding_function
-        )
+        
+        if self.client is None:
+            print("⚠️ ChromaDB client is None, using in-memory fallback")
+            self.collection = None
+            self.preferences = {}  # In-memory fallback
+            return
+            
+        try:
+            self.embedding_function = get_lightweight_embedding_function(use_token_based=True)
+            self.collection = self.client.get_or_create_collection(
+                "user_preferences",
+                embedding_function=self.embedding_function
+            )
+        except Exception as e:
+            print(f"⚠️ Failed to create user preferences collection: {e}")
+            self.collection = None
+            self.preferences = {}  # In-memory fallback
 
     def save_preferences(self, user_id: str, preferences: dict):
         if not self.collection:
