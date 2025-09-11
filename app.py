@@ -228,6 +228,111 @@ app.register_blueprint(migration_bp, url_prefix='/')
 
 print("✓ All route blueprints registered")
 
+# Add a dedicated recommendations route that works with preferences
+@app.route('/api/recommendations', methods=['GET'])
+def get_recommendations():
+    """Get personalized recommendations based on user preferences"""
+    try:
+        from middleware.auth_middleware import get_current_user_id
+        from backend.services.user_preferences_service import UserPreferencesService
+        
+        user_id = get_current_user_id()
+        limit = request.args.get('limit', 8, type=int)
+        
+        print(f"🔍 Recommendations for user: {user_id}, limit: {limit}")
+        
+        # Get user preferences
+        prefs_service = UserPreferencesService()
+        preferences = prefs_service.get_preferences(user_id) if user_id else None
+        
+        print(f"📋 User preferences: {preferences}")
+        
+        # Get recipes from cache
+        all_recipes = recipe_cache.get_cached_recipes("", "", {})
+        
+        # Apply basic preference filtering
+        filtered_recipes = []
+        if preferences:
+            favorite_cuisines = preferences.get('favoriteCuisines', [])
+            dietary_restrictions = preferences.get('dietaryRestrictions', [])
+            
+            print(f"🍽️ Filtering for cuisines: {favorite_cuisines}, diets: {dietary_restrictions}")
+            
+            for recipe in all_recipes:
+                include_recipe = True
+                
+                # Filter by favorite cuisines (if specified)
+                if favorite_cuisines:
+                    recipe_cuisines = recipe.get('cuisines', [])
+                    if isinstance(recipe_cuisines, list):
+                        cuisine_match = any(fav.lower() in [c.lower() for c in recipe_cuisines] for fav in favorite_cuisines)
+                    else:
+                        cuisine_match = any(fav.lower() in str(recipe_cuisines).lower() for fav in favorite_cuisines)
+                    
+                    if not cuisine_match:
+                        include_recipe = False
+                
+                # Filter by dietary restrictions
+                if dietary_restrictions and include_recipe:
+                    recipe_diets = recipe.get('diets', [])
+                    if isinstance(recipe_diets, list):
+                        diet_match = any(diet.lower() in [d.lower() for d in recipe_diets] for diet in dietary_restrictions)
+                    else:
+                        diet_match = any(diet.lower() in str(recipe_diets).lower() for diet in dietary_restrictions)
+                    
+                    if not diet_match:
+                        include_recipe = False
+                
+                if include_recipe:
+                    filtered_recipes.append(recipe)
+                    if len(filtered_recipes) >= limit * 2:  # Get extra for variety
+                        break
+        else:
+            # No preferences - return variety
+            filtered_recipes = all_recipes[:limit * 2]
+        
+        # Format recommendations
+        recommendations = []
+        seen_cuisines = set()
+        
+        for recipe in filtered_recipes:
+            if len(recommendations) >= limit:
+                break
+                
+            cuisine = recipe.get('cuisine', 'Unknown')
+            if cuisine not in seen_cuisines or len(recommendations) < limit//2:
+                formatted_recipe = {
+                    "id": recipe.get('id'),
+                    "title": recipe.get('title', recipe.get('name')),
+                    "image": recipe.get('image', recipe.get('imageUrl')),
+                    "cuisine": cuisine,
+                    "cuisines": recipe.get('cuisines', [cuisine] if cuisine != 'Unknown' else []),
+                    "ingredients": recipe.get('ingredients', []),
+                    "instructions": recipe.get('instructions', []),
+                    "ready_in_minutes": recipe.get('ready_in_minutes', 30),
+                    "diets": recipe.get('diets', []),
+                    "tags": recipe.get('tags', []),
+                    "description": recipe.get('description', ''),
+                    "prep_time": recipe.get('prep_time', ''),
+                    "cooking_time": recipe.get('cooking_time', ''),
+                }
+                recommendations.append(formatted_recipe)
+                seen_cuisines.add(cuisine)
+        
+        print(f"✅ Returning {len(recommendations)} recommendations")
+        
+        return jsonify({
+            "success": True,
+            "recommendations": recommendations,
+            "total": len(recommendations),
+            "preferences_applied": preferences is not None,
+            "message": f"Recommendations based on your preferences" if preferences else "General recommendations"
+        })
+        
+    except Exception as e:
+        print(f"❌ Error in recommendations: {e}")
+        return jsonify({"error": str(e)}), 500
+
 # Check and restore data if needed
 def check_and_restore_data():
     """Check if data exists and automatically restore if needed"""
