@@ -1,10 +1,5 @@
-# Try to import ChromaDB, fallback to in-memory storage if not available
-try:
-    import chromadb
-    CHROMADB_AVAILABLE = True
-except ImportError:
-    CHROMADB_AVAILABLE = False
-    print("Warning: ChromaDB not available, using fallback in-memory storage for recipe search")
+# Import ChromaDB - required for the application to work
+import chromadb
 import json
 from typing import List, Dict, Any, Optional
 import logging
@@ -53,7 +48,7 @@ class RecipeSearchService:
     """
     
     def __init__(self):
-        if not CHROMADB_AVAILABLE:
+        if not self.client:
             logger.warning("ChromaDB not available - RecipeSearchService starting in limited mode")
             self.client = None
             self.recipe_collection = None

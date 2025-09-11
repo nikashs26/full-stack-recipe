@@ -1,10 +1,12 @@
-import chromadb
 import json
 import hashlib
 from typing import List, Dict, Any, Optional
 import logging
 import time
 from datetime import datetime, timedelta
+
+# Import ChromaDB - required for the application to work
+import chromadb
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -17,6 +19,8 @@ class RecipeCacheService:
         Args:
             cache_ttl_days: Number of days before cache entries expire (default: None - TTL disabled)
         """
+        self.cache_ttl_days = cache_ttl_days
+            
         try:
             # Initialize ChromaDB with persistent storage
             # Use Railway persistent volume if available, fallback to local storage
@@ -246,8 +250,6 @@ class RecipeCacheService:
 
     def get_cached_recipes(self, query: str = "", ingredient: str = "", filters: Optional[Dict[str, Any]] = None) -> List[Dict[Any, Any]]:
         """Retrieve cached recipes for the given search parameters with TTL support"""
-       
-        
         if not self.recipe_collection:
             logger.warning("ChromaDB recipe collection not initialized")
             return []
@@ -335,7 +337,7 @@ class RecipeCacheService:
                                             if not recipe_cuisine:
                                                 continue
                                             recipe_cuisine_lower = recipe_cuisine.lower().strip()
-                                            logger.info(f"🔍 DEBUG: Against recipe cuisine: '{recipe_cuisine}' -> '{recipe_cuisine_lower}'")
+
                                             
                                             # Check for exact match or partial match
                                             if (filter_cuisine_lower == recipe_cuisine_lower or 

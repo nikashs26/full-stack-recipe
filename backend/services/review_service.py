@@ -3,13 +3,8 @@ import uuid
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 
-# Try to import ChromaDB, fallback to in-memory storage if not available
-try:
-    import chromadb
-    CHROMADB_AVAILABLE = True
-except ImportError:
-    CHROMADB_AVAILABLE = False
-    print("Warning: ChromaDB not available, using fallback in-memory storage for review service")
+# Import ChromaDB - required for the application to work
+import chromadb
 
 class ReviewService:
     """
@@ -18,12 +13,6 @@ class ReviewService:
     """
     
     def __init__(self):
-        # Check if ChromaDB is available
-        if not CHROMADB_AVAILABLE:
-            print("Warning: ChromaDB not available, using fallback in-memory storage for review service")
-            self.client = None
-            self.collection = None
-            return
         
         # Use the new ChromaDB client configuration with absolute path
         import os
@@ -69,7 +58,7 @@ class ReviewService:
         Returns:
             Dictionary with review data including generated ID
         """
-        if not CHROMADB_AVAILABLE or not self.collection:
+        if not self.collection:
             return {"success": False, "error": "Database not available"}
         
         try:
@@ -142,7 +131,7 @@ class ReviewService:
         Returns:
             List of review dictionaries
         """
-        if not CHROMADB_AVAILABLE or not self.collection:
+        if not self.collection:
             return []
         
         try:
@@ -189,7 +178,7 @@ class ReviewService:
         Returns:
             List of review dictionaries
         """
-        if not CHROMADB_AVAILABLE or not self.collection:
+        if not self.collection:
             return []
         
         try:
@@ -233,7 +222,7 @@ class ReviewService:
         Returns:
             True if deleted successfully, False otherwise
         """
-        if not CHROMADB_AVAILABLE or not self.collection:
+        if not self.collection:
             return False
         
         try:
@@ -272,7 +261,7 @@ class ReviewService:
         Returns:
             Dictionary with review statistics
         """
-        if not CHROMADB_AVAILABLE or not self.collection:
+        if not self.collection:
             return {
                 "total_reviews": 0,
                 "average_rating": 0,

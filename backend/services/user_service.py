@@ -1,11 +1,5 @@
-# Try to import ChromaDB, fallback to in-memory storage if not available
-try:
-    import chromadb
-    CHROMADB_AVAILABLE = True
-except ImportError:
-    CHROMADB_AVAILABLE = False
-    print("Warning: ChromaDB not available, using fallback in-memory storage for user service")
-    from .fallback_user_service import FallbackUserService
+# Import ChromaDB - required for the application to work
+import chromadb
 import json
 import uuid
 from datetime import datetime, timedelta
@@ -61,17 +55,6 @@ class UserService:
         
         chroma_path = os.path.abspath(chroma_path)
         
-        # Check if ChromaDB is available
-        if not CHROMADB_AVAILABLE:
-            print("❌ Warning: ChromaDB not available, using fallback in-memory storage for user service")
-            # Use fallback service
-            from .fallback_user_service import FallbackUserService
-            fallback = FallbackUserService()
-            # Copy all methods from fallback to this instance
-            for attr_name in dir(fallback):
-                if not attr_name.startswith('_') and callable(getattr(fallback, attr_name)):
-                    setattr(self, attr_name, getattr(fallback, attr_name))
-            return
         
         print(f"🔧 Initializing ChromaDB at path: {chroma_path}")
         
@@ -182,7 +165,7 @@ class UserService:
     
     def email_exists(self, email: str) -> bool:
         """Check if an email is already registered"""
-        if not CHROMADB_AVAILABLE or not self.users_collection:
+        if not self.users_collection:
             return False
         try:
             results = self.users_collection.get(
@@ -195,7 +178,7 @@ class UserService:
     
     def register_user(self, email: str, password: str, full_name: str = "") -> Dict[str, Any]:
         """Register a new user"""
-        if not CHROMADB_AVAILABLE or not self.users_collection:
+        if not self.users_collection:
             return {"success": False, "error": "Database not available"}
         try:
             # Check if email already exists
@@ -321,7 +304,7 @@ class UserService:
     
     def authenticate_user(self, email: str, password: str) -> Dict[str, Any]:
         """Authenticate user login"""
-        if not CHROMADB_AVAILABLE or not self.users_collection:
+        if not self.users_collection:
             return {"success": False, "error": "Database not available"}
         try:
             # Find user by email
@@ -363,7 +346,7 @@ class UserService:
     
     def get_user_by_id(self, user_id: str) -> Optional[Dict[str, Any]]:
         """Get user by user ID"""
-        if not CHROMADB_AVAILABLE or not self.users_collection:
+        if not self.users_collection:
             return None
         try:
             results = self.users_collection.get(
@@ -384,7 +367,7 @@ class UserService:
     
     def get_user_by_email(self, email: str) -> Optional[Dict[str, Any]]:
         """Get user by email"""
-        if not CHROMADB_AVAILABLE or not self.users_collection:
+        if not self.users_collection:
             return None
         try:
             results = self.users_collection.get(

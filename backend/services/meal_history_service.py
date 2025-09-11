@@ -3,13 +3,8 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
 import uuid
 
-# Try to import ChromaDB, fallback to in-memory storage if not available
-try:
-    import chromadb
-    CHROMADB_AVAILABLE = True
-except ImportError:
-    CHROMADB_AVAILABLE = False
-    print("Warning: ChromaDB not available, using fallback in-memory storage for meal history")
+# Import ChromaDB - required for the application to work
+import chromadb
 
 class MealHistoryService:
     """
@@ -17,12 +12,6 @@ class MealHistoryService:
     """
     
     def __init__(self):
-        # If ChromaDB isn't available, initialize with no-op storage
-        if not CHROMADB_AVAILABLE:
-            self.client = None
-            self.meal_history_collection = None
-            self.meal_feedback_collection = None
-            return
         
         # Use absolute path to ensure ChromaDB is created in the right location
         import os
@@ -58,7 +47,7 @@ class MealHistoryService:
         """
         Log when a meal plan is generated for a user
         """
-        if not CHROMADB_AVAILABLE or not self.meal_history_collection:
+        if not self.meal_history_collection:
             return
         log_id = str(uuid.uuid4())
         timestamp = datetime.now().isoformat()
@@ -129,7 +118,7 @@ class MealHistoryService:
         
         feedback_type: 'liked', 'disliked', 'cooked', 'skipped', 'rated'
         """
-        if not CHROMADB_AVAILABLE or not self.meal_feedback_collection:
+        if not self.meal_feedback_collection:
             return
         feedback_id = str(uuid.uuid4())
         timestamp = datetime.now().isoformat()

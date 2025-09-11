@@ -13,13 +13,13 @@ fi
 echo "📦 Upgrading pip..."
 $PYTHON_CMD -m pip install --upgrade pip
 
-# Install ChromaDB first (let it pull its own dependencies)
-echo "📦 Installing ChromaDB..."
-$PYTHON_CMD -m pip install chromadb==0.4.18
-
-# Install other dependencies
-echo "📦 Installing other dependencies..."
+# Install all dependencies from requirements file
+echo "📦 Installing all dependencies..."
 $PYTHON_CMD -m pip install -r backend/requirements-prod-minimal.txt
+
+# Additional ChromaDB dependencies that might be missing
+echo "📦 Installing additional ChromaDB dependencies..."
+$PYTHON_CMD -m pip install sentence-transformers==2.2.2
 
 # Create ChromaDB directory (use local path for testing)
 echo "📁 Creating ChromaDB directory..."

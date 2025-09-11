@@ -3,13 +3,8 @@ import uuid
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 
-# Try to import ChromaDB, fallback to in-memory storage if not available
-try:
-    import chromadb
-    CHROMADB_AVAILABLE = True
-except ImportError:
-    CHROMADB_AVAILABLE = False
-    print("Warning: ChromaDB not available, using fallback in-memory storage for folder service")
+# Import ChromaDB - required for the application to work
+import chromadb
 
 class FolderService:
     """
@@ -17,12 +12,6 @@ class FolderService:
     """
     
     def __init__(self):
-        # If ChromaDB isn't available, initialize with no-op storage
-        if not CHROMADB_AVAILABLE:
-            self.client = None
-            self.folders_collection = None
-            self.folder_items_collection = None
-            return
         
         import os
         chroma_path = os.environ.get('CHROMA_DB_PATH', './chroma_db')
@@ -58,7 +47,7 @@ class FolderService:
     
     def create_folder(self, user_id: str, name: str, description: str = "") -> Dict[str, Any]:
         """Create a new folder"""
-        if not CHROMADB_AVAILABLE or not self.folders_collection:
+        if not self.folders_collection:
             return {"success": False, "error": "Database not available"}
         folder_id = str(uuid.uuid4())
         timestamp = datetime.now().isoformat()
@@ -87,7 +76,7 @@ class FolderService:
     
     def get_user_folders(self, user_id: str) -> List[Dict[str, Any]]:
         """Get all folders for a user"""
-        if not CHROMADB_AVAILABLE or not self.folders_collection:
+        if not self.folders_collection:
             return []
         results = self.folders_collection.get(
             where={"user_id": user_id},

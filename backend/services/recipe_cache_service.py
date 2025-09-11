@@ -8,14 +8,8 @@ from datetime import datetime, timedelta
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Try to import ChromaDB, fallback to in-memory storage if not available
-try:
-    import chromadb
-    CHROMADB_AVAILABLE = True
-except ImportError:
-    CHROMADB_AVAILABLE = False
-    logger.warning("ChromaDB not available, using fallback in-memory storage")
-    from .fallback_recipe_cache import FallbackRecipeCacheService
+# Import ChromaDB - required for the application to work
+import chromadb
 
 class RecipeCacheService:
     def __init__(self, cache_ttl_days: int = None):
@@ -25,25 +19,7 @@ class RecipeCacheService:
         Args:
             cache_ttl_days: Number of days before cache entries expire (default: None - TTL disabled)
         """
-        if not CHROMADB_AVAILABLE:
-            # Use fallback in-memory storage
-            self.recipe_collection = FallbackRecipeCacheService()
-            self.search_collection = FallbackRecipeCacheService()
-            self.embedding_function = None
-            self.client = None
-            logger.info("Using fallback in-memory recipe cache service")
-            # Attempt to seed from local JSON if available
-            try:
-                import os
-                seed_path = os.environ.get('SEED_RECIPES_FILE', 'recipes_data.json')
-                seed_on_start = os.environ.get('SEED_RECIPES_ON_STARTUP', 'true').lower() == 'true'
-                if seed_on_start and os.path.exists(seed_path):
-                    # Load all recipes by default, not just 500
-                    limit = int(os.environ.get('SEED_RECIPES_LIMIT', '10000'))
-                    self._seed_from_file(seed_path, limit=limit)
-            except Exception as e:
-                logger.warning(f"Seeding fallback cache failed: {e}")
-            return
+        self.cache_ttl_days = cache_ttl_days
             
         try:
             # Initialize ChromaDB with persistent storage using Settings
@@ -385,8 +361,6 @@ class RecipeCacheService:
 
     def get_cached_recipes(self, query: str = "", ingredient: str = "", filters: Optional[Dict[str, Any]] = None) -> List[Dict[Any, Any]]:
         """Retrieve cached recipes for the given search parameters with TTL support"""
-       
-        
         if not self.recipe_collection:
             logger.warning("ChromaDB recipe collection not initialized")
             return []
@@ -474,7 +448,7 @@ class RecipeCacheService:
                                             if not recipe_cuisine:
                                                 continue
                                             recipe_cuisine_lower = recipe_cuisine.lower().strip()
-                                            logger.info(f"🔍 DEBUG: Against recipe cuisine: '{recipe_cuisine}' -> '{recipe_cuisine_lower}'")
+
                                             
                                             # Check for exact match or partial match
                                             if (filter_cuisine_lower == recipe_cuisine_lower or 

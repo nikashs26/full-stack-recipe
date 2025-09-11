@@ -4,13 +4,8 @@ from datetime import datetime
 import uuid
 import re
 
-# Try to import ChromaDB, fallback to in-memory storage if not available
-try:
-    import chromadb
-    CHROMADB_AVAILABLE = True
-except ImportError:
-    CHROMADB_AVAILABLE = False
-    print("Warning: ChromaDB not available, using fallback in-memory storage for smart shopping")
+# Import ChromaDB - required for the application to work
+import chromadb
 
 class SmartShoppingService:
     """
@@ -18,12 +13,6 @@ class SmartShoppingService:
     """
     
     def __init__(self):
-        if not CHROMADB_AVAILABLE:
-            self.client = None
-            self.ingredient_collection = None
-            self.shopping_list_collection = None
-            self.store_layout_collection = None
-            return
         import os
         chroma_path = os.environ.get('CHROMA_DB_PATH', './chroma_db')
         

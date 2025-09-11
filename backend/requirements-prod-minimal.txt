@@ -1,17 +1,36 @@
-# Minimal production requirements - compatible with ChromaDB
-# This avoids version conflicts by letting ChromaDB manage its own dependencies
+# Complete production requirements for Render deployment
+# Includes all dependencies needed for the full application
 
 # Core Flask dependencies
 flask==2.3.3
 flask-cors==4.0.0
 gunicorn==21.2.0
+werkzeug==2.3.7
+click==8.1.7
+itsdangerous==2.1.2
+jinja2==3.1.2
+blinker==1.6.3
+
+# Environment and configuration
+python-dotenv==1.0.0
+
+# Database and vector storage
+chromadb==0.4.18
+numpy<2.0.0
+pymongo==4.5.0
+dnspython==2.4.2
 
 # Auth and security
 PyJWT==2.9.0
 bcrypt==4.0.1
 cffi==1.16.0
+flask-session==0.5.0
 
-# Email (optional)
+# Email
 flask-mail==0.9.1
-itsdangerous==2.1.2
-werkzeug==2.3.7
+
+# HTTP requests
+requests==2.31.0
+
+# Additional dependencies that might be needed
+sentence-transformers==2.2.2
