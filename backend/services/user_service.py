@@ -98,7 +98,13 @@ class UserService:
             return
         
         try:
-            self.client = chromadb.PersistentClient(path=chroma_path)
+            # Use Settings configuration (recommended approach)
+            from chromadb.config import Settings
+            settings = Settings(
+                is_persistent=True,
+                persist_directory=chroma_path
+            )
+            self.client = chromadb.PersistentClient(settings=settings)
             print("✅ ChromaDB client initialized")
             
             # User collections

@@ -37,7 +37,13 @@ class UserPreferencesService:
                 chroma_path = './chroma_db'
                 os.makedirs(chroma_path, exist_ok=True)
                 print(f"⚠️ Using fallback ChromaDB directory: {chroma_path}")
-        self.client = chromadb.PersistentClient(path=chroma_path)
+        # Use Settings configuration (recommended approach)
+            from chromadb.config import Settings
+            settings = Settings(
+                is_persistent=True,
+                persist_directory=chroma_path
+            )
+            self.client = chromadb.PersistentClient(settings=settings)
         self.collection = self.client.get_or_create_collection("user_preferences")
 
     def save_preferences(self, user_id: str, preferences: dict):

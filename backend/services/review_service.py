@@ -42,7 +42,13 @@ class ReviewService:
             # Directory might already exist with correct permissions
             if not os.path.exists(chroma_path):
                 raise PermissionError(f"Cannot create ChromaDB directory at {chroma_path}. Please ensure the directory exists and has correct permissions.")
-        self.client = chromadb.PersistentClient(path=chroma_path)
+        # Use Settings configuration (recommended approach)
+            from chromadb.config import Settings
+            settings = Settings(
+                is_persistent=True,
+                persist_directory=chroma_path
+            )
+            self.client = chromadb.PersistentClient(settings=settings)
         self.collection = self.client.get_or_create_collection(
             name="recipe_reviews",
             metadata={"description": "Recipe reviews with user authentication"}

@@ -46,9 +46,10 @@ class RecipeCacheService:
             return
             
         try:
-            # Initialize ChromaDB with persistent storage
-            # Use Railway persistent volume if available, fallback to local storage
+            # Initialize ChromaDB with persistent storage using Settings
             import os
+            from chromadb.config import Settings
+            
             chroma_path = os.environ.get('CHROMA_DB_PATH', './chroma_db')
             
             # For Railway/Render deployment, use persistent volume
@@ -64,7 +65,13 @@ class RecipeCacheService:
                 # Directory might already exist with correct permissions
                 if not os.path.exists(chroma_path):
                     raise PermissionError(f"Cannot create ChromaDB directory at {chroma_path}. Please ensure the directory exists and has correct permissions.")
-            self.client = chromadb.PersistentClient(path=chroma_path)
+            
+            # Use Settings configuration (recommended approach)
+            settings = Settings(
+                is_persistent=True,
+                persist_directory=chroma_path
+            )
+            self.client = chromadb.PersistentClient(settings=settings)
             
             # Create embedding function
             self.embedding_function = chromadb.utils.embedding_functions.DefaultEmbeddingFunction()
