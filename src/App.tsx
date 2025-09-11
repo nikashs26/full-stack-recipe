@@ -24,7 +24,7 @@ import VerifyEmailPage from "./pages/VerifyEmailPage";
 import UserPreferencesPage from "./pages/UserPreferencesPage";
 import { Link } from "react-router-dom";
 import { Database, Utensils } from "lucide-react";
-import { AuthProvider } from "./contexts/AuthContext";
+import { AuthProvider } from "./context/AuthContext";
 
 import ManualRecipeDetailPage from "./pages/ManualRecipeDetailPage";
 import MealHistoryPage from "./pages/MealHistoryPage";
