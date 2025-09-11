@@ -66,9 +66,12 @@ class UserService:
             
         except Exception as e:
             print(f"❌ Error initializing ChromaDB client: {e}")
-            print(f"   ChromaDB path: {chroma_path}")
-            print(f"   Path exists: {os.path.exists(chroma_path) if 'chroma_path' in locals() else 'N/A'}")
-            print(f"   Path is writable: {os.access(chroma_path, os.W_OK) if 'chroma_path' in locals() and os.path.exists(chroma_path) else 'N/A'}")
+            try:
+                print(f"   ChromaDB path: {chroma_path}")
+                print(f"   Path exists: {os.path.exists(chroma_path)}")
+                print(f"   Path is writable: {os.access(chroma_path, os.W_OK) if os.path.exists(chroma_path) else 'N/A'}")
+            except NameError:
+                print("   ChromaDB path: undefined")
             import traceback
             print(f"   Full traceback: {traceback.format_exc()}")
             self.client = None

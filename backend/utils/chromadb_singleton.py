@@ -75,21 +75,22 @@ class ChromaDBSingleton:
                 os.makedirs(chroma_path, exist_ok=True)
                 print(f"⚠️ Using fallback ChromaDB directory: {chroma_path}")
         
-        # Create Settings with telemetry disabled and memory optimization
-        cls._settings = Settings(
-            is_persistent=True,
-            persist_directory=chroma_path,
-            anonymized_telemetry=False,
-            allow_reset=False
-        )
-        
-        # Create the singleton client with error handling
+        # Create the singleton client with new ChromaDB v0.5+ configuration
         try:
-            cls._instance = chromadb.PersistentClient(settings=cls._settings)
+            # Use the new client configuration format
+            cls._instance = chromadb.PersistentClient(path=chroma_path)
+            cls._settings = None  # Not needed with new client
         except Exception as e:
             print(f"⚠️ Error creating ChromaDB client: {e}")
-            # Fallback to simpler configuration
-            cls._instance = chromadb.PersistentClient(path=chroma_path)
+            # If that fails, try fallback configuration
+            try:
+                import tempfile
+                fallback_path = tempfile.mkdtemp()
+                cls._instance = chromadb.PersistentClient(path=fallback_path)
+                print(f"⚠️ Using temporary ChromaDB directory: {fallback_path}")
+            except Exception as e2:
+                print(f"⚠️ ChromaDB initialization completely failed: {e2}")
+                cls._instance = None
         cls._path = chroma_path
         
         print(f"✅ ChromaDB singleton initialized at: {chroma_path}")
