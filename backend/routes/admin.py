@@ -209,7 +209,41 @@ def seed_recipes():
             normalized, rid = normalize_item(item)
             ids.append(rid)
             docs.append(json.dumps(normalized))
-            metas.append(item)
+            
+            # Create safe metadata (only primitive types for ChromaDB)
+            metadata = {
+                'id': rid,
+                'title': normalized.get('title', ''),
+                'source': 'admin_seed',
+                'uploaded_at': datetime.now().isoformat()
+            }
+            
+            # Add safe metadata fields
+            if normalized.get('cuisines'):
+                metadata['cuisines'] = ','.join(normalized['cuisines']) if isinstance(normalized['cuisines'], list) else str(normalized.get('cuisines', ''))
+            
+            if normalized.get('diets'):
+                metadata['diets'] = ','.join(normalized['diets']) if isinstance(normalized['diets'], list) else str(normalized.get('diets', ''))
+                
+            # Add nutrition as individual primitive fields
+            if item.get('calories'):
+                metadata['calories'] = float(item['calories']) if item['calories'] else 0.0
+            if item.get('protein'):
+                metadata['protein'] = float(item['protein']) if item['protein'] else 0.0
+            if item.get('carbs'):
+                metadata['carbs'] = float(item['carbs']) if item['carbs'] else 0.0
+            if item.get('fat'):
+                metadata['fat'] = float(item['fat']) if item['fat'] else 0.0
+                
+            # Handle nutrition object
+            if item.get('nutrition') and isinstance(item['nutrition'], dict):
+                nutrition = item['nutrition']
+                metadata['calories'] = float(nutrition.get('calories', 0)) if nutrition.get('calories') else 0.0
+                metadata['protein'] = float(nutrition.get('protein', 0)) if nutrition.get('protein') else 0.0
+                metadata['carbs'] = float(nutrition.get('carbs', 0)) if nutrition.get('carbs') else 0.0
+                metadata['fat'] = float(nutrition.get('fat', 0)) if nutrition.get('fat') else 0.0
+            
+            metas.append(metadata)
 
         if not ids:
             return jsonify({'error': 'No recipes to import'}), 400
