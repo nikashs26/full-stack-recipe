@@ -198,24 +198,26 @@ class RenderRecipeMigrationFixer:
                 'ready_in_minutes': recipe.get('ready_in_minutes', recipe.get('cooking_time', 30)),
             }
             
-            # Add nutrition data if available
+            # Add nutrition data if available (flatten for ChromaDB compatibility)
             if recipe.get('nutrition'):
+                # Store nutrition as both nested object and flat fields
                 fixed['nutrition'] = recipe['nutrition']
-                fixed['calories'] = recipe['nutrition'].get('calories', 0)
-                fixed['protein'] = recipe['nutrition'].get('protein', 0)
-                fixed['carbs'] = recipe['nutrition'].get('carbs', 0)
-                fixed['fat'] = recipe['nutrition'].get('fat', 0)
+                fixed['calories'] = float(recipe['nutrition'].get('calories', 0))
+                fixed['protein'] = float(recipe['nutrition'].get('protein', 0))
+                fixed['carbs'] = float(recipe['nutrition'].get('carbs', 0))
+                fixed['fat'] = float(recipe['nutrition'].get('fat', 0))
             elif any(recipe.get(k) for k in ['calories', 'protein', 'carbs', 'fat']):
+                # Create nutrition object and flat fields
                 fixed['nutrition'] = {
-                    'calories': recipe.get('calories', 0),
-                    'protein': recipe.get('protein', 0),
-                    'carbs': recipe.get('carbs', 0),
-                    'fat': recipe.get('fat', 0)
+                    'calories': float(recipe.get('calories', 0)),
+                    'protein': float(recipe.get('protein', 0)),
+                    'carbs': float(recipe.get('carbs', 0)),
+                    'fat': float(recipe.get('fat', 0))
                 }
-                fixed['calories'] = recipe.get('calories', 0)
-                fixed['protein'] = recipe.get('protein', 0)
-                fixed['carbs'] = recipe.get('carbs', 0)
-                fixed['fat'] = recipe.get('fat', 0)
+                fixed['calories'] = float(recipe.get('calories', 0))
+                fixed['protein'] = float(recipe.get('protein', 0))
+                fixed['carbs'] = float(recipe.get('carbs', 0))
+                fixed['fat'] = float(recipe.get('fat', 0))
             
             return fixed
             
@@ -407,7 +409,7 @@ class RenderRecipeMigrationFixer:
             }
             
             response = requests.post(
-                f"{self.render_url}/api/admin/migrate",
+                f"{self.render_url}/api/admin/seed",
                 headers={
                     "Content-Type": "application/json",
                     "X-Admin-Token": self.admin_token

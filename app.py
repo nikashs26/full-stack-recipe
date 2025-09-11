@@ -177,6 +177,50 @@ if not os.environ.get('DISABLE_SMART_FEATURES', 'FALSE').upper() == 'TRUE':
         print("✓ Smart features routes imported and registered")
     except Exception as e:
         print(f"⚠️ Smart features disabled due to import error: {e}")
+        print(f"⚠️ Error details: {type(e).__name__}: {str(e)}")
+        # Create a simple recommendations fallback route
+        @app.route('/api/recommendations', methods=['GET'])
+        def simple_recommendations_fallback():
+            """Simple recommendations fallback when smart_features fails to import"""
+            try:
+                # Get some recipes from our cache
+                limit = request.args.get('limit', 8, type=int)
+                all_recipes = recipe_cache.get_cached_recipes("", "", {})[:limit*2]  # Get more for variety
+                
+                # Simple filtering for variety
+                recommendations = []
+                seen_cuisines = set()
+                
+                for recipe in all_recipes:
+                    if len(recommendations) >= limit:
+                        break
+                    
+                    # Try to get variety of cuisines
+                    cuisine = recipe.get('cuisine', 'Unknown')
+                    if cuisine not in seen_cuisines or len(recommendations) < limit//2:
+                        recommendations.append({
+                            "id": recipe.get('id'),
+                            "title": recipe.get('title', recipe.get('name')),
+                            "image": recipe.get('image', recipe.get('imageUrl')),
+                            "cuisine": cuisine,
+                            "cuisines": recipe.get('cuisines', [cuisine] if cuisine != 'Unknown' else []),
+                            "ingredients": recipe.get('ingredients', []),
+                            "instructions": recipe.get('instructions', []),
+                            "ready_in_minutes": recipe.get('ready_in_minutes', 30),
+                            "diets": recipe.get('diets', []),
+                            "tags": recipe.get('tags', [])
+                        })
+                        seen_cuisines.add(cuisine)
+                
+                return jsonify({
+                    "success": True,
+                    "recommendations": recommendations,
+                    "total": len(recommendations),
+                    "message": "Simple recommendations (smart features unavailable)"
+                })
+                
+            except Exception as e:
+                return jsonify({"error": str(e)}), 500
 else:
     print("⚠️ Smart features disabled via environment variable")
 app.register_blueprint(admin_bp, url_prefix='/')
