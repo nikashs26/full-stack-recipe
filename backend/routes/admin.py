@@ -1,9 +1,12 @@
 from flask import Blueprint, request, jsonify
 import os
 import json
+from datetime import datetime
 
 # Lazy import to avoid heavy deps at import time
 from backend.services.recipe_cache_service import RecipeCacheService
+from backend.services.user_service import UserService
+from backend.services.user_preferences_service import UserPreferencesService
 
 admin_bp = Blueprint('admin', __name__)
 
@@ -11,6 +14,12 @@ def _check_token(req) -> bool:
     token = req.headers.get('X-Admin-Token') or req.args.get('token')
     expected = os.environ.get('ADMIN_SEED_TOKEN')
     return bool(expected) and token == expected
+
+def _check_admin_auth(req) -> bool:
+    """Check if request is from an admin user"""
+    # For now, use the same token check, but this could be enhanced
+    # to check for admin role in user database
+    return _check_token(req)
 
 @admin_bp.route('/api/admin/seed', methods=['POST'])
 def seed_recipes():
@@ -159,5 +168,300 @@ def seed_recipes():
         return jsonify({'status': 'ok', 'imported': len(ids), 'path': seed_path}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+@admin_bp.route('/api/admin/users', methods=['GET'])
+def get_all_users():
+    """Get all users with pagination and filtering"""
+    if not _check_admin_auth(request):
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    try:
+        user_service = UserService()
+        if not user_service.users_collection:
+            return jsonify({'error': 'User database not available'}), 500
+        
+        # Get query parameters
+        page = int(request.args.get('page', 1))
+        per_page = int(request.args.get('per_page', 20))
+        verified_only = request.args.get('verified_only', 'false').lower() == 'true'
+        search_email = request.args.get('search', '').strip()
+        
+        # Build query
+        where_clause = {}
+        if verified_only:
+            where_clause['is_verified'] = True
+        if search_email:
+            where_clause['email'] = {"$contains": search_email}
+        
+        # Get total count
+        total_results = user_service.users_collection.get(
+            where=where_clause if where_clause else None,
+            include=['metadatas']
+        )
+        total_count = len(total_results['ids'])
+        
+        # Calculate pagination
+        offset = (page - 1) * per_page
+        total_pages = (total_count + per_page - 1) // per_page
+        
+        # Get paginated results
+        results = user_service.users_collection.get(
+            where=where_clause if where_clause else None,
+            include=['documents', 'metadatas'],
+            limit=per_page,
+            offset=offset
+        )
+        
+        # Process user data
+        users = []
+        for i, (user_id, doc, meta) in enumerate(zip(results['ids'], results['documents'], results['metadatas'])):
+            try:
+                user_data = json.loads(doc)
+                users.append({
+                    'user_id': user_id,
+                    'email': user_data.get('email', ''),
+                    'full_name': user_data.get('full_name', ''),
+                    'is_verified': user_data.get('is_verified', False),
+                    'created_at': user_data.get('created_at', ''),
+                    'last_login': user_data.get('last_login', ''),
+                    'metadata': meta
+                })
+            except Exception as e:
+                print(f"Error processing user {user_id}: {e}")
+                continue
+        
+        return jsonify({
+            'status': 'success',
+            'users': users,
+            'pagination': {
+                'page': page,
+                'per_page': per_page,
+                'total_count': total_count,
+                'total_pages': total_pages,
+                'has_next': page < total_pages,
+                'has_prev': page > 1
+            }
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': f'Failed to get users: {str(e)}'}), 500
+
+
+@admin_bp.route('/api/admin/users/<user_id>', methods=['GET'])
+def get_user_details(user_id):
+    """Get detailed information about a specific user"""
+    if not _check_admin_auth(request):
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    try:
+        user_service = UserService()
+        if not user_service.users_collection:
+            return jsonify({'error': 'User database not available'}), 500
+        
+        # Get user data
+        results = user_service.users_collection.get(
+            ids=[user_id],
+            include=['documents', 'metadatas']
+        )
+        
+        if not results['documents']:
+            return jsonify({'error': 'User not found'}), 404
+        
+        user_data = json.loads(results['documents'][0])
+        user_metadata = results['metadatas'][0]
+        
+        # Get user preferences
+        prefs_service = UserPreferencesService()
+        preferences = None
+        if prefs_service.collection:
+            try:
+                prefs_results = prefs_service.collection.get(
+                    where={"user_id": user_id},
+                    include=['documents']
+                )
+                if prefs_results['documents']:
+                    preferences = json.loads(prefs_results['documents'][0])
+            except Exception as e:
+                print(f"Error getting preferences for user {user_id}: {e}")
+        
+        return jsonify({
+            'status': 'success',
+            'user': {
+                'user_id': user_id,
+                'email': user_data.get('email', ''),
+                'full_name': user_data.get('full_name', ''),
+                'is_verified': user_data.get('is_verified', False),
+                'created_at': user_data.get('created_at', ''),
+                'last_login': user_data.get('last_login', ''),
+                'updated_at': user_data.get('updated_at', ''),
+                'metadata': user_metadata,
+                'preferences': preferences
+            }
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': f'Failed to get user details: {str(e)}'}), 500
+
+
+@admin_bp.route('/api/admin/users/<user_id>/verify', methods=['POST'])
+def verify_user(user_id):
+    """Manually verify a user"""
+    if not _check_admin_auth(request):
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    try:
+        user_service = UserService()
+        if not user_service.users_collection:
+            return jsonify({'error': 'User database not available'}), 500
+        
+        # Get user data
+        results = user_service.users_collection.get(
+            ids=[user_id],
+            include=['documents', 'metadatas']
+        )
+        
+        if not results['documents']:
+            return jsonify({'error': 'User not found'}), 404
+        
+        user_data = json.loads(results['documents'][0])
+        user_metadata = results['metadatas'][0]
+        
+        # Update user to verified
+        user_data['is_verified'] = True
+        user_data['updated_at'] = datetime.utcnow().isoformat()
+        user_metadata['is_verified'] = True
+        
+        # Update user in ChromaDB
+        user_service.users_collection.upsert(
+            documents=[json.dumps(user_data)],
+            metadatas=[user_metadata],
+            ids=[user_id]
+        )
+        
+        return jsonify({
+            'status': 'success',
+            'message': f'User {user_data.get("email", user_id)} has been verified'
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': f'Failed to verify user: {str(e)}'}), 500
+
+
+@admin_bp.route('/api/admin/users/<user_id>', methods=['DELETE'])
+def delete_user(user_id):
+    """Delete a user and their data"""
+    if not _check_admin_auth(request):
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    try:
+        user_service = UserService()
+        if not user_service.users_collection:
+            return jsonify({'error': 'User database not available'}), 500
+        
+        # Get user data first
+        results = user_service.users_collection.get(
+            ids=[user_id],
+            include=['documents']
+        )
+        
+        if not results['documents']:
+            return jsonify({'error': 'User not found'}), 404
+        
+        user_data = json.loads(results['documents'][0])
+        user_email = user_data.get('email', user_id)
+        
+        # Delete user from users collection
+        user_service.users_collection.delete(ids=[user_id])
+        
+        # Delete user preferences
+        prefs_service = UserPreferencesService()
+        if prefs_service.collection:
+            try:
+                prefs_results = prefs_service.collection.get(
+                    where={"user_id": user_id},
+                    include=['metadatas']
+                )
+                if prefs_results['ids']:
+                    prefs_service.collection.delete(ids=prefs_results['ids'])
+            except Exception as e:
+                print(f"Error deleting preferences for user {user_id}: {e}")
+        
+        # Delete verification tokens
+        try:
+            verification_results = user_service.verification_tokens_collection.get(
+                where={"user_id": user_id},
+                include=['metadatas']
+            )
+            if verification_results['ids']:
+                user_service.verification_tokens_collection.delete(ids=verification_results['ids'])
+        except Exception as e:
+            print(f"Error deleting verification tokens for user {user_id}: {e}")
+        
+        return jsonify({
+            'status': 'success',
+            'message': f'User {user_email} and all associated data have been deleted'
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': f'Failed to delete user: {str(e)}'}), 500
+
+
+@admin_bp.route('/api/admin/stats', methods=['GET'])
+def get_admin_stats():
+    """Get overall system statistics"""
+    if not _check_admin_auth(request):
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    try:
+        stats = {}
+        
+        # User statistics
+        user_service = UserService()
+        if user_service.users_collection:
+            all_users = user_service.users_collection.get(include=['documents'])
+            total_users = len(all_users['ids'])
+            verified_users = 0
+            
+            for doc in all_users['documents']:
+                try:
+                    user_data = json.loads(doc)
+                    if user_data.get('is_verified', False):
+                        verified_users += 1
+                except Exception:
+                    continue
+            
+            stats['users'] = {
+                'total': total_users,
+                'verified': verified_users,
+                'unverified': total_users - verified_users
+            }
+        else:
+            stats['users'] = {'total': 0, 'verified': 0, 'unverified': 0}
+        
+        # Recipe statistics
+        recipe_cache = RecipeCacheService()
+        if recipe_cache and recipe_cache.recipe_collection:
+            recipe_count = recipe_cache.get_recipe_count()
+            stats['recipes'] = {'total': recipe_count}
+        else:
+            stats['recipes'] = {'total': 0}
+        
+        # User preferences statistics
+        prefs_service = UserPreferencesService()
+        if prefs_service.collection:
+            prefs_count = prefs_service.collection.count()
+            stats['preferences'] = {'total': prefs_count}
+        else:
+            stats['preferences'] = {'total': 0}
+        
+        return jsonify({
+            'status': 'success',
+            'stats': stats,
+            'timestamp': datetime.utcnow().isoformat()
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': f'Failed to get stats: {str(e)}'}), 500
 
 

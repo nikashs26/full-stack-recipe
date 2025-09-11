@@ -24,5 +24,7 @@ services:
         generateValue: true
       - key: JWT_SECRET_KEY
         generateValue: true
+      - key: ADMIN_SEED_TOKEN
+        generateValue: true
       - key: PORT
         value: 10000
