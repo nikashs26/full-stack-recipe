@@ -51,6 +51,7 @@ class FallbackRecipeCacheService:
                 'metadata': metadatas[i] if metadatas else {},
                 'embedding': embeddings[i] if embeddings else None
             }
+        logger.info(f"Added {len(ids)} recipes to fallback cache. Total recipes now: {len(self.recipes)}")
     
     def upsert(self, ids, documents=None, metadatas=None, embeddings=None):
         """Mock ChromaDB upsert method"""

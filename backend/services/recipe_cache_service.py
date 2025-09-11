@@ -38,7 +38,9 @@ class RecipeCacheService:
                 seed_path = os.environ.get('SEED_RECIPES_FILE', 'recipes_data.json')
                 seed_on_start = os.environ.get('SEED_RECIPES_ON_STARTUP', 'true').lower() == 'true'
                 if seed_on_start and os.path.exists(seed_path):
-                    self._seed_from_file(seed_path, limit=int(os.environ.get('SEED_RECIPES_LIMIT', '500')))
+                    # Load all recipes by default, not just 500
+                    limit = int(os.environ.get('SEED_RECIPES_LIMIT', '10000'))
+                    self._seed_from_file(seed_path, limit=limit)
             except Exception as e:
                 logger.warning(f"Seeding fallback cache failed: {e}")
             return
@@ -110,7 +112,7 @@ class RecipeCacheService:
             docs = []
             metas = []
             for item in recipes:
-                if count >= max(0, limit):
+                if limit > 0 and count >= limit:
                     break
                 rid = str(item.get('id') or item.get('_id') or item.get('idMeal') or hash(item.get('title', '')))
                 title = item.get('title') or item.get('name') or item.get('strMeal') or 'Recipe'
@@ -122,7 +124,9 @@ class RecipeCacheService:
                 count += 1
             if ids:
                 self.recipe_collection.add(ids=ids, documents=docs, metadatas=metas)
-                logger.info(f"Seeded {len(ids)} recipes into fallback cache from {path}")
+                logger.info(f"Seeded {len(ids)} recipes into fallback cache from {path} (limit was {limit})")
+            else:
+                logger.warning(f"No recipes found to seed from {path}")
         except Exception as e:
             logger.warning(f"Failed to seed from file {path}: {e}")
 
