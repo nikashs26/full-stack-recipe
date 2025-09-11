@@ -1,0 +1,42 @@
+# Compatible requirements file for Python 3.13
+# Using versions that actually work with Python 3.13
+
+# Core Flask dependencies
+flask>=3.0.0
+flask-cors>=4.0.0
+python-dotenv>=1.0.0
+requests>=2.31.0
+gunicorn>=21.2.0
+
+# ChromaDB with compatible versions
+chromadb>=0.4.24
+numpy>=2.0.0
+sqlalchemy>=2.0.0
+pydantic>=2.0.0
+typing-extensions>=4.8.0
+
+# Essential ChromaDB dependencies
+psutil>=5.9.0
+hnswlib>=0.7.0
+httpx>=0.25.0
+duckdb>=0.9.0
+
+# Additional dependencies
+click>=8.1.0
+filelock>=3.13.0
+packaging>=23.0
+tqdm>=4.66.0
+urllib3>=2.1.0
+certifi>=2023.11.0
+charset-normalizer>=3.3.0
+idna>=3.6.0
+
+# Auth and security
+PyJWT>=2.8.0
+bcrypt>=4.1.0
+cffi>=1.16.0
+
+# Email functionality
+flask-mail>=0.9.0
+itsdangerous>=2.1.0
+werkzeug>=3.0.0

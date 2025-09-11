@@ -3,7 +3,7 @@ services:
     name: dietary-delight-backend
     env: python
     plan: free
-    buildCommand: python -m pip install --upgrade pip && python -m pip install -r backend/requirements-render-minimal.txt && python debug_render_deployment.py && mkdir -p /opt/render/project/src/chroma_db && mkdir -p /opt/render/project/src/fallback_data
+    buildCommand: python -m pip install --upgrade pip && python -m pip install -r backend/requirements-render-comprehensive.txt && python -c "import chromadb; print('ChromaDB version:', chromadb.__version__)" && python debug_render_deployment.py && mkdir -p /opt/render/project/src/chroma_db && mkdir -p /opt/render/project/src/fallback_data
     startCommand: python app.py
     envVars:
       - key: PYTHON_VERSION

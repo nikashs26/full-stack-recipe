@@ -9,6 +9,9 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Try to import ChromaDB, fallback to in-memory storage if not available
+CHROMADB_AVAILABLE = False
+FallbackRecipeCacheService = None
+
 try:
     import chromadb
     CHROMADB_AVAILABLE = True
@@ -17,12 +20,20 @@ except ImportError as e:
     CHROMADB_AVAILABLE = False
     logger.warning(f"ChromaDB not available: {e}")
     logger.warning("Using fallback in-memory storage")
-    from .fallback_recipe_cache import FallbackRecipeCacheService
+    try:
+        from .fallback_recipe_cache import FallbackRecipeCacheService
+    except ImportError as fallback_error:
+        logger.error(f"Failed to import fallback service: {fallback_error}")
+        FallbackRecipeCacheService = None
 except Exception as e:
     CHROMADB_AVAILABLE = False
     logger.error(f"Unexpected error importing ChromaDB: {e}")
     logger.warning("Using fallback in-memory storage")
-    from .fallback_recipe_cache import FallbackRecipeCacheService
+    try:
+        from .fallback_recipe_cache import FallbackRecipeCacheService
+    except ImportError as fallback_error:
+        logger.error(f"Failed to import fallback service: {fallback_error}")
+        FallbackRecipeCacheService = None
 
 class RecipeCacheService:
     def __init__(self, cache_ttl_days: int = None):
@@ -34,6 +45,10 @@ class RecipeCacheService:
         """
         if not CHROMADB_AVAILABLE:
             # Use fallback in-memory storage
+            if FallbackRecipeCacheService is None:
+                logger.error("FallbackRecipeCacheService not available - cannot initialize cache service")
+                raise RuntimeError("Neither ChromaDB nor fallback service is available")
+            
             self.recipe_collection = FallbackRecipeCacheService()
             self.search_collection = FallbackRecipeCacheService()
             self.embedding_function = None
@@ -153,7 +168,13 @@ class RecipeCacheService:
             # Fall back to in-memory storage
             logger.warning("Falling back to in-memory storage due to ChromaDB initialization failure")
             try:
-                from .fallback_recipe_cache import FallbackRecipeCacheService
+                if FallbackRecipeCacheService is None:
+                    from .fallback_recipe_cache import FallbackRecipeCacheService
+                
+                if FallbackRecipeCacheService is None:
+                    logger.error("FallbackRecipeCacheService not available - cannot initialize cache service")
+                    raise RuntimeError("Neither ChromaDB nor fallback service is available")
+                
                 self.recipe_collection = FallbackRecipeCacheService()
                 self.search_collection = FallbackRecipeCacheService()
                 logger.info("Successfully initialized fallback in-memory storage")
