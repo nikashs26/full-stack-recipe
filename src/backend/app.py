@@ -14,6 +14,7 @@ from routes.temp_preferences import temp_preferences_bp
 from routes.auth_routes import auth_bp
 # from routes.ai_meal_planner import ai_meal_planner_bp  # Commented out to avoid route conflict
 from routes.mealdb_routes import register_mealdb_routes
+from routes.admin import admin_bp
 from services.recipe_cache_service import RecipeCacheService
 from services.user_preferences_service import UserPreferencesService
 
@@ -96,9 +97,11 @@ register_mealdb_routes(app)
 app.register_blueprint(temp_preferences_bp, url_prefix='/api')
 # app.register_blueprint(ai_meal_planner_bp, url_prefix='/api')  # Commented out to avoid route conflict
 app.register_blueprint(auth_bp, url_prefix='/api/auth')
+app.register_blueprint(admin_bp, url_prefix='/api')
 print("Recipe routes registered successfully")
 print("Temp preferences routes registered successfully")
 print("Auth routes registered successfully")
+print("Admin routes registered successfully")
 
 if __name__ == "__main__":
     print("Starting Flask application...")
