@@ -5,6 +5,7 @@ Ensures only one ChromaDB client instance across all services.
 
 import os
 import chromadb
+from chromadb import PersistentClient, EphemeralClient
 from typing import Optional
 
 class ChromaDBSingleton:
@@ -60,16 +61,17 @@ class ChromaDBSingleton:
                 os.makedirs(chroma_path, exist_ok=True)
                 print(f"⚠️ Using fallback ChromaDB directory: {chroma_path}")
         
-        # Create the singleton client with ChromaDB v0.4.22 - working format
+        # Create the singleton client with NEW ChromaDB API (no deprecated warnings)
         try:
-            cls._instance = chromadb.PersistentClient(path=chroma_path)
-            print(f"✅ ChromaDB v0.4.22 client created successfully")
+            # Use NEW API: PersistentClient instead of deprecated chromadb.Client()
+            cls._instance = PersistentClient(path=chroma_path)
+            print(f"✅ ChromaDB v0.4.22 PersistentClient created successfully")
         except Exception as e:
-            print(f"⚠️ Error creating ChromaDB client: {e}")
-            # Fallback: try in-memory client
+            print(f"⚠️ Error creating persistent ChromaDB client: {e}")
+            # Fallback: try in-memory client with NEW API
             try:
-                cls._instance = chromadb.Client()
-                print(f"⚠️ Using in-memory ChromaDB fallback")
+                cls._instance = EphemeralClient()
+                print(f"⚠️ Using EphemeralClient ChromaDB fallback")
             except Exception as e2:
                 print(f"⚠️ ChromaDB initialization completely failed: {e2}")
                 cls._instance = None

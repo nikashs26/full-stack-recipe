@@ -1,15 +1,15 @@
 from flask import Blueprint, request, jsonify
-from services.get_review_service() import ReviewService
+from services.review_service import ReviewService
 from middleware.auth_middleware import require_auth, get_current_user_id
 
 review_bp = Blueprint('reviews', __name__)
 
 # Lazy initialization to avoid startup crashes
-def get_get_review_service()():
+def get_review_service():
     """Get ReviewService instance with lazy initialization"""
-    if not hasattr(get_get_review_service(), '_instance'):
-        get_get_review_service()._instance = ReviewService()
-    return get_get_review_service()._instance
+    if not hasattr(get_review_service, '_instance'):
+        get_review_service._instance = ReviewService()
+    return get_review_service._instance
 
 @review_bp.route('/reviews', methods=['POST'])
 @require_auth
