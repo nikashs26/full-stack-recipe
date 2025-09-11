@@ -49,7 +49,7 @@ def proxy_image():
         # Check cache first
         cached_data, cached_type = get_cached_image(image_url)
         if cached_data:
-            logger.info(f"Serving cached image: {image_url}")
+
             return Response(cached_data, mimetype=cached_type)
         
         # Fetch image from external source

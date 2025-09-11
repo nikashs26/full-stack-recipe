@@ -1,32 +1,38 @@
 # ChromaDB requirements specifically for Render (Python 3.11.0)
-# This is a minimal, tested configuration that should work
+# Essential dependencies for ChromaDB 0.4.18
 
-# Core dependencies with specific versions
-numpy==1.24.3
-sqlalchemy==1.4.53
-pydantic==1.10.12
-typing-extensions==4.7.1
-
-# ChromaDB with compatible version
+# Core ChromaDB
 chromadb==0.4.18
 
-# Essential dependencies only
+# Essential system dependencies
+numpy==1.24.3
+pydantic==1.10.12
+typing-extensions==4.7.1
 psutil==5.9.5
-hnswlib==0.7.0
 httpx==0.24.1
-duckdb==0.8.1
-# Additional ChromaDB dependencies
-clickhouse-connect==0.6.23
 
-# Skip heavy dependencies that might cause issues on Render
-# sentence-transformers is excluded to reduce build time and complexity
-
-# Essential auth dependencies
-PyJWT==2.9.0
+# ChromaDB core dependencies (minimal set)
 bcrypt==4.0.1
+fastapi==0.104.1
+grpcio==1.59.3
+importlib-resources==6.1.0
+mmh3==4.1.0
+onnxruntime==1.16.3
+overrides==7.4.0
+pypika==0.10.0
+PyYAML==6.0.1
+requests==2.31.0
+tenacity==8.2.3
+tokenizers==0.15.0
+tqdm==4.66.1
+typer==0.9.0
+uvicorn==0.24.0
+
+# Auth dependencies
+PyJWT==2.9.0
 cffi==1.16.0
 
-# Essential Flask dependencies
+# Flask dependencies
 flask-mail==0.9.1
 itsdangerous==2.1.2
 werkzeug==2.3.7
