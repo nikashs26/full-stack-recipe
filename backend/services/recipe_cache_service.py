@@ -8,8 +8,7 @@ from datetime import datetime, timedelta
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Import ChromaDB - required for the application to work
-import chromadb
+# ChromaDB handled via singleton to prevent multiple instances
 
 class RecipeCacheService:
     def __init__(self, cache_ttl_days: int = None):
@@ -22,35 +21,14 @@ class RecipeCacheService:
         self.cache_ttl_days = cache_ttl_days
             
         try:
-            # Initialize ChromaDB with persistent storage using Settings
-            import os
-            from chromadb.config import Settings
+            # Import ChromaDB singleton to prevent multiple instances
+            from utils.chromadb_singleton import get_chromadb_client
             
-            chroma_path = os.environ.get('CHROMA_DB_PATH', './chroma_db')
-            
-            # For Railway/Render deployment, use persistent volume
-            if os.environ.get('RAILWAY_ENVIRONMENT'):
-                chroma_path = os.environ.get('CHROMA_DB_PATH', '/app/data/chroma_db')
-            elif os.environ.get('RENDER_ENVIRONMENT'):
-                chroma_path = os.environ.get('CHROMA_DB_PATH', '/opt/render/project/src/chroma_db')
-            
-            # Ensure directory exists
-            try:
-                os.makedirs(chroma_path, exist_ok=True)
-            except PermissionError:
-                # Directory might already exist with correct permissions
-                if not os.path.exists(chroma_path):
-                    raise PermissionError(f"Cannot create ChromaDB directory at {chroma_path}. Please ensure the directory exists and has correct permissions.")
-            
-            # Use Settings configuration (recommended approach)
-            settings = Settings(
-                is_persistent=True,
-                persist_directory=chroma_path,
-                anonymized_telemetry=False
-            )
-            self.client = chromadb.PersistentClient(settings=settings)
+            # Use the singleton ChromaDB client
+            self.client = get_chromadb_client()
             
             # Create embedding function
+            import chromadb
             self.embedding_function = chromadb.utils.embedding_functions.DefaultEmbeddingFunction()
             
             # Collection for search results

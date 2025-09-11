@@ -25,13 +25,11 @@ class MealHistoryService:
         
         chroma_path = os.path.abspath(chroma_path)
         
-        # Use Settings configuration (recommended approach)
-        from chromadb.config import Settings
-        settings = Settings(
-            is_persistent=True,
-            persist_directory=chroma_path
-        )
-        self.client = chromadb.PersistentClient(settings=settings)
+        # Import ChromaDB singleton to prevent multiple instances
+        from utils.chromadb_singleton import get_chromadb_client
+        
+        # Use the singleton ChromaDB client
+        self.client = get_chromadb_client()
         
         self.meal_history_collection = self.client.get_or_create_collection(
             name="meal_history",

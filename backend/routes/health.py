@@ -24,16 +24,16 @@ def check_chromadb():
         import chromadb
         import os
         
-        # Check if ChromaDB directory exists and is accessible
-        chroma_path = os.path.abspath("./chroma_db")
-        if os.path.exists(chroma_path):
-            # Try to create a test client
-            client = chromadb.PersistentClient(path=chroma_path)
-            
-            # List collections to verify connection
-            collections = client.list_collections()
-            
-            return jsonify({
+        # Use the singleton ChromaDB client for health check
+        from utils.chromadb_singleton import get_chromadb_client, get_chromadb_path
+        
+        client = get_chromadb_client()
+        chroma_path = get_chromadb_path()
+        
+        # List collections to verify connection
+        collections = client.list_collections()
+        
+        return jsonify({
                 'status': 'success',
                 'message': 'ChromaDB connection successful',
                 'chromadb': {
@@ -43,16 +43,6 @@ def check_chromadb():
                     'collections': [col.name for col in collections]
                 }
             }), 200
-        else:
-            return jsonify({
-                'status': 'error',
-                'message': 'ChromaDB directory not found',
-                'chromadb': {
-                    'connected': False,
-                    'path': chroma_path,
-                    'error': 'Directory does not exist'
-                }
-            }), 500
             
     except Exception as e:
         return jsonify({

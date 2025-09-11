@@ -1,39 +1,12 @@
 import json
 
-# Import ChromaDB - required for the application to work
-import chromadb
+# Import ChromaDB singleton to prevent multiple instances
+from utils.chromadb_singleton import get_chromadb_client
 
 class UserPreferencesService:
     def __init__(self):
-            
-        # Use the new ChromaDB client configuration with absolute path
-        import os
-        chroma_path = os.environ.get('CHROMA_DB_PATH', './chroma_db')
-        
-        # For Railway/Render deployment, use persistent volume
-        if os.environ.get('RAILWAY_ENVIRONMENT'):
-            chroma_path = os.environ.get('CHROMA_DB_PATH', '/app/data/chroma_db')
-        elif os.environ.get('RENDER_ENVIRONMENT'):
-            chroma_path = os.environ.get('CHROMA_DB_PATH', '/opt/render/project/src/chroma_db')
-        
-        chroma_path = os.path.abspath(chroma_path)
-        try:
-            os.makedirs(chroma_path, exist_ok=True)
-        except PermissionError:
-            # Directory might already exist with correct permissions
-            if not os.path.exists(chroma_path):
-                # Try to use a fallback local directory
-                chroma_path = './chroma_db'
-                os.makedirs(chroma_path, exist_ok=True)
-                print(f"⚠️ Using fallback ChromaDB directory: {chroma_path}")
-        # Use Settings configuration (recommended approach)
-        from chromadb.config import Settings
-        settings = Settings(
-            is_persistent=True,
-            persist_directory=chroma_path,
-            anonymized_telemetry=False
-        )
-        self.client = chromadb.PersistentClient(settings=settings)
+        # Use the singleton ChromaDB client
+        self.client = get_chromadb_client()
         self.collection = self.client.get_or_create_collection("user_preferences")
 
     def save_preferences(self, user_id: str, preferences: dict):

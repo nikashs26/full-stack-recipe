@@ -1,5 +1,4 @@
-# Import ChromaDB - required for the application to work
-import chromadb
+# ChromaDB handled via singleton to prevent multiple instances
 import json
 from typing import List, Dict, Any, Optional
 import logging
@@ -52,30 +51,12 @@ class RecipeSearchService:
         self.client = None
         self.recipe_collection = None
         self.cache_service = None
-        import os
-        chroma_path = os.environ.get('CHROMA_DB_PATH', './chroma_db')
         
-        # For Railway/Render deployment, use persistent volume
-        if os.environ.get('RAILWAY_ENVIRONMENT'):
-            chroma_path = os.environ.get('CHROMA_DB_PATH', '/app/data/chroma_db')
-        elif os.environ.get('RENDER_ENVIRONMENT'):
-            chroma_path = os.environ.get('CHROMA_DB_PATH', '/opt/render/project/src/chroma_db')
+        # Import ChromaDB singleton to prevent multiple instances
+        from utils.chromadb_singleton import get_chromadb_client
         
-        chroma_path = os.path.abspath(chroma_path)
-        try:
-            os.makedirs(chroma_path, exist_ok=True)
-        except PermissionError:
-            # Directory might already exist with correct permissions
-            if not os.path.exists(chroma_path):
-                raise PermissionError(f"Cannot create ChromaDB directory at {chroma_path}. Please ensure the directory exists and has correct permissions.")
-        # Use Settings configuration (recommended approach)
-        from chromadb.config import Settings
-        settings = Settings(
-            is_persistent=True,
-            persist_directory=chroma_path,
-            anonymized_telemetry=False
-        )
-        self.client = chromadb.PersistentClient(settings=settings)
+        # Use the singleton ChromaDB client
+        self.client = get_chromadb_client()
         # Prefer existing, populated collections to avoid empty search results
         selected = None
         try:
