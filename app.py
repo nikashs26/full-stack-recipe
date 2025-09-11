@@ -50,6 +50,7 @@ from backend.routes.folder_routes import folder_bp
 # Smart features will be imported later conditionally
 smart_features_bp = None
 from backend.routes.admin import admin_bp
+from backend.routes.migration_api import migration_bp
 
 # Environment variables already set at top of file
 
@@ -179,6 +180,7 @@ if not os.environ.get('DISABLE_SMART_FEATURES', 'FALSE').upper() == 'TRUE':
 else:
     print("⚠️ Smart features disabled via environment variable")
 app.register_blueprint(admin_bp, url_prefix='/')
+app.register_blueprint(migration_bp, url_prefix='/')
 
 print("✓ All route blueprints registered")
 
