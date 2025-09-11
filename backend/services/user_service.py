@@ -48,12 +48,20 @@ class UserService:
             # Import ChromaDB singleton to prevent multiple instances
             from utils.chromadb_singleton import get_chromadb_client
             
-            # Use the singleton ChromaDB client
+            # Use the singleton ChromaDB client and lightweight embeddings
+            from utils.lightweight_embeddings import get_lightweight_embedding_function
             self.client = get_chromadb_client()
+            self.embedding_function = get_lightweight_embedding_function(use_token_based=True)
             
             # User collections
-            self.users_collection = self.client.get_or_create_collection("users")
-            self.verification_tokens_collection = self.client.get_or_create_collection("verification_tokens")
+            self.users_collection = self.client.get_or_create_collection(
+                "users", 
+                embedding_function=self.embedding_function
+            )
+            self.verification_tokens_collection = self.client.get_or_create_collection(
+                "verification_tokens",
+                embedding_function=self.embedding_function
+            )
             print("✅ User collections created/verified")
             
         except Exception as e:

@@ -13,11 +13,14 @@ class ReviewService:
     """
     
     def __init__(self):
-        # Use the singleton ChromaDB client
+        # Use the singleton ChromaDB client and lightweight embeddings
+        from utils.lightweight_embeddings import get_lightweight_embedding_function
         self.client = get_chromadb_client()
+        self.embedding_function = get_lightweight_embedding_function(use_token_based=True)
         self.collection = self.client.get_or_create_collection(
             name="recipe_reviews",
-            metadata={"description": "Recipe reviews with user authentication"}
+            metadata={"description": "Recipe reviews with user authentication"},
+            embedding_function=self.embedding_function
         )
     
     def add_review(self, user_id: str, recipe_id: str, recipe_type: str, 

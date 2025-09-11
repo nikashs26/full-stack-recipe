@@ -3,6 +3,11 @@ from flask_cors import CORS
 import os
 import json
 
+# Set Render environment variable for persistent storage and disable all telemetry FIRST
+os.environ['RENDER_ENVIRONMENT'] = 'true'
+os.environ['DISABLE_SMART_FEATURES'] = os.environ.get('DISABLE_SMART_FEATURES', 'TRUE')
+os.environ['MINIMAL_STARTUP'] = os.environ.get('MINIMAL_STARTUP', 'TRUE')
+
 # Disable ChromaDB telemetry IMMEDIATELY before any ChromaDB imports
 os.environ['ANONYMIZED_TELEMETRY'] = 'FALSE'
 os.environ['CHROMA_CLIENT_AUTHN_PROVIDER'] = ''
@@ -14,6 +19,12 @@ os.environ['CHROMA_SERVER_NOFILE'] = '65536'
 # Disable PostHog completely
 os.environ['POSTHOG_DISABLED'] = 'TRUE'
 os.environ['TELEMETRY_DISABLED'] = 'TRUE'
+
+# Use local path for development, Render path for production
+if os.path.exists('/opt/render'):
+    os.environ['CHROMA_DB_PATH'] = '/opt/render/project/src/chroma_db'
+else:
+    os.environ['CHROMA_DB_PATH'] = './chroma_db'
 
 # Try to load dotenv, but don't fail if it's not available
 try:
@@ -46,15 +57,7 @@ else:
     print("⚠️ Smart features disabled via environment variable")
 from backend.routes.admin import admin_bp
 
-# Set Render environment variable for persistent storage and disable Chroma telemetry
-os.environ['RENDER_ENVIRONMENT'] = 'true'
-# Explicitly disable Chroma anonymized telemetry (avoids PostHog errors on Render)
-os.environ['ANONYMIZED_TELEMETRY'] = 'FALSE'
-# Use local path for development, Render path for production
-if os.path.exists('/opt/render'):
-    os.environ['CHROMA_DB_PATH'] = '/opt/render/project/src/chroma_db'
-else:
-    os.environ['CHROMA_DB_PATH'] = './chroma_db'
+# Environment variables already set at top of file
 
 # Configure logging
 configure_logging(False)  # Disable debug logging in production

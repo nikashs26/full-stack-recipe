@@ -5,9 +5,14 @@ from utils.chromadb_singleton import get_chromadb_client
 
 class UserPreferencesService:
     def __init__(self):
-        # Use the singleton ChromaDB client
+        # Use the singleton ChromaDB client and lightweight embeddings
+        from utils.lightweight_embeddings import get_lightweight_embedding_function
         self.client = get_chromadb_client()
-        self.collection = self.client.get_or_create_collection("user_preferences")
+        self.embedding_function = get_lightweight_embedding_function(use_token_based=True)
+        self.collection = self.client.get_or_create_collection(
+            "user_preferences",
+            embedding_function=self.embedding_function
+        )
 
     def save_preferences(self, user_id: str, preferences: dict):
         if not self.collection:

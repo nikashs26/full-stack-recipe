@@ -54,9 +54,13 @@ class RecipeSearchService:
         
         # Import ChromaDB singleton to prevent multiple instances
         from utils.chromadb_singleton import get_chromadb_client
+        from utils.lightweight_embeddings import get_lightweight_embedding_function
         
         # Use the singleton ChromaDB client
         self.client = get_chromadb_client()
+        
+        # Use lightweight embedding function to avoid model downloads
+        self.embedding_function = get_lightweight_embedding_function(use_token_based=True)
         # Prefer existing, populated collections to avoid empty search results
         selected = None
         try:
@@ -96,12 +100,16 @@ class RecipeSearchService:
             if selected is None:
                 selected = self.client.get_or_create_collection(
                     name="recipes",
-                    metadata={"description": "Recipe collection with semantic search capabilities"}
+                    metadata={"description": "Recipe collection with semantic search capabilities"},
+                    embedding_function=self.embedding_function
                 )
                 logger.warning("No populated collection found; created/using empty 'recipes' collection")
         except Exception as e:
             logger.error(f"Error selecting recipe collection: {e}")
-            selected = self.client.get_or_create_collection(name="recipes")
+            selected = self.client.get_or_create_collection(
+                name="recipes",
+                embedding_function=self.embedding_function
+            )
 
         self.recipe_collection = selected
         # Initialize cache service for hydration of full recipe data

@@ -28,17 +28,21 @@ class MealHistoryService:
         # Import ChromaDB singleton to prevent multiple instances
         from utils.chromadb_singleton import get_chromadb_client
         
-        # Use the singleton ChromaDB client
+        # Use the singleton ChromaDB client and lightweight embeddings
+        from utils.lightweight_embeddings import get_lightweight_embedding_function
         self.client = get_chromadb_client()
+        self.embedding_function = get_lightweight_embedding_function(use_token_based=True)
         
         self.meal_history_collection = self.client.get_or_create_collection(
             name="meal_history",
-            metadata={"description": "User meal history and interactions"}
+            metadata={"description": "User meal history and interactions"},
+            embedding_function=self.embedding_function
         )
         
         self.meal_feedback_collection = self.client.get_or_create_collection(
             name="meal_feedback",
-            metadata={"description": "User feedback on meals"}
+            metadata={"description": "User feedback on meals"},
+            embedding_function=self.embedding_function
         )
     
     def log_meal_generated(self, user_id: str, meal_plan: Dict[str, Any], preferences_used: Dict[str, Any]) -> None:

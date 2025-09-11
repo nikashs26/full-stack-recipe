@@ -32,15 +32,19 @@ class FolderService:
         # Import ChromaDB singleton to prevent multiple instances
         from utils.chromadb_singleton import get_chromadb_client
         
-        # Use the singleton ChromaDB client
+        # Use the singleton ChromaDB client and lightweight embeddings
+        from utils.lightweight_embeddings import get_lightweight_embedding_function
         self.client = get_chromadb_client()
+        self.embedding_function = get_lightweight_embedding_function(use_token_based=True)
         self.folders_collection = self.client.get_or_create_collection(
             name="recipe_folders",
-            metadata={"description": "Recipe folders for organizing recipes"}
+            metadata={"description": "Recipe folders for organizing recipes"},
+            embedding_function=self.embedding_function
         )
         self.folder_items_collection = self.client.get_or_create_collection(
             name="folder_items",
-            metadata={"description": "Items within recipe folders"}
+            metadata={"description": "Items within recipe folders"},
+            embedding_function=self.embedding_function
         )
     
     def create_folder(self, user_id: str, name: str, description: str = "") -> Dict[str, Any]:
