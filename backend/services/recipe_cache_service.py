@@ -70,10 +70,14 @@ class RecipeCacheService:
         except Exception as e:
             logger.error(f"Failed to initialize ChromaDB recipe cache: {e}")
             try:
-                chroma_path = get_chromadb_path()
-                logger.error(f"ChromaDB path: {chroma_path}")
-                logger.error(f"Path exists: {os.path.exists(chroma_path)}")
-                logger.error(f"Path is writable: {os.access(chroma_path, os.W_OK) if os.path.exists(chroma_path) else 'N/A'}")
+                # Try to get path info for debugging
+                if 'get_chromadb_path' in locals():
+                    chroma_path = get_chromadb_path()
+                    logger.error(f"ChromaDB path: {chroma_path}")
+                    logger.error(f"Path exists: {os.path.exists(chroma_path)}")
+                    logger.error(f"Path is writable: {os.access(chroma_path, os.W_OK) if os.path.exists(chroma_path) else 'N/A'}")
+                else:
+                    logger.error("ChromaDB path function not available")
             except Exception as path_error:
                 logger.error(f"Could not get ChromaDB path: {path_error}")
             import traceback

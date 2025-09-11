@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
 from services.recipe_search_service import RecipeSearchService
 from services.meal_history_service import MealHistoryService
-from services.smart_shopping_service import SmartShoppingService
+# SmartShoppingService will be imported lazily to avoid startup issues
 from services.user_preferences_service import UserPreferencesService
 import logging
 from middleware.auth_middleware import get_current_user_id, require_auth
@@ -30,6 +30,8 @@ def get_smart_shopping_service():
     global _smart_shopping_service
     if _smart_shopping_service is None:
         try:
+            # Import SmartShoppingService only when needed
+            from services.smart_shopping_service import SmartShoppingService
             _smart_shopping_service = SmartShoppingService()
         except Exception as e:
             logger.error(f"Failed to initialize SmartShoppingService: {e}")

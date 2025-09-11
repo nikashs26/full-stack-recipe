@@ -44,17 +44,8 @@ from backend.routes.ai_meal_planner import ai_meal_planner_bp
 from backend.routes.health import health_bp
 from backend.routes.review_routes import review_bp
 from backend.routes.folder_routes import folder_bp
-# Import smart features conditionally - skip if disabled
+# Smart features will be imported later conditionally
 smart_features_bp = None
-if not os.environ.get('DISABLE_SMART_FEATURES', 'FALSE').upper() == 'TRUE':
-    try:
-        from backend.routes.smart_features import smart_features_bp
-        print("✓ Smart features routes imported")
-    except Exception as e:
-        print(f"⚠️ Smart features disabled due to import error: {e}")
-        smart_features_bp = None
-else:
-    print("⚠️ Smart features disabled via environment variable")
 from backend.routes.admin import admin_bp
 
 # Environment variables already set at top of file
@@ -174,12 +165,16 @@ app.register_blueprint(ai_meal_planner_bp, url_prefix='/api')
 app.register_blueprint(health_bp)
 app.register_blueprint(review_bp, url_prefix='/api')
 app.register_blueprint(folder_bp, url_prefix='/api')
-# Register smart features only if available
-if smart_features_bp:
-    app.register_blueprint(smart_features_bp, url_prefix='/api')
-    print("✓ Smart features routes registered")
+# Import and register smart features conditionally 
+if not os.environ.get('DISABLE_SMART_FEATURES', 'FALSE').upper() == 'TRUE':
+    try:
+        from backend.routes.smart_features import smart_features_bp
+        app.register_blueprint(smart_features_bp, url_prefix='/api')
+        print("✓ Smart features routes imported and registered")
+    except Exception as e:
+        print(f"⚠️ Smart features disabled due to import error: {e}")
 else:
-    print("⚠️ Smart features routes skipped")
+    print("⚠️ Smart features disabled via environment variable")
 app.register_blueprint(admin_bp, url_prefix='/')
 
 print("✓ All route blueprints registered")
