@@ -1,17 +1,17 @@
 from functools import wraps
 from flask import request, jsonify, g
-from services.user_service import UserService
+from services.user_database_service import UserDatabaseService
 from typing import Optional, Dict, Any
 
 
 class AuthMiddleware:
     """
     Authentication middleware for protecting routes
-    Uses JWT tokens and ChromaDB user service
+    Uses JWT tokens and ChromaDB user database service
     """
     
     def __init__(self):
-        self.user_service = UserService()
+        self.user_db = UserDatabaseService()
     
     def require_auth(self, f):
         """
@@ -47,26 +47,17 @@ class AuthMiddleware:
                     print("❌ Auth middleware - Token is null, undefined, or empty")
                     return jsonify({'error': 'Invalid token'}), 401
                 
-                # Decode and verify JWT token
-                print("🔍 Auth middleware - Attempting to decode token...")
-                payload = self.user_service.decode_jwt_token(token)
-                if not payload:
-                    print("❌ Auth middleware - Token decode failed or token expired")
+                # Verify token and get user info
+                print("🔍 Auth middleware - Attempting to verify token...")
+                user_info = self.user_db.verify_token(token)
+                if not user_info:
+                    print("❌ Auth middleware - Token verification failed or token expired")
                     return jsonify({'error': 'Invalid or expired token'}), 401
                 
-                # Get user from database
-                user = self.user_service.get_user_by_id(payload['user_id'])
-                if not user:
-                    return jsonify({'error': 'User not found'}), 401
-                
-                # Check if user is verified
-                if not user.get('is_verified', False):
-                    return jsonify({'error': 'Email not verified'}), 401
-                
                 # Store user info in Flask's g object for use in the route
-                g.current_user = user
-                g.user_id = user['user_id']
-                g.user_email = user['email']
+                g.current_user = user_info
+                g.user_id = user_info['user_id']
+                g.user_email = user_info['email']
                 
             except Exception as e:
                 return jsonify({'error': 'Authentication failed'}), 401

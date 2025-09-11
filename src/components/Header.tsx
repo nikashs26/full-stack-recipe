@@ -1,12 +1,20 @@
 
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { UtensilsCrossed, Menu, X, ChefHat, Settings, Star } from 'lucide-react';
+import { UtensilsCrossed, Menu, X, ChefHat, Settings, Star, User, LogOut, Users } from 'lucide-react';
 import UserHoverTab from './UserHoverTab';
+import { useAuth } from '../contexts/AuthContext';
+import { AuthModal } from './Auth/AuthModal';
+import { UserManagement } from './Admin/UserManagement';
+import { Button } from './ui/button';
 
 const Header: React.FC = () => {
   const [scrolled, setScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [userManagementOpen, setUserManagementOpen] = useState(false);
+  
+  const { user, isAuthenticated, logout } = useAuth();
 
   
   useEffect(() => {
@@ -74,8 +82,39 @@ const Header: React.FC = () => {
 
           {/* Right Side Actions */}
           <div className="flex items-center space-x-3">
-            {/* User Hover Tab */}
-            <UserHoverTab />
+            {isAuthenticated ? (
+              <div className="flex items-center space-x-2">
+                <span className="text-sm text-gray-700">Welcome, {user?.username}</span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setUserManagementOpen(true)}
+                  className="flex items-center gap-1"
+                >
+                  <Users className="h-4 w-4" />
+                  Users
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={logout}
+                  className="flex items-center gap-1"
+                >
+                  <LogOut className="h-4 w-4" />
+                  Logout
+                </Button>
+              </div>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setAuthModalOpen(true)}
+                className="flex items-center gap-1"
+              >
+                <User className="h-4 w-4" />
+                Sign In
+              </Button>
+            )}
           </div>
         </nav>
       </div>
@@ -131,6 +170,25 @@ const Header: React.FC = () => {
                 My Reviews
               </Link>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Auth Modal */}
+      <AuthModal
+        isOpen={authModalOpen}
+        onClose={() => setAuthModalOpen(false)}
+        onSuccess={(user, token) => {
+          // Auth context will handle the login
+          setAuthModalOpen(false);
+        }}
+      />
+
+      {/* User Management Modal */}
+      {userManagementOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <UserManagement onClose={() => setUserManagementOpen(false)} />
           </div>
         </div>
       )}

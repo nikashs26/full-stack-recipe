@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify, current_app
-from services.user_service import UserService
+from services.user_database_service import UserDatabaseService
 from services.email_service import EmailService
 from middleware.auth_middleware import require_auth, get_current_user_id
 import re
@@ -9,7 +9,7 @@ from datetime import datetime
 import json
 
 auth_bp = Blueprint('auth', __name__)
-user_service = UserService()
+user_db = UserDatabaseService()
 
 # Get the email service from the current app context
 def get_email_service():
@@ -56,11 +56,14 @@ def register():
         if not data:
             return jsonify({"error": "No data provided"}), 400
         
+        username = data.get('username', '').strip()
         email = data.get('email', '').strip().lower()
         password = data.get('password', '')
-        full_name = data.get('full_name', '').strip()
         
         # Validation
+        if not username:
+            return jsonify({"error": "Username is required"}), 400
+        
         if not email:
             return jsonify({"error": "Email is required"}), 400
         
@@ -75,32 +78,17 @@ def register():
             return jsonify({"error": password_validation["error"]}), 400
         
         # Register user
-        result = user_service.register_user(email, password, full_name)
+        result = user_db.create_user(username, email, password)
         
         if not result["success"]:
             return jsonify({"error": result["error"]}), 400
         
-        # Send verification email
-        email_service = get_email_service() # Get the service here
-        email_result = email_service.send_verification_email(
-            email, 
-            result["verification_token"], 
-            full_name
-        )
-        
-        response_data = {
+        return jsonify({
             "success": True,
-            "message": result["message"],
+            "message": "User registered successfully",
             "user_id": result["user_id"],
-            "email": email
-        }
-        
-        # In development mode, include verification URL
-        if email_result.get("verification_url"):
-            response_data["verification_url"] = email_result["verification_url"]
-            response_data["dev_message"] = email_result.get("message", "")
-        
-        return jsonify(response_data), 201
+            "username": result["username"]
+        }), 201
         
     except Exception as e:
         return jsonify({"error": f"Registration failed: {str(e)}"}), 500
@@ -115,21 +103,21 @@ def login():
         if not data:
             return jsonify({"error": "No data provided"}), 400
         
-        email = data.get('email', '').strip().lower()
+        username_or_email = data.get('username_or_email', '').strip()
         password = data.get('password', '')
         
-        if not email or not password:
-            return jsonify({"error": "Email and password are required"}), 400
+        if not username_or_email or not password:
+            return jsonify({"error": "Username/email and password are required"}), 400
         
         # Authenticate user
-        result = user_service.authenticate_user(email, password)
+        result = user_db.authenticate_user(username_or_email, password)
         
         if not result["success"]:
             return jsonify({"error": result["error"]}), 401
         
         return jsonify({
             "success": True,
-            "message": result["message"],
+            "message": "Login successful",
             "user": result["user"],
             "token": result["token"]
         }), 200
@@ -339,10 +327,14 @@ def get_current_user():
 @auth_bp.route('/logout', methods=['POST'])
 @require_auth
 def logout():
-    """Logout user (client-side token removal)"""
+    """Logout user and invalidate token"""
     try:
-        # In JWT-based auth, logout is primarily handled client-side
-        # Server can maintain a blacklist of tokens if needed
+        # Get token from Authorization header
+        auth_header = request.headers.get('Authorization')
+        if auth_header and auth_header.startswith('Bearer '):
+            token = auth_header.split(' ')[1]
+            user_db.logout_user(token)
+        
         return jsonify({
             "success": True,
             "message": "Logged out successfully"
@@ -372,6 +364,23 @@ def check_auth():
         }), 401 
 
 
+@auth_bp.route('/admin/users', methods=['GET'])
+def get_all_users():
+    """Get all users (admin endpoint)"""
+    try:
+        users = user_db.get_all_users()
+        user_count = user_db.get_user_count()
+        
+        return jsonify({
+            "success": True,
+            "users": users,
+            "total_users": user_count
+        }), 200
+        
+    except Exception as e:
+        return jsonify({"error": f"Failed to get users: {str(e)}"}), 500
+
+
 @auth_bp.route('/refresh', methods=['POST'])
 def refresh_token():
     """Refresh JWT token using existing token (even if expired)"""
@@ -385,41 +394,13 @@ def refresh_token():
         if not token or token in ['null', 'undefined']:
             return jsonify({'error': 'Invalid token'}), 401
         
-        # Try to decode the token (even if expired)
-        try:
-            # Decode without verification to get user info
-            try:
-                import jwt
-                JWT_AVAILABLE = True
-            except ImportError:
-                JWT_AVAILABLE = False
-                return jsonify({'error': 'JWT not available'}), 500
-            
-            if not JWT_AVAILABLE:
-                return jsonify({'error': 'JWT not available'}), 500
-                
-            jwt_secret = user_service._get_jwt_secret()
-            payload = jwt.decode(token, jwt_secret, algorithms=['HS256'], options={'verify_exp': False})
-            user_id = payload.get('user_id')
-            email = payload.get('email')
-            
-            if not user_id or not email:
-                return jsonify({'error': 'Invalid token payload'}), 401
-                
-        except jwt.InvalidTokenError:
-            return jsonify({'error': 'Invalid token format'}), 401
-        
-        # Get user from database
-        user = user_service.get_user_by_id(user_id)
-        if not user:
-            return jsonify({"error": "User not found"}), 404
-        
-        # Check if user is verified
-        if not user.get('is_verified', False):
-            return jsonify({"error": "Email not verified"}), 401
+        # Verify token and get user info
+        user_info = user_db.verify_token(token)
+        if not user_info:
+            return jsonify({'error': 'Invalid or expired token'}), 401
         
         # Generate new token
-        new_token = user_service.generate_jwt_token(user['user_id'], user['email'])
+        new_token = user_db._generate_jwt_token(user_info['user_id'], user_info['username'])
         
         return jsonify({
             "success": True,
