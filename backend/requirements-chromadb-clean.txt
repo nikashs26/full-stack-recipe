@@ -1,0 +1,23 @@
+# Clean ChromaDB requirements for Render - avoiding conflicts
+# This approach installs ChromaDB first, then lets it pull its own dependencies
+
+# Install ChromaDB first (it will pull its own dependencies)
+chromadb==0.4.18
+
+# Essential system dependencies only
+numpy==1.24.3
+pydantic==1.10.12
+typing-extensions==4.7.1
+
+# Auth dependencies
+PyJWT==2.9.0
+bcrypt==4.0.1
+cffi==1.16.0
+
+# Flask dependencies
+flask-mail==0.9.1
+itsdangerous==2.1.2
+werkzeug==2.3.7
+
+# Additional dependencies
+python-dotenv==1.0.0

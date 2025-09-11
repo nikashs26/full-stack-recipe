@@ -1,0 +1,51 @@
+# Complete ChromaDB requirements for Render (Python 3.11.0)
+# This includes ALL dependencies that ChromaDB 0.4.18 needs
+
+# Core ChromaDB
+chromadb==0.4.18
+
+# Essential system dependencies
+numpy==1.24.3
+pydantic==1.10.12
+typing-extensions==4.7.1
+
+# ChromaDB core dependencies (complete set)
+bcrypt==4.0.1
+fastapi==0.104.1
+grpcio==1.59.3
+importlib-resources==6.1.0
+mmh3==4.1.0
+onnxruntime==1.16.3
+overrides==7.4.0
+pypika==0.10.0
+PyYAML==6.0.1
+requests==2.31.0
+tenacity==8.2.3
+tokenizers==0.15.0
+tqdm==4.66.1
+typer==0.9.0
+uvicorn==0.24.0
+
+# Additional ChromaDB dependencies that might be missing
+opentelemetry-api==1.21.0
+opentelemetry-sdk==1.21.0
+opentelemetry-exporter-otlp-proto-grpc==1.21.0
+opentelemetry-instrumentation-fastapi==0.42b0
+posthog==3.1.0
+pulsar-client==3.4.0
+
+# System utilities
+psutil==5.9.5
+httpx==0.24.1
+
+# Auth dependencies
+PyJWT==2.9.0
+cffi==1.16.0
+
+# Flask dependencies
+flask-mail==0.9.1
+itsdangerous==2.1.2
+werkzeug==2.3.7
+
+# Additional dependencies that might be needed
+python-dotenv==1.0.0

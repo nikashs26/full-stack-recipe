@@ -1,0 +1,17 @@
+# Minimal production requirements - compatible with ChromaDB
+# This avoids version conflicts by letting ChromaDB manage its own dependencies
+
+# Core Flask dependencies
+flask==2.3.3
+flask-cors==4.0.0
+gunicorn==21.2.0
+
+# Auth and security
+PyJWT==2.9.0
+bcrypt==4.0.1
+cffi==1.16.0
+
+# Email (optional)
+flask-mail==0.9.1
+itsdangerous==2.1.2
+werkzeug==2.3.7
