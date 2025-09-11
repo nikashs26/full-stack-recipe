@@ -13,13 +13,15 @@ fi
 echo "📦 Upgrading pip..."
 $PYTHON_CMD -m pip install --upgrade pip
 
-# Install all dependencies from requirements file
-echo "📦 Installing all dependencies..."
-$PYTHON_CMD -m pip install -r backend/requirements-prod-minimal.txt
+# Install all dependencies from root requirements.txt (already done by Render)
+echo "📦 Dependencies should already be installed from requirements.txt"
 
-# Additional ChromaDB dependencies that might be missing
-echo "📦 Installing additional ChromaDB dependencies..."
-$PYTHON_CMD -m pip install sentence-transformers==2.2.2
+# Verify ChromaDB is installed
+echo "🧪 Verifying ChromaDB installation..."
+$PYTHON_CMD -c "import chromadb; print(f'✅ ChromaDB version: {chromadb.__version__}')" || {
+    echo "❌ ChromaDB not found, installing..."
+    $PYTHON_CMD -m pip install chromadb==0.4.18
+}
 
 # Create ChromaDB directory (use local path for testing)
 echo "📁 Creating ChromaDB directory..."
