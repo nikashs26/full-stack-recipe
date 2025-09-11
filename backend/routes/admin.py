@@ -21,6 +21,75 @@ def _check_admin_auth(req) -> bool:
     # to check for admin role in user database
     return _check_token(req)
 
+@admin_bp.route('/api/admin/debug', methods=['GET'])
+def debug_info():
+    """Debug endpoint to check file paths and environment"""
+    if not _check_token(request):
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    import os
+    import platform
+    
+    debug_info = {
+        'platform': platform.platform(),
+        'python_version': platform.python_version(),
+        'current_working_directory': os.getcwd(),
+        'environment_variables': {
+            'SEED_RECIPES_FILE': os.environ.get('SEED_RECIPES_FILE'),
+            'SEED_RECIPES_ON_STARTUP': os.environ.get('SEED_RECIPES_ON_STARTUP'),
+            'SEED_RECIPES_LIMIT': os.environ.get('SEED_RECIPES_LIMIT'),
+            'RENDER_ENVIRONMENT': os.environ.get('RENDER_ENVIRONMENT'),
+            'CHROMA_DB_PATH': os.environ.get('CHROMA_DB_PATH')
+        },
+        'file_checks': {}
+    }
+    
+    # Check for recipe files in various locations
+    possible_paths = [
+        'recipes_data.json',
+        'backend/recipes_data.json',
+        '/opt/render/project/src/recipes_data.json',
+        '/opt/render/project/src/backend/recipes_data.json',
+        './recipes_data.json',
+        './backend/recipes_data.json'
+    ]
+    
+    for path in possible_paths:
+        try:
+            exists = os.path.exists(path)
+            debug_info['file_checks'][path] = {
+                'exists': exists,
+                'absolute_path': os.path.abspath(path) if exists else None,
+                'size_mb': round(os.path.getsize(path) / 1024 / 1024, 2) if exists else None
+            }
+        except Exception as e:
+            debug_info['file_checks'][path] = {'error': str(e)}
+    
+    # List current directory contents
+    try:
+        debug_info['directory_listing'] = os.listdir('.')
+    except Exception as e:
+        debug_info['directory_listing'] = f"Error: {e}"
+    
+    # Check ChromaDB status
+    try:
+        from backend.services.recipe_cache_service import RecipeCacheService
+        cache = RecipeCacheService()
+        if cache.recipe_collection:
+            debug_info['chromadb_status'] = {
+                'client_available': True,
+                'recipe_count': cache.recipe_collection.count()
+            }
+        else:
+            debug_info['chromadb_status'] = {
+                'client_available': False,
+                'error': 'Recipe collection is None'
+            }
+    except Exception as e:
+        debug_info['chromadb_status'] = {'error': str(e)}
+    
+    return jsonify(debug_info)
+
 @admin_bp.route('/api/admin/seed', methods=['POST'])
 def seed_recipes():
     if not _check_token(request):
