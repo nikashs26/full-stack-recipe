@@ -1,15 +1,15 @@
 from flask import Blueprint, request, jsonify
-from services.get_folder_service() import FolderService
+from services.folder_service import FolderService
 from middleware.auth_middleware import require_auth, get_current_user_id
 
 folder_bp = Blueprint('folders', __name__)
 
 # Lazy initialization to avoid startup crashes
-def get_get_folder_service()():
+def get_folder_service():
     """Get FolderService instance with lazy initialization"""
-    if not hasattr(get_get_folder_service(), '_instance'):
-        get_get_folder_service()._instance = FolderService()
-    return get_get_folder_service()._instance
+    if not hasattr(get_folder_service, '_instance'):
+        get_folder_service._instance = FolderService()
+    return get_folder_service._instance
 
 @folder_bp.route('/folders', methods=['OPTIONS'])
 def handle_folders_options():
