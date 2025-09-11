@@ -1,0 +1,32 @@
+# Minimal requirements file for Render deployment
+# Focus on essential dependencies only
+
+# Core Flask dependencies
+flask==2.3.3
+flask-cors==4.0.0
+python-dotenv==1.0.0
+requests==2.31.0
+gunicorn==21.2.0
+
+# ChromaDB core dependencies (minimal set)
+chromadb==0.4.15
+numpy==1.24.4
+sqlalchemy==1.4.53
+pydantic==1.10.12
+typing-extensions==4.7.1
+
+# Essential ChromaDB dependencies
+psutil==5.9.5
+hnswlib==0.7.0
+httpx==0.24.1
+duckdb==0.8.1
+
+# Auth dependencies
+PyJWT==2.9.0
+bcrypt==4.0.1
+cffi==1.16.0
+
+# Email dependencies
+flask-mail==0.9.1
+itsdangerous==2.1.2
+werkzeug==2.3.7

@@ -7,7 +7,7 @@ gunicorn==21.2.0
 
 # Database and vector storage
 # ChromaDB with all required dependencies
-chromadb==0.4.24
+chromadb==0.4.15
 # Core ChromaDB dependencies (pinned to avoid NumPy 2.0 compatibility issues)
 numpy==1.24.4
 sqlalchemy>=1.4.0,<2.0.0

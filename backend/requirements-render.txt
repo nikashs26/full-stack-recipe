@@ -1,0 +1,58 @@
+# Comprehensive requirements file for Render deployment
+# This includes all necessary dependencies for ChromaDB and the Flask app
+
+# Core Flask dependencies
+flask==2.3.3
+flask-cors==4.0.0
+python-dotenv==1.0.0
+requests==2.31.0
+gunicorn==21.2.0
+
+# ChromaDB and vector storage dependencies
+# Core ChromaDB with compatible versions for Python 3.11
+chromadb==0.4.15
+
+# ChromaDB core dependencies (pinned to avoid compatibility issues)
+numpy==1.24.4
+sqlalchemy==1.4.53
+pydantic==1.10.12
+typing-extensions==4.7.1
+
+# ChromaDB system dependencies
+psutil==5.9.5
+hnswlib==0.7.0
+httpx==0.24.1
+duckdb==0.8.1
+clickhouse-connect==0.6.23
+
+# ChromaDB embedding dependencies
+sentence-transformers==2.2.2
+torch==2.0.1
+transformers==4.30.2
+
+# Auth and security dependencies
+PyJWT==2.9.0
+bcrypt==4.0.1
+cffi==1.16.0
+
+# Email dependencies
+flask-mail==0.9.1
+itsdangerous==2.1.2
+werkzeug==2.3.7
+
+# Additional dependencies that might be needed
+certifi==2023.7.22
+charset-normalizer==3.2.0
+click==8.1.7
+filelock==3.12.2
+huggingface-hub==0.16.4
+idna==3.4
+joblib==1.3.2
+MarkupSafe==2.1.3
+nltk==3.8.1
+packaging==23.1
+regex==2023.8.8
+safetensors==0.3.1
+tokenizers==0.13.3
+tqdm==4.65.0
+urllib3==2.0.4

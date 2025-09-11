@@ -3,7 +3,7 @@ services:
     name: dietary-delight-backend
     env: python
     plan: free
-    buildCommand: python -m pip install --upgrade pip && python -m pip install -r backend/requirements-chromadb-render.txt && python -m pip install -r backend/requirements-prod.txt && mkdir -p /opt/render/project/src/chroma_db
+    buildCommand: python -m pip install --upgrade pip && python -m pip install -r backend/requirements-render-minimal.txt && python debug_render_deployment.py && mkdir -p /opt/render/project/src/chroma_db && mkdir -p /opt/render/project/src/fallback_data
     startCommand: python app.py
     envVars:
       - key: PYTHON_VERSION
@@ -20,6 +20,8 @@ services:
         value: "true"
       - key: SEED_RECIPES_FILE
         value: "recipes_data.json"
+      - key: FALLBACK_DATA_DIR
+        value: "/opt/render/project/src/fallback_data"
       - key: FLASK_SECRET_KEY
         generateValue: true
       - key: JWT_SECRET_KEY
@@ -28,3 +30,9 @@ services:
         generateValue: true
       - key: PORT
         value: 10000
+      - key: CHROMA_SERVER_HOST
+        value: "0.0.0.0"
+      - key: CHROMA_SERVER_HTTP_PORT
+        value: "8000"
+      - key: CHROMA_DB_IMPL
+        value: "duckdb+parquet"
