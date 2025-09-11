@@ -36,16 +36,26 @@ class FolderService:
         from utils.lightweight_embeddings import get_lightweight_embedding_function
         self.client = get_chromadb_client()
         self.embedding_function = get_lightweight_embedding_function(use_token_based=True)
-        self.folders_collection = self.client.get_or_create_collection(
-            name="recipe_folders",
-            metadata={"description": "Recipe folders for organizing recipes"},
-            embedding_function=self.embedding_function
-        )
-        self.folder_items_collection = self.client.get_or_create_collection(
-            name="folder_items",
-            metadata={"description": "Items within recipe folders"},
-            embedding_function=self.embedding_function
-        )
+        
+        # Handle None ChromaDB client gracefully
+        if self.client is not None:
+            self.folders_collection = self.client.get_or_create_collection(
+                name="recipe_folders",
+                metadata={"description": "Recipe folders for organizing recipes"},
+                embedding_function=self.embedding_function
+            )
+            self.folder_items_collection = self.client.get_or_create_collection(
+                name="folder_items",
+                metadata={"description": "Items within recipe folders"},
+                embedding_function=self.embedding_function
+            )
+        else:
+            print("⚠️ ChromaDB client is None, using fallback folder storage")
+            self.folders_collection = None
+            self.folder_items_collection = None
+            # Use in-memory fallback for folders
+            self.folders_fallback = {}
+            self.folder_items_fallback = {}
     
     def create_folder(self, user_id: str, name: str, description: str = "") -> Dict[str, Any]:
         """Create a new folder"""
