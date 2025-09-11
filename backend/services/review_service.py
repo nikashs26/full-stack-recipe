@@ -17,11 +17,19 @@ class ReviewService:
         from utils.lightweight_embeddings import get_lightweight_embedding_function
         self.client = get_chromadb_client()
         self.embedding_function = get_lightweight_embedding_function(use_token_based=True)
-        self.collection = self.client.get_or_create_collection(
-            name="recipe_reviews",
-            metadata={"description": "Recipe reviews with user authentication"},
-            embedding_function=self.embedding_function
-        )
+        
+        # Handle None ChromaDB client gracefully
+        if self.client is not None:
+            self.collection = self.client.get_or_create_collection(
+                name="recipe_reviews",
+                metadata={"description": "Recipe reviews with user authentication"},
+                embedding_function=self.embedding_function
+            )
+        else:
+            print("⚠️ ChromaDB client is None, using fallback review storage")
+            self.collection = None
+            # Use in-memory fallback for reviews
+            self.reviews_fallback = {}
     
     def add_review(self, user_id: str, recipe_id: str, recipe_type: str, 
                    text: str, rating: int) -> Dict[str, Any]:

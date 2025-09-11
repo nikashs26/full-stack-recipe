@@ -1,9 +1,15 @@
 from flask import Blueprint, request, jsonify
-from services.review_service import ReviewService
+from services.get_review_service() import ReviewService
 from middleware.auth_middleware import require_auth, get_current_user_id
 
 review_bp = Blueprint('reviews', __name__)
-review_service = ReviewService()
+
+# Lazy initialization to avoid startup crashes
+def get_get_review_service()():
+    """Get ReviewService instance with lazy initialization"""
+    if not hasattr(get_get_review_service(), '_instance'):
+        get_get_review_service()._instance = ReviewService()
+    return get_get_review_service()._instance
 
 @review_bp.route('/reviews', methods=['POST'])
 @require_auth
@@ -37,7 +43,7 @@ def add_review():
             return jsonify({"error": "Review text cannot be empty"}), 400
         
         # Add the review (author is automatically set from user's real name)
-        review = review_service.add_review(
+        review = get_get_review_service()().add_review(
             user_id=user_id,
             recipe_id=recipe_id,
             recipe_type=recipe_type,
@@ -62,8 +68,8 @@ def get_reviews_by_recipe(recipe_type, recipe_id):
         if recipe_type not in ['local', 'external', 'manual']:
             return jsonify({"error": "Invalid recipe_type. Must be 'local', 'external', or 'manual'"}), 400
         
-        reviews = review_service.get_reviews_by_recipe(recipe_id, recipe_type)
-        stats = review_service.get_recipe_stats(recipe_id, recipe_type)
+        reviews = get_review_service().get_reviews_by_recipe(recipe_id, recipe_type)
+        stats = get_review_service().get_recipe_stats(recipe_id, recipe_type)
         
         return jsonify({
             "success": True,
@@ -80,7 +86,7 @@ def get_my_reviews():
     """Get all reviews by the current authenticated user"""
     try:
         user_id = get_current_user_id()
-        reviews = review_service.get_reviews_by_user(user_id)
+        reviews = get_review_service().get_reviews_by_user(user_id)
         
         return jsonify({
             "success": True,
@@ -98,7 +104,7 @@ def delete_review(review_id):
     try:
         user_id = get_current_user_id()
         
-        success = review_service.delete_review(review_id, user_id)
+        success = get_review_service().delete_review(review_id, user_id)
         
         if success:
             return jsonify({
@@ -121,7 +127,7 @@ def get_recipe_review_stats(recipe_type, recipe_id):
         if recipe_type not in ['local', 'external', 'manual']:
             return jsonify({"error": "Invalid recipe_type. Must be 'local', 'external', or 'manual'"}), 400
         
-        stats = review_service.get_recipe_stats(recipe_id, recipe_type)
+        stats = get_review_service().get_recipe_stats(recipe_id, recipe_type)
         
         return jsonify({
             "success": True,

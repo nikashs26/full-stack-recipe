@@ -60,10 +60,10 @@ class ChromaDBSingleton:
                 os.makedirs(chroma_path, exist_ok=True)
                 print(f"⚠️ Using fallback ChromaDB directory: {chroma_path}")
         
-        # Create the singleton client with ChromaDB v0.4.10 - simple format
+        # Create the singleton client with ChromaDB v0.4.22 - working format
         try:
             cls._instance = chromadb.PersistentClient(path=chroma_path)
-            print(f"✅ ChromaDB v0.4.10 client created successfully")
+            print(f"✅ ChromaDB v0.4.22 client created successfully")
         except Exception as e:
             print(f"⚠️ Error creating ChromaDB client: {e}")
             # Fallback: try in-memory client
