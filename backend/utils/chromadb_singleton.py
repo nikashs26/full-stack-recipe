@@ -35,9 +35,14 @@ class ChromaDBSingleton:
     
     @classmethod
     def _initialize_client(cls):
-        """Initialize the singleton ChromaDB client for v0.4.10"""
-        # Disable telemetry
+        """Initialize the singleton ChromaDB client with latest v0.4.22+ API"""
+        # Set all telemetry environment variables to ensure complete disable
         os.environ['ANONYMIZED_TELEMETRY'] = 'FALSE'
+        os.environ['CHROMA_CLIENT_AUTHN_PROVIDER'] = ''
+        os.environ['CHROMA_CLIENT_AUTHN_CREDENTIALS'] = ''
+        os.environ['POSTHOG_DISABLED'] = 'TRUE'
+        os.environ['TELEMETRY_DISABLED'] = 'TRUE'
+        os.environ['ALLOW_RESET'] = 'FALSE'
         
         # Determine the correct ChromaDB path based on environment
         chroma_path = os.environ.get('CHROMA_DB_PATH', './chroma_db')
@@ -61,14 +66,15 @@ class ChromaDBSingleton:
                 os.makedirs(chroma_path, exist_ok=True)
                 print(f"⚠️ Using fallback ChromaDB directory: {chroma_path}")
         
-        # Create the singleton client with NEW ChromaDB API (no deprecated warnings)
+        # Create the singleton client with LATEST ChromaDB API (v0.4.22+)
         try:
-            # Use NEW API: PersistentClient instead of deprecated chromadb.Client()
+            # Use ONLY the new PersistentClient API without any settings
+            # This avoids all deprecated configuration patterns
             cls._instance = PersistentClient(path=chroma_path)
-            print(f"✅ ChromaDB v0.4.22 PersistentClient created successfully")
+            print(f"✅ ChromaDB v0.4.22+ PersistentClient created successfully")
         except Exception as e:
             print(f"⚠️ Error creating persistent ChromaDB client: {e}")
-            # Fallback: try in-memory client with NEW API
+            # Fallback: try in-memory client with new API
             try:
                 cls._instance = EphemeralClient()
                 print(f"⚠️ Using EphemeralClient ChromaDB fallback")
