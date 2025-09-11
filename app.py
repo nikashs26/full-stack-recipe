@@ -186,17 +186,91 @@ print("✓ All route blueprints registered")
 
 # Check and restore data if needed
 def check_and_restore_data():
-    """Check if data exists and restore if needed"""
+    """Check if data exists and automatically restore if needed"""
     try:
         # Check if we have any recipes
         result = recipe_cache.recipe_collection.get(limit=1)
         if not result['ids']:
-            print("⚠️ No recipes found in ChromaDB, data may have been lost")
-            print("💡 Data will need to be restored via sync script")
+            print("⚠️ No recipes found in ChromaDB - automatically importing...")
+            auto_import_recipes()
         else:
             print(f"✅ ChromaDB has {len(result['ids'])} recipes")
     except Exception as e:
         print(f"⚠️ Error checking ChromaDB: {e}")
+
+def auto_import_recipes():
+    """Automatically import recipes from local data files"""
+    try:
+        import json
+        import os
+        
+        # Try to find recipe data files
+        recipe_files = ["recipes_data.json", "backend/recipes_data.json"]
+        
+        for file_path in recipe_files:
+            if os.path.exists(file_path):
+                print(f"📁 Found recipe data: {file_path}")
+                
+                with open(file_path, 'r') as f:
+                    data = json.load(f)
+                
+                if isinstance(data, dict) and 'recipes' in data:
+                    recipes = data['recipes']
+                elif isinstance(data, list):
+                    recipes = data
+                else:
+                    continue
+                
+                # Import up to 1000 recipes for fast startup
+                recipes_to_import = recipes[:1000]
+                print(f"🚀 Auto-importing {len(recipes_to_import)} recipes...")
+                
+                # Simple recipe normalization for auto-import
+                ids, docs, metas = [], [], []
+                for i, item in enumerate(recipes_to_import):
+                    try:
+                        # Basic normalization
+                        recipe_id = str(item.get('id', f'recipe_{i}'))
+                        title = str(item.get('title', item.get('name', f'Recipe {i}')))
+                        
+                        # Create minimal normalized recipe
+                        normalized = {
+                            'id': recipe_id,
+                            'title': title,
+                            'ingredients': item.get('ingredients', []),
+                            'instructions': item.get('instructions', []),
+                            'image': item.get('image', ''),
+                            'cuisines': item.get('cuisines', []),
+                            'diets': item.get('diets', [])
+                        }
+                        
+                        ids.append(recipe_id)
+                        docs.append(json.dumps(normalized))
+                        
+                        metadata = {
+                            'id': recipe_id,
+                            'title': title,
+                            'source': 'auto_startup',
+                        }
+                        
+                        if normalized.get('cuisines') and isinstance(normalized['cuisines'], list):
+                            metadata['cuisines'] = ','.join(normalized['cuisines'][:3])  # First 3 cuisines
+                        
+                        metas.append(metadata)
+                        
+                    except Exception as e:
+                        print(f"⚠️ Error processing recipe {i}: {e}")
+                        continue
+                
+                if ids:
+                    recipe_cache.recipe_collection.add(ids=ids, documents=docs, metadatas=metas)
+                    print(f"✅ Successfully imported {len(ids)} recipes automatically!")
+                    return
+                
+        print("⚠️ No recipe data files found for auto-import")
+        
+    except Exception as e:
+        print(f"❌ Auto-import failed: {e}")
 
 # Check data on startup
 check_and_restore_data()
