@@ -169,13 +169,13 @@ class UserService:
             # Generate verification token
             verification_token = self.generate_verification_token()
             
-            # Prepare user data
+            # Prepare user data - automatically verify users (no email verification required)
             user_data = {
                 "user_id": user_id,
                 "email": email,
                 "password_hash": hashed_password,
                 "full_name": full_name,
-                "is_verified": False,
+                "is_verified": True,  # Auto-verify for now
                 "created_at": datetime.utcnow().isoformat(),
                 "updated_at": datetime.utcnow().isoformat()
             }
@@ -183,7 +183,7 @@ class UserService:
             user_metadata = {
                 "user_id": user_id,
                 "email": email,
-                "is_verified": False,
+                "is_verified": True,  # Auto-verify for now
                 "type": "user",
                 "created_at": datetime.utcnow().isoformat()
             }
@@ -215,7 +215,7 @@ class UserService:
                 "user_id": user_id,
                 "email": email,
                 "verification_token": verification_token,
-                "message": "User registered successfully. Please check your email for verification."
+                "message": "User registered and verified successfully. You can now sign in."
             }
             
         except Exception as e:
@@ -295,9 +295,9 @@ class UserService:
             
             user_data = json.loads(results['documents'][0])
             
-            # Check if email is verified
-            if not user_data['is_verified']:
-                return {"success": False, "error": "Please verify your email before signing in"}
+            # Skip email verification check for now
+            # if not user_data['is_verified']:
+            #     return {"success": False, "error": "Please verify your email before signing in"}
             
             # Verify password
             if not self.verify_password(password, user_data['password_hash']):
