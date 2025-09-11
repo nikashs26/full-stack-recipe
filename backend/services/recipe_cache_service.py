@@ -121,8 +121,22 @@ class RecipeCacheService:
                     break
                 rid = str(item.get('id') or item.get('_id') or item.get('idMeal') or hash(item.get('title', '')))
                 title = item.get('title') or item.get('name') or item.get('strMeal') or 'Recipe'
-                doc = title
-                meta = item
+                
+                # Create ChromaDB-compatible metadata (flatten complex objects)
+                meta = {}
+                for key, value in item.items():
+                    if isinstance(value, (str, int, float, bool)) or value is None:
+                        meta[key] = value
+                    elif isinstance(value, (dict, list)):
+                        # Convert complex objects to JSON strings
+                        meta[key] = json.dumps(value)
+                    else:
+                        # Convert other types to strings
+                        meta[key] = str(value)
+                
+                # Store the full recipe as a JSON document for searching and retrieval
+                doc = json.dumps(item)
+                
                 ids.append(rid)
                 docs.append(doc)
                 metas.append(meta)
