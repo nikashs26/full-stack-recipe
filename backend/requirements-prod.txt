@@ -11,6 +11,9 @@ chromadb==0.4.18
 numpy>=1.21.0
 # Additional dependencies for ChromaDB
 sqlalchemy>=1.4.0
+# Additional ChromaDB dependencies that might be missing
+pydantic>=1.8.0
+typing-extensions>=4.0.0
 
 # Auth and security (lightweight subset)
 PyJWT==2.9.0

@@ -178,8 +178,14 @@ def get_all_users():
     
     try:
         user_service = UserService()
-        if not user_service.users_collection:
-            return jsonify({'error': 'User database not available'}), 500
+        # Check if we have a working user service (either ChromaDB or fallback)
+        if not hasattr(user_service, 'users_collection') or user_service.users_collection is None:
+            # Try fallback method
+            if hasattr(user_service, 'get_all_users'):
+                # This is the fallback service
+                pass
+            else:
+                return jsonify({'error': 'User database not available'}), 500
         
         # Get query parameters
         page = int(request.args.get('page', 1))

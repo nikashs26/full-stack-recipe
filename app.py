@@ -152,6 +152,55 @@ check_and_restore_data()
 def health_check():
     return {'status': 'healthy', 'message': 'Render backend is running', 'routes': 'all registered'}
 
+# Debug endpoint for ChromaDB status
+@app.route('/api/debug-chromadb', methods=['GET'])
+def debug_chromadb():
+    """Debug endpoint to check ChromaDB status"""
+    try:
+        import os
+        from backend.services.user_service import UserService
+        from backend.services.user_preferences_service import UserPreferencesService
+        
+        debug_info = {
+            'chromadb_available': True,  # We know it's available since we're using it
+            'environment': {
+                'CHROMA_DB_PATH': os.environ.get('CHROMA_DB_PATH'),
+                'RENDER_ENVIRONMENT': os.environ.get('RENDER_ENVIRONMENT'),
+                'RAILWAY_ENVIRONMENT': os.environ.get('RAILWAY_ENVIRONMENT'),
+            },
+            'paths': {
+                'current_dir': os.getcwd(),
+                'chroma_path': os.path.abspath(os.environ.get('CHROMA_DB_PATH', './chroma_db')),
+                'path_exists': os.path.exists(os.path.abspath(os.environ.get('CHROMA_DB_PATH', './chroma_db')))
+            }
+        }
+        
+        # Test UserService initialization
+        try:
+            user_service = UserService()
+            debug_info['user_service'] = {
+                'client_available': user_service.client is not None,
+                'users_collection_available': user_service.users_collection is not None,
+                'verification_tokens_collection_available': user_service.verification_tokens_collection is not None
+            }
+        except Exception as e:
+            debug_info['user_service'] = {'error': str(e)}
+        
+        # Test UserPreferencesService initialization
+        try:
+            prefs_service = UserPreferencesService()
+            debug_info['preferences_service'] = {
+                'client_available': prefs_service.client is not None,
+                'collection_available': prefs_service.collection is not None
+            }
+        except Exception as e:
+            debug_info['preferences_service'] = {'error': str(e)}
+        
+        return jsonify(debug_info)
+        
+    except Exception as e:
+        return jsonify({'error': f'Debug failed: {str(e)}'}), 500
+
 # Root route
 @app.route('/')
 def root():

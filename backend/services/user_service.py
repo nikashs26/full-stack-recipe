@@ -5,6 +5,7 @@ try:
 except ImportError:
     CHROMADB_AVAILABLE = False
     print("Warning: ChromaDB not available, using fallback in-memory storage for user service")
+    from .fallback_user_service import FallbackUserService
 import json
 import uuid
 from datetime import datetime, timedelta
@@ -54,31 +55,61 @@ class UserService:
         
         # For Railway/Render deployment, use persistent volume
         if os.environ.get('RAILWAY_ENVIRONMENT') or os.environ.get('RENDER_ENVIRONMENT'):
-            chroma_path = os.environ.get('CHROMA_DB_PATH', '/app/data/chroma_db')
+            # Use the path from environment or default Render path
+            chroma_path = os.environ.get('CHROMA_DB_PATH', '/opt/render/project/src/chroma_db')
         
         chroma_path = os.path.abspath(chroma_path)
         
         # Check if ChromaDB is available
         if not CHROMADB_AVAILABLE:
-            print("Warning: ChromaDB not available, using fallback in-memory storage for user service")
+            print("❌ Warning: ChromaDB not available, using fallback in-memory storage for user service")
+            # Use fallback service
+            from .fallback_user_service import FallbackUserService
+            fallback = FallbackUserService()
+            # Copy all methods from fallback to this instance
+            for attr_name in dir(fallback):
+                if not attr_name.startswith('_') and callable(getattr(fallback, attr_name)):
+                    setattr(self, attr_name, getattr(fallback, attr_name))
+            return
+        
+        print(f"🔧 Initializing ChromaDB at path: {chroma_path}")
+        
+        # Try to create directory, but don't fail if it already exists or permission denied
+        try:
+            os.makedirs(chroma_path, exist_ok=True)
+            print(f"✅ ChromaDB directory created/verified: {chroma_path}")
+        except PermissionError as e:
+            print(f"⚠️ Permission error creating directory: {e}")
+            # Directory might already exist with correct permissions
+            if not os.path.exists(chroma_path):
+                print(f"❌ Directory does not exist and cannot be created: {chroma_path}")
+                self.client = None
+                self.users_collection = None
+                self.verification_tokens_collection = None
+                return
+            else:
+                print(f"✅ Directory exists: {chroma_path}")
+        except Exception as e:
+            print(f"❌ Error creating ChromaDB directory: {e}")
             self.client = None
             self.users_collection = None
             self.verification_tokens_collection = None
             return
         
-        # Try to create directory, but don't fail if it already exists or permission denied
         try:
-            os.makedirs(chroma_path, exist_ok=True)
-        except PermissionError:
-            # Directory might already exist with correct permissions
-            if not os.path.exists(chroma_path):
-                raise PermissionError(f"Cannot create ChromaDB directory at {chroma_path}. Please ensure the directory exists and has correct permissions.")
-        
-        self.client = chromadb.PersistentClient(path=chroma_path)
-        
-        # User collections
-        self.users_collection = self.client.get_or_create_collection("users")
-        self.verification_tokens_collection = self.client.get_or_create_collection("verification_tokens")
+            self.client = chromadb.PersistentClient(path=chroma_path)
+            print("✅ ChromaDB client initialized")
+            
+            # User collections
+            self.users_collection = self.client.get_or_create_collection("users")
+            self.verification_tokens_collection = self.client.get_or_create_collection("verification_tokens")
+            print("✅ User collections created/verified")
+            
+        except Exception as e:
+            print(f"❌ Error initializing ChromaDB client: {e}")
+            self.client = None
+            self.users_collection = None
+            self.verification_tokens_collection = None
         
     def hash_password(self, password: str) -> str:
         """Hash a password using bcrypt or fallback"""
