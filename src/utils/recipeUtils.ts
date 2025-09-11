@@ -313,9 +313,12 @@ export const getReliableImageUrl = (imageUrl?: string, size: 'small' | 'medium' 
     return true;
   };
   
-  // If the original URL is valid, use it
+  // If the original URL is valid, use the image proxy to avoid CORS issues
   if (imageUrl && isValidImageUrl(imageUrl)) {
-    return imageUrl;
+    // Use the backend image proxy to avoid CORS issues
+    const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://dietary-delight.onrender.com';
+    const encodedUrl = encodeURIComponent(imageUrl);
+    return `${backendUrl}/api/proxy-image?url=${encodedUrl}`;
   }
   
   // Return appropriate fallback based on size

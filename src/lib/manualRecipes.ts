@@ -1,4 +1,5 @@
 import { getApiUrl } from '../config/api';
+import { getReliableImageUrl } from '../utils/recipeUtils';
 
 // Use the Railway backend API URL
 const API_BASE_URL = getApiUrl();
@@ -283,10 +284,10 @@ export const fetchManualRecipes = async (
           // Special handling for TheMealDB images
           const recipeName = recipeData.title ? recipeData.title.replace(/\s+/g, '%20') : '';
           imageUrl = `https://www.themealdb.com/images/ingredients/${recipeName}.png`;
-        } else {
-          // Only use fallback if no image is available at all
-          imageUrl = 'https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?auto=format&fit=crop&w=400&h=300&q=80';
         }
+        
+        // Use getReliableImageUrl to handle the image URL properly
+        imageUrl = getReliableImageUrl(imageUrl, 'medium');
         
         return {
           id: recipe.id || recipeData.id || `recipe-${Math.random().toString(36).substr(2, 9)}`,
@@ -414,7 +415,7 @@ export const fetchManualRecipeById = async (id: number | string): Promise<Manual
       cuisine: recipe.cuisines || [],
       cuisines: recipe.cuisines || [],
       diets: recipe.diets || [],
-      image: recipe.image || '/placeholder.svg',
+      image: getReliableImageUrl(recipe.image, 'medium'),
       ingredients: Array.isArray(recipe.ingredients) 
         ? recipe.ingredients.map((ing: any) => ({
             name: ing.name || '',
@@ -467,7 +468,7 @@ export const createManualRecipe = async (recipe: Partial<ManualRecipe>): Promise
         readyInMinutes: recipe.ready_in_minutes || 30,
         cuisines: recipe.cuisine || [],
         diets: recipe.diets || [],
-        image: recipe.image || '/placeholder.svg',
+        image: getReliableImageUrl(recipe.image, 'medium'),
         added_at: Date.now() / 1000
       }),
     });
@@ -493,7 +494,7 @@ export const createManualRecipe = async (recipe: Partial<ManualRecipe>): Promise
       ready_in_minutes: recipe.ready_in_minutes || 30,
       cuisine: recipe.cuisine || [],
       diets: recipe.diets || [],
-      image: recipe.image || '/placeholder.svg',
+      image: getReliableImageUrl(recipe.image, 'medium'),
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };

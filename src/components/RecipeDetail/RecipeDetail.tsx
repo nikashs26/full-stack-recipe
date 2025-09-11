@@ -4,6 +4,7 @@ import { Clock, Utensils, ChefHat, Users, Info, Timer, Clock3, Salad, Carrot, Wh
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { RecipeNutrition } from '../RecipeNutrition';
+import { getReliableImageUrl } from '../../utils/recipeUtils';
 
 interface RecipeDetailProps {
   recipe: Recipe;
@@ -66,11 +67,11 @@ export const RecipeDetail: React.FC<RecipeDetailProps> = ({
       <div className="relative rounded-xl overflow-hidden bg-muted">
         <div className="aspect-w-16 aspect-h-9 w-full">
           <img
-            src={recipe.image || 'https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?auto=format&fit=crop&w=800&h=600&q=80'}
+            src={getReliableImageUrl(recipe.image, 'large')}
             alt={recipe.name}
             className="w-full h-full object-cover"
             onError={(e) => {
-              (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?auto=format&fit=crop&w=800&h=600&q=80';
+              (e.target as HTMLImageElement).src = getReliableImageUrl(undefined, 'large');
             }}
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent" />

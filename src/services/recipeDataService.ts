@@ -1,5 +1,6 @@
 import { Recipe } from '../types/recipe';
 import { getApiUrl } from '../config/api';
+import { getReliableImageUrl } from '../utils/recipeUtils';
 
 /**
  * Shared service for consistent recipe data processing across the application
@@ -86,9 +87,10 @@ export function normalizeRecipeData(recipe: any): NormalizedRecipe {
   } else if (recipe.source === 'themealdb' && recipe.id) {
     const recipeName = recipe.title ? recipe.title.replace(/\s+/g, '%20') : '';
     imageUrl = `https://www.themealdb.com/images/ingredients/${recipeName}.png`;
-  } else {
-    imageUrl = 'https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?auto=format&fit=crop&w=400&h=300&q=80';
   }
+  
+  // Use getReliableImageUrl to handle the image URL properly
+  imageUrl = getReliableImageUrl(imageUrl, 'medium');
   
   // Normalize ingredients
   const ingredients = Array.isArray(recipe.ingredients) 

@@ -79,7 +79,7 @@ class RecipeUploader:
                     print(f"   ⚠️  Error processing recipe {recipe_id}: {e}")
                     continue
             
-            print(f"   ✅ Successfully processed {len(processed_recipes)} recipes")
+       
             return processed_recipes
             
         except Exception as e:
