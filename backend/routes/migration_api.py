@@ -264,13 +264,19 @@ def _create_recipe_metadata(recipe: Dict[str, Any]) -> Dict[str, Any]:
     if isinstance(dish_types, list) and dish_types:
         metadata['dish_types'] = ','.join(dish_types)
     
-    # Add nutrition info
+    # Add nutrition info (convert to primitive types for ChromaDB)
     nutrition = recipe.get('nutrition', {})
     if isinstance(nutrition, dict):
-        metadata['calories'] = nutrition.get('calories', 0)
-        metadata['protein'] = nutrition.get('protein', 0)
-        metadata['carbs'] = nutrition.get('carbs', 0)
-        metadata['fat'] = nutrition.get('fat', 0)
+        metadata['calories'] = float(nutrition.get('calories', 0)) if nutrition.get('calories') else 0.0
+        metadata['protein'] = float(nutrition.get('protein', 0)) if nutrition.get('protein') else 0.0
+        metadata['carbs'] = float(nutrition.get('carbs', 0)) if nutrition.get('carbs') else 0.0
+        metadata['fat'] = float(nutrition.get('fat', 0)) if nutrition.get('fat') else 0.0
+    else:
+        # Also check direct fields on recipe
+        metadata['calories'] = float(recipe.get('calories', 0)) if recipe.get('calories') else 0.0
+        metadata['protein'] = float(recipe.get('protein', 0)) if recipe.get('protein') else 0.0
+        metadata['carbs'] = float(recipe.get('carbs', 0)) if recipe.get('carbs') else 0.0
+        metadata['fat'] = float(recipe.get('fat', 0)) if recipe.get('fat') else 0.0
     
     # Add ingredient count
     ingredients = recipe.get('ingredients', [])
@@ -283,7 +289,17 @@ def _create_recipe_metadata(recipe: Dict[str, Any]) -> Dict[str, Any]:
     # Add image availability
     metadata['has_image'] = bool(recipe.get('image', '').strip())
     
-    return metadata
+    # Sanitize metadata to ensure all values are primitive types
+    sanitized_metadata = {}
+    for key, value in metadata.items():
+        if isinstance(value, (str, int, float, bool)) or value is None:
+            sanitized_metadata[key] = value
+        elif isinstance(value, (list, dict)):
+            sanitized_metadata[key] = json.dumps(value) if value else ""
+        else:
+            sanitized_metadata[key] = str(value)
+    
+    return sanitized_metadata
 
 def batch_upload_legacy(data: Dict[str, Any]) -> tuple:
     """Legacy batch upload support"""
