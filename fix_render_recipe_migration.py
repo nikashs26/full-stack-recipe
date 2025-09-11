@@ -407,7 +407,7 @@ class RenderRecipeMigrationFixer:
             }
             
             response = requests.post(
-                f"{self.render_url}/api/admin/seed",
+                f"{self.render_url}/api/admin/migrate",
                 headers={
                     "Content-Type": "application/json",
                     "X-Admin-Token": self.admin_token

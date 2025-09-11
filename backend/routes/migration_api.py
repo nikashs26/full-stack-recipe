@@ -84,7 +84,7 @@ def reset_chromadb_schema(data: Dict[str, Any]) -> tuple:
             "traceback": traceback.format_exc()
         }), 500
 
-@migration_bp.route('/api/admin/seed', methods=['POST'])
+@migration_bp.route('/api/admin/migrate', methods=['POST'])
 def enhanced_seed_recipes():
     """Enhanced recipe seeding with format preservation"""
     try:

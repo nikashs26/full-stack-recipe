@@ -60,7 +60,7 @@ def test_migration_api():
         }
         
         response = requests.post(
-            f"{base_url}/api/admin/seed",
+            f"{base_url}/api/admin/migrate",
             headers={
                 "Content-Type": "application/json",
                 "X-Admin-Token": admin_token
