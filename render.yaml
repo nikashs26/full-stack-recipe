@@ -4,7 +4,7 @@ services:
     env: python
     plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn --bind 0.0.0.0:$PORT app:app --workers 1 --threads 1 --timeout 300 --preload-app --worker-class sync --log-level info
+    startCommand: gunicorn --config gunicorn.conf.py app:app
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.0
@@ -30,5 +30,17 @@ services:
         value: 10000
       - key: ANONYMIZED_TELEMETRY
         value: "FALSE"
+      - key: CHROMA_CLIENT_AUTHN_PROVIDER
+        value: ""
+      - key: ALLOW_RESET
+        value: "FALSE"
+      - key: CHROMA_DB_IMPL
+        value: "duckdb+parquet"
       - key: DISABLE_SMART_FEATURES
         value: "TRUE"
+      - key: SKIP_CHROMADB_SEEDING
+        value: "TRUE"
+      - key: MINIMAL_STARTUP
+        value: "TRUE"
+      - key: CHROMA_SERVER_NOFILE
+        value: "65536"

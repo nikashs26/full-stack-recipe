@@ -43,7 +43,13 @@ class ChromaDBSingleton:
         # Aggressively disable telemetry before creating client
         os.environ['ANONYMIZED_TELEMETRY'] = 'FALSE'
         os.environ['CHROMA_CLIENT_AUTHN_PROVIDER'] = ''
+        os.environ['CHROMA_CLIENT_AUTHN_CREDENTIALS'] = ''
         os.environ['ALLOW_RESET'] = 'FALSE'
+        os.environ['CHROMA_DB_IMPL'] = 'duckdb+parquet'
+        os.environ['CHROMA_SERVER_NOFILE'] = '65536'
+        # Disable PostHog completely
+        os.environ['POSTHOG_DISABLED'] = 'TRUE'
+        os.environ['TELEMETRY_DISABLED'] = 'TRUE'
         
         # Determine the correct ChromaDB path based on environment
         chroma_path = os.environ.get('CHROMA_DB_PATH', './chroma_db')
@@ -69,15 +75,21 @@ class ChromaDBSingleton:
                 os.makedirs(chroma_path, exist_ok=True)
                 print(f"⚠️ Using fallback ChromaDB directory: {chroma_path}")
         
-        # Create Settings with telemetry disabled
+        # Create Settings with telemetry disabled and memory optimization
         cls._settings = Settings(
             is_persistent=True,
             persist_directory=chroma_path,
-            anonymized_telemetry=False
+            anonymized_telemetry=False,
+            allow_reset=False
         )
         
-        # Create the singleton client
-        cls._instance = chromadb.PersistentClient(settings=cls._settings)
+        # Create the singleton client with error handling
+        try:
+            cls._instance = chromadb.PersistentClient(settings=cls._settings)
+        except Exception as e:
+            print(f"⚠️ Error creating ChromaDB client: {e}")
+            # Fallback to simpler configuration
+            cls._instance = chromadb.PersistentClient(path=chroma_path)
         cls._path = chroma_path
         
         print(f"✅ ChromaDB singleton initialized at: {chroma_path}")

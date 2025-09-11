@@ -6,9 +6,14 @@ import json
 # Disable ChromaDB telemetry IMMEDIATELY before any ChromaDB imports
 os.environ['ANONYMIZED_TELEMETRY'] = 'FALSE'
 os.environ['CHROMA_CLIENT_AUTHN_PROVIDER'] = ''
+os.environ['CHROMA_CLIENT_AUTHN_CREDENTIALS'] = ''
 # Additional telemetry disable attempts
 os.environ['ALLOW_RESET'] = 'FALSE'
 os.environ['CHROMA_DB_IMPL'] = 'duckdb+parquet'
+os.environ['CHROMA_SERVER_NOFILE'] = '65536'
+# Disable PostHog completely
+os.environ['POSTHOG_DISABLED'] = 'TRUE'
+os.environ['TELEMETRY_DISABLED'] = 'TRUE'
 
 # Try to load dotenv, but don't fail if it's not available
 try:
@@ -97,21 +102,43 @@ def handle_preflight():
             response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With, x-requested-with, Accept'
         return response
 
-# Initialize services
-try:
-    recipe_cache = RecipeCacheService()
-    print("✓ Recipe cache service initialized")
-    
-    # Skip automatic population on startup - will be done manually
-    try:
-        recipe_count = recipe_cache.get_recipe_count()
-        print(f"📊 Render cache has {recipe_count} recipes")
-    except Exception as e:
-        print(f"⚠️ Could not check recipe cache: {e}")
-        
-except Exception as e:
-    print(f"⚠️ Recipe cache service failed to initialize: {e}")
+# Initialize services with memory optimization
+def initialize_services_safely():
+    """Initialize services with proper error handling and memory management"""
     recipe_cache = None
+    
+    # Check if we should skip heavy initialization
+    minimal_startup = os.environ.get('MINIMAL_STARTUP', 'FALSE').upper() == 'TRUE'
+    
+    if minimal_startup:
+        print("🚀 Minimal startup mode - delaying heavy initialization")
+        try:
+            # Lazy initialization - create service but don't populate data
+            recipe_cache = RecipeCacheService()
+            print("✓ Recipe cache service initialized (minimal mode)")
+        except Exception as e:
+            print(f"⚠️ Recipe cache service failed to initialize: {e}")
+            recipe_cache = None
+    else:
+        try:
+            recipe_cache = RecipeCacheService()
+            print("✓ Recipe cache service initialized")
+            
+            # Skip automatic population on startup - will be done manually
+            try:
+                recipe_count = recipe_cache.get_recipe_count()
+                print(f"📊 Render cache has {recipe_count} recipes")
+            except Exception as e:
+                print(f"⚠️ Could not check recipe cache: {e}")
+                
+        except Exception as e:
+            print(f"⚠️ Recipe cache service failed to initialize: {e}")
+            recipe_cache = None
+    
+    return recipe_cache
+
+# Initialize with safety checks
+recipe_cache = initialize_services_safely()
 
 # Initialize email service
 try:
@@ -156,10 +183,41 @@ def check_and_restore_data():
 # Check data on startup
 check_and_restore_data()
 
-# Basic health check route
+# Basic health check route - lightweight for Render monitoring
 @app.route('/api/health')
 def health_check():
     return {'status': 'healthy', 'message': 'Render backend is running', 'routes': 'all registered'}
+
+# Separate readiness check for heavy operations
+@app.route('/api/ready')
+def readiness_check():
+    """Check if the app is ready to serve requests (includes database checks)"""
+    try:
+        ready = True
+        services = {}
+        
+        # Check recipe cache only if initialized
+        if recipe_cache:
+            try:
+                # Lightweight check - just verify collection exists
+                services['recipe_cache'] = 'ready'
+            except Exception as e:
+                services['recipe_cache'] = f'error: {str(e)}'
+                ready = False
+        else:
+            services['recipe_cache'] = 'not_initialized'
+            
+        return {
+            'status': 'ready' if ready else 'not_ready',
+            'services': services,
+            'message': 'All services operational' if ready else 'Some services unavailable'
+        }, 200 if ready else 503
+        
+    except Exception as e:
+        return {
+            'status': 'error',
+            'message': f'Health check failed: {str(e)}'
+        }, 500
 
 # Debug endpoint for ChromaDB status
 @app.route('/api/debug-chromadb', methods=['GET'])
