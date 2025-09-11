@@ -85,12 +85,71 @@ class RecipeCacheService:
             self.cache_ttl = None
             logger.info("ChromaDB recipe cache initialized with TTL disabled - recipes will never expire")
             logger.info(f"Using persistent storage at {chroma_path}")
+            
+            # Seed ChromaDB from local JSON if available and collections are empty
+            try:
+                seed_path = os.environ.get('SEED_RECIPES_FILE', 'recipes_data.json')
+                seed_on_start = os.environ.get('SEED_RECIPES_ON_STARTUP', 'true').lower() == 'true'
+                if seed_on_start and os.path.exists(seed_path):
+                    # Check if collections are empty
+                    recipe_count = self.recipe_collection.count()
+                    if recipe_count == 0:
+                        limit = int(os.environ.get('SEED_RECIPES_LIMIT', '10000'))
+                        logger.info(f"ChromaDB collections are empty, seeding from {seed_path} (limit: {limit})")
+                        self._seed_chromadb_from_file(seed_path, limit=limit)
+                    else:
+                        logger.info(f"ChromaDB already has {recipe_count} recipes, skipping seeding")
+            except Exception as e:
+                logger.warning(f"ChromaDB seeding failed: {e}")
         except Exception as e:
             logger.error(f"Failed to initialize ChromaDB recipe cache: {e}")
             self.client = None
             self.search_collection = None
             self.recipe_collection = None
             self.cache_ttl = None  # TTL disabled even if initialization fails
+
+    def _seed_chromadb_from_file(self, path: str, limit: int = 500) -> None:
+        """Seed ChromaDB from a local JSON file.
+        The file can be a list of recipe objects or an object with a top-level 'recipes' list.
+        """
+        try:
+            with open(path, 'r') as f:
+                data = json.load(f)
+            if isinstance(data, dict) and 'recipes' in data:
+                recipes = data['recipes']
+            elif isinstance(data, list):
+                recipes = data
+            else:
+                logger.warning("Seed file format not recognized; expected list or {'recipes': [...]} ")
+                return
+            
+            # Normalize minimal fields expected by ChromaDB
+            count = 0
+            ids = []
+            docs = []
+            metas = []
+            
+            for item in recipes:
+                if limit > 0 and count >= limit:
+                    break
+                rid = str(item.get('id') or item.get('_id') or item.get('idMeal') or hash(item.get('title', '')))
+                title = item.get('title') or item.get('name') or item.get('strMeal') or 'Recipe'
+                doc = title
+                meta = item
+                ids.append(rid)
+                docs.append(doc)
+                metas.append(meta)
+                count += 1
+            
+            if ids:
+                # Add to both collections
+                self.recipe_collection.add(ids=ids, documents=docs, metadatas=metas)
+                self.search_collection.add(ids=ids, documents=docs, metadatas=metas)
+                logger.info(f"Seeded {len(ids)} recipes into ChromaDB from {path}")
+            else:
+                logger.warning(f"No recipes found to seed from {path}")
+        except Exception as e:
+            logger.warning(f"Failed to seed ChromaDB from file {path}: {e}")
 
     def _seed_from_file(self, path: str, limit: int = 500) -> None:
         """Seed the fallback cache from a local JSON file if using in-memory storage.
