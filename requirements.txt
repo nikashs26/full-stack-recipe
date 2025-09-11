@@ -1,7 +1,4 @@
-# Root requirements.txt for Render deployment
-# This file tells Render to use Python instead of Bun
-
-# Core Flask dependencies
+# Complete requirements for full recipe app with ChromaDB v0.5+
 flask==2.3.3
 flask-cors==4.0.0
 gunicorn==21.2.0
@@ -14,7 +11,7 @@ blinker==1.6.3
 # Environment and configuration
 python-dotenv==1.0.0
 
-# Database and vector storage
+# Database and vector storage (updated to v0.5+ for compatibility)
 chromadb==0.5.0
 numpy<2.0.0
 pymongo==4.5.0
@@ -30,6 +27,3 @@ flask-mail==0.9.1
 
 # HTTP requests
 requests==2.31.0
-
-# Additional dependencies that might be needed
-# Removed sentence-transformers to reduce cold start time and memory usage on Render
