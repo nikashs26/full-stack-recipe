@@ -1,4 +1,4 @@
-from flask import Flask, request, make_response
+from flask import Flask, request, make_response, jsonify
 from flask_cors import CORS
 import os
 import json
@@ -33,7 +33,17 @@ from backend.routes.ai_meal_planner import ai_meal_planner_bp
 from backend.routes.health import health_bp
 from backend.routes.review_routes import review_bp
 from backend.routes.folder_routes import folder_bp
-from backend.routes.smart_features import smart_features_bp
+# Import smart features conditionally - skip if disabled
+smart_features_bp = None
+if not os.environ.get('DISABLE_SMART_FEATURES', 'FALSE').upper() == 'TRUE':
+    try:
+        from backend.routes.smart_features import smart_features_bp
+        print("✓ Smart features routes imported")
+    except Exception as e:
+        print(f"⚠️ Smart features disabled due to import error: {e}")
+        smart_features_bp = None
+else:
+    print("⚠️ Smart features disabled via environment variable")
 from backend.routes.admin import admin_bp
 
 # Set Render environment variable for persistent storage and disable Chroma telemetry
@@ -161,7 +171,12 @@ app.register_blueprint(ai_meal_planner_bp, url_prefix='/api')
 app.register_blueprint(health_bp)
 app.register_blueprint(review_bp, url_prefix='/api')
 app.register_blueprint(folder_bp, url_prefix='/api')
-app.register_blueprint(smart_features_bp, url_prefix='/api')
+# Register smart features only if available
+if smart_features_bp:
+    app.register_blueprint(smart_features_bp, url_prefix='/api')
+    print("✓ Smart features routes registered")
+else:
+    print("⚠️ Smart features routes skipped")
 app.register_blueprint(admin_bp, url_prefix='/')
 
 print("✓ All route blueprints registered")

@@ -35,26 +35,9 @@ class SmartShoppingService:
         # Use the singleton ChromaDB client
         self.client = get_chromadb_client()
         
-        # Create a simple custom embedding function that doesn't require model downloads
-        class SimpleEmbeddingFunction:
-            def __call__(self, input):
-                # Simple hash-based embedding to avoid model downloads
-                import hashlib
-                embeddings = []
-                for text in input:
-                    # Create a simple 384-dimensional embedding from text hash
-                    hash_obj = hashlib.sha256(text.encode())
-                    hash_bytes = hash_obj.digest()
-                    # Convert to 384 floats (mimic all-MiniLM-L6-v2 dimension)
-                    embedding = []
-                    for i in range(384):
-                        byte_val = hash_bytes[i % len(hash_bytes)]
-                        # Normalize to [-1, 1] range
-                        embedding.append((byte_val / 128.0) - 1.0)
-                    embeddings.append(embedding)
-                return embeddings
-        
-        simple_embedding_function = SimpleEmbeddingFunction()
+        # Use shared lightweight embedding function to avoid model downloads
+        from utils.lightweight_embeddings import get_lightweight_embedding_function
+        simple_embedding_function = get_lightweight_embedding_function(use_token_based=True)
         
         # Collection for ingredient knowledge base
         self.ingredient_collection = self.client.get_or_create_collection(
@@ -77,12 +60,27 @@ class SmartShoppingService:
             embedding_function=simple_embedding_function
         )
         
-        # Initialize ingredient knowledge base
-        try:
-            self._initialize_ingredient_knowledge()
-        except Exception as e:
-            print(f"⚠️ Failed to initialize ingredient knowledge base: {e}")
-            print("SmartShoppingService will continue with limited functionality")
+        # Initialize ingredient knowledge base only when needed (lazy loading)
+        self._knowledge_initialized = False
+        
+        # Skip heavy initialization on startup if disabled
+        if not os.environ.get('DISABLE_SMART_FEATURES', 'FALSE').upper() == 'TRUE':
+            try:
+                self._initialize_ingredient_knowledge()
+            except Exception as e:
+                print(f"⚠️ Failed to initialize ingredient knowledge base: {e}")
+                print("SmartShoppingService will continue with limited functionality")
+        else:
+            print("⚠️ Smart features initialization skipped")
+    
+    def _ensure_knowledge_initialized(self) -> None:
+        """Ensure ingredient knowledge is initialized when needed"""
+        if not self._knowledge_initialized:
+            try:
+                self._initialize_ingredient_knowledge()
+                self._knowledge_initialized = True
+            except Exception as e:
+                print(f"⚠️ Failed to initialize ingredient knowledge: {e}")
     
     def _initialize_ingredient_knowledge(self) -> None:
         """
@@ -91,6 +89,7 @@ class SmartShoppingService:
         # Check if already initialized
         existing = self.ingredient_collection.get(limit=1)
         if existing and existing['documents']:
+            self._knowledge_initialized = True
             return
         
         # Common ingredient categories and relationships

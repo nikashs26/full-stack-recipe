@@ -1,5 +1,6 @@
 import json
 import hashlib
+import os
 from typing import List, Dict, Any, Optional
 import logging
 import time
@@ -22,14 +23,14 @@ class RecipeCacheService:
             
         try:
             # Import ChromaDB singleton to prevent multiple instances
-            from utils.chromadb_singleton import get_chromadb_client
+            from utils.chromadb_singleton import get_chromadb_client, get_chromadb_path
             
             # Use the singleton ChromaDB client
             self.client = get_chromadb_client()
             
-            # Create embedding function
-            import chromadb
-            self.embedding_function = chromadb.utils.embedding_functions.DefaultEmbeddingFunction()
+            # Create lightweight embedding function to avoid model downloads
+            from utils.lightweight_embeddings import get_lightweight_embedding_function
+            self.embedding_function = get_lightweight_embedding_function(use_token_based=True)
             
             # Collection for search results
             self.search_collection = self.client.get_or_create_collection(
@@ -48,7 +49,6 @@ class RecipeCacheService:
             # TTL is disabled - recipes will never expire
             self.cache_ttl = None
             logger.info("ChromaDB recipe cache initialized with TTL disabled - recipes will never expire")
-            from utils.chromadb_singleton import get_chromadb_path
             chroma_path = get_chromadb_path()
             logger.info(f"Using persistent storage at {chroma_path}")
             
@@ -70,7 +70,6 @@ class RecipeCacheService:
         except Exception as e:
             logger.error(f"Failed to initialize ChromaDB recipe cache: {e}")
             try:
-                from utils.chromadb_singleton import get_chromadb_path
                 chroma_path = get_chromadb_path()
                 logger.error(f"ChromaDB path: {chroma_path}")
                 logger.error(f"Path exists: {os.path.exists(chroma_path)}")
