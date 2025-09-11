@@ -6,14 +6,23 @@ requests==2.31.0
 gunicorn==21.2.0
 
 # Database and vector storage
+# ChromaDB with all required dependencies
 chromadb==0.4.18
-# ChromaDB dependencies
-numpy>=1.21.0
-# Additional dependencies for ChromaDB
-sqlalchemy>=1.4.0
-# Additional ChromaDB dependencies that might be missing
-pydantic>=1.8.0
+# Core ChromaDB dependencies (pinned to avoid NumPy 2.0 compatibility issues)
+numpy==1.24.3
+sqlalchemy>=1.4.0,<2.0.0
+pydantic>=1.8.0,<2.0.0
 typing-extensions>=4.0.0
+# Additional ChromaDB system dependencies
+psutil>=5.8.0
+# ChromaDB embedding dependencies
+sentence-transformers>=2.2.0
+# ChromaDB vector store dependencies
+hnswlib>=0.7.0
+# ChromaDB HTTP client dependencies
+httpx>=0.24.0
+# ChromaDB persistence dependencies
+duckdb>=0.8.0
 
 # Auth and security (lightweight subset)
 PyJWT==2.9.0
