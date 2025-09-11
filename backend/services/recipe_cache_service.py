@@ -28,6 +28,14 @@ class RecipeCacheService:
             # Use the singleton ChromaDB client
             self.client = get_chromadb_client()
             
+            # Handle None ChromaDB client gracefully
+            if self.client is None:
+                logger.warning("ChromaDB client is None - recipe cache will operate in fallback mode")
+                self.search_collection = None
+                self.recipe_collection = None
+                self.embedding_function = None
+                return
+            
             # Create lightweight embedding function to avoid model downloads
             from utils.lightweight_embeddings import get_lightweight_embedding_function
             self.embedding_function = get_lightweight_embedding_function(use_token_based=True)

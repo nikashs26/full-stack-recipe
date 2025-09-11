@@ -7,6 +7,8 @@ import json
 os.environ['RENDER_ENVIRONMENT'] = 'true'
 os.environ['DISABLE_SMART_FEATURES'] = os.environ.get('DISABLE_SMART_FEATURES', 'TRUE')
 os.environ['MINIMAL_STARTUP'] = os.environ.get('MINIMAL_STARTUP', 'TRUE')
+# Force clean ChromaDB initialization to resolve deprecated configuration issues
+os.environ['CHROMADB_FORCE_CLEAN_INIT'] = 'true'
 
 # Disable ChromaDB telemetry IMMEDIATELY before any ChromaDB imports
 os.environ['ANONYMIZED_TELEMETRY'] = 'FALSE'

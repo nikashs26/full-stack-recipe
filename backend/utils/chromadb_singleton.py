@@ -66,6 +66,14 @@ class ChromaDBSingleton:
                 os.makedirs(chroma_path, exist_ok=True)
                 print(f"⚠️ Using fallback ChromaDB directory: {chroma_path}")
         
+        # Check if forced clean initialization is requested
+        force_clean = os.environ.get('CHROMADB_FORCE_CLEAN_INIT', '').lower() == 'true'
+        if force_clean and os.path.exists(chroma_path):
+            print(f"🔧 CHROMADB_FORCE_CLEAN_INIT set - removing existing ChromaDB data")
+            import shutil
+            shutil.rmtree(chroma_path, ignore_errors=True)
+            os.makedirs(chroma_path, exist_ok=True)
+        
         # Create the singleton client with LATEST ChromaDB API (v0.4.22+)
         try:
             # Use ONLY the new PersistentClient API without any settings
@@ -74,26 +82,33 @@ class ChromaDBSingleton:
             print(f"✅ ChromaDB v0.4.22+ PersistentClient created successfully")
         except Exception as e:
             error_str = str(e).lower()
-            if "deprecated configuration" in error_str:
-                print(f"⚠️ ChromaDB deprecated configuration detected. Attempting data migration...")
+            if "deprecated configuration" in error_str or "deprecated" in error_str:
+                print(f"⚠️ ChromaDB deprecated configuration detected. Forcing clean initialization...")
                 try:
-                    # Try to backup and recreate the ChromaDB directory
+                    # Force clean initialization by removing old data
                     import shutil
                     from datetime import datetime
                     
-                    # Create backup of existing data
-                    backup_path = f"{chroma_path}_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
                     if os.path.exists(chroma_path):
-                        shutil.move(chroma_path, backup_path)
-                        print(f"📦 Backed up existing ChromaDB data to: {backup_path}")
+                        # In deployment, we need to be more aggressive about cleaning up
+                        if os.environ.get('RENDER_ENVIRONMENT') or os.environ.get('RAILWAY_ENVIRONMENT'):
+                            print(f"🔧 Deployment environment detected - removing deprecated ChromaDB data")
+                            shutil.rmtree(chroma_path, ignore_errors=True)
+                        else:
+                            # In development, backup first
+                            backup_path = f"{chroma_path}_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                            shutil.move(chroma_path, backup_path)
+                            print(f"📦 Backed up existing ChromaDB data to: {backup_path}")
                     
-                    # Recreate the directory and try again
+                    # Recreate the directory with fresh structure
                     os.makedirs(chroma_path, exist_ok=True)
+                    
+                    # Try creating client again with clean directory
                     cls._instance = PersistentClient(path=chroma_path)
-                    print(f"✅ ChromaDB v0.4.22+ PersistentClient created successfully after migration")
+                    print(f"✅ ChromaDB v0.4.22+ PersistentClient created successfully after clean initialization")
                 except Exception as migration_error:
-                    print(f"⚠️ Migration failed: {migration_error}")
-                    print(f"⚠️ Error creating persistent ChromaDB client: {e}")
+                    print(f"⚠️ Clean initialization failed: {migration_error}")
+                    print(f"⚠️ Falling back to EphemeralClient")
                     # Fallback: try in-memory client with new API
                     try:
                         cls._instance = EphemeralClient()
@@ -103,7 +118,7 @@ class ChromaDBSingleton:
                         cls._instance = None
             else:
                 print(f"⚠️ Error creating persistent ChromaDB client: {e}")
-                # Fallback: try in-memory client with new API
+                # For any other error, also try fallback
                 try:
                     cls._instance = EphemeralClient()
                     print(f"⚠️ Using EphemeralClient ChromaDB fallback")
