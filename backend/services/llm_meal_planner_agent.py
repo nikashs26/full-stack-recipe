@@ -86,7 +86,8 @@ class LLMMealPlannerAgent:
     def __init__(self):
         """Initialize the LLM Meal Planner Agent with free LLM options"""
         self.huggingface_api_key = os.getenv('HUGGINGFACE_API_KEY', '')
-        self.ollama_url = os.getenv('OLLAMA_URL', 'http://localhost:11434')
+        # Disable Ollama by default unless explicitly configured
+        self.ollama_url = os.getenv('OLLAMA_URL', '')
         
         # Model options - using smaller, faster models
         self.hf_model = "microsoft/phi-2"

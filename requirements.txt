@@ -32,4 +32,4 @@ flask-mail==0.9.1
 requests==2.31.0
 
 # Additional dependencies that might be needed
-sentence-transformers==2.2.2
+# Removed sentence-transformers to reduce cold start time and memory usage on Render

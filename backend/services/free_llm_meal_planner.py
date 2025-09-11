@@ -45,7 +45,8 @@ class FreeLLMMealPlannerAgent:
         else:
             self.meal_history_service = None
         
-        self.ollama_url = os.getenv('OLLAMA_URL', 'http://localhost:11434')
+        # Disable Ollama by default unless explicitly configured
+        self.ollama_url = os.getenv('OLLAMA_URL', '')
         self.ollama_model = os.getenv('OLLAMA_MODEL', 'llama3.2:latest')
         self.hf_api_key = os.getenv('HUGGINGFACE_API_KEY')
         self.hf_api_url = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2"

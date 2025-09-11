@@ -48,12 +48,10 @@ class RecipeSearchService:
     """
     
     def __init__(self):
-        if not self.client:
-            logger.warning("ChromaDB not available - RecipeSearchService starting in limited mode")
-            self.client = None
-            self.recipe_collection = None
-            self.cache_service = None
-            return
+        # Initialize attributes before use
+        self.client = None
+        self.recipe_collection = None
+        self.cache_service = None
         import os
         chroma_path = os.environ.get('CHROMA_DB_PATH', './chroma_db')
         
@@ -74,7 +72,8 @@ class RecipeSearchService:
         from chromadb.config import Settings
         settings = Settings(
             is_persistent=True,
-            persist_directory=chroma_path
+            persist_directory=chroma_path,
+            anonymized_telemetry=False
         )
         self.client = chromadb.PersistentClient(settings=settings)
         # Prefer existing, populated collections to avoid empty search results
