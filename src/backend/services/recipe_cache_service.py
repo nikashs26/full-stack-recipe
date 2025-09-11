@@ -92,6 +92,63 @@ class RecipeCacheService:
         # except (ValueError, TypeError) as e:
         #     logger.warning(f"Invalid cache timestamp '{cached_at}': {str(e)}")
         #     return False
+
+    def _seed_chromadb_from_file(self, path: str, limit: int = 500) -> None:
+        """Seed ChromaDB from a local JSON file.
+        The file can be a list of recipe objects or an object with a top-level 'recipes' list.
+        """
+        try:
+            with open(path, 'r') as f:
+                data = json.load(f)
+            if isinstance(data, dict) and 'recipes' in data:
+                recipes = data['recipes']
+            elif isinstance(data, list):
+                recipes = data
+            else:
+                logger.warning("Seed file format not recognized; expected list or {'recipes': [...]} ")
+                return
+            
+            # Normalize minimal fields expected by ChromaDB
+            count = 0
+            ids = []
+            docs = []
+            metas = []
+            
+            for item in recipes:
+                if limit > 0 and count >= limit:
+                    break
+                rid = str(item.get('id') or item.get('_id') or item.get('idMeal') or hash(item.get('title', '')))
+                title = item.get('title') or item.get('name') or item.get('strMeal') or 'Recipe'
+                
+                # Create ChromaDB-compatible metadata (flatten complex objects)
+                meta = {}
+                for key, value in item.items():
+                    if isinstance(value, (str, int, float, bool)) or value is None:
+                        meta[key] = value
+                    elif isinstance(value, (dict, list)):
+                        # Convert complex objects to JSON strings
+                        meta[key] = json.dumps(value)
+                    else:
+                        # Convert other types to strings
+                        meta[key] = str(value)
+                
+                # Store the full recipe as a JSON document for searching and retrieval
+                doc = json.dumps(item)
+                
+                ids.append(rid)
+                docs.append(doc)
+                metas.append(meta)
+                count += 1
+            
+            if ids:
+                # Add to both collections
+                self.recipe_collection.add(ids=ids, documents=docs, metadatas=metas)
+                self.search_collection.add(ids=ids, documents=docs, metadatas=metas)
+                logger.info(f"Seeded {len(ids)} recipes into ChromaDB from {path}")
+            else:
+                logger.warning(f"No recipes found to seed from {path}")
+        except Exception as e:
+            logger.warning(f"Failed to seed ChromaDB from file {path}: {e}")
             
     async def add_recipe(self, recipe: Dict[str, Any]) -> bool:
         """
