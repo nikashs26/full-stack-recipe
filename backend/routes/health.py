@@ -30,6 +30,18 @@ def check_chromadb():
         client = get_chromadb_client()
         chroma_path = get_chromadb_path()
         
+        # Check if client is None
+        if client is None:
+            return jsonify({
+                'status': 'error',
+                'message': 'ChromaDB client is None - initialization failed',
+                'chromadb': {
+                    'connected': False,
+                    'path': chroma_path,
+                    'error': 'Client initialization failed'
+                }
+            }), 500
+        
         # List collections to verify connection
         collections = client.list_collections()
         

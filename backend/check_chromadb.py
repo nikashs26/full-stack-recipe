@@ -1,5 +1,4 @@
 import chromadb
-from chromadb.config import Settings
 import os
 
 def check_chromadb():

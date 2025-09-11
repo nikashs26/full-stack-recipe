@@ -73,14 +73,43 @@ class ChromaDBSingleton:
             cls._instance = PersistentClient(path=chroma_path)
             print(f"✅ ChromaDB v0.4.22+ PersistentClient created successfully")
         except Exception as e:
-            print(f"⚠️ Error creating persistent ChromaDB client: {e}")
-            # Fallback: try in-memory client with new API
-            try:
-                cls._instance = EphemeralClient()
-                print(f"⚠️ Using EphemeralClient ChromaDB fallback")
-            except Exception as e2:
-                print(f"⚠️ ChromaDB initialization completely failed: {e2}")
-                cls._instance = None
+            error_str = str(e).lower()
+            if "deprecated configuration" in error_str:
+                print(f"⚠️ ChromaDB deprecated configuration detected. Attempting data migration...")
+                try:
+                    # Try to backup and recreate the ChromaDB directory
+                    import shutil
+                    from datetime import datetime
+                    
+                    # Create backup of existing data
+                    backup_path = f"{chroma_path}_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                    if os.path.exists(chroma_path):
+                        shutil.move(chroma_path, backup_path)
+                        print(f"📦 Backed up existing ChromaDB data to: {backup_path}")
+                    
+                    # Recreate the directory and try again
+                    os.makedirs(chroma_path, exist_ok=True)
+                    cls._instance = PersistentClient(path=chroma_path)
+                    print(f"✅ ChromaDB v0.4.22+ PersistentClient created successfully after migration")
+                except Exception as migration_error:
+                    print(f"⚠️ Migration failed: {migration_error}")
+                    print(f"⚠️ Error creating persistent ChromaDB client: {e}")
+                    # Fallback: try in-memory client with new API
+                    try:
+                        cls._instance = EphemeralClient()
+                        print(f"⚠️ Using EphemeralClient ChromaDB fallback")
+                    except Exception as e2:
+                        print(f"⚠️ ChromaDB initialization completely failed: {e2}")
+                        cls._instance = None
+            else:
+                print(f"⚠️ Error creating persistent ChromaDB client: {e}")
+                # Fallback: try in-memory client with new API
+                try:
+                    cls._instance = EphemeralClient()
+                    print(f"⚠️ Using EphemeralClient ChromaDB fallback")
+                except Exception as e2:
+                    print(f"⚠️ ChromaDB initialization completely failed: {e2}")
+                    cls._instance = None
         
         cls._path = chroma_path
         print(f"✅ ChromaDB singleton initialized")

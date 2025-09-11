@@ -14,7 +14,8 @@ os.environ['CHROMA_CLIENT_AUTHN_PROVIDER'] = ''
 os.environ['CHROMA_CLIENT_AUTHN_CREDENTIALS'] = ''
 # Additional telemetry disable attempts
 os.environ['ALLOW_RESET'] = 'FALSE'
-os.environ['CHROMA_DB_IMPL'] = 'duckdb+parquet'
+# Remove deprecated CHROMA_DB_IMPL - use default for v0.4.22+
+# os.environ['CHROMA_DB_IMPL'] = 'duckdb+parquet'  # This is deprecated
 os.environ['CHROMA_SERVER_NOFILE'] = '65536'
 # Disable PostHog completely
 os.environ['POSTHOG_DISABLED'] = 'TRUE'
