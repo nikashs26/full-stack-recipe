@@ -4,7 +4,7 @@ services:
     env: python
     plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: pip install -r requirements.txt && python app.py
+    startCommand: python app.py
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.0
@@ -28,3 +28,5 @@ services:
         generateValue: true
       - key: PORT
         value: 10000
+      - key: ANONYMIZED_TELEMETRY
+        value: "FALSE"

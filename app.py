@@ -24,8 +24,10 @@ from backend.routes.folder_routes import folder_bp
 from backend.routes.smart_features import smart_features_bp
 from backend.routes.admin import admin_bp
 
-# Set Render environment variable for persistent storage
+# Set Render environment variable for persistent storage and disable Chroma telemetry
 os.environ['RENDER_ENVIRONMENT'] = 'true'
+# Explicitly disable Chroma anonymized telemetry (avoids PostHog errors on Render)
+os.environ['ANONYMIZED_TELEMETRY'] = 'FALSE'
 # Use local path for development, Render path for production
 if os.path.exists('/opt/render'):
     os.environ['CHROMA_DB_PATH'] = '/opt/render/project/src/chroma_db'

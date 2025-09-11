@@ -45,7 +45,8 @@ class RecipeCacheService:
             # Use Settings configuration (recommended approach)
             settings = Settings(
                 is_persistent=True,
-                persist_directory=chroma_path
+                persist_directory=chroma_path,
+                anonymized_telemetry=False
             )
             self.client = chromadb.PersistentClient(settings=settings)
             
