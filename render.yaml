@@ -19,7 +19,7 @@ services:
       - key: SEED_RECIPES_ON_STARTUP
         value: "true"
       - key: SEED_RECIPES_FILE
-        value: "recipes_data.json"
+        value: "backend/recipes_data.json"
       - key: FLASK_SECRET_KEY
         generateValue: true
       - key: JWT_SECRET_KEY
@@ -34,12 +34,12 @@ services:
         value: ""
       - key: ALLOW_RESET
         value: "FALSE"
-      - key: CHROMA_DB_IMPL
-        value: "duckdb+parquet"
+      # Remove deprecated CHROMA_DB_IMPL to fix deprecation warnings  
       - key: DISABLE_SMART_FEATURES
         value: "TRUE"
+      # Enable ChromaDB seeding to populate recipes after clean initialization
       - key: SKIP_CHROMADB_SEEDING
-        value: "TRUE"
+        value: "FALSE"
       - key: MINIMAL_STARTUP
         value: "TRUE"
       - key: CHROMA_SERVER_NOFILE
