@@ -28,8 +28,10 @@ class SmartShoppingService:
         chroma_path = os.environ.get('CHROMA_DB_PATH', './chroma_db')
         
         # For Railway/Render deployment, use persistent volume
-        if os.environ.get('RAILWAY_ENVIRONMENT') or os.environ.get('RENDER_ENVIRONMENT'):
+        if os.environ.get('RAILWAY_ENVIRONMENT'):
             chroma_path = os.environ.get('CHROMA_DB_PATH', '/app/data/chroma_db')
+        elif os.environ.get('RENDER_ENVIRONMENT'):
+            chroma_path = os.environ.get('CHROMA_DB_PATH', '/opt/render/project/src/chroma_db')
         
         chroma_path = os.path.abspath(chroma_path)
         try:

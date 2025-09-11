@@ -52,8 +52,10 @@ class RecipeCacheService:
             chroma_path = os.environ.get('CHROMA_DB_PATH', './chroma_db')
             
             # For Railway/Render deployment, use persistent volume
-            if os.environ.get('RAILWAY_ENVIRONMENT') or os.environ.get('RENDER_ENVIRONMENT'):
+            if os.environ.get('RAILWAY_ENVIRONMENT'):
                 chroma_path = os.environ.get('CHROMA_DB_PATH', '/app/data/chroma_db')
+            elif os.environ.get('RENDER_ENVIRONMENT'):
+                chroma_path = os.environ.get('CHROMA_DB_PATH', '/opt/render/project/src/chroma_db')
             
             # Ensure directory exists
             try:
@@ -103,6 +105,11 @@ class RecipeCacheService:
                 logger.warning(f"ChromaDB seeding failed: {e}")
         except Exception as e:
             logger.error(f"Failed to initialize ChromaDB recipe cache: {e}")
+            logger.error(f"ChromaDB path: {chroma_path}")
+            logger.error(f"Path exists: {os.path.exists(chroma_path) if 'chroma_path' in locals() else 'N/A'}")
+            logger.error(f"Path is writable: {os.access(chroma_path, os.W_OK) if 'chroma_path' in locals() and os.path.exists(chroma_path) else 'N/A'}")
+            import traceback
+            logger.error(f"Full traceback: {traceback.format_exc()}")
             self.client = None
             self.search_collection = None
             self.recipe_collection = None

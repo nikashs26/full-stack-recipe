@@ -28,6 +28,8 @@ duckdb>=0.8.0
 PyJWT==2.9.0
 bcrypt==4.0.1
 cffi==1.16.0
+# Additional auth dependencies
+pyjwt==2.9.0
 
 # Email (optional)
 flask-mail==0.9.1
