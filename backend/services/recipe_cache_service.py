@@ -69,9 +69,14 @@ class RecipeCacheService:
                 logger.warning(f"ChromaDB seeding failed: {e}")
         except Exception as e:
             logger.error(f"Failed to initialize ChromaDB recipe cache: {e}")
-            logger.error(f"ChromaDB path: {chroma_path}")
-            logger.error(f"Path exists: {os.path.exists(chroma_path) if 'chroma_path' in locals() else 'N/A'}")
-            logger.error(f"Path is writable: {os.access(chroma_path, os.W_OK) if 'chroma_path' in locals() and os.path.exists(chroma_path) else 'N/A'}")
+            try:
+                from utils.chromadb_singleton import get_chromadb_path
+                chroma_path = get_chromadb_path()
+                logger.error(f"ChromaDB path: {chroma_path}")
+                logger.error(f"Path exists: {os.path.exists(chroma_path)}")
+                logger.error(f"Path is writable: {os.access(chroma_path, os.W_OK) if os.path.exists(chroma_path) else 'N/A'}")
+            except Exception as path_error:
+                logger.error(f"Could not get ChromaDB path: {path_error}")
             import traceback
             logger.error(f"Full traceback: {traceback.format_exc()}")
             self.client = None

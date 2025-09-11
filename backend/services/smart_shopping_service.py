@@ -35,22 +35,46 @@ class SmartShoppingService:
         # Use the singleton ChromaDB client
         self.client = get_chromadb_client()
         
+        # Create a simple custom embedding function that doesn't require model downloads
+        class SimpleEmbeddingFunction:
+            def __call__(self, input):
+                # Simple hash-based embedding to avoid model downloads
+                import hashlib
+                embeddings = []
+                for text in input:
+                    # Create a simple 384-dimensional embedding from text hash
+                    hash_obj = hashlib.sha256(text.encode())
+                    hash_bytes = hash_obj.digest()
+                    # Convert to 384 floats (mimic all-MiniLM-L6-v2 dimension)
+                    embedding = []
+                    for i in range(384):
+                        byte_val = hash_bytes[i % len(hash_bytes)]
+                        # Normalize to [-1, 1] range
+                        embedding.append((byte_val / 128.0) - 1.0)
+                    embeddings.append(embedding)
+                return embeddings
+        
+        simple_embedding_function = SimpleEmbeddingFunction()
+        
         # Collection for ingredient knowledge base
         self.ingredient_collection = self.client.get_or_create_collection(
             name="ingredients",
-            metadata={"description": "Ingredient knowledge base with relationships and substitutions"}
+            metadata={"description": "Ingredient knowledge base with relationships and substitutions"},
+            embedding_function=simple_embedding_function
         )
         
         # Collection for shopping lists
         self.shopping_list_collection = self.client.get_or_create_collection(
             name="shopping_lists",
-            metadata={"description": "User shopping lists with context"}
+            metadata={"description": "User shopping lists with context"},
+            embedding_function=simple_embedding_function
         )
         
         # Collection for store layouts and optimization
         self.store_layout_collection = self.client.get_or_create_collection(
             name="store_layouts",
-            metadata={"description": "Store layouts for shopping optimization"}
+            metadata={"description": "Store layouts for shopping optimization"},
+            embedding_function=simple_embedding_function
         )
         
         # Initialize ingredient knowledge base
