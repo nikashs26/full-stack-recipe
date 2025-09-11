@@ -63,10 +63,10 @@ class UserService:
         
         # Check if ChromaDB is available
         if not CHROMADB_AVAILABLE:
-            print("❌ Warning: ChromaDB not available, using persistent fallback storage for user service")
-            # Use persistent fallback service
-            from .persistent_fallback_user_service import PersistentFallbackUserService
-            fallback = PersistentFallbackUserService()
+            print("❌ Warning: ChromaDB not available, using fallback in-memory storage for user service")
+            # Use fallback service
+            from .fallback_user_service import FallbackUserService
+            fallback = FallbackUserService()
             # Copy all methods from fallback to this instance
             for attr_name in dir(fallback):
                 if not attr_name.startswith('_') and callable(getattr(fallback, attr_name)):

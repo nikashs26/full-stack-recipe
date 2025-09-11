@@ -9,31 +9,13 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Try to import ChromaDB, fallback to in-memory storage if not available
-CHROMADB_AVAILABLE = False
-FallbackRecipeCacheService = None
-
 try:
     import chromadb
     CHROMADB_AVAILABLE = True
-    logger.info("ChromaDB successfully imported")
-except ImportError as e:
+except ImportError:
     CHROMADB_AVAILABLE = False
-    logger.warning(f"ChromaDB not available: {e}")
-    logger.warning("Using fallback in-memory storage")
-    try:
-        from .fallback_recipe_cache import FallbackRecipeCacheService
-    except ImportError as fallback_error:
-        logger.error(f"Failed to import fallback service: {fallback_error}")
-        FallbackRecipeCacheService = None
-except Exception as e:
-    CHROMADB_AVAILABLE = False
-    logger.error(f"Unexpected error importing ChromaDB: {e}")
-    logger.warning("Using fallback in-memory storage")
-    try:
-        from .fallback_recipe_cache import FallbackRecipeCacheService
-    except ImportError as fallback_error:
-        logger.error(f"Failed to import fallback service: {fallback_error}")
-        FallbackRecipeCacheService = None
+    logger.warning("ChromaDB not available, using fallback in-memory storage")
+    from .fallback_recipe_cache import FallbackRecipeCacheService
 
 class RecipeCacheService:
     def __init__(self, cache_ttl_days: int = None):
@@ -45,10 +27,6 @@ class RecipeCacheService:
         """
         if not CHROMADB_AVAILABLE:
             # Use fallback in-memory storage
-            if FallbackRecipeCacheService is None:
-                logger.error("FallbackRecipeCacheService not available - cannot initialize cache service")
-                raise RuntimeError("Neither ChromaDB nor fallback service is available")
-            
             self.recipe_collection = FallbackRecipeCacheService()
             self.search_collection = FallbackRecipeCacheService()
             self.embedding_function = None
@@ -79,59 +57,31 @@ class RecipeCacheService:
             elif os.environ.get('RENDER_ENVIRONMENT'):
                 chroma_path = os.environ.get('CHROMA_DB_PATH', '/opt/render/project/src/chroma_db')
             
-            logger.info(f"Initializing ChromaDB with path: {chroma_path}")
-            logger.info(f"Environment: RENDER_ENVIRONMENT={os.environ.get('RENDER_ENVIRONMENT')}, RAILWAY_ENVIRONMENT={os.environ.get('RAILWAY_ENVIRONMENT')}")
-            
             # Ensure directory exists
             try:
                 os.makedirs(chroma_path, exist_ok=True)
-                logger.info(f"ChromaDB directory created/verified: {chroma_path}")
-            except PermissionError as e:
-                logger.error(f"Permission error creating ChromaDB directory: {e}")
+            except PermissionError:
                 # Directory might already exist with correct permissions
                 if not os.path.exists(chroma_path):
                     raise PermissionError(f"Cannot create ChromaDB directory at {chroma_path}. Please ensure the directory exists and has correct permissions.")
-                else:
-                    logger.info(f"ChromaDB directory already exists: {chroma_path}")
-            
-            logger.info("Creating ChromaDB PersistentClient...")
             self.client = chromadb.PersistentClient(path=chroma_path)
-            logger.info("ChromaDB PersistentClient created successfully")
             
             # Create embedding function
-            logger.info("Creating embedding function...")
-            try:
-                self.embedding_function = chromadb.utils.embedding_functions.DefaultEmbeddingFunction()
-                logger.info("Embedding function created successfully")
-            except Exception as e:
-                logger.error(f"Failed to create embedding function: {e}")
-                raise
+            self.embedding_function = chromadb.utils.embedding_functions.DefaultEmbeddingFunction()
             
             # Collection for search results
-            logger.info("Creating/accessing search collection...")
-            try:
-                self.search_collection = self.client.get_or_create_collection(
-                    name="recipe_search_cache",
-                    metadata={"description": "Cache for recipe search results"},
-                    embedding_function=self.embedding_function
-                )
-                logger.info("Search collection created/accessed successfully")
-            except Exception as e:
-                logger.error(f"Failed to create/access search collection: {e}")
-                raise
+            self.search_collection = self.client.get_or_create_collection(
+                name="recipe_search_cache",
+                metadata={"description": "Cache for recipe search results"},
+                embedding_function=self.embedding_function
+            )
             
             # Collection for individual recipes
-            logger.info("Creating/accessing recipe collection...")
-            try:
-                self.recipe_collection = self.client.get_or_create_collection(
-                    name="recipe_details_cache",
-                    metadata={"description": "Cache for individual recipe details"},
-                    embedding_function=self.embedding_function
-                )
-                logger.info("Recipe collection created/accessed successfully")
-            except Exception as e:
-                logger.error(f"Failed to create/access recipe collection: {e}")
-                raise
+            self.recipe_collection = self.client.get_or_create_collection(
+                name="recipe_details_cache",
+                metadata={"description": "Cache for individual recipe details"},
+                embedding_function=self.embedding_function
+            )
             
             # TTL is disabled - recipes will never expire
             self.cache_ttl = None
@@ -164,35 +114,6 @@ class RecipeCacheService:
             self.search_collection = None
             self.recipe_collection = None
             self.cache_ttl = None  # TTL disabled even if initialization fails
-            
-            # Fall back to in-memory storage
-            logger.warning("Falling back to in-memory storage due to ChromaDB initialization failure")
-            try:
-                if FallbackRecipeCacheService is None:
-                    from .fallback_recipe_cache import FallbackRecipeCacheService
-                
-                if FallbackRecipeCacheService is None:
-                    logger.error("FallbackRecipeCacheService not available - cannot initialize cache service")
-                    raise RuntimeError("Neither ChromaDB nor fallback service is available")
-                
-                self.recipe_collection = FallbackRecipeCacheService()
-                self.search_collection = FallbackRecipeCacheService()
-                logger.info("Successfully initialized fallback in-memory storage")
-                
-                # Attempt to seed from local JSON if available
-                try:
-                    import os
-                    seed_path = os.environ.get('SEED_RECIPES_FILE', 'recipes_data.json')
-                    seed_on_start = os.environ.get('SEED_RECIPES_ON_STARTUP', 'true').lower() == 'true'
-                    if seed_on_start and os.path.exists(seed_path):
-                        limit = int(os.environ.get('SEED_RECIPES_LIMIT', '10000'))
-                        self._seed_from_file(seed_path, limit=limit)
-                except Exception as seed_error:
-                    logger.warning(f"Seeding fallback cache failed: {seed_error}")
-                    
-            except Exception as fallback_error:
-                logger.error(f"Failed to initialize fallback storage: {fallback_error}")
-                raise
 
     def _seed_chromadb_from_file(self, path: str, limit: int = 500) -> None:
         """Seed ChromaDB from a local JSON file.

@@ -11,13 +11,10 @@ except ImportError:
 class UserPreferencesService:
     def __init__(self):
         if not CHROMADB_AVAILABLE:
-            # Use persistent fallback storage
-            from .persistent_fallback_preferences_service import PersistentFallbackUserPreferencesService
-            fallback = PersistentFallbackUserPreferencesService()
-            # Copy all methods from fallback to this instance
-            for attr_name in dir(fallback):
-                if not attr_name.startswith('_') and callable(getattr(fallback, attr_name)):
-                    setattr(self, attr_name, getattr(fallback, attr_name))
+            # Use fallback in-memory storage
+            self.preferences = {}  # In-memory storage
+            self.collection = self  # Mock collection interface
+            print("Using fallback in-memory user preferences storage")
             return
             
         # Use the new ChromaDB client configuration with absolute path
