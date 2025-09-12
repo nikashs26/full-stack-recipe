@@ -1,5 +1,6 @@
 import { getApiUrl } from '../config/api';
 import { getReliableImageUrl } from '../utils/recipeUtils';
+import { cleanRecipeDescription } from '../utils/recipeDescriptionCleaner';
 
 // Use the Railway backend API URL
 const API_BASE_URL = getApiUrl();
@@ -350,7 +351,7 @@ export const fetchManualRecipes = async (
         return {
           id: recipe.id || recipeData.id || `recipe-${Math.random().toString(36).substr(2, 9)}`,
           title: recipeData.title || 'Untitled Recipe',
-          description: recipeData.summary || recipeData.description || '',
+          description: cleanRecipeDescription((recipeData.summary || recipeData.description || '').toString()),
           ready_in_minutes: recipeData.ready_in_minutes || recipeData.readyInMinutes || metadata.readyInMinutes || 30,
           cuisine: cuisines.length > 0 ? cuisines[0] : undefined,
           cuisines: cuisines,
