@@ -141,12 +141,26 @@ def initialize_services_safely():
             print("🔄 Render detected - restoring user accounts from backup...")
             user_service.restore_users_from_backup()
             
-            # Skip automatic population on startup - will be done manually
+            # Check if recipes need to be seeded
             try:
-                recipe_count = recipe_cache.get_recipe_count()
+                count_result = recipe_cache.get_recipe_count()
+                if isinstance(count_result, dict):
+                    recipe_count = count_result.get('total', 0)
+                else:
+                    recipe_count = count_result
                 print(f"📊 Render cache has {recipe_count} recipes")
+                
+                # If no recipes, automatically populate
+                if recipe_count == 0:
+                    print("🌱 No recipes found - auto-seeding recipes...")
+                    auto_seed_recipes()
+                else:
+                    print("✅ Recipes already loaded")
             except Exception as e:
                 print(f"⚠️ Could not check recipe cache: {e}")
+                # Still try to seed recipes on error
+                print("🌱 Error checking cache - attempting to seed recipes...")
+                auto_seed_recipes()
                 
         except Exception as e:
             print(f"⚠️ Recipe cache service failed to initialize: {e}")
@@ -319,6 +333,87 @@ print("✓ All route blueprints registered")
 # The recommendations route is handled by smart_features.py when available
 # or by the fallback route when smart features are disabled
 
+def auto_seed_recipes():
+    """Automatically seed recipes on startup for production deployment"""
+    try:
+        print("🌱 Starting automatic recipe seeding...")
+        import json
+        import os
+        
+        # First try to load exported recipes from backup files
+        backup_files = [
+            "production_recipes_essential.json",
+            "production_recipes_backup.json"
+        ]
+        
+        total_added = 0
+        recipes_loaded = False
+        
+        for backup_file in backup_files:
+            if os.path.exists(backup_file):
+                try:
+                    print(f"📦 Loading recipes from {backup_file}...")
+                    with open(backup_file, 'r', encoding='utf-8') as f:
+                        backup_data = json.load(f)
+                    
+                    recipes = backup_data.get('recipes', [])
+                    print(f"📊 Found {len(recipes)} recipes in backup")
+                    
+                    for recipe in recipes:
+                        try:
+                            recipe_id = recipe.get('id', f"backup_{total_added}")
+                            recipe_cache.cache_recipe(recipe_id, recipe)
+                            total_added += 1
+                            if total_added % 100 == 0:
+                                print(f"✅ Loaded {total_added} recipes...")
+                        except Exception as e:
+                            print(f"❌ Failed to load recipe {recipe.get('title', 'Unknown')}: {e}")
+                    
+                    recipes_loaded = True
+                    print(f"✅ Successfully loaded {total_added} recipes from backup!")
+                    break
+                    
+                except Exception as e:
+                    print(f"❌ Failed to load {backup_file}: {e}")
+                    continue
+        
+        # If no backup files found, fall back to minimal seeding
+        if not recipes_loaded:
+            print("⚠️ No recipe backup found, creating minimal seed recipes...")
+            
+            minimal_recipes = [
+                {
+                    'id': 'seed_chicken_pasta',
+                    'title': 'Chicken Alfredo Pasta',
+                    'image': 'https://images.unsplash.com/photo-1621996346565-e3dbc353d2e5?w=500',
+                    'cuisine': 'Italian',
+                    'cuisines': ['Italian'],
+                    'ingredients': ['chicken breast', 'fettuccine pasta', 'heavy cream', 'parmesan cheese', 'garlic', 'butter'],
+                    'instructions': ['Cook pasta according to package directions', 'Season and cook chicken', 'Make alfredo sauce with cream and cheese', 'Combine all ingredients'],
+                    'source': 'Fallback',
+                    'diets': [],
+                    'tags': ['pasta', 'chicken', 'creamy'],
+                    'ready_in_minutes': 30,
+                    'difficulty': 'medium'
+                }
+            ]
+            
+            for recipe in minimal_recipes:
+                try:
+                    recipe_cache.cache_recipe(recipe['id'], recipe)
+                    total_added += 1
+                    print(f"✅ Added fallback recipe: {recipe['title']}")
+                except Exception as e:
+                    print(f"❌ Failed to add fallback recipe: {e}")
+        
+        print(f"🎉 Auto-seeding complete! Added {total_added} recipes")
+        return total_added
+        
+    except Exception as e:
+        print(f"❌ Auto-seeding failed: {e}")
+        return 0
+
+
 # Initialize the application
 if __name__ == "__main__":
     debug_mode = os.environ.get("DEBUG", "false").lower() == "true"
@@ -339,4 +434,3 @@ if __name__ == "__main__":
         debug=debug_mode,
         threaded=True
     )
-            
