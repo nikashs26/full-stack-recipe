@@ -1837,10 +1837,12 @@ class RecipeCacheService:
             
             # Get all recipes from the recipe collection
             try:
+                # Get the limit from environment variable or use default
+                query_limit = int(os.environ.get('CHROMADB_QUERY_LIMIT', '10000'))
                 recipe_results = self.recipe_collection.get(
                     where=where if where else None,
                     include=["documents", "metadatas"],
-                    limit=10000  # Increase limit to get more recipes
+                    limit=query_limit  # Use environment variable for limit
                 )
             except Exception as e:
                 logger.error(f"Error fetching all recipes: {e}")

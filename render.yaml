@@ -16,6 +16,8 @@ services:
         value: "true"
       - key: SEED_RECIPES_LIMIT
         value: "10000"
+      - key: CHROMADB_QUERY_LIMIT
+        value: "10000"
       - key: SEED_RECIPES_ON_STARTUP
         value: "true"
       - key: SEED_RECIPES_FILE
