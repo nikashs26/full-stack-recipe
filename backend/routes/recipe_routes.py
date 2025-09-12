@@ -455,11 +455,18 @@ def register_recipe_routes(app, recipe_cache):
                         "source": r.get("source", "import")
                     }
                     documents.append(json.dumps(doc))
+                    # Ensure Chroma metadata uses only primitive types
+                    cuisines_meta = doc.get("cuisines", [])
+                    if isinstance(cuisines_meta, list):
+                        cuisines_meta = ",".join([str(c) for c in cuisines_meta if c])
+                    diets_meta = doc.get("diets", [])
+                    if isinstance(diets_meta, list):
+                        diets_meta = ",".join([str(d) for d in diets_meta if d])
                     metadatas.append({
                         "id": rid,
                         "title": title,
-                        "cuisines": doc.get("cuisines", []),
-                        "diets": doc.get("diets", []),
+                        "cuisines": cuisines_meta or "",
+                        "diets": diets_meta or "",
                         "cached_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
                     })
                     ids.append(rid)
