@@ -55,6 +55,90 @@ cors = CORS(app,
 # Initialize services
 recipe_cache = RecipeCacheService()
 
+def ensure_recipes_loaded():
+    """Auto-restore recipes if count is too low on startup"""
+    try:
+        count_result = recipe_cache.get_recipe_count()
+        if isinstance(count_result, dict):
+            count = count_result.get('total', 0)
+        else:
+            count = count_result
+        
+        print(f"📊 Current recipe count: {count}")
+        
+        if count < 1200:  # Threshold - adjust based on your expected count
+            print(f"⚠️ Only {count} recipes found, auto-restoring from backup...")
+            
+            # Try to restore from backup files
+            backup_files = [
+                'complete_railway_sync_data.json',
+                'production_recipes_backup.json',
+                'recipes_data.json'
+            ]
+            
+            restored_count = 0
+            for backup_file in backup_files:
+                if os.path.exists(backup_file):
+                    try:
+                        import json
+                        print(f"📦 Loading recipes from {backup_file}...")
+                        with open(backup_file, 'r', encoding='utf-8') as f:
+                            backup_data = json.load(f)
+                        
+                        # Handle different data structures
+                        if isinstance(backup_data, dict):
+                            recipes = backup_data.get('recipes', backup_data.get('data', []))
+                        elif isinstance(backup_data, list):
+                            recipes = backup_data
+                        else:
+                            continue
+                        
+                        # Import up to 1500 recipes for good variety
+                        recipes_to_import = recipes[:1500]
+                        batch_size = 100
+                        
+                        for i in range(0, len(recipes_to_import), batch_size):
+                            batch = recipes_to_import[i:i + batch_size]
+                            
+                            for recipe in batch:
+                                try:
+                                    recipe_id = str(recipe.get('id', f"restore_{restored_count}"))
+                                    recipe_cache.cache_recipe(recipe_id, recipe)
+                                    restored_count += 1
+                                    
+                                    if restored_count % 100 == 0:
+                                        print(f"✅ Restored {restored_count} recipes...")
+                                        
+                                except Exception as e:
+                                    print(f"Failed to restore recipe: {e}")
+                            
+                            # Rate limiting
+                            import time
+                            time.sleep(0.1)
+                        
+                        print(f"✅ Successfully restored {restored_count} recipes from {backup_file}!")
+                        break
+                        
+                    except Exception as e:
+                        print(f"❌ Failed to restore from {backup_file}: {e}")
+                        continue
+            
+            if restored_count > 0:
+                final_count = recipe_cache.get_recipe_count()
+                if isinstance(final_count, dict):
+                    final_count = final_count.get('total', 0)
+                print(f"🎉 Recipe restoration completed! Final count: {final_count}")
+            else:
+                print("⚠️ No backup files found or restoration failed")
+        else:
+            print(f"✅ Recipe count looks good ({count} recipes)")
+            
+    except Exception as e:
+        print(f"❌ Error checking/restoring recipes: {e}")
+
+# Auto-restore recipes on startup
+ensure_recipes_loaded()
+
 # Initialize email service with the Flask app
 email_service = EmailService(app)
 print("✓ Email service initialized")

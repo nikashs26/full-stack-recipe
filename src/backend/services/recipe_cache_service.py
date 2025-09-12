@@ -1676,40 +1676,76 @@ class RecipeCacheService:
             return {"total": 0, "valid": 0, "expired": 0}
 
     def _get_all_recipes_from_cache(self, where: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
-        """Get all recipes from cache with optional filtering"""
+        """Get all recipes from cache with optional filtering and proper pagination beyond 1000."""
         try:
             if not self.client or not self.recipe_collection:
                 logger.warning("ChromaDB collections not initialized")
                 return []
-            
-            # Get all recipes from the recipe collection
+
             try:
+                # Determine total available to decide pagination strategy
+                total_count = self.recipe_collection.count()
+            except Exception as e:
+                logger.warning(f"Could not get collection count: {e}")
+                total_count = 0
+
+            try:
+                if total_count and total_count > 1000:
+                    # Paginate in chunks to retrieve all documents
+                    all_documents: List[Any] = []
+                    all_metadatas: List[Any] = []
+                    offset = 0
+                    step = 1000
+                    while offset < total_count:
+                        batch = self.recipe_collection.get(
+                            where=where if where else None,
+                            include=["documents", "metadatas"],
+                            limit=step,
+                            offset=offset
+                        )
+                        docs = batch.get("documents") or []
+                        metas = batch.get("metadatas") or []
+                        # Some clients return nested lists; normalize
+                        if len(docs) and isinstance(docs[0], list):
+                            docs = docs[0]
+                            metas = metas[0] if len(metas) and isinstance(metas[0], list) else metas
+                        all_documents.extend(docs)
+                        all_metadatas.extend(metas)
+                        if not docs:
+                            break
+                        offset += len(docs)
+                    recipe_results = {"documents": all_documents, "metadatas": all_metadatas}
+                else:
+                    # <= 1000, single get is fine
+                    recipe_results = self.recipe_collection.get(
+                        where=where if where else None,
+                        include=["documents", "metadatas"],
+                        limit=1000
+                    )
+            except Exception as e:
+                logger.error(f"Error fetching recipes with pagination: {e}")
+                # Fallback to a single page
                 recipe_results = self.recipe_collection.get(
                     where=where if where else None,
-                    include=["documents", "metadatas"]
+                    include=["documents", "metadatas"],
+                    limit=1000
                 )
-            except Exception as e:
-                logger.error(f"Error fetching all recipes: {e}")
-                return []
-            
+
             if not recipe_results.get('documents'):
                 return []
-            
+
             # Process results
-            all_recipes = []
+            all_recipes: List[Dict[str, Any]] = []
             seen_ids = set()
-            
+
             for i, doc in enumerate(recipe_results['documents']):
                 try:
-                    # Skip empty or invalid documents
                     if not doc or not isinstance(doc, (str, dict)):
                         continue
-                        
-                    # Parse JSON if needed
                     if isinstance(doc, str):
                         try:
                             doc = doc.strip()
-                            if not doc:  # Skip empty strings
+                            if not doc:
                                 continue
                             recipe = json.loads(doc)
                         except json.JSONDecodeError as e:
@@ -1717,32 +1753,24 @@ class RecipeCacheService:
                             continue
                     else:
                         recipe = doc
-                        
-                    # Validate recipe structure
+
                     if not isinstance(recipe, dict) or not recipe.get('id'):
                         continue
-                        
-                    metadata = recipe_results['metadatas'][i] if i < len(recipe_results['metadatas']) else {}
-                    
+
                     recipe_id = recipe.get('id')
                     if not recipe_id or recipe_id in seen_ids:
                         continue
-                    # TTL is disabled - don't check expiration
-                    # if not self._is_cache_valid(metadata.get('cached_at')):
-                    #     logger.debug(f"Skipping recipe {recipe_id}: expired")
-                    #     continue
-                    
+
                     all_recipes.append(recipe)
                     seen_ids.add(recipe_id)
-                    
+
                 except Exception as e:
                     logger.error(f"Unexpected error processing recipe at index {i}: {e}", exc_info=True)
                     continue
-            
-            # Only log once per request, not for every recipe
-            logger.debug(f"Retrieved {len(all_recipes)} recipes from cache")
+
+            logger.debug(f"Retrieved {len(all_recipes)} recipes from cache (paginated)")
             return all_recipes
-            
+
         except Exception as e:
             logger.error(f"Error in _get_all_recipes_from_cache: {e}")
             return [] 

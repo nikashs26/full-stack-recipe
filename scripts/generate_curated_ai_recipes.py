@@ -176,11 +176,10 @@ def estimate_nutrition(core: List[str]) -> Dict[str, float]:
     }
 
 
-def cuisine_image(cuisine: str, title: str) -> str:
-    # Use Unsplash source endpoint to fetch a real photo matching the dish
-    # This returns an actual image for the given query terms
-    q = slugify(f"{title} {cuisine} food")
-    return f"https://source.unsplash.com/800x600/?{q}"
+def cuisine_image_with_seed(cuisine: str, title: str, seed: str) -> str:
+    # Use Unsplash source endpoint and add a signature to force a unique image selection
+    q = slugify(f"{title} {cuisine} recipe food")
+    return f"https://source.unsplash.com/800x600/?{q}&sig={slugify(seed)}"
 
 
 def generate_for_cuisine(cuisine: str, needed: int) -> List[Dict]:
@@ -216,7 +215,7 @@ def generate_for_cuisine(cuisine: str, needed: int) -> List[Dict]:
             "diets": diets,
             "ingredients": ingredients,
             "instructions": instructions,
-            "image": cuisine_image(cuisine, title),
+            "image": cuisine_image_with_seed(cuisine, title, rid),
             "readyInMinutes": random.choice([25, 30, 35, 40]),
             "servings": random.choice([2, 3, 4]),
             **nutrition,
