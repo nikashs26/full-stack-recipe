@@ -1901,7 +1901,6 @@ class RecipeCacheService:
                 logger.info(f"Retrieved {len(all_recipes)} recipes from cache")
                 return all_recipes
                 
-            
         except Exception as e:
             logger.error(f"Error in _get_all_recipes_from_cache: {e}")
             return [] 
