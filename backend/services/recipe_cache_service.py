@@ -1835,80 +1835,86 @@ class RecipeCacheService:
                 logger.warning("ChromaDB collections not initialized")
                 return []
             
-            # Get all recipes from the recipe collection
+            # Get all recipes from the recipe collection using pagination
             try:
-                # Get the limit from environment variable or use default
-                query_limit = int(os.environ.get('CHROMADB_QUERY_LIMIT', '10000'))
-                recipe_results = self.recipe_collection.get(
-                    where=where if where else None,
-                    include=["documents", "metadatas"],
-                    limit=query_limit  # Use environment variable for limit
-                )
-            except Exception as e:
-                logger.error(f"Error fetching all recipes: {e}")
-                return []
-            
-            if not recipe_results.get('documents'):
-                return []
-            
-            # Process results
-            all_recipes = []
-            seen_ids = set()
-            
-            for i, doc in enumerate(recipe_results['documents']):
-                try:
-                    # Skip empty or invalid documents
-                    if not doc or not isinstance(doc, (str, dict)):
-                        continue
-                        
-                    # Parse JSON if needed
-                    if isinstance(doc, str):
+                all_recipes = []
+                offset = 0
+                batch_size = 1000  # ChromaDB's max per query
+                max_recipes = int(os.environ.get('CHROMADB_QUERY_LIMIT', '10000'))
+                
+                while len(all_recipes) < max_recipes:
+                    # Get a batch of recipes
+                    recipe_results = self.recipe_collection.get(
+                        where=where if where else None,
+                        include=["documents", "metadatas"],
+                        limit=batch_size,
+                        offset=offset
+                    )
+                    
+                    if not recipe_results.get('documents') or len(recipe_results['documents']) == 0:
+                        break  # No more recipes
+                    
+                    # Process this batch
+                    batch_recipes = []
+                    for i, doc in enumerate(recipe_results['documents']):
                         try:
-                            doc = doc.strip()
-                            if not doc:  # Skip empty strings
+                            # Skip empty or invalid documents
+                            if not doc or not isinstance(doc, (str, dict)):
                                 continue
-                            recipe = json.loads(doc)
-                        except json.JSONDecodeError as e:
-                            logger.error(f"Error decoding recipe JSON at index {i}: {e}")
+                                
+                            # Parse JSON if needed
+                            if isinstance(doc, str):
+                                try:
+                                    doc = doc.strip()
+                                    if not doc:  # Skip empty strings
+                                        continue
+                                    recipe = json.loads(doc)
+                                except json.JSONDecodeError as e:
+                                    logger.error(f"Error decoding recipe JSON at index {i}: {e}")
+                                    continue
+                            else:
+                                recipe = doc
+                                
+                            # Validate recipe structure
+                            if not isinstance(recipe, dict) or not recipe.get('id'):
+                                continue
+                                
+                            metadata = recipe_results['metadatas'][i] if i < len(recipe_results['metadatas']) else {}
+                            
+                            # Extract actual recipe data from nested structure
+                            recipe_data = recipe
+                            if 'data' in recipe and isinstance(recipe['data'], dict):
+                                # The actual recipe data is in the 'data' field
+                                recipe_data = recipe['data']
+                                # Merge in any additional fields from the top level
+                                if 'id' in recipe and 'id' not in recipe_data:
+                                    recipe_data['id'] = recipe['id']
+                                if 'source' in recipe and 'source' not in recipe_data:
+                                    recipe_data['source'] = recipe['source']
+                            
+                            recipe_id = recipe_data.get('id')
+                            if not recipe_id or recipe_id in [r.get('id') for r in all_recipes]:
+                                continue
+                            
+                            batch_recipes.append(recipe_data)
+                            
+                        except Exception as e:
+                            logger.error(f"Unexpected error processing recipe at index {i}: {e}", exc_info=True)
                             continue
-                    else:
-                        recipe = doc
-                        
-                    # Validate recipe structure
-                    if not isinstance(recipe, dict) or not recipe.get('id'):
-                        continue
-                        
-                    metadata = recipe_results['metadatas'][i] if i < len(recipe_results['metadatas']) else {}
                     
-                    # Extract actual recipe data from nested structure
-                    recipe_data = recipe
-                    if 'data' in recipe and isinstance(recipe['data'], dict):
-                        # The actual recipe data is in the 'data' field
-                        recipe_data = recipe['data']
-                        # Merge in any additional fields from the top level
-                        if 'id' in recipe and 'id' not in recipe_data:
-                            recipe_data['id'] = recipe['id']
-                        if 'source' in recipe and 'source' not in recipe_data:
-                            recipe_data['source'] = recipe['source']
+                    if not batch_recipes:
+                        break  # No valid recipes in this batch
                     
-                    recipe_id = recipe_data.get('id')
-                    if not recipe_id or recipe_id in seen_ids:
-                        continue
-                    # TTL is disabled - don't check expiration
-                    # if not self._is_cache_valid(metadata.get('cached_at')):
-                    #     logger.debug(f"Skipping recipe {recipe_id}: expired")
-                    #     continue
+                    all_recipes.extend(batch_recipes)
+                    offset += batch_size
                     
-                    all_recipes.append(recipe_data)
-                    seen_ids.add(recipe_id)
-                    
-                except Exception as e:
-                    logger.error(f"Unexpected error processing recipe at index {i}: {e}", exc_info=True)
-                    continue
-            
-            # Only log once per request, not for every recipe
-            logger.debug(f"Retrieved {len(all_recipes)} recipes from cache")
-            return all_recipes
+                    # If we got fewer recipes than requested, we've reached the end
+                    if len(batch_recipes) < batch_size:
+                        break
+                
+                logger.info(f"Retrieved {len(all_recipes)} recipes from cache using pagination")
+                return all_recipes
+                
             
         except Exception as e:
             logger.error(f"Error in _get_all_recipes_from_cache: {e}")
