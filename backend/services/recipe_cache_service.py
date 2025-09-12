@@ -1794,6 +1794,14 @@ class RecipeCacheService:
                         if isinstance(doc, str) and doc.strip().startswith('{'):
                             try:
                                 recipe = json.loads(doc)
+                                # Extract actual recipe data from nested structure
+                                if 'data' in recipe and isinstance(recipe['data'], dict):
+                                    recipe = recipe['data']
+                                    # Merge in any additional fields from the top level
+                                    if 'id' in recipe and 'id' not in recipe:
+                                        recipe['id'] = recipe.get('id')
+                                    if 'source' in recipe and 'source' not in recipe:
+                                        recipe['source'] = recipe.get('source')
                             except Exception:
                                 recipe = None
                         # Otherwise, construct a minimal recipe from metadata/title
@@ -1831,7 +1839,8 @@ class RecipeCacheService:
             try:
                 recipe_results = self.recipe_collection.get(
                     where=where if where else None,
-                    include=["documents", "metadatas"]
+                    include=["documents", "metadatas"],
+                    limit=10000  # Increase limit to get more recipes
                 )
             except Exception as e:
                 logger.error(f"Error fetching all recipes: {e}")
@@ -1869,7 +1878,18 @@ class RecipeCacheService:
                         
                     metadata = recipe_results['metadatas'][i] if i < len(recipe_results['metadatas']) else {}
                     
-                    recipe_id = recipe.get('id')
+                    # Extract actual recipe data from nested structure
+                    recipe_data = recipe
+                    if 'data' in recipe and isinstance(recipe['data'], dict):
+                        # The actual recipe data is in the 'data' field
+                        recipe_data = recipe['data']
+                        # Merge in any additional fields from the top level
+                        if 'id' in recipe and 'id' not in recipe_data:
+                            recipe_data['id'] = recipe['id']
+                        if 'source' in recipe and 'source' not in recipe_data:
+                            recipe_data['source'] = recipe['source']
+                    
+                    recipe_id = recipe_data.get('id')
                     if not recipe_id or recipe_id in seen_ids:
                         continue
                     # TTL is disabled - don't check expiration
@@ -1877,7 +1897,7 @@ class RecipeCacheService:
                     #     logger.debug(f"Skipping recipe {recipe_id}: expired")
                     #     continue
                     
-                    all_recipes.append(recipe)
+                    all_recipes.append(recipe_data)
                     seen_ids.add(recipe_id)
                     
                 except Exception as e:
