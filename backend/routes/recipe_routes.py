@@ -290,7 +290,7 @@ def register_recipe_routes(app, recipe_cache):
     @app.route("/api/admin/export-recipes", methods=["GET"])  # server-to-server
     def admin_export_recipes():
         admin_token = request.headers.get("X-Admin-Token", "")
-        expected = os.environ.get("ADMIN_TOKEN", "")
+        expected = os.environ.get("ADMIN_TOKEN") or os.environ.get("ADMIN_SEED_TOKEN", "")
         if not expected or admin_token != expected:
             return jsonify({"status": "error", "message": "Unauthorized"}), 401
         try:
@@ -336,7 +336,7 @@ def register_recipe_routes(app, recipe_cache):
     @app.route("/api/admin/assist-cleanup", methods=["GET", "POST"])  # server-to-server
     def admin_assist_cleanup():
         admin_token = request.headers.get("X-Admin-Token", "")
-        expected = os.environ.get("ADMIN_TOKEN", "")
+        expected = os.environ.get("ADMIN_TOKEN") or os.environ.get("ADMIN_SEED_TOKEN", "")
         if not expected or admin_token != expected:
             return jsonify({"status": "error", "message": "Unauthorized"}), 401
         try:
@@ -397,7 +397,7 @@ def register_recipe_routes(app, recipe_cache):
     def admin_import_recipes():
         try:
             admin_token = request.headers.get("X-Admin-Token", "")
-            expected = os.environ.get("ADMIN_TOKEN", "")
+            expected = os.environ.get("ADMIN_TOKEN") or os.environ.get("ADMIN_SEED_TOKEN", "")
             if not expected or admin_token != expected:
                 return jsonify({"status": "error", "message": "Unauthorized"}), 401
 
