@@ -25,7 +25,7 @@ services:
       - key: FLASK_SECRET_KEY
         generateValue: true
       - key: JWT_SECRET_KEY
-        generateValue: true
+        value: "your-super-secret-jwt-key-for-production-stability"
       - key: ADMIN_SEED_TOKEN
         generateValue: true
       - key: PORT
