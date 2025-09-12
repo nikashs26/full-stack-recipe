@@ -141,26 +141,12 @@ def initialize_services_safely():
             print("🔄 Render detected - restoring user accounts from backup...")
             user_service.restore_users_from_backup()
             
-            # Check if recipes need to be seeded
+            # Skip automatic population on startup - will be done manually
             try:
-                count_result = recipe_cache.get_recipe_count()
-                if isinstance(count_result, dict):
-                    recipe_count = count_result.get('total', 0)
-                else:
-                    recipe_count = count_result
+                recipe_count = recipe_cache.get_recipe_count()
                 print(f"📊 Render cache has {recipe_count} recipes")
-                
-                # If no recipes, automatically populate
-                if recipe_count == 0:
-                    print("🌱 No recipes found - auto-seeding recipes...")
-                    auto_seed_recipes()
-                else:
-                    print("✅ Recipes already loaded")
             except Exception as e:
                 print(f"⚠️ Could not check recipe cache: {e}")
-                # Still try to seed recipes on error
-                print("🌱 Error checking cache - attempting to seed recipes...")
-                auto_seed_recipes()
                 
         except Exception as e:
             print(f"⚠️ Recipe cache service failed to initialize: {e}")
@@ -205,118 +191,46 @@ else:
     # Create a simple recommendations fallback route
     @app.route('/api/recommendations', methods=['GET'])
     def simple_recommendations_fallback():
-        """Simple recommendations fallback when smart_features fails to import"""
-        try:
-            from middleware.auth_middleware import get_current_user_id
-            from backend.services.user_preferences_service import UserPreferencesService
-            
-            # Get user info for preferences
-            user_id = get_current_user_id()
-            limit = request.args.get('limit', 16, type=int)
-            
-            print(f"🔍 Fallback recommendations for user: {user_id}, limit: {limit}")
-            
-            # Get user preferences if available
-            prefs_service = UserPreferencesService()
-            preferences = prefs_service.get_preferences(user_id) if user_id else None
-            
-            print(f"📋 User preferences: {preferences}")
-            
-            # Get all available recipes
-            all_recipes = recipe_cache.get_cached_recipes("", "", {})
-            
-            # Apply basic preference filtering if preferences exist
-            filtered_recipes = []
-            if preferences:
-                favorite_cuisines = preferences.get('favoriteCuisines', [])
-                dietary_restrictions = preferences.get('dietaryRestrictions', [])
+            """Simple recommendations fallback when smart_features fails to import"""
+            try:
+                # Get some recipes from our cache
+                limit = request.args.get('limit', 8, type=int)
+                all_recipes = recipe_cache.get_cached_recipes("", "", {})[:limit*2]  # Get more for variety
                 
-                print(f"🍽️ Filtering for cuisines: {favorite_cuisines}, diets: {dietary_restrictions}")
+                # Simple filtering for variety
+                recommendations = []
+                seen_cuisines = set()
                 
                 for recipe in all_recipes:
-                    include_recipe = True
+                    if len(recommendations) >= limit:
+                        break
                     
-                    # Filter by favorite cuisines
-                    if favorite_cuisines:
-                        recipe_cuisine = recipe.get('cuisine', '').lower()
-                        recipe_cuisines = recipe.get('cuisines', [])
-                        if isinstance(recipe_cuisines, list):
-                            cuisine_match = any(fav.lower() in [c.lower() for c in recipe_cuisines] for fav in favorite_cuisines)
-                        else:
-                            cuisine_match = any(fav.lower() in recipe_cuisine for fav in favorite_cuisines)
-                        
-                        if not cuisine_match:
-                            include_recipe = False
-                    
-                    # Filter by dietary restrictions
-                    if dietary_restrictions and include_recipe:
-                        recipe_diets = recipe.get('diets', [])
-                        if isinstance(recipe_diets, list):
-                            diet_match = all(any(diet.lower() in d.lower() for d in recipe_diets) for diet in dietary_restrictions)
-                        else:
-                            diet_match = all(diet.lower() in str(recipe_diets).lower() for diet in dietary_restrictions)
-                        
-                        if not diet_match:
-                            include_recipe = False
-                    
-                    if include_recipe:
-                        filtered_recipes.append(recipe)
-                        if len(filtered_recipes) >= limit * 3:  # Get extra for variety
-                            break
-            else:
-                # No preferences - return variety from all recipes
-                filtered_recipes = all_recipes[:limit * 3]
-            
-            # Create diverse recommendations
-            recommendations = []
-            seen_cuisines = set()
-            
-            # Shuffle for variety
-            import random
-            random.shuffle(filtered_recipes)
-            
-            for recipe in filtered_recipes:
-                if len(recommendations) >= limit:
-                    break
+                    # Try to get variety of cuisines
+                    cuisine = recipe.get('cuisine', 'Unknown')
+                    if cuisine not in seen_cuisines or len(recommendations) < limit//2:
+                        recommendations.append({
+                            "id": recipe.get('id'),
+                            "title": recipe.get('title', recipe.get('name')),
+                            "image": recipe.get('image', recipe.get('imageUrl')),
+                            "cuisine": cuisine,
+                            "cuisines": recipe.get('cuisines', [cuisine] if cuisine != 'Unknown' else []),
+                            "ingredients": recipe.get('ingredients', []),
+                            "instructions": recipe.get('instructions', []),
+                            "ready_in_minutes": recipe.get('ready_in_minutes', 30),
+                            "diets": recipe.get('diets', []),
+                            "tags": recipe.get('tags', [])
+                        })
+                        seen_cuisines.add(cuisine)
                 
-                # Try to get variety of cuisines
-                cuisine = recipe.get('cuisine', 'Unknown')
-                if cuisine not in seen_cuisines or len(recommendations) < limit//2:
-                    formatted_recipe = {
-                        "id": recipe.get('id'),
-                        "title": recipe.get('title', recipe.get('name')),
-                        "image": recipe.get('image', recipe.get('imageUrl')),
-                        "cuisine": cuisine,
-                        "cuisines": recipe.get('cuisines', [cuisine] if cuisine != 'Unknown' else []),
-                        "ingredients": recipe.get('ingredients', []),
-                        "instructions": recipe.get('instructions', []),
-                        "ready_in_minutes": recipe.get('ready_in_minutes', 30),
-                        "diets": recipe.get('diets', []),
-                        "tags": recipe.get('tags', []),
-                        "description": recipe.get('description', ''),
-                        "prep_time": recipe.get('prep_time', ''),
-                        "cooking_time": recipe.get('cooking_time', ''),
-                        "calories": recipe.get('calories'),
-                        "protein": recipe.get('protein'),
-                        "carbs": recipe.get('carbs'),
-                        "fat": recipe.get('fat')
-                    }
-                    recommendations.append(formatted_recipe)
-                    seen_cuisines.add(cuisine)
-            
-            print(f"✅ Returning {len(recommendations)} fallback recommendations")
-            
-            return jsonify({
-                "success": True,
-                "recommendations": recommendations,
-                "total": len(recommendations),
-                "preferences_applied": preferences is not None,
-                "message": f"Recommendations based on your preferences (fallback mode)" if preferences else "General recommendations (fallback mode)"
-            })
-            
-        except Exception as e:
-            print(f"❌ Error in fallback recommendations: {e}")
-            return jsonify({"error": str(e)}), 500
+                return jsonify({
+                    "success": True,
+                    "recommendations": recommendations,
+                    "total": len(recommendations),
+                    "message": "Simple recommendations (smart features unavailable)"
+                })
+                
+            except Exception as e:
+                return jsonify({"error": str(e)}), 500
 
 # Register image proxy for handling external images
 try:
@@ -330,214 +244,294 @@ app.register_blueprint(migration_bp, url_prefix='/')
 
 print("✓ All route blueprints registered")
 
-# Add root route to prevent 404
-@app.route('/')
-def root():
-    """Root endpoint - API status"""
-    return jsonify({
-        "status": "running",
-        "message": "Recipe API is running",
-        "version": "1.0.0",
-        "endpoints": {
-            "recipes": "/api/recipes",
-            "recommendations": "/api/recommendations", 
-            "auth": "/api/auth",
-            "health": "/health"
-        }
-    })
-
-@app.route('/health')
-def health_check():
-    """Health check endpoint"""
+# Add a dedicated recommendations route that works with preferences
+@app.route('/api/recommendations', methods=['GET'])
+def get_recommendations():
+    """Get personalized recommendations based on user preferences"""
     try:
-        # Check if recipe cache is working
-        recipe_count_result = recipe_cache.get_recipe_count() if recipe_cache else 0
-        if isinstance(recipe_count_result, dict):
-            recipe_count = recipe_count_result.get('total', 0)
-        else:
-            recipe_count = recipe_count_result
+        from middleware.auth_middleware import get_current_user_id
+        from backend.services.user_preferences_service import UserPreferencesService
+        
+        user_id = get_current_user_id()
+        limit = request.args.get('limit', 8, type=int)
+        
+        print(f"🔍 Recommendations for user: {user_id}, limit: {limit}")
+        
+        # Get user preferences
+        prefs_service = UserPreferencesService()
+        preferences = prefs_service.get_preferences(user_id) if user_id else None
+        
+        print(f"📋 User preferences: {preferences}")
+        
+        # Get recipes from cache
+        all_recipes = recipe_cache.get_cached_recipes("", "", {})
+        
+        # Apply basic preference filtering
+        filtered_recipes = []
+        if preferences:
+            favorite_cuisines = preferences.get('favoriteCuisines', [])
+            dietary_restrictions = preferences.get('dietaryRestrictions', [])
             
+            print(f"🍽️ Filtering for cuisines: {favorite_cuisines}, diets: {dietary_restrictions}")
+            
+            for recipe in all_recipes:
+                include_recipe = True
+                
+                # Filter by favorite cuisines (if specified)
+                if favorite_cuisines:
+                    recipe_cuisines = recipe.get('cuisines', [])
+                    if isinstance(recipe_cuisines, list):
+                        cuisine_match = any(fav.lower() in [c.lower() for c in recipe_cuisines] for fav in favorite_cuisines)
+                    else:
+                        cuisine_match = any(fav.lower() in str(recipe_cuisines).lower() for fav in favorite_cuisines)
+                    
+                    if not cuisine_match:
+                        include_recipe = False
+                
+                # Filter by dietary restrictions
+                if dietary_restrictions and include_recipe:
+                    recipe_diets = recipe.get('diets', [])
+                    if isinstance(recipe_diets, list):
+                        diet_match = any(diet.lower() in [d.lower() for d in recipe_diets] for diet in dietary_restrictions)
+                    else:
+                        diet_match = any(diet.lower() in str(recipe_diets).lower() for diet in dietary_restrictions)
+                    
+                    if not diet_match:
+                        include_recipe = False
+                
+                if include_recipe:
+                    filtered_recipes.append(recipe)
+                    if len(filtered_recipes) >= limit * 2:  # Get extra for variety
+                        break
+        else:
+            # No preferences - return variety
+            filtered_recipes = all_recipes[:limit * 2]
+        
+        # Format recommendations
+        recommendations = []
+        seen_cuisines = set()
+        
+        for recipe in filtered_recipes:
+            if len(recommendations) >= limit:
+                break
+                
+            cuisine = recipe.get('cuisine', 'Unknown')
+            if cuisine not in seen_cuisines or len(recommendations) < limit//2:
+                formatted_recipe = {
+                    "id": recipe.get('id'),
+                    "title": recipe.get('title', recipe.get('name')),
+                    "image": recipe.get('image', recipe.get('imageUrl')),
+                    "cuisine": cuisine,
+                    "cuisines": recipe.get('cuisines', [cuisine] if cuisine != 'Unknown' else []),
+                    "ingredients": recipe.get('ingredients', []),
+                    "instructions": recipe.get('instructions', []),
+                    "ready_in_minutes": recipe.get('ready_in_minutes', 30),
+                    "diets": recipe.get('diets', []),
+                    "tags": recipe.get('tags', []),
+                    "description": recipe.get('description', ''),
+                    "prep_time": recipe.get('prep_time', ''),
+                    "cooking_time": recipe.get('cooking_time', ''),
+                }
+                recommendations.append(formatted_recipe)
+                seen_cuisines.add(cuisine)
+        
+        print(f"✅ Returning {len(recommendations)} recommendations")
+        
         return jsonify({
-            "status": "healthy",
-            "timestamp": "2025-09-12",
-            "database": "connected",
-            "recipes_loaded": recipe_count,
-            "services": ["ChromaDB", "Authentication", "Image Proxy"]
+            "success": True,
+            "recommendations": recommendations,
+            "total": len(recommendations),
+            "preferences_applied": preferences is not None,
+            "message": f"Recommendations based on your preferences" if preferences else "General recommendations"
         })
+        
     except Exception as e:
-        return jsonify({
-            "status": "unhealthy", 
-            "error": str(e)
-        }), 500
+        print(f"❌ Error in recommendations: {e}")
+        return jsonify({"error": str(e)}), 500
 
-# The recommendations route is handled by smart_features.py when available
-# or by the fallback route when smart features are disabled
-
-def auto_seed_recipes():
-    """Automatically seed recipes on startup for production deployment"""
+# Check and restore data if needed
+def check_and_restore_data():
+    """Check if data exists and automatically restore if needed"""
     try:
-        print("🌱 Starting automatic recipe seeding...")
+        # Check if we have any recipes
+        result = recipe_cache.recipe_collection.get(limit=1)
+        if not result['ids']:
+            print("⚠️ No recipes found in ChromaDB - automatically importing...")
+            auto_import_recipes()
+        else:
+            print(f"✅ ChromaDB has {len(result['ids'])} recipes")
+    except Exception as e:
+        print(f"⚠️ Error checking ChromaDB: {e}")
+
+def auto_import_recipes():
+    """Automatically import recipes from local data files"""
+    try:
         import json
         import os
         
-        # First try to load exported recipes from backup files
-        backup_files = [
-            "production_recipes_essential.json",
-            "production_recipes_backup.json"
-        ]
+        # Try to find recipe data files
+        recipe_files = ["recipes_data.json", "backend/recipes_data.json"]
         
-        total_added = 0
-        recipes_loaded = False
-        
-        for backup_file in backup_files:
-            if os.path.exists(backup_file):
-                try:
-                    print(f"📦 Loading recipes from {backup_file}...")
-                    with open(backup_file, 'r', encoding='utf-8') as f:
-                        backup_data = json.load(f)
-                    
-                    recipes = backup_data.get('recipes', [])
-                    print(f"📊 Found {len(recipes)} recipes in backup")
-                    
-                    for recipe in recipes:
-                        try:
-                            recipe_id = recipe.get('id', f"backup_{total_added}")
-                            recipe_cache.cache_recipe(recipe_id, recipe)
-                            total_added += 1
-                            if total_added % 100 == 0:
-                                print(f"✅ Loaded {total_added} recipes...")
-                        except Exception as e:
-                            print(f"❌ Failed to load recipe {recipe.get('title', 'Unknown')}: {e}")
-                    
-                    recipes_loaded = True
-                    print(f"✅ Successfully loaded {total_added} recipes from backup!")
-                    break
-                    
-                except Exception as e:
-                    print(f"❌ Failed to load {backup_file}: {e}")
+        for file_path in recipe_files:
+            if os.path.exists(file_path):
+                print(f"📁 Found recipe data: {file_path}")
+                
+                with open(file_path, 'r') as f:
+                    data = json.load(f)
+                
+                if isinstance(data, dict) and 'recipes' in data:
+                    recipes = data['recipes']
+                elif isinstance(data, list):
+                    recipes = data
+                else:
                     continue
-        
-        # If no backup files found, fall back to TheMealDB seeding
-        if not recipes_loaded:
-            print("⚠️ No recipe backup found, seeding from TheMealDB...")
-            
-            try:
-                import requests
-                categories = ['Chicken', 'Pasta', 'Seafood', 'Vegetarian', 'Dessert']
                 
-                for category in categories:
+                # Import all recipes for complete recipe collection
+                recipes_to_import = recipes
+                print(f"🚀 Auto-importing {len(recipes_to_import)} recipes...")
+                
+                # Simple recipe normalization for auto-import
+                ids, docs, metas = [], [], []
+                for i, item in enumerate(recipes_to_import):
                     try:
-                        print(f"📡 Fetching {category} recipes...")
-                        response = requests.get(f"https://www.themealdb.com/api/json/v1/1/filter.php?c={category}", timeout=15)
+                        # Basic normalization
+                        recipe_id = str(item.get('id', f'recipe_{i}'))
+                        title = str(item.get('title', item.get('name', f'Recipe {i}')))
                         
-                        if response.status_code == 200:
-                            data = response.json()
-                            meals = data.get('meals', [])[:8]  # 8 per category = 40 total
-                            
-                            for meal in meals:
-                                # Get detailed recipe info
-                                detail_response = requests.get(f"https://www.themealdb.com/api/json/v1/1/lookup.php?i={meal['idMeal']}", timeout=10)
-                                if detail_response.status_code == 200:
-                                    detail_data = detail_response.json()
-                                    detailed_meal = detail_data.get('meals', [{}])[0]
-                                    
-                                    # Extract ingredients
-                                    ingredients = []
-                                    for i in range(1, 21):
-                                        ingredient = detailed_meal.get(f'strIngredient{i}', '').strip()
-                                        measure = detailed_meal.get(f'strMeasure{i}', '').strip()
-                                        if ingredient and ingredient.lower() != 'null':
-                                            ingredients.append(f"{measure} {ingredient}".strip())
-                                    
-                                    # Format recipe for ChromaDB
-                                    recipe = {
-                                        'id': f"themealdb_{meal['idMeal']}",
-                                        'title': detailed_meal.get('strMeal', 'Unknown Recipe'),
-                                        'image': detailed_meal.get('strMealThumb', ''),
-                                        'cuisine': detailed_meal.get('strArea', category),
-                                        'cuisines': [detailed_meal.get('strArea', category)],
-                                        'ingredients': ingredients,
-                                        'instructions': detailed_meal.get('strInstructions', '').split('. ') if detailed_meal.get('strInstructions') else [],
-                                        'source': 'TheMealDB',
-                                        'category': category,
-                                        'diets': ['vegetarian'] if category == 'Vegetarian' else [],
-                                        'tags': [category.lower(), detailed_meal.get('strArea', '').lower()],
-                                        'ready_in_minutes': 45,
-                                        'difficulty': 'medium',
-                                        'description': f"Delicious {category.lower()} recipe from {detailed_meal.get('strArea', 'international')} cuisine."
-                                    }
-                                    
-                                    # Add to ChromaDB
-                                    try:
-                                        recipe_cache.cache_recipe(recipe['id'], recipe)
-                                        total_added += 1
-                                        if total_added % 10 == 0:
-                                            print(f"✅ Loaded {total_added} recipes...")
-                                    except Exception as e:
-                                        print(f"❌ Failed to add {recipe['title']}: {e}")
-                                
-                                # Rate limiting
-                                import time
-                                time.sleep(0.2)
-                    
+                        # Create minimal normalized recipe
+                        normalized = {
+                            'id': recipe_id,
+                            'title': title,
+                            'ingredients': item.get('ingredients', []),
+                            'instructions': item.get('instructions', []),
+                            'image': item.get('image', ''),
+                            'cuisines': item.get('cuisines', []),
+                            'diets': item.get('diets', [])
+                        }
+                        
+                        ids.append(recipe_id)
+                        docs.append(json.dumps(normalized))
+                        
+                        metadata = {
+                            'id': recipe_id,
+                            'title': title,
+                            'source': 'auto_startup',
+                        }
+                        
+                        if normalized.get('cuisines') and isinstance(normalized['cuisines'], list):
+                            metadata['cuisines'] = ','.join(normalized['cuisines'][:3])  # First 3 cuisines
+                        
+                        metas.append(metadata)
+                        
                     except Exception as e:
-                        print(f"❌ Error fetching {category}: {e}")
+                        print(f"⚠️ Error processing recipe {i}: {e}")
                         continue
-                        
-            except Exception as e:
-                print(f"❌ TheMealDB seeding failed: {e}")
                 
-                # Absolute fallback - minimal recipes
-                minimal_recipes = [
-                    {
-                        'id': 'fallback_pasta',
-                        'title': 'Simple Spaghetti',
-                        'image': 'https://images.unsplash.com/photo-1621996346565-e3dbc353d2e5?w=500',
-                        'cuisine': 'Italian',
-                        'cuisines': ['Italian'],
-                        'ingredients': ['spaghetti', 'olive oil', 'garlic', 'parmesan'],
-                        'instructions': ['Boil pasta', 'Heat oil and garlic', 'Combine with cheese'],
-                        'source': 'Fallback',
-                        'diets': ['vegetarian'],
-                        'tags': ['pasta', 'simple'],
-                        'ready_in_minutes': 20,
-                        'difficulty': 'easy'
-                    }
-                ]
+                if ids:
+                    recipe_cache.recipe_collection.add(ids=ids, documents=docs, metadatas=metas)
+                    print(f"✅ Successfully imported {len(ids)} recipes automatically!")
+                    return
                 
-                for recipe in minimal_recipes:
-                    try:
-                        recipe_cache.cache_recipe(recipe['id'], recipe)
-                        total_added += 1
-                        print(f"✅ Added fallback: {recipe['title']}")
-                    except Exception as e:
-                        print(f"❌ Failed to add fallback: {e}")
-        
-        print(f"🎉 Auto-seeding complete! Added {total_added} recipes")
-        return total_added
+        print("⚠️ No recipe data files found for auto-import")
         
     except Exception as e:
-        print(f"❌ Auto-seeding failed: {e}")
-        return 0
+        print(f"❌ Auto-import failed: {e}")
 
+# Check data on startup
+check_and_restore_data()
 
-# Initialize the application
-if __name__ == "__main__":
-    debug_mode = os.environ.get("DEBUG", "false").lower() == "true"
-    
-    if debug_mode:
-        print("🐛 Debug mode enabled")
+# Basic health check route - lightweight for Render monitoring
+@app.route('/api/health')
+def health_check():
+    return {'status': 'healthy', 'message': 'Render backend is running', 'routes': 'all registered'}
+
+# Separate readiness check for heavy operations
+@app.route('/api/ready')
+def readiness_check():
+    """Check if the app is ready to serve requests (includes database checks)"""
+    try:
+        ready = True
+        services = {}
         
-    # Start the application
-    port = int(os.environ.get("PORT", 8081))
-    print(f"🚀 Starting Flask app on port {port}")
-    
-    # Initialize the app properly
-    print("✅ App initialization complete")
-    
-    app.run(
-        host="0.0.0.0", 
-        port=port, 
-        debug=debug_mode,
-        threaded=True
-    )
+        # Check recipe cache only if initialized
+        if recipe_cache:
+            try:
+                # Lightweight check - just verify collection exists
+                services['recipe_cache'] = 'ready'
+            except Exception as e:
+                services['recipe_cache'] = f'error: {str(e)}'
+                ready = False
+        else:
+            services['recipe_cache'] = 'not_initialized'
+            
+        return {
+            'status': 'ready' if ready else 'not_ready',
+            'services': services,
+            'message': 'All services operational' if ready else 'Some services unavailable'
+        }, 200 if ready else 503
+        
+    except Exception as e:
+        return {
+            'status': 'error',
+            'message': f'Health check failed: {str(e)}'
+        }, 500
+
+# Debug endpoint for ChromaDB status
+@app.route('/api/debug-chromadb', methods=['GET'])
+def debug_chromadb():
+    """Debug endpoint to check ChromaDB status"""
+    try:
+        import os
+        from backend.services.user_service import UserService
+        from backend.services.user_preferences_service import UserPreferencesService
+        
+        debug_info = {
+            'chromadb_available': True,  # We know it's available since we're using it
+            'environment': {
+                'CHROMA_DB_PATH': os.environ.get('CHROMA_DB_PATH'),
+                'RENDER_ENVIRONMENT': os.environ.get('RENDER_ENVIRONMENT'),
+                'RAILWAY_ENVIRONMENT': os.environ.get('RAILWAY_ENVIRONMENT'),
+            },
+            'paths': {
+                'current_dir': os.getcwd(),
+                'chroma_path': os.path.abspath(os.environ.get('CHROMA_DB_PATH', './chroma_db')),
+                'path_exists': os.path.exists(os.path.abspath(os.environ.get('CHROMA_DB_PATH', './chroma_db')))
+            }
+        }
+        
+        # Test UserService initialization
+        try:
+            user_service = UserService()
+            debug_info['user_service'] = {
+                'client_available': user_service.client is not None,
+                'users_collection_available': user_service.users_collection is not None,
+                'verification_tokens_collection_available': user_service.verification_tokens_collection is not None
+            }
+        except Exception as e:
+            debug_info['user_service'] = {'error': str(e)}
+        
+        # Test UserPreferencesService initialization
+        try:
+            prefs_service = UserPreferencesService()
+            debug_info['preferences_service'] = {
+                'client_available': prefs_service.client is not None,
+                'collection_available': prefs_service.collection is not None
+            }
+        except Exception as e:
+            debug_info['preferences_service'] = {'error': str(e)}
+        
+        return jsonify(debug_info)
+        
+    except Exception as e:
+        return jsonify({'error': f'Debug failed: {str(e)}'}), 500
+
+# Root route
+@app.route('/')
+def root():
+    return {'message': 'Recipe App Backend API - Render Deployment', 'url': 'https://dietary-delight.onrender.com'}
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 10000))
+    print(f"🚀 Starting Render Flask app on port {port}...")
+    print(f"🌐 Binding to host 0.0.0.0 and port {port}")
+    app.run(host="0.0.0.0", port=port, debug=False)
