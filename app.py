@@ -185,11 +185,12 @@ if not os.environ.get('DISABLE_SMART_FEATURES', 'FALSE').upper() == 'TRUE':
         app.register_blueprint(smart_features_bp, url_prefix='/api')
         print("✓ Smart features routes imported and registered")
     except Exception as e:
-        print(f"⚠️ Smart features disabled due to import error: {e}")
-        print(f"⚠️ Error details: {type(e).__name__}: {str(e)}")
-        # Create a simple recommendations fallback route
-        @app.route('/api/recommendations', methods=['GET'])
-        def simple_recommendations_fallback():
+        print(f"⚠️ Smart features could not be imported: {e}")
+else:
+    print("⚠️ Smart features disabled via environment variable")
+    # Create a simple recommendations fallback route
+    @app.route('/api/recommendations', methods=['GET'])
+    def simple_recommendations_fallback():
             """Simple recommendations fallback when smart_features fails to import"""
             try:
                 # Get some recipes from our cache
@@ -232,6 +233,14 @@ if not os.environ.get('DISABLE_SMART_FEATURES', 'FALSE').upper() == 'TRUE':
                 return jsonify({"error": str(e)}), 500
 else:
     print("⚠️ Smart features disabled via environment variable")
+
+# Register image proxy for handling external images
+try:
+    app.register_blueprint(image_proxy_bp, url_prefix='/api')
+    print("✓ Image proxy routes registered")
+except Exception as e:
+    print(f"⚠️ Image proxy could not be registered: {e}")
+
 app.register_blueprint(admin_bp, url_prefix='/')
 app.register_blueprint(migration_bp, url_prefix='/')
 
