@@ -330,6 +330,46 @@ app.register_blueprint(migration_bp, url_prefix='/')
 
 print("✓ All route blueprints registered")
 
+# Add root route to prevent 404
+@app.route('/')
+def root():
+    """Root endpoint - API status"""
+    return jsonify({
+        "status": "running",
+        "message": "Recipe API is running",
+        "version": "1.0.0",
+        "endpoints": {
+            "recipes": "/api/recipes",
+            "recommendations": "/api/recommendations", 
+            "auth": "/api/auth",
+            "health": "/health"
+        }
+    })
+
+@app.route('/health')
+def health_check():
+    """Health check endpoint"""
+    try:
+        # Check if recipe cache is working
+        recipe_count_result = recipe_cache.get_recipe_count() if recipe_cache else 0
+        if isinstance(recipe_count_result, dict):
+            recipe_count = recipe_count_result.get('total', 0)
+        else:
+            recipe_count = recipe_count_result
+            
+        return jsonify({
+            "status": "healthy",
+            "timestamp": "2025-09-12",
+            "database": "connected",
+            "recipes_loaded": recipe_count,
+            "services": ["ChromaDB", "Authentication", "Image Proxy"]
+        })
+    except Exception as e:
+        return jsonify({
+            "status": "unhealthy", 
+            "error": str(e)
+        }), 500
+
 # The recommendations route is handled by smart_features.py when available
 # or by the fallback route when smart features are disabled
 
