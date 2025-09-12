@@ -368,6 +368,7 @@ def auto_import_recipes():
     try:
         import json
         import os
+        import time
         
         print("🌱 Starting automatic recipe seeding...")
         
@@ -402,16 +403,52 @@ def auto_import_recipes():
                     
                     print(f"📊 Found {len(recipes)} recipes in backup")
                     
-                    # Import recipes using your existing cache method
-                    for recipe in recipes[:1000]:  # Limit to 1000 for startup speed
+                    # Import recipes directly to ChromaDB collections
+                    recipes_to_import = recipes[:1000]  # Limit to 1000 for startup speed
+                    
+                    # Prepare data for ChromaDB
+                    ids = []
+                    documents = []
+                    metadatas = []
+                    
+                    for recipe in recipes_to_import:
                         try:
-                            recipe_id = recipe.get('id', f"backup_{total_added}")
-                            recipe_cache.cache_recipe(recipe_id, recipe)
+                            recipe_id = str(recipe.get('id', f"backup_{total_added}"))
+                            ids.append(recipe_id)
+                            
+                            # Store the full recipe as a JSON string
+                            documents.append(json.dumps(recipe))
+                            
+                            # Create metadata
+                            metadata = {
+                                'id': recipe_id,
+                                'title': recipe.get('title', 'Unknown Recipe'),
+                                'source': recipe.get('source', 'backup'),
+                                'cached_at': str(int(time.time()))
+                            }
+                            
+                            # Add additional metadata if available
+                            if recipe.get('cuisines'):
+                                metadata['cuisines'] = ','.join(recipe['cuisines'][:3])
+                            if recipe.get('diets'):
+                                metadata['diets'] = ','.join(recipe['diets'][:3])
+                            
+                            metadatas.append(metadata)
                             total_added += 1
-                            if total_added % 100 == 0:
-                                print(f"✅ Loaded {total_added} recipes...")
                         except Exception as e:
-                            print(f"❌ Failed to load recipe {recipe.get('title', 'Unknown')}: {e}")
+                            print(f"❌ Failed to process recipe {recipe.get('title', 'Unknown')}: {e}")
+                    
+                    # Batch insert to ChromaDB
+                    if ids:
+                        try:
+                            recipe_cache.recipe_collection.upsert(
+                                ids=ids,
+                                documents=documents,
+                                metadatas=metadatas
+                            )
+                            print(f"✅ Successfully imported {len(ids)} recipes to ChromaDB")
+                        except Exception as e:
+                            print(f"❌ Failed to upsert recipes to ChromaDB: {e}")
                     
                     recipes_loaded = True
                     print(f"✅ Successfully loaded {total_added} recipes from {backup_file}!")
@@ -456,13 +493,33 @@ def auto_import_recipes():
                 }
             ]
             
-            for recipe in curated_recipes:
+            # Add curated recipes to ChromaDB
+            if curated_recipes:
                 try:
-                    recipe_cache.cache_recipe(recipe['id'], recipe)
-                    total_added += 1
-                    print(f"✅ Added curated recipe: {recipe['title']}")
+                    curated_ids = []
+                    curated_docs = []
+                    curated_metas = []
+                    
+                    for recipe in curated_recipes:
+                        curated_ids.append(recipe['id'])
+                        curated_docs.append(json.dumps(recipe))
+                        curated_metas.append({
+                            'id': recipe['id'],
+                            'title': recipe['title'],
+                            'source': recipe['source'],
+                            'cached_at': str(int(time.time()))
+                        })
+                    
+                    recipe_cache.recipe_collection.upsert(
+                        ids=curated_ids,
+                        documents=curated_docs,
+                        metadatas=curated_metas
+                    )
+                    total_added += len(curated_recipes)
+                    print(f"✅ Added {len(curated_recipes)} curated recipes")
+                    
                 except Exception as e:
-                    print(f"❌ Failed to add curated recipe: {e}")
+                    print(f"❌ Failed to add curated recipes: {e}")
         
         print(f"🎉 Auto-seeding complete! Added {total_added} recipes")
         return total_added
