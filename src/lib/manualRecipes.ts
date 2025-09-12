@@ -290,6 +290,63 @@ export const fetchManualRecipes = async (
         // Use getReliableImageUrl to handle the image URL properly
         imageUrl = getReliableImageUrl(imageUrl, 'medium');
         
+        // Build ingredients from multiple possible shapes
+        const normalizedIngredients: Array<{ name: string; amount?: string | number; unit?: string }> = (() => {
+          // Preferred: ingredients as objects with name/amount/unit
+          if (Array.isArray(recipeData.ingredients) && recipeData.ingredients.length > 0) {
+            return recipeData.ingredients.map((ing: any) => ({
+              name: ing?.name || ing?.ingredient || '',
+              amount: (ing?.amount !== undefined && ing?.amount !== null)
+                ? (typeof ing.amount === 'object'
+                    ? (ing.amount?.us?.value ?? ing.amount?.metric?.value ?? '')
+                    : String(ing.amount))
+                : '',
+              unit: ing?.unit || ing?.measures?.us?.unitShort || ing?.measures?.metric?.unitShort || ''
+            }));
+          }
+          // Spoonacular-style extendedIngredients
+          if (Array.isArray((recipeData as any).extendedIngredients) && (recipeData as any).extendedIngredients.length > 0) {
+            return (recipeData as any).extendedIngredients.map((ing: any) => ({
+              name: ing?.name || ing?.originalName || '',
+              amount: (ing?.measures?.us?.amount ?? ing?.measures?.metric?.amount ?? ing?.amount ?? ''),
+              unit: ing?.measures?.us?.unitShort || ing?.measures?.metric?.unitShort || ing?.unit || ''
+            }));
+          }
+          // Ingredients provided as strings
+          if (Array.isArray(recipeData.ingredients) && recipeData.ingredients.length > 0) {
+            return recipeData.ingredients
+              .filter((ing: any) => typeof ing === 'string')
+              .map((textIng: string) => ({ name: textIng, amount: '', unit: '' }));
+          }
+          return [];
+        })();
+
+        // Build instructions from string/array/analyzedInstructions
+        const normalizedInstructions: string[] = (() => {
+          // Already an array of steps
+          if (Array.isArray(recipeData.instructions) && recipeData.instructions.length > 0) {
+            return recipeData.instructions.filter((s: any) => typeof s === 'string' && s.trim()).map((s: string) => s.trim());
+          }
+          // Single string of instructions -> split on newlines or numbered steps
+          if (typeof recipeData.instructions === 'string' && recipeData.instructions.trim()) {
+            const raw = recipeData.instructions.trim();
+            const splitByNewline = raw.split(/\n+|\r+/).map(s => s.trim()).filter(Boolean);
+            if (splitByNewline.length > 1) return splitByNewline;
+            // Fallback: split by sentences or step numbers
+            const splitBySteps = raw.split(/\s*(?:\d+\.|Step\s*\d+:?)\s+/i).map(s => s.trim()).filter(Boolean);
+            if (splitBySteps.length > 1) return splitBySteps;
+            return [raw];
+          }
+          // Spoonacular-style analyzedInstructions
+          if (Array.isArray((recipeData as any).analyzedInstructions) && (recipeData as any).analyzedInstructions.length > 0) {
+            const sections = (recipeData as any).analyzedInstructions as any[];
+            const steps = sections.flatMap(section => Array.isArray(section?.steps) ? section.steps : []);
+            const texts = steps.map((st: any) => (typeof st?.step === 'string' ? st.step.trim() : '')).filter(Boolean);
+            if (texts.length > 0) return texts;
+          }
+          return [];
+        })();
+
         return {
           id: recipe.id || recipeData.id || `recipe-${Math.random().toString(36).substr(2, 9)}`,
           title: recipeData.title || 'Untitled Recipe',
@@ -302,19 +359,17 @@ export const fetchManualRecipes = async (
           dietary_restrictions: diets, // Use the merged diets array
           dish_types: dishTypes,
           image: imageUrl,
-          ingredients: Array.isArray(recipeData.ingredients) 
-            ? recipeData.ingredients.map((ing: any) => ({
-                name: ing.name || '',
-                amount: ing.amount?.toString() || '',
-                unit: ing.unit || ''
-              }))
-            : [],
+          ingredients: normalizedIngredients,
+          instructions: normalizedInstructions,
           created_at: recipeData.created_at || new Date().toISOString(),
           updated_at: recipeData.updated_at || new Date().toISOString(),
           // Include source for debugging
           source: recipe.source || 'unknown'
         };
       });
+      
+      // Filter out recipes that have neither ingredients nor instructions (clearly unusable)
+      const usableRecipes = transformedRecipes.filter(r => (Array.isArray(r.ingredients) && r.ingredients.length > 0) || (Array.isArray(r.instructions) && r.instructions.length > 0));
       
       console.log('🔍 Search results summary:');
       console.log('  - Original query:', queryStr);
@@ -324,8 +379,8 @@ export const fetchManualRecipes = async (
       console.log('  - First recipe title:', transformedRecipes[0]?.title || 'No title');
       
       return {
-        recipes: transformedRecipes,
-        total: total || transformedRecipes.length
+        recipes: usableRecipes,
+        total: total || usableRecipes.length
       };
     } else {
       // If no recipes found, return empty array with 0 total
