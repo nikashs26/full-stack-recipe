@@ -417,34 +417,101 @@ def auto_seed_recipes():
                     print(f"❌ Failed to load {backup_file}: {e}")
                     continue
         
-        # If no backup files found, fall back to minimal seeding
+        # If no backup files found, fall back to TheMealDB seeding
         if not recipes_loaded:
-            print("⚠️ No recipe backup found, creating minimal seed recipes...")
+            print("⚠️ No recipe backup found, seeding from TheMealDB...")
             
-            minimal_recipes = [
-                {
-                    'id': 'seed_chicken_pasta',
-                    'title': 'Chicken Alfredo Pasta',
-                    'image': 'https://images.unsplash.com/photo-1621996346565-e3dbc353d2e5?w=500',
-                    'cuisine': 'Italian',
-                    'cuisines': ['Italian'],
-                    'ingredients': ['chicken breast', 'fettuccine pasta', 'heavy cream', 'parmesan cheese', 'garlic', 'butter'],
-                    'instructions': ['Cook pasta according to package directions', 'Season and cook chicken', 'Make alfredo sauce with cream and cheese', 'Combine all ingredients'],
-                    'source': 'Fallback',
-                    'diets': [],
-                    'tags': ['pasta', 'chicken', 'creamy'],
-                    'ready_in_minutes': 30,
-                    'difficulty': 'medium'
-                }
-            ]
-            
-            for recipe in minimal_recipes:
-                try:
-                    recipe_cache.cache_recipe(recipe['id'], recipe)
-                    total_added += 1
-                    print(f"✅ Added fallback recipe: {recipe['title']}")
-                except Exception as e:
-                    print(f"❌ Failed to add fallback recipe: {e}")
+            try:
+                import requests
+                categories = ['Chicken', 'Pasta', 'Seafood', 'Vegetarian', 'Dessert']
+                
+                for category in categories:
+                    try:
+                        print(f"📡 Fetching {category} recipes...")
+                        response = requests.get(f"https://www.themealdb.com/api/json/v1/1/filter.php?c={category}", timeout=15)
+                        
+                        if response.status_code == 200:
+                            data = response.json()
+                            meals = data.get('meals', [])[:8]  # 8 per category = 40 total
+                            
+                            for meal in meals:
+                                # Get detailed recipe info
+                                detail_response = requests.get(f"https://www.themealdb.com/api/json/v1/1/lookup.php?i={meal['idMeal']}", timeout=10)
+                                if detail_response.status_code == 200:
+                                    detail_data = detail_response.json()
+                                    detailed_meal = detail_data.get('meals', [{}])[0]
+                                    
+                                    # Extract ingredients
+                                    ingredients = []
+                                    for i in range(1, 21):
+                                        ingredient = detailed_meal.get(f'strIngredient{i}', '').strip()
+                                        measure = detailed_meal.get(f'strMeasure{i}', '').strip()
+                                        if ingredient and ingredient.lower() != 'null':
+                                            ingredients.append(f"{measure} {ingredient}".strip())
+                                    
+                                    # Format recipe for ChromaDB
+                                    recipe = {
+                                        'id': f"themealdb_{meal['idMeal']}",
+                                        'title': detailed_meal.get('strMeal', 'Unknown Recipe'),
+                                        'image': detailed_meal.get('strMealThumb', ''),
+                                        'cuisine': detailed_meal.get('strArea', category),
+                                        'cuisines': [detailed_meal.get('strArea', category)],
+                                        'ingredients': ingredients,
+                                        'instructions': detailed_meal.get('strInstructions', '').split('. ') if detailed_meal.get('strInstructions') else [],
+                                        'source': 'TheMealDB',
+                                        'category': category,
+                                        'diets': ['vegetarian'] if category == 'Vegetarian' else [],
+                                        'tags': [category.lower(), detailed_meal.get('strArea', '').lower()],
+                                        'ready_in_minutes': 45,
+                                        'difficulty': 'medium',
+                                        'description': f"Delicious {category.lower()} recipe from {detailed_meal.get('strArea', 'international')} cuisine."
+                                    }
+                                    
+                                    # Add to ChromaDB
+                                    try:
+                                        recipe_cache.cache_recipe(recipe['id'], recipe)
+                                        total_added += 1
+                                        if total_added % 10 == 0:
+                                            print(f"✅ Loaded {total_added} recipes...")
+                                    except Exception as e:
+                                        print(f"❌ Failed to add {recipe['title']}: {e}")
+                                
+                                # Rate limiting
+                                import time
+                                time.sleep(0.2)
+                    
+                    except Exception as e:
+                        print(f"❌ Error fetching {category}: {e}")
+                        continue
+                        
+            except Exception as e:
+                print(f"❌ TheMealDB seeding failed: {e}")
+                
+                # Absolute fallback - minimal recipes
+                minimal_recipes = [
+                    {
+                        'id': 'fallback_pasta',
+                        'title': 'Simple Spaghetti',
+                        'image': 'https://images.unsplash.com/photo-1621996346565-e3dbc353d2e5?w=500',
+                        'cuisine': 'Italian',
+                        'cuisines': ['Italian'],
+                        'ingredients': ['spaghetti', 'olive oil', 'garlic', 'parmesan'],
+                        'instructions': ['Boil pasta', 'Heat oil and garlic', 'Combine with cheese'],
+                        'source': 'Fallback',
+                        'diets': ['vegetarian'],
+                        'tags': ['pasta', 'simple'],
+                        'ready_in_minutes': 20,
+                        'difficulty': 'easy'
+                    }
+                ]
+                
+                for recipe in minimal_recipes:
+                    try:
+                        recipe_cache.cache_recipe(recipe['id'], recipe)
+                        total_added += 1
+                        print(f"✅ Added fallback: {recipe['title']}")
+                    except Exception as e:
+                        print(f"❌ Failed to add fallback: {e}")
         
         print(f"🎉 Auto-seeding complete! Added {total_added} recipes")
         return total_added
