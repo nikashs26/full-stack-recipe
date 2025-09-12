@@ -78,8 +78,9 @@ export const fetchManualRecipes = async (
     } else {
       // Fallback: if no pagination options, use defaults
       params.append('offset', '0');
-      params.append('limit', '1000'); // Increased from 20 to 1000 to match backend default
-      console.log('⚠️ Using default pagination: offset 0, limit 1000');
+      const defaultLimit = import.meta.env.VITE_RECIPE_LIMIT || '10000';
+      params.append('limit', defaultLimit);
+      console.log(`⚠️ Using default pagination: offset 0, limit ${defaultLimit}`);
     }
     
     // Handle cuisines filter

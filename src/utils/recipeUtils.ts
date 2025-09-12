@@ -313,9 +313,22 @@ export const getReliableImageUrl = (imageUrl?: string, size: 'small' | 'medium' 
     return true;
   };
   
-  // If the original URL is valid, use the image proxy to avoid CORS issues
+  // If the original URL is valid, try direct access first, then proxy as fallback
   if (imageUrl && isValidImageUrl(imageUrl)) {
-    // Use the backend image proxy to avoid CORS issues
+    // For production (Netlify), try direct access first to avoid proxy issues
+    if (import.meta.env.PROD) {
+      // Check if it's already a full URL
+      if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+        return imageUrl;
+      }
+      // If it's a relative URL, make it absolute
+      if (imageUrl.startsWith('/')) {
+        const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://dietary-delight.onrender.com';
+        return `${backendUrl}${imageUrl}`;
+      }
+    }
+    
+    // Fallback to proxy for development or problematic URLs
     const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://dietary-delight.onrender.com';
     const encodedUrl = encodeURIComponent(imageUrl);
     return `${backendUrl}/api/proxy-image?url=${encodedUrl}`;

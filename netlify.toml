@@ -8,6 +8,7 @@
   PYTHON_VERSION = "3.11"
   VITE_BACKEND_URL = "https://dietary-delight.onrender.com"
   MISE_DISABLE = "1"
+  VITE_RECIPE_LIMIT = "10000"
 
 [[redirects]]
   from = "/*"

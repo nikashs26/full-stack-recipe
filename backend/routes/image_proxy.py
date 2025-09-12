@@ -4,6 +4,7 @@ This avoids CORS issues when loading images from external sources
 """
 
 from flask import Blueprint, request, Response, jsonify
+from flask_cors import cross_origin
 import requests
 import logging
 from functools import wraps
@@ -35,6 +36,10 @@ def get_cached_image(url):
     return None, None
 
 @image_proxy_bp.route('/proxy-image')
+@cross_origin(origins=['http://localhost:8081', 'http://localhost:5173', 'https://betterbulk.netlify.app'], 
+             methods=['GET', 'OPTIONS'],
+             allow_headers=['Content-Type', 'Authorization', 'X-Requested-With'],
+             supports_credentials=True)
 def proxy_image():
     """
     Proxy external images to avoid CORS issues
@@ -49,8 +54,13 @@ def proxy_image():
         # Check cache first
         cached_data, cached_type = get_cached_image(image_url)
         if cached_data:
-
-            return Response(cached_data, mimetype=cached_type)
+            # Create response with proper CORS headers for cached data
+            response = Response(cached_data, mimetype=cached_type)
+            response.headers['Access-Control-Allow-Origin'] = '*'
+            response.headers['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
+            response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With'
+            response.headers['Cache-Control'] = 'public, max-age=3600'
+            return response
         
         # Fetch image from external source
 
@@ -71,9 +81,14 @@ def proxy_image():
         # Cache the image
         cache_image(image_url, image_data, content_type)
         
-
+        # Create response with proper CORS headers
+        response = Response(image_data, mimetype=content_type)
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        response.headers['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With'
+        response.headers['Cache-Control'] = 'public, max-age=3600'
         
-        return Response(image_data, mimetype=content_type)
+        return response
         
     except requests.exceptions.RequestException as e:
 
