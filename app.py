@@ -364,78 +364,112 @@ def check_and_restore_data():
         print(f"⚠️ Error checking ChromaDB: {e}")
 
 def auto_import_recipes():
-    """Automatically import recipes from local data files"""
+    """Automatically import recipes from your existing data files"""
     try:
         import json
         import os
         
-        # Try to find recipe data files
-        recipe_files = ["recipes_data.json", "backend/recipes_data.json"]
+        print("🌱 Starting automatic recipe seeding...")
         
-        for file_path in recipe_files:
-            if os.path.exists(file_path):
-                print(f"📁 Found recipe data: {file_path}")
-                
-                with open(file_path, 'r') as f:
-                    data = json.load(f)
-                
-                if isinstance(data, dict) and 'recipes' in data:
-                    recipes = data['recipes']
-                elif isinstance(data, list):
-                    recipes = data
-                else:
-                    continue
-                
-                # Import all recipes for complete recipe collection
-                recipes_to_import = recipes
-                print(f"🚀 Auto-importing {len(recipes_to_import)} recipes...")
-                
-                # Simple recipe normalization for auto-import
-                ids, docs, metas = [], [], []
-                for i, item in enumerate(recipes_to_import):
-                    try:
-                        # Basic normalization
-                        recipe_id = str(item.get('id', f'recipe_{i}'))
-                        title = str(item.get('title', item.get('name', f'Recipe {i}')))
-                        
-                        # Create minimal normalized recipe
-                        normalized = {
-                            'id': recipe_id,
-                            'title': title,
-                            'ingredients': item.get('ingredients', []),
-                            'instructions': item.get('instructions', []),
-                            'image': item.get('image', ''),
-                            'cuisines': item.get('cuisines', []),
-                            'diets': item.get('diets', [])
-                        }
-                        
-                        ids.append(recipe_id)
-                        docs.append(json.dumps(normalized))
-                        
-                        metadata = {
-                            'id': recipe_id,
-                            'title': title,
-                            'source': 'auto_startup',
-                        }
-                        
-                        if normalized.get('cuisines') and isinstance(normalized['cuisines'], list):
-                            metadata['cuisines'] = ','.join(normalized['cuisines'][:3])  # First 3 cuisines
-                        
-                        metas.append(metadata)
-                        
-                    except Exception as e:
-                        print(f"⚠️ Error processing recipe {i}: {e}")
+        # Try to load from your existing recipe data files
+        backup_files = [
+            "complete_railway_sync_data.json",
+            "recipes_data.json", 
+            "batch_1.json",
+            "batch_2.json",
+            "production_recipes_backup.json",
+            "production_recipes_essential.json"
+        ]
+        
+        total_added = 0
+        recipes_loaded = False
+        
+        for backup_file in backup_files:
+            if os.path.exists(backup_file):
+                try:
+                    print(f"📦 Loading recipes from {backup_file}...")
+                    with open(backup_file, 'r', encoding='utf-8') as f:
+                        backup_data = json.load(f)
+                    
+                    # Handle different data structures
+                    if isinstance(backup_data, dict):
+                        recipes = backup_data.get('recipes', backup_data.get('data', []))
+                    elif isinstance(backup_data, list):
+                        recipes = backup_data
+                    else:
+                        print(f"⚠️ Unknown data structure in {backup_file}")
                         continue
-                
-                if ids:
-                    recipe_cache.recipe_collection.add(ids=ids, documents=docs, metadatas=metas)
-                    print(f"✅ Successfully imported {len(ids)} recipes automatically!")
-                    return
-                
-        print("⚠️ No recipe data files found for auto-import")
+                    
+                    print(f"📊 Found {len(recipes)} recipes in backup")
+                    
+                    # Import recipes using your existing cache method
+                    for recipe in recipes[:1000]:  # Limit to 1000 for startup speed
+                        try:
+                            recipe_id = recipe.get('id', f"backup_{total_added}")
+                            recipe_cache.cache_recipe(recipe_id, recipe)
+                            total_added += 1
+                            if total_added % 100 == 0:
+                                print(f"✅ Loaded {total_added} recipes...")
+                        except Exception as e:
+                            print(f"❌ Failed to load recipe {recipe.get('title', 'Unknown')}: {e}")
+                    
+                    recipes_loaded = True
+                    print(f"✅ Successfully loaded {total_added} recipes from {backup_file}!")
+                    break
+                    
+                except Exception as e:
+                    print(f"❌ Failed to load {backup_file}: {e}")
+                    continue
+        
+        # If no backup files found, add some basic recipes as fallback
+        if not recipes_loaded:
+            print("⚠️ No backup files found, adding basic curated recipes...")
+            
+            curated_recipes = [
+                {
+                    "id": "curated_french_toast",
+                    "title": "Perfect French Toast",
+                    "image": "https://images.unsplash.com/photo-1484723091739-30a097e8f929?w=500",
+                    "cuisine": "French",
+                    "cuisines": ["French", "Breakfast"],
+                    "ingredients": ["4 slices thick bread", "3 large eggs", "1/2 cup milk", "1 tsp vanilla extract", "1 tsp cinnamon", "2 tbsp butter", "maple syrup"],
+                    "instructions": ["Whisk together eggs, milk, vanilla, and cinnamon", "Heat butter in skillet", "Dip bread in mixture", "Cook until golden brown", "Serve with maple syrup"],
+                    "diets": ["vegetarian"],
+                    "tags": ["breakfast", "easy", "sweet"],
+                    "ready_in_minutes": 15,
+                    "difficulty": "easy",
+                    "source": "curated"
+                },
+                {
+                    "id": "curated_overnight_oats",
+                    "title": "Overnight Oats with Berries", 
+                    "image": "https://images.unsplash.com/photo-1571197119587-cfac4ac57e4a?w=500",
+                    "cuisine": "American",
+                    "cuisines": ["American", "Healthy"],
+                    "ingredients": ["1/2 cup rolled oats", "1/2 cup milk", "1 tbsp chia seeds", "1 tbsp maple syrup", "1/4 cup mixed berries", "1 tbsp almond butter"],
+                    "instructions": ["Combine oats, milk, chia seeds, and maple syrup in jar", "Refrigerate overnight", "Top with berries and almond butter", "Enjoy cold"],
+                    "diets": ["vegetarian", "healthy", "gluten-free"],
+                    "tags": ["breakfast", "no-cook", "healthy"],
+                    "ready_in_minutes": 5,
+                    "difficulty": "easy",
+                    "source": "curated"
+                }
+            ]
+            
+            for recipe in curated_recipes:
+                try:
+                    recipe_cache.cache_recipe(recipe['id'], recipe)
+                    total_added += 1
+                    print(f"✅ Added curated recipe: {recipe['title']}")
+                except Exception as e:
+                    print(f"❌ Failed to add curated recipe: {e}")
+        
+        print(f"🎉 Auto-seeding complete! Added {total_added} recipes")
+        return total_added
         
     except Exception as e:
-        print(f"❌ Auto-import failed: {e}")
+        print(f"❌ Auto-seeding failed: {e}")
+        return 0
 
 # Check data on startup
 check_and_restore_data()
@@ -529,6 +563,9 @@ def debug_chromadb():
 @app.route('/')
 def root():
     return {'message': 'Recipe App Backend API - Render Deployment', 'url': 'https://dietary-delight.onrender.com'}
+
+# Check data on startup - ensure recipes are loaded
+check_and_restore_data()
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
