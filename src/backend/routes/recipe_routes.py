@@ -174,7 +174,7 @@ def register_recipe_routes(app, recipe_cache):
         ingredient = request.args.get("ingredient", "").strip()
         
         offset = int(request.args.get("offset", "0"))
-        limit = int(request.args.get("limit", "1000"))  # Default to 1000 results
+        limit = int(request.args.get("limit", "10000"))  # Default to 10000 results
         
         # Debug pagination parameters
         print(f"🔍 BACKEND PAGINATION DEBUG:")

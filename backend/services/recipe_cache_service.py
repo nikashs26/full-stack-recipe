@@ -1836,70 +1836,69 @@ class RecipeCacheService:
                 return []
             
             # Get all recipes from the recipe collection
-            try:
-                # Try to get all recipes in one go first
-                recipe_results = self.recipe_collection.get(
-                    where=where if where else None,
-                    include=["documents", "metadatas"],
-                    limit=10000  # Try to get all at once
-                )
-                
-                if not recipe_results.get('documents'):
-                    return []
-                
-                # Process results
-                all_recipes = []
-                seen_ids = set()
-                
-                for i, doc in enumerate(recipe_results['documents']):
-                    try:
-                        # Skip empty or invalid documents
-                        if not doc or not isinstance(doc, (str, dict)):
-                            continue
-                            
-                        # Parse JSON if needed
-                        if isinstance(doc, str):
-                            try:
-                                doc = doc.strip()
-                                if not doc:  # Skip empty strings
-                                    continue
-                                recipe = json.loads(doc)
-                            except json.JSONDecodeError as e:
-                                logger.error(f"Error decoding recipe JSON at index {i}: {e}")
-                                continue
-                        else:
-                            recipe = doc
-                            
-                        # Validate recipe structure
-                        if not isinstance(recipe, dict) or not recipe.get('id'):
-                            continue
-                            
-                        metadata = recipe_results['metadatas'][i] if i < len(recipe_results['metadatas']) else {}
-                        
-                        # Extract actual recipe data from nested structure
-                        recipe_data = recipe
-                        if 'data' in recipe and isinstance(recipe['data'], dict):
-                            # The actual recipe data is in the 'data' field
-                            recipe_data = recipe['data']
-                            # Merge in any additional fields from the top level
-                            if 'id' in recipe and 'id' not in recipe_data:
-                                recipe_data['id'] = recipe['id']
-                            if 'source' in recipe and 'source' not in recipe_data:
-                                recipe_data['source'] = recipe['source']
-                        
-                        recipe_id = recipe_data.get('id')
-                        if not recipe_id or recipe_id in seen_ids:
-                            continue
-                        
-                        all_recipes.append(recipe_data)
-                        seen_ids.add(recipe_id)
-                        
-                    except Exception as e:
-                        logger.error(f"Unexpected error processing recipe at index {i}: {e}", exc_info=True)
+            # Try to get all recipes in one go first
+            recipe_results = self.recipe_collection.get(
+                where=where if where else None,
+                include=["documents", "metadatas"],
+                limit=10000  # Try to get all at once
+            )
+            
+            if not recipe_results.get('documents'):
+                return []
+            
+            # Process results
+            all_recipes = []
+            seen_ids = set()
+            
+            for i, doc in enumerate(recipe_results['documents']):
+                try:
+                    # Skip empty or invalid documents
+                    if not doc or not isinstance(doc, (str, dict)):
                         continue
-                
-                logger.info(f"Retrieved {len(all_recipes)} recipes from cache")
-                return all_recipes
+                        
+                    # Parse JSON if needed
+                    if isinstance(doc, str):
+                        try:
+                            doc = doc.strip()
+                            if not doc:  # Skip empty strings
+                                continue
+                            recipe = json.loads(doc)
+                        except json.JSONDecodeError as e:
+                            logger.error(f"Error decoding recipe JSON at index {i}: {e}")
+                            continue
+                    else:
+                        recipe = doc
+                        
+                    # Validate recipe structure
+                    if not isinstance(recipe, dict) or not recipe.get('id'):
+                        continue
+                        
+                    metadata = recipe_results['metadatas'][i] if i < len(recipe_results['metadatas']) else {}
+                    
+                    # Extract actual recipe data from nested structure
+                    recipe_data = recipe
+                    if 'data' in recipe and isinstance(recipe['data'], dict):
+                        # The actual recipe data is in the 'data' field
+                        recipe_data = recipe['data']
+                        # Merge in any additional fields from the top level
+                        if 'id' in recipe and 'id' not in recipe_data:
+                            recipe_data['id'] = recipe['id']
+                        if 'source' in recipe and 'source' not in recipe_data:
+                            recipe_data['source'] = recipe['source']
+                    
+                    recipe_id = recipe_data.get('id')
+                    if not recipe_id or recipe_id in seen_ids:
+                        continue
+                    
+                    all_recipes.append(recipe_data)
+                    seen_ids.add(recipe_id)
+                    
+                except Exception as e:
+                    logger.error(f"Unexpected error processing recipe at index {i}: {e}", exc_info=True)
+                    continue
+            
+            logger.info(f"Retrieved {len(all_recipes)} recipes from cache")
+            return all_recipes
                 
         except Exception as e:
             logger.error(f"Error in _get_all_recipes_from_cache: {e}")
