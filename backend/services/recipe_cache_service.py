@@ -1835,13 +1835,46 @@ class RecipeCacheService:
                 logger.warning("ChromaDB collections not initialized")
                 return []
             
-            # Get all recipes from the recipe collection
-            # Try to get all recipes in one go first
-            recipe_results = self.recipe_collection.get(
-                where=where if where else None,
-                include=["documents", "metadatas"],
-                limit=10000  # Try to get all at once
-            )
+            # Get all recipes from the recipe collection using multiple queries
+            # ChromaDB has a hard limit of 1000 per query, so we need to use multiple queries
+            all_recipe_results = {
+                'documents': [],
+                'metadatas': []
+            }
+            
+            # Get recipes in batches of 1000
+            offset = 0
+            batch_size = 1000
+            max_queries = 10  # Safety limit to prevent infinite loops
+            
+            for query_num in range(max_queries):
+                try:
+                    # Get a batch of recipes
+                    batch_results = self.recipe_collection.get(
+                        where=where if where else None,
+                        include=["documents", "metadatas"],
+                        limit=batch_size,
+                        offset=offset
+                    )
+                    
+                    if not batch_results.get('documents') or len(batch_results['documents']) == 0:
+                        break  # No more recipes
+                    
+                    # Add to our combined results
+                    all_recipe_results['documents'].extend(batch_results['documents'])
+                    all_recipe_results['metadatas'].extend(batch_results['metadatas'])
+                    
+                    # If we got fewer than batch_size, we've reached the end
+                    if len(batch_results['documents']) < batch_size:
+                        break
+                    
+                    offset += batch_size
+                    
+                except Exception as e:
+                    logger.error(f"Error fetching recipe batch {query_num + 1}: {e}")
+                    break
+            
+            recipe_results = all_recipe_results
             
             if not recipe_results.get('documents'):
                 return []
