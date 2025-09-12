@@ -1850,31 +1850,50 @@ class RecipeCacheService:
                         limit=1000
                     )
                 else:
-                    # If we have more than 1000, use query method with pagination
+                    # If we have more than 1000, use get method with proper pagination
                     all_documents = []
                     all_metadatas = []
+                    all_ids = []
                     
-                    # Get recipes in batches of 1000
-                    for offset in range(0, total_count, 1000):
-                        try:
-                            # Use query method with empty query to get all documents
-                            batch_results = self.recipe_collection.query(
-                                query_texts=[""],  # Empty query to get all
-                                n_results=1000,
-                                offset=offset,
+                    # Get all IDs first to enable proper pagination
+                    try:
+                        # Get all IDs in batches
+                        for offset in range(0, total_count, 1000):
+                            batch_ids = self.recipe_collection.get(
                                 where=where if where else None,
-                                include=["documents", "metadatas"]
+                                include=["metadatas"],
+                                limit=1000,
+                                offset=offset
                             )
                             
-                            if batch_results['documents'] and len(batch_results['documents'][0]) > 0:
-                                all_documents.extend(batch_results['documents'][0])
-                                all_metadatas.extend(batch_results['metadatas'][0])
+                            if batch_ids.get('ids'):
+                                all_ids.extend(batch_ids['ids'])
                             else:
-                                break  # No more results
+                                break
+                        
+                        # Now get documents in batches using the IDs
+                        for i in range(0, len(all_ids), 1000):
+                            batch_ids = all_ids[i:i+1000]
+                            if batch_ids:
+                                batch_results = self.recipe_collection.get(
+                                    ids=batch_ids,
+                                    include=["documents", "metadatas"]
+                                )
                                 
-                        except Exception as e:
-                            logger.error(f"Error fetching batch at offset {offset}: {e}")
-                            break
+                                if batch_results.get('documents'):
+                                    all_documents.extend(batch_results['documents'])
+                                    all_metadatas.extend(batch_results['metadatas'])
+                                    
+                    except Exception as e:
+                        logger.error(f"Error in pagination: {e}")
+                        # Fallback to simple get with limit
+                        batch_results = self.recipe_collection.get(
+                            where=where if where else None,
+                            include=["documents", "metadatas"],
+                            limit=1000
+                        )
+                        all_documents = batch_results.get('documents', [])
+                        all_metadatas = batch_results.get('metadatas', [])
                     
                     recipe_results = {
                         'documents': all_documents,

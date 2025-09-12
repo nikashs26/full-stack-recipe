@@ -92,11 +92,13 @@ const RecommendedRecipes: React.FC = () => {
       try {
         console.log('🔍 Fetching recommendations from backend...');
         
-        const response = await fetch('/api/recommendations?limit=16', {
+        const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://dietary-delight.onrender.com';
+        const response = await fetch(`${backendUrl}/api/recommendations?limit=16`, {
           method: 'GET',
           credentials: 'include',
           headers: {
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
           }
         });
 
