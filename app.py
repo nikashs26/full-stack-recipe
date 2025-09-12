@@ -231,8 +231,6 @@ else:
                 
             except Exception as e:
                 return jsonify({"error": str(e)}), 500
-else:
-    print("⚠️ Smart features disabled via environment variable")
 
 # Register image proxy for handling external images
 try:
