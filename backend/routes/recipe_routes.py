@@ -126,8 +126,19 @@ def register_recipe_routes(app, recipe_cache):
             recipe = await recipe_service.get_recipe_by_id(recipe_id)
                                 
             if recipe:
-                # Fix data structure - if recipe has nested data, use the document field
-                if 'document' in recipe and isinstance(recipe['document'], str):
+                # Fix data structure - if recipe has nested data, extract the actual recipe data
+                if 'data' in recipe and isinstance(recipe['data'], dict):
+                    # Extract the actual recipe data from the nested structure
+                    recipe_data = recipe['data']
+                    
+                    # Merge in any additional fields from the top level that might be useful
+                    if 'id' in recipe and 'id' not in recipe_data:
+                        recipe_data['id'] = recipe['id']
+                    if 'source' in recipe and 'source' not in recipe_data:
+                        recipe_data['source'] = recipe['source']
+                    
+                    return jsonify(recipe_data), 200
+                elif 'document' in recipe and isinstance(recipe['document'], str):
                     try:
                         import json
                         document_data = json.loads(recipe['document'])
@@ -136,7 +147,7 @@ def register_recipe_routes(app, recipe_cache):
                     except:
                         pass
                 
-                # If no document field or parsing failed, return the recipe as-is
+                # If no nested data structure, return the recipe as-is
                 return jsonify(recipe), 200
             else:
                 return jsonify({"error": "Recipe not found"}), 404
@@ -174,7 +185,7 @@ def register_recipe_routes(app, recipe_cache):
         ingredient = request.args.get("ingredient", "").strip()
         
         offset = int(request.args.get("offset", "0"))
-        limit = int(request.args.get("limit", "1000"))  # Default to 1000 results
+        limit = int(request.args.get("limit", "10000"))  # Default to 10000 results to show more recipes
         
         # Debug pagination parameters
         print(f"🔍 BACKEND PAGINATION DEBUG:")

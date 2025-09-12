@@ -835,7 +835,7 @@ class RecipeService:
         return False
 
     async def search_recipes(self, query: str = "", ingredient: str = "", 
-                       offset: int = 0, limit: int = 1000,
+                       offset: int = 0, limit: int = 10000,
                        cuisines: List[str] = None, 
                        dietary_restrictions: List[str] = None,
                        foods_to_avoid: List[str] = None,
@@ -847,7 +847,7 @@ class RecipeService:
             query: Search query string to match against title, description, or ingredients
             ingredient: Filter by ingredient name
             offset: Pagination offset
-            limit: Maximum number of results to return (default: 1000)
+            limit: Maximum number of results to return (default: 10000)
             cuisines: List of cuisines to filter by
             dietary_restrictions: List of dietary restrictions to filter by
             foods_to_avoid: List of foods to exclude from results

@@ -213,7 +213,7 @@ class RecipeSearchService:
             # Perform semantic search with expanded query
             results = self.recipe_collection.query(
                 query_texts=[expanded_query],
-                n_results=min(limit * 3, 1000),  # Fetch more for post-ranking
+                n_results=min(limit * 3, 10000),  # Fetch more for post-ranking
                 where=where_clause if where_clause else None,
                 include=['documents', 'metadatas', 'distances']
             )
