@@ -132,6 +132,15 @@ def initialize_services_safely():
             recipe_cache = RecipeCacheService()
             print("✓ Recipe cache service initialized")
             
+            # Initialize and restore user accounts for Render persistence
+            print("🔄 Initializing user accounts...")
+            from backend.services.user_service import UserService
+            user_service = UserService()
+            
+            # Restore users from backup on startup (for Render persistence)
+            print("🔄 Render detected - restoring user accounts from backup...")
+            user_service.restore_users_from_backup()
+            
             # Skip automatic population on startup - will be done manually
             try:
                 recipe_count = recipe_cache.get_recipe_count()
@@ -370,8 +379,8 @@ def auto_import_recipes():
                 else:
                     continue
                 
-                # Import up to 1000 recipes for fast startup
-                recipes_to_import = recipes[:1000]
+                # Import all recipes for complete recipe collection
+                recipes_to_import = recipes
                 print(f"🚀 Auto-importing {len(recipes_to_import)} recipes...")
                 
                 # Simple recipe normalization for auto-import

@@ -9,7 +9,7 @@ This document describes the new authentication system that replaces Supabase wit
 - **Secure Login** with JWT tokens
 - **Email Verification** with expiring tokens (24 hours)
 - **Password Security** with bcrypt hashing
-- **Session Management** with JWT tokens (7-day expiry)
+- **Session Management** with JWT tokens (30-day expiry)
 
 ### 🔒 Protected Features
 The following features now require authentication:
@@ -78,7 +78,7 @@ The system uses ChromaDB to store:
 
 ### Security Features
 - **Password Hashing**: bcrypt with salt
-- **JWT Tokens**: HS256 algorithm, 7-day expiry
+- **JWT Tokens**: HS256 algorithm, 30-day expiry
 - **Email Verification**: Required before access
 - **Input Validation**: Email format, password strength
 - **Rate Limiting**: Built-in via middleware

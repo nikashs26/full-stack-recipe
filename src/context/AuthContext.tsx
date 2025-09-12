@@ -123,6 +123,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         } catch (error) {
           console.error('Error verifying token:', error);
+          // Try to refresh the token before giving up
+          try {
+            console.log('🔄 Attempting token refresh after verification failure');
+            const refreshResponse = await apiCall('/api/auth/refresh', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${savedToken}`,
+                'Content-Type': 'application/json'
+              }
+            });
+            
+            if (refreshResponse.ok) {
+              const refreshData = await refreshResponse.json();
+              localStorage.setItem('auth_token', refreshData.token);
+              setToken(refreshData.token);
+              
+              // Now try to verify the new token
+              const verifyResponse = await apiCall('/api/auth/me', {
+                method: 'GET',
+                headers: {
+                  'Authorization': `Bearer ${refreshData.token}`,
+                  'Content-Type': 'application/json',
+                  'Accept': 'application/json'
+                }
+              });
+              
+              if (verifyResponse.ok) {
+                const userData = await verifyResponse.json();
+                setUser(userData.user);
+                console.log('✅ Token refresh and verification successful');
+                return; // Exit early, don't clear tokens
+              }
+            }
+          } catch (refreshError) {
+            console.error('Token refresh also failed:', refreshError);
+          }
+          
+          // If refresh failed or verification still failed, clear everything
           setUser(null);
           setToken(null);
           localStorage.removeItem('auth_token');
@@ -145,8 +183,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const tokenData = JSON.parse(atob(token.split('.')[1]));
         const expiresIn = tokenData.exp * 1000 - Date.now(); // Convert to milliseconds
         
-        if (expiresIn < 24 * 60 * 60 * 1000) { // Less than 1 day remaining
-          console.log('🔄 Periodic token refresh - token expires in less than 1 day');
+        if (expiresIn < 7 * 24 * 60 * 60 * 1000) { // Less than 7 days remaining
+          console.log('🔄 Periodic token refresh - token expires in less than 7 days');
           const response = await apiCall('/api/auth/refresh', {
             method: 'POST',
             headers: {
@@ -159,15 +197,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             localStorage.setItem('auth_token', data.token);
             setToken(data.token);
             console.log('🔑 Periodic token refresh successful');
+          } else {
+            console.log('❌ Periodic token refresh failed, will retry later');
           }
         }
       } catch (error) {
         console.error('Periodic token refresh failed:', error);
+        // Don't immediately log out on refresh failure - the token might still be valid
+        // and the backend might be temporarily unavailable
       }
     };
 
-    // Check token expiry every hour
-    const interval = setInterval(checkTokenExpiry, 60 * 60 * 1000);
+    // Check token expiry every 30 minutes for better reliability
+    const interval = setInterval(checkTokenExpiry, 30 * 60 * 1000);
     return () => clearInterval(interval);
   }, [token]);
 

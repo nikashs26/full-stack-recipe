@@ -110,7 +110,7 @@ class UserService:
         payload = {
             'user_id': user_id,
             'email': email,
-            'exp': datetime.utcnow() + timedelta(days=7),  # Token expires in 7 days
+            'exp': datetime.utcnow() + timedelta(days=30),  # Token expires in 30 days
             'iat': datetime.utcnow()
         }
         return jwt.encode(payload, self._get_jwt_secret(), algorithm='HS256')
@@ -209,6 +209,12 @@ class UserService:
                 metadatas={"user_id": user_id, "email": email, "type": "verification"},
                 ids=[verification_token]
             )
+            
+            # Backup users for persistence (especially important on Render)
+            try:
+                self.backup_users_for_persistence()
+            except Exception as backup_error:
+                print(f"⚠️ User backup failed after registration: {backup_error}")
             
             return {
                 "success": True,
@@ -400,3 +406,60 @@ class UserService:
             
         except Exception as e:
             return {"success": False, "error": f"Failed to resend verification email: {str(e)}"} 
+    
+    def backup_users_for_persistence(self) -> bool:
+        """
+        Backup users to persistent storage for Render deployments
+        """
+        try:
+            from .user_backup_service import UserBackupService
+            backup_service = UserBackupService()
+            
+            # Export current users
+            users_data = backup_service.export_users_from_chromadb(self)
+            
+            if users_data:
+                # Create persistent file backup
+                file_success = backup_service.create_persistent_user_file(users_data)
+                
+                # Also try environment variable backup for small datasets
+                env_success = backup_service.backup_users_to_env(users_data)
+                
+                if file_success or env_success:
+                    print(f"✅ Backed up {len(users_data)} users for persistence")
+                    return True
+            
+            return False
+            
+        except Exception as e:
+            print(f"❌ Failed to backup users: {e}")
+            return False
+    
+    def restore_users_from_backup(self) -> bool:
+        """
+        Restore users from persistent backup on startup
+        """
+        try:
+            from .user_backup_service import UserBackupService
+            backup_service = UserBackupService()
+            
+            # Try to restore from persistent file first
+            users_data = backup_service.restore_from_persistent_file()
+            
+            # If no file backup, try environment variables
+            if not users_data:
+                users_data = backup_service.restore_users_from_env()
+            
+            if users_data:
+                success = backup_service.import_users_to_chromadb(self, users_data)
+                if success:
+                    print(f"✅ Restored {len(users_data)} users from backup")
+                    return True
+            else:
+                print("📭 No user backup found - starting fresh")
+            
+            return False
+            
+        except Exception as e:
+            print(f"❌ Failed to restore users from backup: {e}")
+            return False
