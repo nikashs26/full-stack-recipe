@@ -165,10 +165,46 @@ const HomePage: React.FC = () => {
     enabled: true, // Always enabled
   });
 
-  // Remove the separate recommendations query since we're now using the same endpoint
-  // This ensures homepage and search page show the same data
-  const backendRecommendations = backendRecipes; // Use the same data
-  const isLoadingRecommendations = isLoadingBackend; // Use the same loading state
+  // Query for backend recommendations
+  const { data: backendRecommendations = [], isLoading: isLoadingRecommendations } = useQuery({
+    queryKey: ['recommendations'],
+    queryFn: async () => {
+      try {
+        console.log('🔍 HomePage: Fetching recommendations from backend...');
+        
+        const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://dietary-delight.onrender.com';
+        const response = await fetch(`${backendUrl}/api/recommendations?limit=16`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+
+        console.log('🔍 HomePage: API response status:', response.status);
+        console.log('🔍 HomePage: API response ok:', response.ok);
+
+        if (!response.ok) {
+          console.error('❌ HomePage: Failed to fetch recommendations:', response.status, response.statusText);
+          return [];
+        }
+
+        const data = await response.json();
+        console.log('✅ HomePage: Backend recommendations response:', data);
+        console.log('✅ HomePage: Backend recommendations array:', data.recommendations);
+        
+        return data.recommendations || [];
+      } catch (error) {
+        console.error('❌ HomePage: Error fetching recommendations:', error);
+        return [];
+      }
+    },
+    enabled: true, // Always enable to work with backend fallback route
+    staleTime: Infinity, // Never consider data stale - only refresh manually
+    gcTime: Infinity, // Keep in cache indefinitely
+    refetchOnWindowFocus: false, // Don't refetch when window regains focus
+    refetchOnMount: false, // Don't refetch when component mounts
+    refetchOnReconnect: false, // Don't refetch when reconnecting to network
+  });
   
   // Debug logging for backend data changes
   useEffect(() => {
