@@ -29,7 +29,16 @@ def restore_all_recipes():
     
     try:
         with open(backup_file, 'r', encoding='utf-8') as f:
-            recipes_data = json.load(f)
+            backup_data = json.load(f)
+        
+        # Handle both array format and object with recipes array format
+        if isinstance(backup_data, list):
+            recipes_data = backup_data
+        elif isinstance(backup_data, dict) and 'recipes' in backup_data:
+            recipes_data = backup_data['recipes']
+        else:
+            print(f"❌ Unexpected format in backup file")
+            return False
         
         print(f"📊 Found {len(recipes_data)} recipes in backup")
         
@@ -38,10 +47,18 @@ def restore_all_recipes():
         client = get_chromadb_client()
         recipe_service = RecipeCacheService()
         
+        # Limit to first 300 recipes for restoration
+        recipes_data = recipes_data[:300]
+        print(f"📊 Restoring first {len(recipes_data)} recipes...")
+        
         # Clear existing recipes
         print("🗑️ Clearing existing recipes...")
         try:
-            recipe_service.recipe_collection.delete(where={})
+            # Get all existing IDs first
+            existing_results = recipe_service.recipe_collection.get()
+            if existing_results['ids']:
+                recipe_service.recipe_collection.delete(ids=existing_results['ids'])
+                print(f"✅ Cleared {len(existing_results['ids'])} existing recipes")
         except Exception as e:
             print(f"⚠️ Could not clear existing recipes: {e}")
         
@@ -91,8 +108,8 @@ def restore_all_recipes():
                     metadatas.append({
                         "id": recipe['id'],
                         "title": recipe.get('title', ''),
-                        "cuisines": recipe.get('cuisines', []),
-                        "diets": recipe.get('diets', []),
+                        "cuisines": json.dumps(recipe.get('cuisines', [])),
+                        "diets": json.dumps(recipe.get('diets', [])),
                         "cached_at": "2024-01-01T00:00:00Z"
                     })
                     ids.append(recipe['id'])

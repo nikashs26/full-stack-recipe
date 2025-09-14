@@ -25,25 +25,8 @@ const RecommendedRecipes: React.FC = () => {
   console.log('🔍 Component - user:', user);
   console.log('🔍 Component - user?.preferences:', user?.preferences);
   
-  // Check if user has meaningful preferences (not just empty arrays/strings)
-  const hasMeaningfulPreferences = React.useMemo(() => {
-    if (!user?.preferences) {
-      console.log('🔍 No user preferences found');
-      return false;
-    }
-    
-    const prefs = user.preferences;
-    console.log('🔍 Checking preferences:', prefs);
-    console.log('🔍 Preferences type:', typeof prefs);
-    console.log('🔍 Preferences keys:', Object.keys(prefs));
-    
-    // For now, let's be more lenient - if user has any preferences object, show recommendations
-    // This will help us debug what's actually happening
-    const hasAnyPreferences = prefs && typeof prefs === 'object';
-    
-    console.log('🔍 Has any preferences:', hasAnyPreferences);
-    return hasAnyPreferences;
-  }, [user?.preferences]);
+  // Always show recommendations since we have a backend fallback route
+  const hasMeaningfulPreferences = true;
   
   // Query for local recipes
   const { data: allRecipes = [], isLoading: isLocalLoading } = useQuery({
@@ -87,7 +70,7 @@ const RecommendedRecipes: React.FC = () => {
 
   // Query for backend recommendations
   const { data: recommendedRecipes = [], isLoading: isRecommendationsLoading, refetch: refetchRecommendations } = useQuery({
-    queryKey: ['recommendations', user?.preferences?.favoriteCuisines?.join(','), user?.preferences?.favoriteFoods?.join(',')], // Stable key based on preferences
+    queryKey: ['recommendations'], // Simple key for fallback route
     queryFn: async () => {
       try {
         console.log('🔍 Fetching recommendations from backend...');
@@ -95,10 +78,8 @@ const RecommendedRecipes: React.FC = () => {
         const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://dietary-delight.onrender.com';
         const response = await fetch(`${backendUrl}/api/recommendations?limit=16`, {
           method: 'GET',
-          credentials: 'include',
           headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+            'Content-Type': 'application/json'
           }
         });
 
@@ -171,7 +152,7 @@ const RecommendedRecipes: React.FC = () => {
         return [];
       }
     },
-    enabled: isAuthenticated && !!user?.preferences,
+    enabled: true, // Always enable to work with backend fallback route
     staleTime: Infinity, // Never consider data stale - only refresh manually
     gcTime: Infinity, // Keep in cache indefinitely
     refetchOnWindowFocus: false, // Don't refetch when window regains focus
