@@ -728,7 +728,7 @@ class RecipeService:
     def _matches_dietary_restrictions(self, recipe: Dict[str, Any], restrictions: List[str]) -> bool:
         """Check if a recipe matches all the specified dietary restrictions.
         
-        This method checks the recipe's dietary restriction tags for matches.
+        This method checks the recipe's dietary restriction tags and analyzes ingredients.
         """
         if not restrictions:
             return True
@@ -751,9 +751,9 @@ class RecipeService:
         if recipe.get('vegan', False):
             recipe_restrictions.add('vegan')
         
-        # If no restrictions found in the recipe, assume it's not restricted
+        # If no explicit restrictions found, analyze ingredients
         if not recipe_restrictions:
-            return False
+            recipe_restrictions = self._analyze_recipe_dietary_restrictions(recipe)
             
         # Debug logging
         logger.debug(f"Recipe '{recipe.get('title', 'unknown')}' has restrictions: {recipe_restrictions}")
@@ -772,6 +772,74 @@ class RecipeService:
         
         # Check if all required restrictions are present in the recipe
         return required_restrictions.issubset(recipe_restrictions)
+    
+    def _analyze_recipe_dietary_restrictions(self, recipe: Dict[str, Any]) -> set:
+        """Analyze recipe ingredients to determine dietary restrictions."""
+        restrictions = set()
+        
+        # Get all text from recipe for analysis
+        recipe_text = ""
+        
+        # Add title and description
+        recipe_text += f" {recipe.get('title', '')} {recipe.get('description', '')}"
+        
+        # Add ingredients
+        if 'ingredients' in recipe and isinstance(recipe['ingredients'], list):
+            for ing in recipe['ingredients']:
+                if isinstance(ing, dict) and 'name' in ing:
+                    recipe_text += f" {ing['name']}"
+                elif isinstance(ing, str):
+                    recipe_text += f" {ing}"
+        
+        # Add instructions
+        if 'instructions' in recipe:
+            if isinstance(recipe['instructions'], list):
+                recipe_text += f" {' '.join(str(step) for step in recipe['instructions'])}"
+            elif isinstance(recipe['instructions'], str):
+                recipe_text += f" {recipe['instructions']}"
+        
+        recipe_text = recipe_text.lower()
+        
+        # Meat indicators that would make a recipe non-vegetarian
+        meat_indicators = [
+            'chicken', 'beef', 'pork', 'lamb', 'fish', 'salmon', 'tuna', 'shrimp', 'prawn', 
+            'meat', 'bacon', 'ham', 'sausage', 'turkey', 'duck', 'goose', 'venison', 
+            'rabbit', 'quail', 'pheasant', 'veal', 'mackerel', 'haddock', 'clam', 'oyster',
+            'mussel', 'scallop', 'crab', 'lobster', 'anchovy', 'sardine', 'trout', 'cod',
+            'halibut', 'sea bass', 'tilapia', 'catfish', 'swordfish', 'mahi mahi',
+            'steak', 'burger', 'hot dog', 'hotdog', 'pepperoni', 'salami', 'prosciutto',
+            'chorizo', 'pastrami', 'corned beef', 'roast beef', 'ground beef', 'mince',
+            'liver', 'kidney', 'heart', 'tongue', 'tripe', 'oxtail', 'short ribs',
+            'ribeye', 'sirloin', 'tenderloin', 'brisket', 'flank', 'skirt steak',
+            'lamb chops', 'lamb shank', 'pork chops', 'pork belly', 'pork shoulder',
+            'chicken breast', 'chicken thigh', 'chicken wing', 'chicken leg', 'chicken drumstick',
+            'fish fillet', 'fish steak', 'fish cake', 'fish ball', 'fish sauce',
+            'anchovy paste', 'fish stock', 'chicken stock', 'beef stock', 'meat stock',
+            'bone broth', 'chicken broth', 'beef broth', 'meat broth'
+        ]
+        
+        # Check for meat indicators
+        has_meat = any(meat in recipe_text for meat in meat_indicators)
+        
+        if not has_meat:
+            restrictions.add('vegetarian')
+            
+            # Check for animal products that would make it non-vegan
+            animal_indicators = [
+                'milk', 'cheese', 'butter', 'cream', 'egg', 'yogurt', 'honey', 'gelatin', 
+                'lard', 'tallow', 'whey', 'casein', 'parmesan', 'pecorino', 'mascarpone', 
+                'creme fraiche', 'sour cream', 'condensed milk', 'evaporated milk', 'half and half',
+                'heavy cream', 'light cream', 'whipping cream', 'buttermilk', 'kefir', 'cottage cheese',
+                'ricotta', 'mozzarella', 'cheddar', 'gouda', 'brie', 'camembert', 'feta', 'blue cheese',
+                'goat cheese', 'cream cheese', 'american cheese', 'provolone', 'swiss cheese'
+            ]
+            
+            has_animal_products = any(animal in recipe_text for animal in animal_indicators)
+            
+            if not has_animal_products:
+                restrictions.add('vegan')
+        
+        return restrictions
         
     def _matches_query(self, recipe: Dict[str, Any], query: str) -> bool:
         """
@@ -929,8 +997,17 @@ class RecipeService:
         # Cuisine filtering is now handled by the cache service
         logger.info(f"🔍 Cuisine filtering handled by cache service - cuisines requested: {cuisines}")
         
-        # Dietary restrictions filtering is now handled by the cache service
-        logger.info(f"🔍 Dietary restrictions filtering handled by cache service - restrictions requested: {dietary_restrictions}")
+        # Apply dietary restrictions filtering directly here to ensure it works
+        if dietary_restrictions:
+            logger.info(f"🔍 Applying dietary restrictions filter: {dietary_restrictions}")
+            diet_filtered = []
+            for recipe in filtered_recipes:
+                if self._matches_dietary_restrictions(recipe, dietary_restrictions):
+                    diet_filtered.append(recipe)
+                else:
+                    logger.debug(f"❌ Recipe excluded by dietary filter: {recipe.get('title', 'Unknown')}")
+            filtered_recipes = diet_filtered
+            logger.info(f"After dietary restrictions filtering: {len(filtered_recipes)} recipes")
         
         # The cache service has already scored and sorted the recipes by search relevance
         # We don't need to re-score them here. Just preserve the existing search scores.
