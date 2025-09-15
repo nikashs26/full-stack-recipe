@@ -4,7 +4,17 @@ import json
 from utils.chromadb_singleton import get_chromadb_client
 
 class UserPreferencesService:
-    def __init__(self):
+    _instance = None
+    _collection = None
+    _embedding_function = None
+    
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(UserPreferencesService, cls).__new__(cls)
+            cls._instance._initialize()
+        return cls._instance
+    
+    def _initialize(self):
         # Use the singleton ChromaDB client and lightweight embeddings
         from utils.lightweight_embeddings import get_lightweight_embedding_function
         self.client = get_chromadb_client()
@@ -16,11 +26,20 @@ class UserPreferencesService:
             return
             
         try:
-            self.embedding_function = get_lightweight_embedding_function(use_token_based=True)
-            self.collection = self.client.get_or_create_collection(
-                "user_preferences",
-                embedding_function=self.embedding_function
-            )
+            # Cache the embedding function to avoid recreating it
+            if UserPreferencesService._embedding_function is None:
+                UserPreferencesService._embedding_function = get_lightweight_embedding_function(use_token_based=True)
+            
+            self.embedding_function = UserPreferencesService._embedding_function
+            
+            # Cache the collection to avoid recreating it
+            if UserPreferencesService._collection is None:
+                UserPreferencesService._collection = self.client.get_or_create_collection(
+                    "user_preferences",
+                    embedding_function=self.embedding_function
+                )
+            
+            self.collection = UserPreferencesService._collection
         except Exception as e:
             print(f"⚠️ Failed to create user preferences collection: {e}")
             self.collection = None
@@ -48,26 +67,18 @@ class UserPreferencesService:
             # Get from memory
             return self.preferences.get(user_id)
             
-        print(f'🔥 USER_PREFERENCES_SERVICE: get_preferences called for user_id: {user_id}')
-        
-        results = self.collection.get(
-            ids=[user_id],
-            include=['documents']
-        )
-        
-        print(f'🔥 USER_PREFERENCES_SERVICE: ChromaDB results: {results}')
-        
-        if results and results["documents"]:
-            print(f'🔥 USER_PREFERENCES_SERVICE: Found documents: {results["documents"]}')
-            # Parse the JSON string back to dict
-            try:
+        try:
+            results = self.collection.get(
+                ids=[user_id],
+                include=['documents']
+            )
+            
+            if results and results["documents"]:
+                # Parse the JSON string back to dict
                 preferences = json.loads(results["documents"][0])
-                print(f'🔥 USER_PREFERENCES_SERVICE: Parsed preferences: {preferences}')
                 return preferences
-            except json.JSONDecodeError as e:
-                print(f'🔥 USER_PREFERENCES_SERVICE: JSON decode error: {e}')
+            else:
                 return None
-        else:
-            print(f'🔥 USER_PREFERENCES_SERVICE: No documents found for user_id: {user_id}')
-        
-        return None 
+        except Exception as e:
+            print(f'⚠️ Error getting preferences for user {user_id}: {e}')
+            return None 

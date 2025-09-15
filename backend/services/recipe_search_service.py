@@ -618,7 +618,7 @@ class RecipeSearchService:
         # FAIR SPLIT APPROACH: Ensure equal distribution among cuisines
         logger.info(f"Getting FAIR cuisine split for {len(favorite_cuisines)} cuisines with limit={limit}")
         
-        # Reserve slots for favorite foods (2-3 slots)
+        # Reserve slots for favorite foods (minimum 2, up to 25% of limit)
         favorite_food_slots = min(3, max(2, limit // 4))  # 25% of limit, minimum 2
         cuisine_slots = limit - favorite_food_slots
         
