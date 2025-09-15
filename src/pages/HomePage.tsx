@@ -176,8 +176,10 @@ const HomePage: React.FC = () => {
         const response = await fetch(`${backendUrl}/api/recommendations?limit=16`, {
           method: 'GET',
           headers: {
-            'Content-Type': 'application/json'
-          }
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+          },
+          credentials: 'include'
         });
 
         console.log('🔍 HomePage: API response status:', response.status);
@@ -706,6 +708,29 @@ const HomePage: React.FC = () => {
           console.log('🥗 Recipes after dietary restriction filtering:', filteredRecipes.length);
         }
         
+        // Filter out foods to avoid
+        const foodsToAvoid = userPreferences?.foodsToAvoid || [];
+        if (foodsToAvoid && foodsToAvoid.length > 0) {
+          console.log('🚫 Filtering out foods to avoid:', foodsToAvoid);
+          const foodsToAvoidNorm = foodsToAvoid.map((f: any) => (f || '').toString().trim().toLowerCase()).filter(Boolean);
+          
+          filteredRecipes = filteredRecipes.filter(recipe => {
+            const titleLower = ((recipe.title || (recipe as any).name || '') as string).toLowerCase();
+            const ingredientsLower = Array.isArray(recipe.ingredients) ? 
+              recipe.ingredients.map((i: any) => String(i).toLowerCase()) : [];
+            
+            // Check if recipe contains any foods to avoid
+            const containsAvoidedFood = foodsToAvoidNorm.some(avoidFood => 
+              titleLower.includes(avoidFood) || 
+              ingredientsLower.some(ingredient => ingredient.includes(avoidFood))
+            );
+            
+            return !containsAvoidedFood;
+          });
+          
+          console.log('🚫 Recipes after filtering out avoided foods:', filteredRecipes.length);
+        }
+        
         // Smart recommendation logic: prioritize favorite foods first, then cuisine preferences
         const favoriteFoodsNorm: string[] = (favoriteFoods || []).map((f: any) => (f || '').toString().trim().toLowerCase()).filter(Boolean);
         
@@ -999,7 +1024,7 @@ const HomePage: React.FC = () => {
           }
         }
         
-        recommendedRecipes = finalRecommendations.slice(0, 16);  // Increased from 8 to 16 for better cuisine distribution
+        recommendedRecipes = finalRecommendations.map(recipe => ({ ...recipe, type: 'external' as const }));
         console.log('🔄 Final frontend recommendations:', recommendedRecipes.length);
         
         // Debug: Show breakdown of final recommendations
@@ -1065,7 +1090,7 @@ const HomePage: React.FC = () => {
     }
     
     return {
-      recommended: recommendedRecipes.slice(0, 8), // Show 16 recommended recipes for better cuisine distribution
+      recommended: recommendedRecipes.slice(0, 8), // Show 8 recommended recipes
       popular: popularRecipes.slice(0, 8)
     };
   }, [backendRecipes, popularRecipesData, isAuthenticated, userPreferences, showPersonalPopular, personalPopularRecipesData, backendRecommendations]);
