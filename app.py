@@ -5,7 +5,7 @@ import json
 
 # Set Render environment variable for persistent storage and disable all telemetry FIRST
 os.environ['RENDER_ENVIRONMENT'] = 'true'
-os.environ['DISABLE_SMART_FEATURES'] = os.environ.get('DISABLE_SMART_FEATURES', 'TRUE')
+os.environ['DISABLE_SMART_FEATURES'] = os.environ.get('DISABLE_SMART_FEATURES', 'FALSE')
 os.environ['MINIMAL_STARTUP'] = os.environ.get('MINIMAL_STARTUP', 'TRUE')
 # Force clean ChromaDB initialization to resolve deprecated configuration issues
 os.environ['CHROMADB_FORCE_CLEAN_INIT'] = 'true'
@@ -205,12 +205,22 @@ else:
                     if len(recommendations) >= limit:
                         break
                     
+                    # Skip recipes with missing essential data
+                    title = recipe.get('title', recipe.get('name', ''))
+                    if not title or title.strip() == '':
+                        continue
+                    
                     # Try to get variety of cuisines
                     cuisine = recipe.get('cuisine', 'Unknown')
+                    
+                    # Skip recipes with unknown cuisine if we have enough variety
+                    if cuisine == 'Unknown' and len(seen_cuisines) > 2:
+                        continue
+                    
                     if cuisine not in seen_cuisines or len(recommendations) < limit//2:
                         recommendations.append({
                             "id": recipe.get('id'),
-                            "title": recipe.get('title', recipe.get('name')),
+                            "title": title,
                             "image": recipe.get('image', recipe.get('imageUrl')),
                             "cuisine": cuisine,
                             "cuisines": recipe.get('cuisines', [cuisine] if cuisine != 'Unknown' else []),
