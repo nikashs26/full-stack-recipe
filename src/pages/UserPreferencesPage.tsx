@@ -30,7 +30,7 @@ const formSchema = z.object({
   foodsToAvoid: z.array(z.string()).default([]),
   allergens: z.array(z.string()).default([]), // Backend expects this field
   cookingSkillLevel: z.enum(['beginner', 'intermediate', 'advanced'] as const).default('beginner'),
-  favoriteFoods: z.array(z.string()).min(2, "Please add at least 2 favorite foods for better recommendations").default([]), // Require at least 2 favorite foods
+  favoriteFoods: z.array(z.string()).default([]), // Optional - only if user wants to add them
   healthGoals: z.array(z.string()).default([]),
   maxCookingTime: z.string().default('30 minutes'),
   includeBreakfast: z.boolean().default(true),
@@ -546,21 +546,12 @@ const UserPreferencesPage = () => {
         ? values.cookingSkillLevel
         : 'beginner',
 
-      // Fix: Only include non-empty favorite foods, validate minimum count
-      favoriteFoods: (() => {
-        const foods = Array.isArray(values.favoriteFoods)
-          ? values.favoriteFoods
-              .filter((f): f is string => typeof f === 'string' && f.trim().length > 0)
-              .map(f => f.trim())
-          : [];
-        
-        // Validate minimum count - this will be caught by form validation
-        if (foods.length < 2) {
-          throw new Error('Please add at least 2 favorite foods for better recommendations');
-        }
-        
-        return foods; // Return as array, not tuple
-      })(),
+      // Include non-empty favorite foods (optional)
+      favoriteFoods: Array.isArray(values.favoriteFoods)
+        ? values.favoriteFoods
+            .filter((f): f is string => typeof f === 'string' && f.trim().length > 0)
+            .map(f => f.trim())
+        : [],
 
       healthGoals: Array.isArray(values.healthGoals)
         ? values.healthGoals.filter((g): g is string => Boolean(g) && typeof g === 'string')
@@ -715,8 +706,8 @@ const UserPreferencesPage = () => {
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
               {/* Favorite Foods */}
               <div>
-                <h2 className="text-xl font-medium mb-4">Favorite Foods (Required)</h2>
-                <p className="text-sm text-gray-600 mb-4">Enter at least 2 favorite foods to get personalized recommendations</p>
+                <h2 className="text-xl font-medium mb-4">Favorite Foods (Optional)</h2>
+                <p className="text-sm text-gray-600 mb-4">Add your favorite foods to get more personalized recommendations</p>
                 <div className="space-y-3">
                   {/* Display existing favorite foods */}
                   {form.watch('favoriteFoods')?.map((food, index) => (

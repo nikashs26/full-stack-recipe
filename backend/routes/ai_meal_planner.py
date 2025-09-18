@@ -28,75 +28,34 @@ def ai_meal_plan():
     if request.method == 'OPTIONS':
         # Handle preflight request
         response = jsonify({'status': 'ok'})
-        response.headers.add('Access-Control-Allow-Origin', 'http://localhost:8081')
+        response.headers.add('Access-Control-Allow-Origin', '*')
         response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
         response.headers.add('Access-Control-Allow-Methods', 'POST, OPTIONS')
         response.headers.add('Access-Control-Allow-Credentials', 'true')
         return response
         
-    # TEMPORARY: For testing, allow any user ID
-    # TODO: Restore proper JWT authentication
-    user_id = "test@example.com"  # Use a test user ID that exists in preferences
-    
-    # Get user from JWT token (commented out for testing)
-    # auth_header = request.headers.get('Authorization')
-    # if not auth_header:
-    #     response = jsonify({'error': 'No authorization header provided'})
-    #     response.headers.add('Access-Control-Allow-Origin', 'http://localhost:8081')
-    #     response.headers.add('Access-Control-Allow-Credentials', 'true')
-    #     return response, 401
-    
-    # try:
-    #     # Extract token from "Bearer <token>"
-    #     if not auth_header.startswith('Bearer '):
-    #         response = jsonify({'error': 'Invalid authorization header format'})
-    #         response.headers.add('Access-Control-Allow-Origin', 'http://localhost:8081')
-    #         response.headers.add('Access-Control-Allow-Credentials', 'true')
-    #         return response, 401
-        
-    #     token = auth_header.split(' ')[1]
-    #     if not token or token in ['null', 'undefined']:
-    #         response = jsonify({'error': 'Invalid token'})
-    #         response.headers.add('Access-Control-Allow-Origin', 'http://localhost:8081')
-    #         response.headers.add('Access-Control-Allow-Credentials', 'true')
-    #         return response, 401
-        
-    #     # Decode and verify JWT token
-    #     payload = user_service.decode_jwt_token(token)
-    #     if not payload:
-    #         response = jsonify({'error': 'Invalid or expired token'})
-    #         response.headers.add('Access-Control-Allow-Origin', 'http://localhost:8081')
-    #         response.headers.add('Access-Control-Allow-Credentials', 'true')
-    #         return response, 401
-        
-    #     user_id = payload.get('user_id') or payload.get('sub') or payload.get('email')
-    #     if not user_id:
-    #         response = jsonify({'error': 'Invalid token payload'})
-    #         response.headers.add('Access-Control-Allow-Origin', 'http://localhost:8081')
-    #         response.headers.add('Access-Control-Allow-Credentials', 'true')
-    #         return response, 401
-            
-    # except Exception as e:
-    #     response = jsonify({'error': f'Authentication failed: {str(e)}'})
-    #     response.headers.add('Access-Control-Allow-Origin', 'http://localhost:8081')
-    #     response.headers.add('Access-Control-Allow-Credentials', 'true')
-    #     return response, 500
-
-    # Get preferences from user profile
-    preferences = user_preferences_service.get_preferences(user_id)
-    if not preferences:
-        response = jsonify({'error': 'No preferences found for user'})
-        response.headers.add('Access-Control-Allow-Origin', 'http://localhost:8081')
-        response.headers.add('Access-Control-Allow-Credentials', 'true')
-        return response, 404
-    
-    # Get preferences from request body
+    # Get data from request body
     data = request.get_json() or {}
     preferences = data.get('preferences', {})
     
-    # If no preferences in request, use the ones from user profile
+    # If no preferences provided, use default preferences
     if not preferences:
-        preferences = user_preferences_service.get_preferences(user_id)
+        preferences = {
+            'favoriteCuisines': ['American', 'Italian'],
+            'dietaryRestrictions': [],
+            'allergens': [],
+            'favoriteFoods': [],
+            'cookingSkillLevel': 'beginner',
+            'maxCookingTime': '30 minutes',
+            'targetCalories': 2000,
+            'targetProtein': 150,
+            'targetCarbs': 200,
+            'targetFat': 65,
+            'includeBreakfast': True,
+            'includeLunch': True,
+            'includeDinner': True,
+            'includeSnacks': False
+        }
     
     print(f"🎯 Using preferences for meal planning: {preferences}")  # Debug log
     
@@ -108,19 +67,20 @@ def ai_meal_plan():
     # Call the LLM service
     try:
         # Generate the meal plan using the free LLM meal planner agent WITH preferences
-        result = free_llm_meal_planner.generate_weekly_meal_plan_with_preferences(user_id, preferences)
+        # Use a generic user_id for public access
+        result = free_llm_meal_planner.generate_weekly_meal_plan_with_preferences("public_user", preferences)
         
         # Check if the LLM agent returned an error
         if 'error' in result:
             response = jsonify({'error': result['error']})
-            response.headers.add('Access-Control-Allow-Origin', 'http://localhost:8081')
+            response.headers.add('Access-Control-Allow-Origin', '*')
             response.headers.add('Access-Control-Allow-Credentials', 'true')
             return response, 500
         
         # Check if the result has the expected structure
         if not result.get('success') or 'meal_plan' not in result:
             response = jsonify({'error': 'Invalid response structure from LLM agent'})
-            response.headers.add('Access-Control-Allow-Origin', 'http://localhost:8081')
+            response.headers.add('Access-Control-Allow-Origin', '*')
             response.headers.add('Access-Control-Allow-Credentials', 'true')
             return response, 500
         
@@ -130,13 +90,14 @@ def ai_meal_plan():
         # Return the meal plan in the expected format
         response = jsonify({
             'success': True,
-            'meal_plan': meal_plan
+            'meal_plan': meal_plan,
+            'message': 'Meal plan generated successfully'
         })
-        response.headers.add('Access-Control-Allow-Origin', 'http://localhost:8081')
+        response.headers.add('Access-Control-Allow-Origin', '*')
         response.headers.add('Access-Control-Allow-Credentials', 'true')
         return response
     except Exception as e:
         response = jsonify({'error': str(e)})
-        response.headers.add('Access-Control-Allow-Origin', 'http://localhost:8081')
+        response.headers.add('Access-Control-Allow-Origin', '*')
         response.headers.add('Access-Control-Allow-Credentials', 'true')
         return response, 500

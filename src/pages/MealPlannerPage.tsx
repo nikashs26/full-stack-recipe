@@ -39,17 +39,7 @@ const MealPlannerPage: React.FC = () => {
     includeSnacks: false
   });
   
-  // Redirect if not authenticated
-  useEffect(() => {
-    if (!authLoading && !isAuthenticated) {
-      navigate('/signin');
-      toast({
-        title: "Authentication Required",
-        description: "Please sign in to access the AI Meal Planner.",
-        variant: "destructive"
-      });
-    }
-  }, [isAuthenticated, authLoading, navigate, toast]);
+  // No authentication required - public access
 
   // Timer for elapsed time during generation
   useEffect(() => {
@@ -70,14 +60,6 @@ const MealPlannerPage: React.FC = () => {
   }, [isGenerating]);
 
   const handleGenerateMealPlan = async () => {
-    if (!isAuthenticated) {
-      toast({
-        title: "Authentication Required",
-        description: "Please sign in to generate a meal plan.",
-        variant: "destructive"
-      });
-      return;
-    }
 
     // Create abort controller for cancellation
     const controller = new AbortController();
@@ -319,7 +301,7 @@ const MealPlannerPage: React.FC = () => {
                   <h1 className="text-3xl text-gray-900">AI Meal Planner</h1>
                 </div>
                 <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-                  Welcome back, {user?.full_name || user?.email}! Generate personalized weekly meal plans based on your preferences.
+                  Generate personalized weekly meal plans based on your preferences. No account required!
                 </p>
               </div>
 

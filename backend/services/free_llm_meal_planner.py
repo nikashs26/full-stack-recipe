@@ -45,8 +45,8 @@ class FreeLLMMealPlannerAgent:
         else:
             self.meal_history_service = None
         
-        # Disable Ollama by default unless explicitly configured
-        self.ollama_url = os.getenv('OLLAMA_URL', '')
+        # Configure LLM services
+        self.ollama_url = os.getenv('OLLAMA_URL', 'http://localhost:11434')
         self.ollama_model = os.getenv('OLLAMA_MODEL', 'llama3.2:latest')
         self.hf_api_key = os.getenv('HUGGINGFACE_API_KEY')
         self.hf_api_url = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2"
@@ -92,8 +92,10 @@ class FreeLLMMealPlannerAgent:
             # Try Ollama first (preferred)
             try:
                 logger.info("🤖 Attempting to generate with Ollama...")
+                logger.info(f"🔗 Ollama URL: {self.ollama_url}")
                 meal_plan = self._generate_with_ollama(preferences)
                 logger.info(f"🔍 Ollama returned meal plan: {type(meal_plan)}")
+                logger.info(f"🔍 Meal plan content: {meal_plan}")
                 
                 if meal_plan:
                     logger.info("📝 Validating meal plan structure...")
@@ -181,8 +183,18 @@ class FreeLLMMealPlannerAgent:
                 except Exception as e:
                     logger.warning(f"⚠️ Hugging Face failed: {e}")
             
-            # If we get here, both LLMs failed
-            logger.error("❌ Both LLMs failed to generate meal plan")
+            # If we get here, both LLMs failed - provide a fallback meal plan
+            logger.error("❌ Both LLMs failed to generate meal plan, using fallback")
+            fallback_plan = self._generate_fallback_meal_plan(preferences)
+            if fallback_plan:
+                return {
+                    "success": True,
+                    "meal_plan": fallback_plan,
+                    "source": "fallback",
+                    "generated_at": datetime.now().isoformat(),
+                    "warning": "Generated using fallback system - LLM services unavailable"
+                }
+            
             return {
                 "error": "Unable to generate meal plan - LLM services unavailable",
                 "details": "Please try again later or check your LLM configuration"
@@ -943,4 +955,167 @@ IMPORTANT: Return ONLY the JSON, no other text."""
                 "generated_at": datetime.now().isoformat(),
                 "preferences_used": preferences,
                 "plan_type": "llm_generated"
-            } 
+            }
+    
+    def _generate_fallback_meal_plan(self, preferences: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Generate a simple fallback meal plan when LLM services are unavailable."""
+        try:
+            logger.info("🔄 Generating fallback meal plan...")
+            
+            # Get preferences
+            cuisines = preferences.get('favoriteCuisines', ['American'])
+            dietary_restrictions = preferences.get('dietaryRestrictions', [])
+            include_breakfast = preferences.get('includeBreakfast', True)
+            include_lunch = preferences.get('includeLunch', True)
+            include_dinner = preferences.get('includeDinner', True)
+            include_snacks = preferences.get('includeSnacks', False)
+            
+            # Create a simple meal plan
+            days = []
+            day_names = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+            
+            # Sample meals based on cuisine preferences
+            cuisine = cuisines[0] if cuisines else 'American'
+            
+            sample_meals = {
+                'breakfast': [
+                    f"{cuisine} Breakfast Bowl",
+                    f"Protein-Rich {cuisine} Omelette",
+                    f"{cuisine} Style Pancakes",
+                    f"Healthy {cuisine} Smoothie Bowl"
+                ],
+                'lunch': [
+                    f"{cuisine} Grilled Chicken Salad",
+                    f"Balanced {cuisine} Wrap",
+                    f"{cuisine} Style Soup",
+                    f"Fresh {cuisine} Bowl"
+                ],
+                'dinner': [
+                    f"Nutritious {cuisine} Stir-Fry",
+                    f"Grilled {cuisine} Fish",
+                    f"{cuisine} Style Pasta",
+                    f"Hearty {cuisine} Stew"
+                ],
+                'snack': [
+                    f"{cuisine} Style Trail Mix",
+                    f"Protein {cuisine} Bar",
+                    f"Fresh {cuisine} Fruit",
+                    f"{cuisine} Yogurt Parfait"
+                ]
+            }
+            
+            for i, day_name in enumerate(day_names):
+                meals = []
+                
+                if include_breakfast:
+                    meals.append({
+                        "name": sample_meals['breakfast'][i % len(sample_meals['breakfast'])],
+                        "meal_type": "breakfast",
+                        "cuisine": cuisine,
+                        "is_vegetarian": 'vegetarian' in dietary_restrictions,
+                        "is_vegan": 'vegan' in dietary_restrictions,
+                        "ingredients": ["See recipe details"],
+                        "instructions": ["Gather ingredients", "Follow cooking instructions", "Serve and enjoy"],
+                        "nutrition": {
+                            "calories": 400,
+                            "protein": "25g",
+                            "carbs": "45g",
+                            "fat": "15g"
+                        },
+                        "prep_time": "15 minutes",
+                        "cook_time": "20 minutes",
+                        "servings": 2,
+                        "difficulty": "beginner"
+                    })
+                
+                if include_lunch:
+                    meals.append({
+                        "name": sample_meals['lunch'][i % len(sample_meals['lunch'])],
+                        "meal_type": "lunch",
+                        "cuisine": cuisine,
+                        "is_vegetarian": 'vegetarian' in dietary_restrictions,
+                        "is_vegan": 'vegan' in dietary_restrictions,
+                        "ingredients": ["See recipe details"],
+                        "instructions": ["Gather ingredients", "Follow cooking instructions", "Serve and enjoy"],
+                        "nutrition": {
+                            "calories": 500,
+                            "protein": "30g",
+                            "carbs": "50g",
+                            "fat": "20g"
+                        },
+                        "prep_time": "20 minutes",
+                        "cook_time": "25 minutes",
+                        "servings": 2,
+                        "difficulty": "beginner"
+                    })
+                
+                if include_dinner:
+                    meals.append({
+                        "name": sample_meals['dinner'][i % len(sample_meals['dinner'])],
+                        "meal_type": "dinner",
+                        "cuisine": cuisine,
+                        "is_vegetarian": 'vegetarian' in dietary_restrictions,
+                        "is_vegan": 'vegan' in dietary_restrictions,
+                        "ingredients": ["See recipe details"],
+                        "instructions": ["Gather ingredients", "Follow cooking instructions", "Serve and enjoy"],
+                        "nutrition": {
+                            "calories": 600,
+                            "protein": "35g",
+                            "carbs": "55g",
+                            "fat": "25g"
+                        },
+                        "prep_time": "25 minutes",
+                        "cook_time": "30 minutes",
+                        "servings": 2,
+                        "difficulty": "beginner"
+                    })
+                
+                if include_snacks:
+                    meals.append({
+                        "name": sample_meals['snack'][i % len(sample_meals['snack'])],
+                        "meal_type": "snack",
+                        "cuisine": cuisine,
+                        "is_vegetarian": 'vegetarian' in dietary_restrictions,
+                        "is_vegan": 'vegan' in dietary_restrictions,
+                        "ingredients": ["See recipe details"],
+                        "instructions": ["Gather ingredients", "Prepare snack", "Enjoy"],
+                        "nutrition": {
+                            "calories": 200,
+                            "protein": "10g",
+                            "carbs": "25g",
+                            "fat": "8g"
+                        },
+                        "prep_time": "5 minutes",
+                        "cook_time": "0 minutes",
+                        "servings": 1,
+                        "difficulty": "beginner"
+                    })
+                
+                days.append({
+                    "day": day_name,
+                    "date": (datetime.now().date() + timedelta(days=i)).isoformat(),
+                    "meals": meals
+                })
+            
+            return {
+                "days": days,
+                "shopping_list": {
+                    "ingredients": [],
+                    "estimated_cost": 0
+                },
+                "nutrition_summary": {
+                    "daily_average": {
+                        "calories": preferences.get('targetCalories', 2000),
+                        "protein": f"{preferences.get('targetProtein', 150)}g",
+                        "carbs": f"{preferences.get('targetCarbs', 200)}g",
+                        "fat": f"{preferences.get('targetFat', 65)}g"
+                    }
+                },
+                "generated_at": datetime.now().isoformat(),
+                "preferences_used": preferences,
+                "plan_type": "fallback"
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Fallback meal plan generation failed: {e}")
+            return None 

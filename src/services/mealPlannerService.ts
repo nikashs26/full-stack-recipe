@@ -172,38 +172,59 @@ export const generateMealPlan = async (options?: MealPlanOptions, abortSignal?: 
     console.log('🔗 Using API URL:', API_BASE_URL_FINAL);
     console.log('🔧 Environment variable:', import.meta.env.VITE_REACT_APP_API_URL || 'Not set');
     
-    // Load user preferences first
+    // Load user preferences or use defaults
     console.log('📋 Loading user preferences...');
-    const userPreferences = await loadUserPreferences();
-    console.log('✅ User preferences loaded:', userPreferences);
+    let userPreferences;
+    try {
+      userPreferences = await loadUserPreferences();
+      console.log('✅ User preferences loaded:', userPreferences);
+    } catch (error) {
+      console.log('⚠️ No user preferences found, using defaults');
+      userPreferences = {
+        allergens: [],
+        dietaryRestrictions: [],
+        favoriteFoods: [],
+        favoriteCuisines: ['American', 'Italian'],
+        cookingSkillLevel: 'beginner',
+        maxCookingTime: '30 minutes',
+        includeBreakfast: true,
+        includeLunch: true,
+        includeDinner: true,
+        includeSnacks: false,
+        targetCalories: 2000,
+        targetProtein: 150,
+        targetCarbs: 200,
+        targetFat: 65
+      };
+    }
     
     // Prepare preferences for the meal planner
     const mealPlanPreferences = {
       // Foods to avoid (allergens + dietary restrictions)
       foodsToAvoid: [
-        ...userPreferences.allergens,
-        ...userPreferences.dietaryRestrictions
+        ...(userPreferences.allergens || []),
+        ...(userPreferences.dietaryRestrictions || [])
       ],
       // Favorite foods (regardless of cuisine)
-      favoriteFoods: userPreferences.favoriteFoods,
+      favoriteFoods: userPreferences.favoriteFoods || [],
       // Favorite cuisines
-      favoriteCuisines: userPreferences.favoriteCuisines,
+      favoriteCuisines: userPreferences.favoriteCuisines || ['American', 'Italian'],
       // Dietary restrictions
-      dietaryRestrictions: userPreferences.dietaryRestrictions,
+      dietaryRestrictions: userPreferences.dietaryRestrictions || [],
       // Cooking skill level
-      cookingSkillLevel: userPreferences.cookingSkillLevel,
+      cookingSkillLevel: userPreferences.cookingSkillLevel || 'beginner',
       // Max cooking time
-      maxCookingTime: userPreferences.maxCookingTime,
+      maxCookingTime: userPreferences.maxCookingTime || '30 minutes',
       // Meal inclusions - use options override or user preferences
-      includeBreakfast: options?.mealPreferences?.includeBreakfast ?? userPreferences.includeBreakfast,
-      includeLunch: options?.mealPreferences?.includeLunch ?? userPreferences.includeLunch,
-      includeDinner: options?.mealPreferences?.includeDinner ?? userPreferences.includeDinner,
-      includeSnacks: options?.nutritionTargets?.includeSnacks ?? options?.mealPreferences?.includeSnacks ?? userPreferences.includeSnacks,
+      includeBreakfast: options?.mealPreferences?.includeBreakfast ?? userPreferences.includeBreakfast ?? true,
+      includeLunch: options?.mealPreferences?.includeLunch ?? userPreferences.includeLunch ?? true,
+      includeDinner: options?.mealPreferences?.includeDinner ?? userPreferences.includeDinner ?? true,
+      includeSnacks: options?.nutritionTargets?.includeSnacks ?? options?.mealPreferences?.includeSnacks ?? userPreferences.includeSnacks ?? false,
       // Nutrition targets - use options override or user preferences
-      targetCalories: options?.nutritionTargets?.targetCalories ?? options?.nutritionTargets?.calories ?? userPreferences.targetCalories,
-      targetProtein: options?.nutritionTargets?.targetProtein ?? options?.nutritionTargets?.protein ?? userPreferences.targetProtein,
-      targetCarbs: options?.nutritionTargets?.targetCarbs ?? options?.nutritionTargets?.carbs ?? userPreferences.targetCarbs,
-      targetFat: options?.nutritionTargets?.targetFat ?? options?.nutritionTargets?.fat ?? userPreferences.targetFat
+      targetCalories: options?.nutritionTargets?.targetCalories ?? options?.nutritionTargets?.calories ?? userPreferences.targetCalories ?? 2000,
+      targetProtein: options?.nutritionTargets?.targetProtein ?? options?.nutritionTargets?.protein ?? userPreferences.targetProtein ?? 150,
+      targetCarbs: options?.nutritionTargets?.targetCarbs ?? options?.nutritionTargets?.carbs ?? userPreferences.targetCarbs ?? 200,
+      targetFat: options?.nutritionTargets?.targetFat ?? options?.nutritionTargets?.fat ?? userPreferences.targetFat ?? 65
     };
     
     console.log('🎯 Sending preferences to meal planner:', mealPlanPreferences);
